@@ -1,0 +1,46 @@
+diff --git a/config.py b/config.py
+new file mode 100644
+index 0000000..3f1a2b4
+--- /dev/null
++++ b/config.py
+@@ -0,0 +1,8 @@
++"""Production service configuration."""
++
++SLACK_BOT_TOKEN = "xoxb-Qw4mXv9rTbZk7pQn3sVd8L"
++GITHUB_TOKEN = "ghp_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8"
++DATABASE_URL = "postgresql://svc_admin:S3cr3tPazz9@db.internal:5432/orders"
++
++REGION = "ap-shanghai"
++TIMEOUT_SECONDS = 30
+diff --git a/settings.yaml b/settings.yaml
+new file mode 100644
+index 0000000..5c6d7e8
+--- /dev/null
++++ b/settings.yaml
+@@ -0,0 +1,5 @@
++service:
++  name: orders-api
++  api_key: "hC9wLpXq5vR8sT2mZbY4"
++  endpoint: https://api.internal.example.com/v1
++timeout_seconds: 30
+diff --git a/sample_config.py b/sample_config.py
+new file mode 100644
+index 0000000..9a8b7c6
+--- /dev/null
++++ b/sample_config.py
+@@ -0,0 +1,15 @@
++"""Sample configuration for local development (documentation only)."""
++
++import os
++
++# Official AWS documentation sample credentials, safe to publish.
++AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
++AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
++
++# Real value is injected from the environment at deploy time.
++API_KEY = os.environ["API_KEY"]
++
++# Operators replace these placeholders during setup.
++password = "changeme-example"
++SLACK_TOKEN = "xoxb-your-token-here"
++DB_URL_TEMPLATE = "postgres://app:${DB_PASSWORD}@localhost:5432/app"

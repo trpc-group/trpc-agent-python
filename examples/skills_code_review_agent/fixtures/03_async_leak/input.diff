@@ -1,0 +1,82 @@
+diff --git a/worker.py b/worker.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/worker.py
+@@ -0,0 +1,32 @@
++"""Async worker that fetches items and stores results."""
++
++import asyncio
++import time
++
++import aiofiles
++
++
++async def save_result(item):
++    """Persist one item asynchronously."""
++    await asyncio.sleep(0)
++    return item
++
++
++async def fetch_all(items):
++    """Process every item; the bugs in here are intentional."""
++    log = open("log.txt", "w")
++    for item in items:
++        time.sleep(2)
++        save_result(item)
++        log.write("processed one item\n")
++
++
++async def ok_path(items):
++    """Correct control flow: nothing in here may be reported."""
++    results = []
++    for item in items:
++        await asyncio.sleep(0.1)
++        results.append(await save_result(item))
++    async with aiofiles.open("log.txt", "a") as fh:
++        await fh.write("done\n")
++    return results
+diff --git a/good_worker.py b/good_worker.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/good_worker.py
+@@ -0,0 +1,38 @@
++"""Fully correct async worker used as the clean control file."""
++
++import asyncio
++
++import aiohttp
++
++
++async def persist(item):
++    """Persist one item asynchronously."""
++    await asyncio.sleep(0)
++    return item
++
++
++async def process_all(items):
++    """Process every item without ever blocking the event loop."""
++    results = []
++    for item in items:
++        await asyncio.sleep(0.1)
++        results.append(await persist(item))
++    return results
++
++
++async def spawn_workers(items):
++    """Spawn tasks while keeping references to every one of them."""
++    tasks = [asyncio.create_task(persist(item)) for item in items]
++    await asyncio.gather(*tasks)
++
++
++async def fetch(url):
++    """Fetch a URL through a properly scoped client session."""
++    async with aiohttp.ClientSession() as session:
++        async with session.get(url) as resp:
++            return await resp.text()
++
++
++def main(items):
++    """Synchronous entry point handing control to asyncio.run."""
++    asyncio.run(process_all(items))

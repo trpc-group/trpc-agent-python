@@ -1,0 +1,31 @@
+{
+  "description": "worker.py blocks the loop with time.sleep(2) (ASYNC001), drops the save_result coroutine (ASYNC002) and never closes the log file opened on line 17 (resource_leak); good_worker.py shows the correct patterns and must stay async-clean.",
+  "expect_clean": false,
+  "expected_findings": [
+    {
+      "category": "async",
+      "file": "worker.py",
+      "line": 19,
+      "min_severity": "high"
+    },
+    {
+      "category": "async",
+      "file": "worker.py",
+      "line": 20,
+      "min_severity": "high"
+    },
+    {
+      "category": "resource_leak",
+      "file": "worker.py",
+      "line": [15, 21],
+      "min_severity": "medium"
+    }
+  ],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "category": "async",
+      "file": "good_worker.py"
+    }
+  ]
+}

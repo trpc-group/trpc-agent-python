@@ -1,0 +1,14 @@
+{
+  "description": "Hardcoded secrets in new config files (Slack bot token, GitHub token, DB URL password, yaml api_key) while AWS doc samples, os.environ lookups and changeme/your-/${...} placeholders in sample_config.py must stay silent",
+  "expect_clean": false,
+  "expected_findings": [
+    {"category": "secrets", "file": "config.py", "line": 3, "min_severity": "high"},
+    {"category": "secrets", "file": "config.py", "line": 4, "min_severity": "high"},
+    {"category": "secrets", "file": "config.py", "line": 5, "min_severity": "high"},
+    {"category": "secrets", "file": "settings.yaml", "line": 3, "min_severity": "high"}
+  ],
+  "expected_warnings": [],
+  "forbidden": [
+    {"category": "secrets", "file": "sample_config.py"}
+  ]
+}

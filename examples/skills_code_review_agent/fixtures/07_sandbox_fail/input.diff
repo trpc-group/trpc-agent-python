@@ -1,0 +1,17 @@
+diff --git a/utils/slug.py b/utils/slug.py
+index ef85e65..1785098 100644
+--- a/utils/slug.py
++++ b/utils/slug.py
+@@ -4,9 +4,9 @@
+ def slugify(title):
+     text = str(title).strip().lower()
+     out = []
+-    for ch in text:
+-        if ch.isalnum():
+-            out.append(ch)
++    for char in text:
++        if char.isalnum():
++            out.append(char)
+         else:
+             out.append("-")
+     return "".join(out)

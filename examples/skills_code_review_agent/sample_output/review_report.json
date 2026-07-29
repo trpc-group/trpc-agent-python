@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "task": {
+    "id": "08ed4c85ccae",
+    "status": "succeeded",
+    "input_type": "fixture",
+    "input_ref": "02_sql_injection",
+    "mode": "diff_only",
+    "runtime": "container",
+    "dry_run": true,
+    "diff_digest": "a17ba3b46d8eb5cd",
+    "created_at": "2026-07-26T17:02:40.868824",
+    "error": ""
+  },
+  "summary": {
+    "finding_count": 2,
+    "warning_count": 2,
+    "needs_human_review_count": 0,
+    "suppressed_duplicates": 0,
+    "severity_stats": {
+      "critical": 2,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "notes": []
+  },
+  "findings": [
+    {
+      "rule_id": "SEC001",
+      "category": "security",
+      "severity": "critical",
+      "confidence": "high",
+      "source": "static",
+      "file": "user_dao.py",
+      "line": 6,
+      "title": "SQL built with string interpolation passed to execute()",
+      "evidence": "cur.execute(f\"SELECT id, name, email FROM users WHERE name = '{name}'\")",
+      "recommendation": "Use a parameterized query: keep the SQL text static with placeholders and pass the values as the second argument (sqlite3 uses '?', most other DB-API drivers use '%s'). Never interpolate request data into SQL text.",
+      "fix": {
+        "before": "cur.execute(f\"SELECT id, name, email FROM users WHERE name = '{name}'\")",
+        "after": "cur.execute('SELECT id, name, email FROM users WHERE name = %s', (name,))"
+      },
+      "status": "reported"
+    },
+    {
+      "rule_id": "SEC001",
+      "category": "security",
+      "severity": "critical",
+      "confidence": "high",
+      "source": "static",
+      "file": "user_dao.py",
+      "line": 15,
+      "title": "Dynamically built SQL variable 'query' passed to execute()",
+      "evidence": "L13: query = \"DELETE FROM users WHERE id = \" + str(user_id)  ->  L15: cur.execute(query)",
+      "recommendation": "Use a parameterized query: keep the SQL text static with placeholders and pass the values as the second argument (sqlite3 uses '?', most other DB-API drivers use '%s'). Never interpolate request data into SQL text.",
+      "fix": {
+        "before": "query = \"DELETE FROM users WHERE id = \" + str(user_id)\ncur.execute(query)",
+        "after": "query = 'DELETE FROM users WHERE id = %s'\ncur.execute(query, (str(user_id),))"
+      },
+      "status": "reported"
+    }
+  ],
+  "warnings": [
+    {
+      "rule_id": "TEST001",
+      "category": "missing_tests",
+      "severity": "info",
+      "confidence": "low",
+      "source": "static",
+      "file": "user_dao.py",
+      "line": 4,
+      "title": "Source change ships without test changes",
+      "evidence": "2 new/changed definition(s), no test file in the changeset: def get_user_by_name (line 4), def delete_user (line 12); diff-only mode cannot see repository tests",
+      "recommendation": "Add or update tests (e.g. tests/test_user_dao.py) covering the changed definitions before merging.",
+      "fix": {
+        "before": "def get_user_by_name(conn, name):",
+        "after": "# tests/test_user_dao.py\ndef test_get_user_by_name():\n    ...  # TODO: cover def 'get_user_by_name'\ndef test_delete_user():\n    ...  # TODO: cover def 'delete_user'"
+      },
+      "status": "warning"
+    },
+    {
+      "rule_id": "TEST001",
+      "category": "missing_tests",
+      "severity": "info",
+      "confidence": "low",
+      "source": "static",
+      "file": "safe_dao.py",
+      "line": 4,
+      "title": "Source change ships without test changes",
+      "evidence": "2 new/changed definition(s), no test file in the changeset: def get_user_by_id (line 4), def rename_user (line 12); diff-only mode cannot see repository tests",
+      "recommendation": "Add or update tests (e.g. tests/test_safe_dao.py) covering the changed definitions before merging.",
+      "fix": {
+        "before": "def get_user_by_id(conn, user_id):",
+        "after": "# tests/test_safe_dao.py\ndef test_get_user_by_id():\n    ...  # TODO: cover def 'get_user_by_id'\ndef test_rename_user():\n    ...  # TODO: cover def 'rename_user'"
+      },
+      "status": "warning"
+    }
+  ],
+  "needs_human_review": [],
+  "filter_summary": {
+    "total_decisions": 2,
+    "blocked": 0,
+    "events": [
+      {
+        "tool_name": "skill_load",
+        "decision": "allow",
+        "rule": "skill_allowlist",
+        "reason": "ok",
+        "args_digest": "{\"skill_name\": \"code-review\", \"include_all_docs\": true} [sha256:73ec6ae324aa453f, 55 chars]"
+      },
+      {
+        "tool_name": "skill_run",
+        "decision": "allow",
+        "rule": "policy",
+        "reason": "ok",
+        "args_digest": "{\"skill\": \"code-review\", \"command\": \"python3 scripts/run_checks.py\", \"inputs\": [{\"src\": \"host:///tmp/cr-input-08ed4c85ccae-b8oxzjm2/review_input.json\", \"dst\": \"\"}], \"timeout\": 60} [sha256:eb4745fb47dba2d2, 179 chars]"
+      }
+    ]
+  },
+  "sandbox_summary": [
+    {
+      "tool": "skill_run",
+      "command": "python3 scripts/run_checks.py",
+      "runtime": "container",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 422,
+      "timed_out": false,
+      "truncated": false,
+      "stdout_digest": "run_checks: 4 finding(s) from 2 file(s), 6/6 checks ok -> findings.json\\n [sha256:b5e3a8bedf0c108c, 72 chars]",
+      "stderr_digest": ""
+    }
+  ],
+  "metrics": {
+    "total_ms": 2477,
+    "sandbox_ms": 1896,
+    "tool_calls": 2,
+    "filter_blocks": 0,
+    "finding_count": 2,
+    "severity_dist": {
+      "critical": 2
+    },
+    "error_dist": {},
+    "token_usage": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0,
+      "llm_calls": 3,
+      "source": "event_stream(usage_metadata); zeros in dry-run"
+    },
+    "phase_timings": {
+      "persist_input": 35,
+      "sandbox_setup": 430,
+      "agent_loop": 1988,
+      "collect_findings": 1,
+      "persist_findings": 20,
+      "render_report": 0,
+      "source_note": "tool_calls/sandbox_ms/errors/tokens from event stream; filter_blocks/findings/phases self-instrumented"
+    }
+  },
+  "fix_suggestions": [
+    {
+      "file": "user_dao.py",
+      "line": 6,
+      "rule_id": "SEC001",
+      "before": "cur.execute(f\"SELECT id, name, email FROM users WHERE name = '{name}'\")",
+      "after": "cur.execute('SELECT id, name, email FROM users WHERE name = %s', (name,))"
+    },
+    {
+      "file": "user_dao.py",
+      "line": 15,
+      "rule_id": "SEC001",
+      "before": "query = \"DELETE FROM users WHERE id = \" + str(user_id)\ncur.execute(query)",
+      "after": "query = 'DELETE FROM users WHERE id = %s'\ncur.execute(query, (str(user_id),))"
+    }
+  ]
+}

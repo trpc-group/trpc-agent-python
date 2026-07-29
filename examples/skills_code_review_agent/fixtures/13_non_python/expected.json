@@ -1,0 +1,23 @@
+{
+  "description": "A slack token added to deploy/config.yaml must be reported while the plain pip-install shell script stays free of python-specific findings.",
+  "expect_clean": false,
+  "expected_findings": [
+    {
+      "category": "secrets",
+      "file": "deploy/config.yaml",
+      "line": 3,
+      "min_severity": "high"
+    }
+  ],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "category": "security",
+      "file": "scripts/setup.sh"
+    },
+    {
+      "category": "async",
+      "file": "scripts/setup.sh"
+    }
+  ]
+}

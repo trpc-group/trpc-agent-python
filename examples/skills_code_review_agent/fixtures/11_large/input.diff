@@ -1,0 +1,1220 @@
+diff --git a/models/entities.py b/models/entities.py
+new file mode 100644
+index 0000000..fccfe88
+--- /dev/null
++++ b/models/entities.py
+@@ -0,0 +1,192 @@
++"""Order-domain value objects shared by the reporting services.
++
++Plain dataclasses with no I/O: construction, derived values and simple
++validation only, which keeps every class trivially unit-testable.
++"""
++
++from dataclasses import dataclass, field
++
++
++@dataclass(frozen=True)
++class Address:
++    """Postal address of a customer or a warehouse."""
++
++    street: str
++    city: str
++    postcode: str
++    country: str = "DE"
++
++    def one_line(self):
++        """Render the address as a single shipping-label line."""
++        return ", ".join((self.street, self.postcode, self.city, self.country))
++
++    def is_domestic(self, home_country):
++        """True when the address lies in the given home country."""
++        return self.country == home_country
++
++
++@dataclass(frozen=True)
++class Customer:
++    """A buyer with an optional shipping address."""
++
++    customer_id: int
++    first_name: str
++    last_name: str
++    address: Address | None = None
++
++    def full_name(self):
++        """Display name in first-last order, whitespace-trimmed."""
++        return " ".join((self.first_name, self.last_name)).strip()
++
++    def has_address(self):
++        """True when a shipping address is attached."""
++        return self.address is not None
++
++
++@dataclass(frozen=True)
++class Product:
++    """One sellable article in the catalogue."""
++
++    product_id: int
++    title: str
++    unit_price_cents: int
++    weight_grams: int = 0
++
++    def price_display(self):
++        """Human readable price such as `12.30`."""
++        units = self.unit_price_cents // 100
++        cents = self.unit_price_cents % 100
++        return f"{units}.{cents:02d}"
++
++    def is_heavy(self, threshold_grams=5000):
++        """True when the article exceeds the bulky-parcel threshold."""
++        return self.weight_grams > threshold_grams
++
++
++@dataclass(frozen=True)
++class PriceTier:
++    """Quantity break: unit price valid from `min_quantity` upward."""
++
++    min_quantity: int
++    unit_price_cents: int
++
++
++def pick_tier(tiers, quantity):
++    """Best matching tier for a quantity, None when nothing applies."""
++    best = None
++    for tier in tiers:
++        if quantity >= tier.min_quantity:
++            if best is None or tier.min_quantity > best.min_quantity:
++                best = tier
++    return best
++
++
++@dataclass(frozen=True)
++class OrderLine:
++    """One product position inside a purchase order."""
++
++    product: Product
++    quantity: int
++    discount_percent: int = 0
++
++    def gross_cents(self):
++        """Line value before discount."""
++        return self.product.unit_price_cents * self.quantity
++
++    def discount_cents(self):
++        """Absolute discount value, rounded down."""
++        return self.gross_cents() * self.discount_percent // 100
++
++    def total_cents(self):
++        """Line value after discount."""
++        return self.gross_cents() - self.discount_cents()
++
++    def line_weight_grams(self):
++        """Shipping weight contributed by this line."""
++        return self.product.weight_grams * self.quantity
++
++
++@dataclass
++class PurchaseOrder:
++    """A customer order assembled from order lines."""
++
++    order_id: int
++    customer: Customer
++    lines: list = field(default_factory=list)
++    status: str = "draft"
++
++    def item_count(self):
++        """Number of physical articles over all lines."""
++        return sum(line.quantity for line in self.lines)
++
++    def total_cents(self):
++        """Order value after per-line discounts."""
++        return sum(line.total_cents() for line in self.lines)
++
++    def weight_grams(self):
++        """Total shipping weight of the order."""
++        return sum(line.line_weight_grams() for line in self.lines)
++
++    def is_empty(self):
++        """True when the order carries no lines."""
++        return not self.lines
++
++    def mark_submitted(self):
++        """Move a draft order into the submitted state."""
++        if self.status == "draft":
++            self.status = "submitted"
++        return self.status
++
++
++@dataclass(frozen=True)
++class Shipment:
++    """A parcel dispatched for an order."""
++
++    shipment_id: int
++    order_id: int
++    carrier_code: str
++    weight_grams: int
++    delivered: bool = False
++
++    def weight_class(self):
++        """Coarse weight class used by the label printer."""
++        if self.weight_grams <= 1000:
++            return "small"
++        if self.weight_grams <= 10000:
++            return "medium"
++        return "bulky"
++
++
++@dataclass
++class InventoryLevel:
++    """Stock counters for one product in one zone."""
++
++    product_id: int
++    on_hand: int = 0
++    reserved: int = 0
++
++    def available(self):
++        """Sellable stock: on hand minus reservations, floored at zero."""
++        free = self.on_hand - self.reserved
++        return free if free > 0 else 0
++
++    def can_reserve(self, quantity):
++        """True when the requested quantity is currently sellable."""
++        return 0 < quantity <= self.available()
++
++    def reserve(self, quantity):
++        """Reserve stock, returning the actually granted amount."""
++        grant = min(self.available(), max(quantity, 0))
++        self.reserved += grant
++        return grant
++
++
++def order_summary(order):
++    """Compact dict summary used by the reporting layer."""
++    return {
++        "order_id": order.order_id,
++        "customer": order.customer.full_name(),
++        "items": order.item_count(),
++        "total_cents": order.total_cents(),
++        "status": order.status,
++    }
+diff --git a/utils/textops.py b/utils/textops.py
+new file mode 100644
+index 0000000..300b0b8
+--- /dev/null
++++ b/utils/textops.py
+@@ -0,0 +1,211 @@
++"""Pure text helpers for the plain-text report renderers.
++
++Every function is a total transformation over builtin types: no I/O and
++no module state, so the rendering layer stays trivially unit-testable.
++"""
++
++
++def normalize_spaces(text):
++    """Collapse whitespace runs into single spaces and trim the ends."""
++    return " ".join(str(text).split())
++
++
++def is_blank(text):
++    """True for None, empty or whitespace-only input."""
++    return not str(text or "").strip()
++
++
++def first_line(text):
++    """First line of a possibly multi-line text, empty when blank."""
++    for line in str(text or "").splitlines():
++        return line.strip()
++    return ""
++
++
++def ellipsize(text, limit):
++    """Shorten to `limit` characters, marking the cut with three dots."""
++    cleaned = normalize_spaces(text)
++    if len(cleaned) <= limit:
++        return cleaned
++    if limit <= 3:
++        return cleaned[:limit]
++    return cleaned[: limit - 3] + "..."
++
++
++def truncate_middle(text, limit):
++    """Keep head and tail of an overlong text, cutting the middle out."""
++    cleaned = normalize_spaces(text)
++    if len(cleaned) <= limit or limit < 5:
++        return ellipsize(cleaned, limit)
++    head = (limit - 3) // 2
++    tail = limit - 3 - head
++    return cleaned[:head] + "..." + cleaned[len(cleaned) - tail:]
++
++
++def pad_right(text, width, fill=" "):
++    """Left-align `text` inside `width` using `fill` characters."""
++    raw = str(text)
++    if len(raw) >= width:
++        return raw
++    return raw + fill * (width - len(raw))
++
++
++def pad_center(text, width, fill=" "):
++    """Center `text` inside `width` using `fill` characters."""
++    raw = str(text)
++    if len(raw) >= width:
++        return raw
++    left = (width - len(raw)) // 2
++    right = width - len(raw) - left
++    return fill * left + raw + fill * right
++
++
++def repeat_rule(width, mark="-"):
++    """Horizontal rule of `width` marks for section separators."""
++    return mark * max(width, 0)
++
++
++def titlecase_words(text):
++    """Uppercase the first letter of every word, keep the rest as-is."""
++    words = []
++    for word in str(text).split():
++        words.append(word[:1].upper() + word[1:])
++    return " ".join(words)
++
++
++def snake_from_camel(name):
++    """Convert `camelCaseName` into `camel_case_name`."""
++    out = []
++    for char in str(name):
++        if char.isupper() and out:
++            out.append("_")
++        out.append(char.lower())
++    return "".join(out)
++
++
++def camel_from_snake(name):
++    """Convert `snake_case_name` into `snakeCaseName`."""
++    parts = [part for part in str(name).split("_") if part]
++    if not parts:
++        return ""
++    head = parts[0].lower()
++    rest = [part[:1].upper() + part[1:].lower() for part in parts[1:]]
++    return head + "".join(rest)
++
++
++def initials(full_name, limit=3):
++    """Uppercase initials of the first `limit` words."""
++    letters = [word[0].upper() for word in str(full_name).split() if word]
++    return "".join(letters[:limit])
++
++
++def count_words(text):
++    """Number of whitespace-separated words."""
++    return len(str(text).split())
++
++
++def longest_word(text):
++    """Longest word of the text, empty string for blank input."""
++    best = ""
++    for word in str(text).split():
++        if len(word) > len(best):
++            best = word
++    return best
++
++
++def wrap_words(text, width):
++    """Greedy word wrap returning a list of lines no wider than `width`."""
++    lines = []
++    current = []
++    used = 0
++    for word in str(text).split():
++        extra = len(word) + (1 if current else 0)
++        if current and used + extra > width:
++            lines.append(" ".join(current))
++            current = [word]
++            used = len(word)
++        else:
++            current.append(word)
++            used += extra
++    if current:
++        lines.append(" ".join(current))
++    return lines
++
++
++def number_lines(lines, start=1):
++    """Prefix every line with a right-aligned line number."""
++    width = len(str(start + max(len(lines) - 1, 0)))
++    out = []
++    for offset, line in enumerate(lines):
++        label = str(start + offset).rjust(width)
++        out.append(label + "  " + line)
++    return out
++
++
++def bullet_list(items, mark="-"):
++    """Render items as a plain bullet list."""
++    return [mark + " " + normalize_spaces(item) for item in items]
++
++
++def join_nonempty(parts, sep=", "):
++    """Join the parts that are not blank."""
++    return sep.join(str(part) for part in parts if not is_blank(part))
++
++
++def common_prefix(left, right):
++    """Longest shared prefix of two strings."""
++    limit = min(len(left), len(right))
++    index = 0
++    while index < limit and left[index] == right[index]:
++        index += 1
++    return left[:index]
++
++
++def indent_block(text, spaces=4):
++    """Indent every non-blank line by `spaces` spaces."""
++    pad = " " * spaces
++    out = []
++    for line in str(text).splitlines():
++        out.append(pad + line if line.strip() else line)
++    return "\n".join(out)
++
++
++def strip_margin(text, marker="|"):
++    """Drop everything up to the first `marker` on every line."""
++    out = []
++    for line in str(text).splitlines():
++        head, sep, tail = line.partition(marker)
++        out.append(tail if sep else line)
++    return "\n".join(out)
++
++
++def align_pairs(pairs, gap=2):
++    """Align `(label, value)` pairs into two flush columns."""
++    widest = 0
++    for label, _value in pairs:
++        widest = max(widest, len(str(label)))
++    out = []
++    for label, value in pairs:
++        out.append(pad_right(str(label), widest + gap) + str(value))
++    return out
++
++
++def pluralize(count, singular, plural=None):
++    """Simple count-aware noun phrase: `1 file`, `3 files`."""
++    word = singular if count == 1 else (plural or singular + "s")
++    return str(count) + " " + word
++
++
++def squeeze_lines(text):
++    """Collapse runs of blank lines into one blank line."""
++    out = []
++    blank_run = 0
++    for line in str(text).splitlines():
++        if line.strip():
++            blank_run = 0
++            out.append(line)
++        else:
++            blank_run += 1
++            if blank_run == 1:
++                out.append("")
++    return "\n".join(out)
+diff --git a/utils/mathops.py b/utils/mathops.py
+new file mode 100644
+index 0000000..f35339f
+--- /dev/null
++++ b/utils/mathops.py
+@@ -0,0 +1,194 @@
++"""Pure numeric helpers for the aggregation layer.
++
++All functions accept plain numbers or lists of numbers and return plain
++numbers: no I/O, no state, no dependency beyond `math`.
++"""
++
++import math
++
++
++def clamp(value, low, high):
++    """Constrain `value` into the closed interval [low, high]."""
++    if value < low:
++        return low
++    if value > high:
++        return high
++    return value
++
++
++def lerp(start, end, factor):
++    """Linear interpolation between `start` and `end` at `factor`."""
++    return start + (end - start) * factor
++
++
++def inv_lerp(start, end, value):
++    """Inverse interpolation: where `value` sits between the bounds."""
++    if end == start:
++        return 0.0
++    return (value - start) / (end - start)
++
++
++def remap(value, in_low, in_high, out_low, out_high):
++    """Map `value` from one interval onto another."""
++    factor = inv_lerp(in_low, in_high, value)
++    return lerp(out_low, out_high, factor)
++
++
++def safe_div(numerator, denominator, fallback=0.0):
++    """Division that returns `fallback` instead of raising on zero."""
++    if denominator == 0:
++        return fallback
++    return numerator / denominator
++
++
++def mean(values):
++    """Arithmetic mean, 0.0 for an empty series."""
++    series = list(values)
++    if not series:
++        return 0.0
++    return sum(series) / len(series)
++
++
++def median(values):
++    """Middle value of the sorted series, 0.0 when empty."""
++    series = sorted(values)
++    if not series:
++        return 0.0
++    middle = len(series) // 2
++    if len(series) % 2:
++        return float(series[middle])
++    return (series[middle - 1] + series[middle]) / 2
++
++
++def variance(values):
++    """Population variance, 0.0 for series shorter than two."""
++    series = list(values)
++    if len(series) < 2:
++        return 0.0
++    center = mean(series)
++    return sum((value - center) ** 2 for value in series) / len(series)
++
++
++def stddev(values):
++    """Population standard deviation."""
++    return math.sqrt(variance(values))
++
++
++def percentile(values, fraction):
++    """Nearest-rank percentile with `fraction` in [0, 1]."""
++    series = sorted(values)
++    if not series:
++        return 0.0
++    fraction = clamp(fraction, 0.0, 1.0)
++    rank = round(fraction * (len(series) - 1))
++    return float(series[int(rank)])
++
++
++def moving_average(values, window):
++    """Simple moving average with a trailing `window`."""
++    series = list(values)
++    if window <= 0:
++        return []
++    out = []
++    for index in range(len(series)):
++        start = max(0, index - window + 1)
++        chunk = series[start:index + 1]
++        out.append(sum(chunk) / len(chunk))
++    return out
++
++
++def cumulative_sum(values):
++    """Running totals of the series."""
++    total = 0
++    out = []
++    for value in values:
++        total += value
++        out.append(total)
++    return out
++
++
++def diff_series(values):
++    """First differences; one element shorter than the input."""
++    series = list(values)
++    return [series[i + 1] - series[i] for i in range(len(series) - 1)]
++
++
++def scale_series(values, factor):
++    """Multiply every element by `factor`."""
++    return [value * factor for value in values]
++
++
++def normalize_series(values):
++    """Scale the series so its maximum absolute value becomes 1."""
++    series = list(values)
++    peak = max((abs(value) for value in series), default=0)
++    if peak == 0:
++        return [0.0 for _value in series]
++    return [value / peak for value in series]
++
++
++def weighted_mean(values, weights):
++    """Mean with per-element weights; 0.0 when weights sum to zero."""
++    pairs = list(zip(values, weights))
++    total_weight = sum(weight for _value, weight in pairs)
++    if total_weight == 0:
++        return 0.0
++    return sum(value * weight for value, weight in pairs) / total_weight
++
++
++def geometric_mean(values):
++    """Geometric mean of positive numbers, 0.0 otherwise."""
++    series = list(values)
++    if not series or any(value <= 0 for value in series):
++        return 0.0
++    log_total = sum(math.log(value) for value in series)
++    return math.exp(log_total / len(series))
++
++
++def harmonic_mean(values):
++    """Harmonic mean of positive numbers, 0.0 otherwise."""
++    series = list(values)
++    if not series or any(value <= 0 for value in series):
++        return 0.0
++    return len(series) / sum(1.0 / value for value in series)
++
++
++def dot(left, right):
++    """Dot product over the shorter common length."""
++    return sum(a * b for a, b in zip(left, right))
++
++
++def magnitude(values):
++    """Euclidean length of the vector."""
++    return math.sqrt(sum(value * value for value in values))
++
++
++def percent_change(before, after):
++    """Relative change in percent, 0.0 when `before` is zero."""
++    if before == 0:
++        return 0.0
++    return (after - before) / before * 100.0
++
++
++def round_to(value, step):
++    """Round `value` to the nearest multiple of `step`."""
++    if step == 0:
++        return value
++    return round(value / step) * step
++
++
++def sign(value):
++    """-1, 0 or 1 depending on the sign of `value`."""
++    if value > 0:
++        return 1
++    if value < 0:
++        return -1
++    return 0
++
++
++def span(values):
++    """Distance between smallest and largest element, 0 when empty."""
++    series = list(values)
++    if not series:
++        return 0
++    return max(series) - min(series)
+diff --git a/constants/regions.py b/constants/regions.py
+new file mode 100644
+index 0000000..e71eb29
+--- /dev/null
++++ b/constants/regions.py
+@@ -0,0 +1,469 @@
++"""Warehouse zone and carrier-lane constant tables for routing.
++
++Static lookup data only: tuples of `(code, label, capacity)` rows plus
++tiny pure accessors, so the routing layer needs no database round trip.
++"""
++
++ZONE_ROWS = (
++    ("Z001", "Aisle 001", 67),
++    ("Z002", "Aisle 002", 74),
++    ("Z003", "Aisle 003", 81),
++    ("Z004", "Aisle 004", 88),
++    ("Z005", "Aisle 005", 95),
++    ("Z006", "Aisle 006", 102),
++    ("Z007", "Aisle 007", 64),
++    ("Z008", "Aisle 008", 71),
++    ("Z009", "Aisle 009", 78),
++    ("Z010", "Aisle 010", 85),
++    ("Z011", "Aisle 011", 92),
++    ("Z012", "Aisle 012", 99),
++    ("Z013", "Aisle 013", 61),
++    ("Z014", "Aisle 014", 68),
++    ("Z015", "Aisle 015", 75),
++    ("Z016", "Aisle 016", 82),
++    ("Z017", "Aisle 017", 89),
++    ("Z018", "Aisle 018", 96),
++    ("Z019", "Aisle 019", 103),
++    ("Z020", "Aisle 020", 65),
++    ("Z021", "Aisle 021", 72),
++    ("Z022", "Aisle 022", 79),
++    ("Z023", "Aisle 023", 86),
++    ("Z024", "Aisle 024", 93),
++    ("Z025", "Aisle 025", 100),
++    ("Z026", "Aisle 026", 62),
++    ("Z027", "Aisle 027", 69),
++    ("Z028", "Aisle 028", 76),
++    ("Z029", "Aisle 029", 83),
++    ("Z030", "Aisle 030", 90),
++    ("Z031", "Aisle 031", 97),
++    ("Z032", "Aisle 032", 104),
++    ("Z033", "Aisle 033", 66),
++    ("Z034", "Aisle 034", 73),
++    ("Z035", "Aisle 035", 80),
++    ("Z036", "Aisle 036", 87),
++    ("Z037", "Aisle 037", 94),
++    ("Z038", "Aisle 038", 101),
++    ("Z039", "Aisle 039", 63),
++    ("Z040", "Aisle 040", 70),
++    ("Z041", "Aisle 041", 77),
++    ("Z042", "Aisle 042", 84),
++    ("Z043", "Aisle 043", 91),
++    ("Z044", "Aisle 044", 98),
++    ("Z045", "Aisle 045", 60),
++    ("Z046", "Aisle 046", 67),
++    ("Z047", "Aisle 047", 74),
++    ("Z048", "Aisle 048", 81),
++    ("Z049", "Aisle 049", 88),
++    ("Z050", "Aisle 050", 95),
++    ("Z051", "Aisle 051", 102),
++    ("Z052", "Aisle 052", 64),
++    ("Z053", "Aisle 053", 71),
++    ("Z054", "Aisle 054", 78),
++    ("Z055", "Aisle 055", 85),
++    ("Z056", "Aisle 056", 92),
++    ("Z057", "Aisle 057", 99),
++    ("Z058", "Aisle 058", 61),
++    ("Z059", "Aisle 059", 68),
++    ("Z060", "Aisle 060", 75),
++    ("Z061", "Aisle 061", 82),
++    ("Z062", "Aisle 062", 89),
++    ("Z063", "Aisle 063", 96),
++    ("Z064", "Aisle 064", 103),
++    ("Z065", "Aisle 065", 65),
++    ("Z066", "Aisle 066", 72),
++    ("Z067", "Aisle 067", 79),
++    ("Z068", "Aisle 068", 86),
++    ("Z069", "Aisle 069", 93),
++    ("Z070", "Aisle 070", 100),
++    ("Z071", "Aisle 071", 62),
++    ("Z072", "Aisle 072", 69),
++    ("Z073", "Aisle 073", 76),
++    ("Z074", "Aisle 074", 83),
++    ("Z075", "Aisle 075", 90),
++    ("Z076", "Aisle 076", 97),
++    ("Z077", "Aisle 077", 104),
++    ("Z078", "Aisle 078", 66),
++    ("Z079", "Aisle 079", 73),
++    ("Z080", "Aisle 080", 80),
++    ("Z081", "Aisle 081", 87),
++    ("Z082", "Aisle 082", 94),
++    ("Z083", "Aisle 083", 101),
++    ("Z084", "Aisle 084", 63),
++    ("Z085", "Aisle 085", 70),
++    ("Z086", "Aisle 086", 77),
++    ("Z087", "Aisle 087", 84),
++    ("Z088", "Aisle 088", 91),
++    ("Z089", "Aisle 089", 98),
++    ("Z090", "Aisle 090", 60),
++    ("Z091", "Aisle 091", 67),
++    ("Z092", "Aisle 092", 74),
++    ("Z093", "Aisle 093", 81),
++    ("Z094", "Aisle 094", 88),
++    ("Z095", "Aisle 095", 95),
++    ("Z096", "Aisle 096", 102),
++    ("Z097", "Aisle 097", 64),
++    ("Z098", "Aisle 098", 71),
++    ("Z099", "Aisle 099", 78),
++    ("Z100", "Aisle 100", 85),
++    ("Z101", "Aisle 101", 92),
++    ("Z102", "Aisle 102", 99),
++    ("Z103", "Aisle 103", 61),
++    ("Z104", "Aisle 104", 68),
++    ("Z105", "Aisle 105", 75),
++    ("Z106", "Aisle 106", 82),
++    ("Z107", "Aisle 107", 89),
++    ("Z108", "Aisle 108", 96),
++    ("Z109", "Aisle 109", 103),
++    ("Z110", "Aisle 110", 65),
++    ("Z111", "Aisle 111", 72),
++    ("Z112", "Aisle 112", 79),
++    ("Z113", "Aisle 113", 86),
++    ("Z114", "Aisle 114", 93),
++    ("Z115", "Aisle 115", 100),
++    ("Z116", "Aisle 116", 62),
++    ("Z117", "Aisle 117", 69),
++    ("Z118", "Aisle 118", 76),
++    ("Z119", "Aisle 119", 83),
++    ("Z120", "Aisle 120", 90),
++    ("Z121", "Aisle 121", 97),
++    ("Z122", "Aisle 122", 104),
++    ("Z123", "Aisle 123", 66),
++    ("Z124", "Aisle 124", 73),
++    ("Z125", "Aisle 125", 80),
++    ("Z126", "Aisle 126", 87),
++    ("Z127", "Aisle 127", 94),
++    ("Z128", "Aisle 128", 101),
++    ("Z129", "Aisle 129", 63),
++    ("Z130", "Aisle 130", 70),
++    ("Z131", "Aisle 131", 77),
++    ("Z132", "Aisle 132", 84),
++    ("Z133", "Aisle 133", 91),
++    ("Z134", "Aisle 134", 98),
++    ("Z135", "Aisle 135", 60),
++    ("Z136", "Aisle 136", 67),
++    ("Z137", "Aisle 137", 74),
++    ("Z138", "Aisle 138", 81),
++    ("Z139", "Aisle 139", 88),
++    ("Z140", "Aisle 140", 95),
++    ("Z141", "Aisle 141", 102),
++    ("Z142", "Aisle 142", 64),
++    ("Z143", "Aisle 143", 71),
++    ("Z144", "Aisle 144", 78),
++    ("Z145", "Aisle 145", 85),
++    ("Z146", "Aisle 146", 92),
++    ("Z147", "Aisle 147", 99),
++    ("Z148", "Aisle 148", 61),
++    ("Z149", "Aisle 149", 68),
++    ("Z150", "Aisle 150", 75),
++    ("Z151", "Aisle 151", 82),
++    ("Z152", "Aisle 152", 89),
++    ("Z153", "Aisle 153", 96),
++    ("Z154", "Aisle 154", 103),
++    ("Z155", "Aisle 155", 65),
++    ("Z156", "Aisle 156", 72),
++    ("Z157", "Aisle 157", 79),
++    ("Z158", "Aisle 158", 86),
++    ("Z159", "Aisle 159", 93),
++    ("Z160", "Aisle 160", 100),
++    ("Z161", "Aisle 161", 62),
++    ("Z162", "Aisle 162", 69),
++    ("Z163", "Aisle 163", 76),
++    ("Z164", "Aisle 164", 83),
++    ("Z165", "Aisle 165", 90),
++    ("Z166", "Aisle 166", 97),
++    ("Z167", "Aisle 167", 104),
++    ("Z168", "Aisle 168", 66),
++    ("Z169", "Aisle 169", 73),
++    ("Z170", "Aisle 170", 80),
++    ("Z171", "Aisle 171", 87),
++    ("Z172", "Aisle 172", 94),
++    ("Z173", "Aisle 173", 101),
++    ("Z174", "Aisle 174", 63),
++    ("Z175", "Aisle 175", 70),
++    ("Z176", "Aisle 176", 77),
++    ("Z177", "Aisle 177", 84),
++    ("Z178", "Aisle 178", 91),
++    ("Z179", "Aisle 179", 98),
++    ("Z180", "Aisle 180", 60),
++    ("Z181", "Aisle 181", 67),
++    ("Z182", "Aisle 182", 74),
++    ("Z183", "Aisle 183", 81),
++    ("Z184", "Aisle 184", 88),
++    ("Z185", "Aisle 185", 95),
++    ("Z186", "Aisle 186", 102),
++    ("Z187", "Aisle 187", 64),
++    ("Z188", "Aisle 188", 71),
++    ("Z189", "Aisle 189", 78),
++    ("Z190", "Aisle 190", 85),
++    ("Z191", "Aisle 191", 92),
++    ("Z192", "Aisle 192", 99),
++    ("Z193", "Aisle 193", 61),
++    ("Z194", "Aisle 194", 68),
++    ("Z195", "Aisle 195", 75),
++    ("Z196", "Aisle 196", 82),
++    ("Z197", "Aisle 197", 89),
++    ("Z198", "Aisle 198", 96),
++    ("Z199", "Aisle 199", 103),
++    ("Z200", "Aisle 200", 65),
++    ("Z201", "Aisle 201", 72),
++    ("Z202", "Aisle 202", 79),
++    ("Z203", "Aisle 203", 86),
++    ("Z204", "Aisle 204", 93),
++    ("Z205", "Aisle 205", 100),
++    ("Z206", "Aisle 206", 62),
++    ("Z207", "Aisle 207", 69),
++    ("Z208", "Aisle 208", 76),
++    ("Z209", "Aisle 209", 83),
++    ("Z210", "Aisle 210", 90),
++    ("Z211", "Aisle 211", 97),
++    ("Z212", "Aisle 212", 104),
++    ("Z213", "Aisle 213", 66),
++    ("Z214", "Aisle 214", 73),
++    ("Z215", "Aisle 215", 80),
++    ("Z216", "Aisle 216", 87),
++    ("Z217", "Aisle 217", 94),
++    ("Z218", "Aisle 218", 101),
++    ("Z219", "Aisle 219", 63),
++    ("Z220", "Aisle 220", 70),
++    ("Z221", "Aisle 221", 77),
++    ("Z222", "Aisle 222", 84),
++    ("Z223", "Aisle 223", 91),
++    ("Z224", "Aisle 224", 98),
++    ("Z225", "Aisle 225", 60),
++    ("Z226", "Aisle 226", 67),
++    ("Z227", "Aisle 227", 74),
++    ("Z228", "Aisle 228", 81),
++    ("Z229", "Aisle 229", 88),
++    ("Z230", "Aisle 230", 95),
++    ("Z231", "Aisle 231", 102),
++    ("Z232", "Aisle 232", 64),
++    ("Z233", "Aisle 233", 71),
++    ("Z234", "Aisle 234", 78),
++    ("Z235", "Aisle 235", 85),
++    ("Z236", "Aisle 236", 92),
++    ("Z237", "Aisle 237", 99),
++    ("Z238", "Aisle 238", 61),
++    ("Z239", "Aisle 239", 68),
++    ("Z240", "Aisle 240", 75),
++    ("Z241", "Aisle 241", 82),
++    ("Z242", "Aisle 242", 89),
++    ("Z243", "Aisle 243", 96),
++    ("Z244", "Aisle 244", 103),
++    ("Z245", "Aisle 245", 65),
++    ("Z246", "Aisle 246", 72),
++    ("Z247", "Aisle 247", 79),
++    ("Z248", "Aisle 248", 86),
++    ("Z249", "Aisle 249", 93),
++    ("Z250", "Aisle 250", 100),
++    ("Z251", "Aisle 251", 62),
++    ("Z252", "Aisle 252", 69),
++    ("Z253", "Aisle 253", 76),
++    ("Z254", "Aisle 254", 83),
++    ("Z255", "Aisle 255", 90),
++    ("Z256", "Aisle 256", 97),
++    ("Z257", "Aisle 257", 104),
++    ("Z258", "Aisle 258", 66),
++    ("Z259", "Aisle 259", 73),
++    ("Z260", "Aisle 260", 80),
++    ("Z261", "Aisle 261", 87),
++    ("Z262", "Aisle 262", 94),
++    ("Z263", "Aisle 263", 101),
++    ("Z264", "Aisle 264", 63),
++    ("Z265", "Aisle 265", 70),
++    ("Z266", "Aisle 266", 77),
++    ("Z267", "Aisle 267", 84),
++    ("Z268", "Aisle 268", 91),
++    ("Z269", "Aisle 269", 98),
++    ("Z270", "Aisle 270", 60),
++    ("Z271", "Aisle 271", 67),
++    ("Z272", "Aisle 272", 74),
++    ("Z273", "Aisle 273", 81),
++    ("Z274", "Aisle 274", 88),
++    ("Z275", "Aisle 275", 95),
++    ("Z276", "Aisle 276", 102),
++    ("Z277", "Aisle 277", 64),
++    ("Z278", "Aisle 278", 71),
++    ("Z279", "Aisle 279", 78),
++    ("Z280", "Aisle 280", 85),
++)
++
++LANE_ROWS = (
++    ("L001", "Lane 001", 17),
++    ("L002", "Lane 002", 22),
++    ("L003", "Lane 003", 27),
++    ("L004", "Lane 004", 32),
++    ("L005", "Lane 005", 37),
++    ("L006", "Lane 006", 12),
++    ("L007", "Lane 007", 17),
++    ("L008", "Lane 008", 22),
++    ("L009", "Lane 009", 27),
++    ("L010", "Lane 010", 32),
++    ("L011", "Lane 011", 37),
++    ("L012", "Lane 012", 12),
++    ("L013", "Lane 013", 17),
++    ("L014", "Lane 014", 22),
++    ("L015", "Lane 015", 27),
++    ("L016", "Lane 016", 32),
++    ("L017", "Lane 017", 37),
++    ("L018", "Lane 018", 12),
++    ("L019", "Lane 019", 17),
++    ("L020", "Lane 020", 22),
++    ("L021", "Lane 021", 27),
++    ("L022", "Lane 022", 32),
++    ("L023", "Lane 023", 37),
++    ("L024", "Lane 024", 12),
++    ("L025", "Lane 025", 17),
++    ("L026", "Lane 026", 22),
++    ("L027", "Lane 027", 27),
++    ("L028", "Lane 028", 32),
++    ("L029", "Lane 029", 37),
++    ("L030", "Lane 030", 12),
++    ("L031", "Lane 031", 17),
++    ("L032", "Lane 032", 22),
++    ("L033", "Lane 033", 27),
++    ("L034", "Lane 034", 32),
++    ("L035", "Lane 035", 37),
++    ("L036", "Lane 036", 12),
++    ("L037", "Lane 037", 17),
++    ("L038", "Lane 038", 22),
++    ("L039", "Lane 039", 27),
++    ("L040", "Lane 040", 32),
++    ("L041", "Lane 041", 37),
++    ("L042", "Lane 042", 12),
++    ("L043", "Lane 043", 17),
++    ("L044", "Lane 044", 22),
++    ("L045", "Lane 045", 27),
++    ("L046", "Lane 046", 32),
++    ("L047", "Lane 047", 37),
++    ("L048", "Lane 048", 12),
++    ("L049", "Lane 049", 17),
++    ("L050", "Lane 050", 22),
++    ("L051", "Lane 051", 27),
++    ("L052", "Lane 052", 32),
++    ("L053", "Lane 053", 37),
++    ("L054", "Lane 054", 12),
++    ("L055", "Lane 055", 17),
++    ("L056", "Lane 056", 22),
++    ("L057", "Lane 057", 27),
++    ("L058", "Lane 058", 32),
++    ("L059", "Lane 059", 37),
++    ("L060", "Lane 060", 12),
++    ("L061", "Lane 061", 17),
++    ("L062", "Lane 062", 22),
++    ("L063", "Lane 063", 27),
++    ("L064", "Lane 064", 32),
++    ("L065", "Lane 065", 37),
++    ("L066", "Lane 066", 12),
++    ("L067", "Lane 067", 17),
++    ("L068", "Lane 068", 22),
++    ("L069", "Lane 069", 27),
++    ("L070", "Lane 070", 32),
++    ("L071", "Lane 071", 37),
++    ("L072", "Lane 072", 12),
++    ("L073", "Lane 073", 17),
++    ("L074", "Lane 074", 22),
++    ("L075", "Lane 075", 27),
++    ("L076", "Lane 076", 32),
++    ("L077", "Lane 077", 37),
++    ("L078", "Lane 078", 12),
++    ("L079", "Lane 079", 17),
++    ("L080", "Lane 080", 22),
++    ("L081", "Lane 081", 27),
++    ("L082", "Lane 082", 32),
++    ("L083", "Lane 083", 37),
++    ("L084", "Lane 084", 12),
++    ("L085", "Lane 085", 17),
++    ("L086", "Lane 086", 22),
++    ("L087", "Lane 087", 27),
++    ("L088", "Lane 088", 32),
++    ("L089", "Lane 089", 37),
++    ("L090", "Lane 090", 12),
++    ("L091", "Lane 091", 17),
++    ("L092", "Lane 092", 22),
++    ("L093", "Lane 093", 27),
++    ("L094", "Lane 094", 32),
++    ("L095", "Lane 095", 37),
++    ("L096", "Lane 096", 12),
++    ("L097", "Lane 097", 17),
++    ("L098", "Lane 098", 22),
++    ("L099", "Lane 099", 27),
++    ("L100", "Lane 100", 32),
++    ("L101", "Lane 101", 37),
++    ("L102", "Lane 102", 12),
++    ("L103", "Lane 103", 17),
++    ("L104", "Lane 104", 22),
++    ("L105", "Lane 105", 27),
++    ("L106", "Lane 106", 32),
++    ("L107", "Lane 107", 37),
++    ("L108", "Lane 108", 12),
++    ("L109", "Lane 109", 17),
++    ("L110", "Lane 110", 22),
++)
++
++
++def zone_label(code):
++    """Human readable label of one zone, empty for unknown codes."""
++    for row_code, label, _capacity in ZONE_ROWS:
++        if row_code == code:
++            return label
++    return ""
++
++
++def zone_capacity(code):
++    """Capacity of one zone, 0 for unknown codes."""
++    for row_code, _label, capacity in ZONE_ROWS:
++        if row_code == code:
++            return capacity
++    return 0
++
++
++def zones_over(minimum):
++    """Codes of all zones with at least `minimum` capacity."""
++    return [row_code for row_code, _label, capacity in ZONE_ROWS if capacity >= minimum]
++
++
++def total_zone_capacity():
++    """Sum of the capacity column over every zone."""
++    return sum(capacity for _code, _label, capacity in ZONE_ROWS)
++
++
++def busiest_zone():
++    """Code of the zone with the highest capacity."""
++    best_code = ""
++    best_capacity = -1
++    for row_code, _label, capacity in ZONE_ROWS:
++        if capacity > best_capacity:
++            best_code = row_code
++            best_capacity = capacity
++    return best_code
++
++
++def lane_label(code):
++    """Human readable label of one carrier lane."""
++    for row_code, label, _load in LANE_ROWS:
++        if row_code == code:
++            return label
++    return ""
++
++
++def lane_load(code):
++    """Planned daily load of one lane, 0 for unknown codes."""
++    for row_code, _label, load in LANE_ROWS:
++        if row_code == code:
++            return load
++    return 0
++
++
++def lanes_over(minimum):
++    """Codes of all lanes with at least `minimum` planned load."""
++    return [row_code for row_code, _label, load in LANE_ROWS if load >= minimum]
++
++
++def total_lane_load():
++    """Sum of the planned load column over every lane."""
++    return sum(load for _code, _label, load in LANE_ROWS)
++
++
++def table_sizes():
++    """Row counts of both tables, used by the sanity dashboard."""
++    return {"zones": len(ZONE_ROWS), "lanes": len(LANE_ROWS)}
+diff --git a/services/report_service.py b/services/report_service.py
+new file mode 100644
+index 0000000..61905b6
+--- /dev/null
++++ b/services/report_service.py
+@@ -0,0 +1,124 @@
++"""Owner-level reporting over the `report_rows` ledger table.
++
++The service receives an already opened DB-API cursor from its caller
++(the caller owns the connection lifecycle), aggregates raw ledger rows
++per owner and renders plain-text and CSV views for the dashboard.
++"""
++
++REPORT_CURRENCY = "EUR"
++MAX_PAGE_SIZE = 500
++DEFAULT_TOP_N = 10
++REPORT_API_KEY = "Zn4vXq9wLd27RcPy8Kb3"
++
++CSV_COLUMNS = ("owner_id", "rows", "total_cents")
++
++
++def normalize_row(row):
++    """Map a raw `(owner_id, total_cents)` tuple onto a dict."""
++    owner_id, total_cents = row
++    return {"owner_id": int(owner_id), "total_cents": int(total_cents)}
++
++
++def validate_page_size(page_size):
++    """Clamp a requested page size into `[1, MAX_PAGE_SIZE]`."""
++    if page_size < 1:
++        return 1
++    if page_size > MAX_PAGE_SIZE:
++        return MAX_PAGE_SIZE
++    return page_size
++
++
++def format_cents(total_cents):
++    """Render a cent amount as `12.30 EUR`."""
++    units = total_cents // 100
++    cents = total_cents % 100
++    return f"{units}.{cents:02d} {REPORT_CURRENCY}"
++
++
++def fetch_owner_rows(cursor, owner_id):
++    """Load the ledger rows of one owner in raw column order."""
++    rows = cursor.execute(f"SELECT owner_id, total_cents FROM report_rows WHERE owner_id = {owner_id}").fetchall()
++    return [normalize_row(row) for row in rows]
++
++
++def fetch_owner_totals(cursor, owner_id):
++    """Reference variant: totals only, with a bound parameter."""
++    rows = cursor.execute("SELECT total_cents FROM report_rows WHERE owner_id = ?", (owner_id,)).fetchall()
++    return [int(row[0]) for row in rows]
++
++
++def group_by_owner(rows):
++    """Bucket normalized rows per owner id."""
++    grouped = {}
++    for row in rows:
++        grouped.setdefault(row["owner_id"], []).append(row)
++    return grouped
++
++
++def owner_totals(rows):
++    """Total cents per owner id over normalized rows."""
++    totals = {}
++    for row in rows:
++        totals[row["owner_id"]] = totals.get(row["owner_id"], 0) + row["total_cents"]
++    return totals
++
++
++def top_owners(rows, top_n=DEFAULT_TOP_N):
++    """The `top_n` owners with the highest totals, descending."""
++    totals = owner_totals(rows)
++    ranked = sorted(totals.items(), reverse=True, key=lambda item: (item[1], -item[0]))
++    return ranked[:max(top_n, 0)]
++
++
++def percent_share(part, whole):
++    """Share of `part` in `whole` as a percentage, 0.0 for empty whole."""
++    if whole == 0:
++        return 0.0
++    return part / whole * 100.0
++
++
++def render_owner_line(owner_id, total_cents, share):
++    """One aligned report line for an owner."""
++    label = str(owner_id).rjust(8)
++    amount = format_cents(total_cents).rjust(14)
++    return f"{label}  {amount}  {share:5.1f}%"
++
++
++def render_owner_report(rows):
++    """Plain-text ranking of owners by ledger total."""
++    totals = owner_totals(rows)
++    whole = sum(totals.values())
++    lines = ["   owner          total  share"]
++    for owner_id, total_cents in top_owners(rows):
++        lines.append(render_owner_line(owner_id, total_cents, percent_share(total_cents, whole)))
++    return "\n".join(lines)
++
++
++def render_totals_csv(rows):
++    """CSV body (columns fixed by `CSV_COLUMNS`)."""
++    grouped = group_by_owner(rows)
++    lines = [",".join(CSV_COLUMNS)]
++    for owner_id in sorted(grouped):
++        bucket = grouped[owner_id]
++        total = sum(row["total_cents"] for row in bucket)
++        lines.append(f"{owner_id},{len(bucket)},{total}")
++    return "\n".join(lines)
++
++
++def rollup_pages(rows, page_size):
++    """Split normalized rows into validated fixed-size pages."""
++    size = validate_page_size(page_size)
++    return [rows[start:start + size] for start in range(0, len(rows), size)]
++
++
++def build_dashboard_payload(rows):
++    """Aggregate payload consumed by the operations dashboard."""
++    totals = owner_totals(rows)
++    whole = sum(totals.values())
++    return {
++        "owners": len(totals),
++        "rows": len(rows),
++        "total_cents": whole,
++        "total_display": format_cents(whole),
++        "top": top_owners(rows),
++    }

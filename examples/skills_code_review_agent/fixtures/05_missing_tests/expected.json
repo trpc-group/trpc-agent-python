@@ -1,0 +1,19 @@
+{
+  "description": "New source functions (src/calculator.py: add, divide) land without any test change; in diff-only mode this yields an info/low missing_tests warning, while the doc-only README.md edit must stay silent.",
+  "expect_clean": false,
+  "expected_findings": [],
+  "expected_warnings": [
+    {
+      "category": "missing_tests",
+      "file": "src/calculator.py",
+      "line": [4, 9],
+      "min_severity": "info"
+    }
+  ],
+  "forbidden": [
+    {
+      "category": "missing_tests",
+      "file": "README.md"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+diff --git a/data/names.py b/data/names.py
+new file mode 100644
+index 0000000..1a2b3c4
+--- /dev/null
++++ b/data/names.py
+@@ -0,0 +1,5 @@
++"""Display labels for the drinks menu."""
++
++CAFE_LABEL = "café au lait"
++THE_LABEL = "thé vert"
++MENU = (CAFE_LABEL, THE_LABEL)
+diff --git a/windows.py b/windows.py
+new file mode 100644
+index 0000000..2b3c4d5
+--- /dev/null
++++ b/windows.py
+@@ -0,0 +1,4 @@
++"""Window size presets for the desktop launcher."""
++
++SMALL = (800, 600)
++WIDE = (1280, 720)
+\ No newline at end of file
