@@ -38,7 +38,6 @@ from trpc_agent_sdk.tools import convert_toolunion_to_tool_list
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import Part
-from trpc_agent_sdk.utils import json_loads_repair
 
 # Type aliases for tool definitions
 ToolUnion: TypeAlias = Union[BaseTool, BaseToolSet]
@@ -351,31 +350,7 @@ class ToolsProcessor:
             # Capture state before tool execution
             state_begin = dict(context.session.state)
 
-            # Parse arguments (FunctionCall uses 'args' field).
-            # json_repair tolerates malformed JSON from models, but it can also
-            # silently turn plain text (e.g. "Beijing") into "" or wrap loose
-            # values into lists. Guard the result so downstream tools always
-            # receive a dict, falling back to {} when repair cannot recover a
-            # structured object.
-            if isinstance(tool_call.args, str):
-                try:
-                    arguments = json_loads_repair(tool_call.args)
-                except Exception as ex:  # pylint: disable=broad-except
-                    logger.warning(
-                        "Failed to repair string tool args for %s: %s",
-                        tool_call.name,
-                        ex,
-                    )
-                    arguments = {}
-                if not isinstance(arguments, dict):
-                    logger.warning(
-                        "Discarding non-dict repaired tool args for %s: %r",
-                        tool_call.name,
-                        arguments,
-                    )
-                    arguments = {}
-            else:
-                arguments = tool_call.args or {}
+            arguments = tool_call.args or {}
 
             # Set function call ID for context
             context.function_call_id = tool_call.id
@@ -508,10 +483,18 @@ class ToolsProcessor:
         ):
             state_begin = dict(context.session.state)
 
-            if isinstance(tool_call.args, str):
-                arguments = json.loads(tool_call.args)
-            else:
-                arguments = tool_call.args or {}
+            arguments = tool_call.args or {}
+            argument_error_response = tool._get_argument_error_response(arguments)
+            if argument_error_response is not None:
+                yield self._create_error_event(
+                    context,
+                    argument_error_response["error"],
+                    argument_error_response["message"],
+                    tool_call.id,
+                    tool_call.name,
+                    error_details=argument_error_response,
+                )
+                return
 
             context.function_call_id = tool_call.id
             start_time = time.monotonic()
@@ -725,6 +708,7 @@ class ToolsProcessor:
         error_message: str,
         tool_call_id: Optional[str] = None,
         tool_name: Optional[str] = None,
+        error_details: Optional[dict[str, Any]] = None,
     ) -> Event:
         """Create an error event with proper function_response structure.
 
@@ -737,6 +721,7 @@ class ToolsProcessor:
             error_message: The error message for the event
             tool_call_id: The ID of the failed tool call (optional)
             tool_name: The name of the failed tool (optional)
+            error_details: Additional structured error details (optional)
 
         Returns:
             Event: Error event with proper function_response structure
@@ -747,6 +732,8 @@ class ToolsProcessor:
             "message": error_message,
             "status": "failed",
         }
+        if error_details:
+            error_response.update(error_details)
 
         # Create function response part
         part_function_response = Part.from_function_response(

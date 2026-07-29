@@ -351,14 +351,22 @@ class OpenAIModel(LLMModel):
                     elif part.function_call:
                         # Only convert function call to OpenAI tool call format if add_tools_to_prompt is disabled
                         if not self.add_tools_to_prompt:
+                            function_args = part.function_call.args
+                            if (isinstance(function_args, dict) and const.TOOL_CALL_ARGUMENT_ERRORS in function_args):
+                                # The matching function response describes the
+                                # parsing failure. Keep the historical call
+                                # valid without exposing the internal envelope.
+                                formatted_function_args = "{}"
+                            elif isinstance(function_args, str):
+                                formatted_function_args = function_args
+                            else:
+                                formatted_function_args = json.dumps(function_args, ensure_ascii=False)
                             tool_call = {
                                 "id": getattr(part.function_call, "id", None) or f"call_{uuid.uuid4().hex[:24]}",
                                 "type": "function",
                                 "function": {
-                                    "name":
-                                    part.function_call.name,
-                                    "arguments": (part.function_call.args if isinstance(part.function_call.args, str)
-                                                  else json.dumps(part.function_call.args, ensure_ascii=False)),
+                                    "name": part.function_call.name,
+                                    "arguments": formatted_function_args,
                                 },
                             }
                             if self._adapter.should_include_thought_signature():
@@ -808,8 +816,66 @@ class OpenAIModel(LLMModel):
 
         return finish_reason, usage, delta_arguments
 
+    def _parse_tool_call_arguments(self, raw_arguments: Any) -> Dict[str, Any]:
+        """Normalize provider tool-call arguments into a dictionary.
+
+        Strict JSON parsing is attempted first. Malformed JSON is repaired only
+        after the complete provider response has been collected. If repair
+        cannot produce an object, an internal envelope preserves the original
+        parsing error for ``BaseTool`` to return without invoking the tool
+        implementation.
+
+        Args:
+            raw_arguments: Raw arguments supplied by the model provider.
+
+        Returns:
+            Parsed arguments or an internal invalid-arguments envelope.
+        """
+        if raw_arguments is None or raw_arguments == "":
+            return {}
+        if isinstance(raw_arguments, dict):
+            return raw_arguments
+        if not isinstance(raw_arguments, str):
+            return {
+                const.TOOL_CALL_ARGUMENT_ERRORS: {
+                    "raw_arguments":
+                    str(raw_arguments),
+                    "json_error": ("Tool arguments must be a JSON object or a JSON object "
+                                   f"string, got {type(raw_arguments).__name__}."),
+                },
+            }
+        if not raw_arguments.strip():
+            return {}
+
+        original_error: Optional[json.JSONDecodeError] = None
+        try:
+            arguments = json.loads(raw_arguments)
+        except json.JSONDecodeError as ex:
+            original_error = ex
+            try:
+                arguments = json_loads_repair(raw_arguments)
+            except json.JSONDecodeError as repair_error:
+                logger.warning("Failed to repair tool-call arguments: %s", repair_error)
+                arguments = None
+
+        if isinstance(arguments, dict):
+            return arguments
+
+        if original_error is not None:
+            error_message = str(original_error)
+        else:
+            error_message = ("Tool arguments must be a JSON object, "
+                             f"got {type(arguments).__name__}.")
+
+        return {
+            const.TOOL_CALL_ARGUMENT_ERRORS: {
+                "raw_arguments": raw_arguments,
+                "json_error": error_message,
+            },
+        }
+
     def _create_complete_tool_calls(self, accumulated_tool_calls: list[dict]) -> Optional[List[ToolCall]]:
-        """Create ToolCall objects only for complete tool calls with valid data.
+        """Create tool calls from fully accumulated streaming data.
 
         Args:
             accumulated_tool_calls (`list`): The list of accumulated tool calls
@@ -831,15 +897,7 @@ class OpenAIModel(LLMModel):
 
             if has_name and has_arguments:
                 try:
-                    # Streaming tool-call accumulator: keep STRICT json.loads here.
-                    # Incomplete deltas (e.g. ``{"foo":``) must raise so the loop
-                    # can wait for the next chunk; using a repair-style parser
-                    # would prematurely emit half-formed tool calls.
-                    arguments_str: str = function_map[ToolKey.ARGUMENTS].strip()
-                    if arguments_str:
-                        arguments = json.loads(arguments_str)
-                    else:
-                        arguments = {}
+                    arguments = self._parse_tool_call_arguments(function_map[ToolKey.ARGUMENTS])
 
                     # Handle missing or empty ID by generating a fallback
                     tool_call_id = tool_call_data.get(ToolKey.ID, "")
@@ -858,12 +916,13 @@ class OpenAIModel(LLMModel):
                             arguments=arguments,
                             thought_signature=thought_sig,
                         ))
-                except json.JSONDecodeError as ex:
-                    # Arguments not complete yet, skip this tool call
-                    logger.debug("JSON decode error for tool call %s: %s", i, ex)
-                    continue
                 except Exception as ex:  # pylint: disable=broad-except
-                    logger.warning("Failed to create complete tool call: %s, error: %s", tool_call_data, ex)
+                    logger.warning(
+                        "Failed to create complete tool call %s: %s, error: %s",
+                        i,
+                        tool_call_data,
+                        ex,
+                    )
                     continue
 
         return complete_tool_calls if complete_tool_calls else None
@@ -979,17 +1038,7 @@ class OpenAIModel(LLMModel):
                 thought_sig = tool_call.get(ToolKey.THOUGHT_SIGNATURE)
                 if not thought_sig and isinstance(tool_call.get(ToolKey.PROVIDER_SPECIFIC_FIELDS), dict):
                     thought_sig = tool_call[ToolKey.PROVIDER_SPECIFIC_FIELDS].get(ToolKey.THOUGHT_SIGNATURE)
-                arguments = json_loads_repair(tool_call[ToolKey.FUNCTION][ToolKey.ARGUMENTS])
-                if not isinstance(arguments, dict):
-                    # json_repair can turn unrecoverable text (e.g. "NOT_JSON")
-                    # into an empty string or list. Skip those so we never feed
-                    # ToolCall a non-dict ``arguments`` value.
-                    logger.warning(
-                        "Skipping tool call with non-dict repaired arguments: %s -> %r",
-                        tool_call,
-                        arguments,
-                    )
-                    continue
+                arguments = self._parse_tool_call_arguments(tool_call[ToolKey.FUNCTION][ToolKey.ARGUMENTS])
                 tool_calls.append(
                     ToolCall(
                         id=tool_call[ToolKey.ID],

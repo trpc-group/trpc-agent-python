@@ -9,7 +9,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from trpc_agent_sdk.models import LlmRequest, OpenAIModel
+from trpc_agent_sdk.models import LlmRequest, OpenAIModel, TOOL_CALL_ARGUMENT_ERRORS
 from trpc_agent_sdk.models._llm_response import LlmResponse
 from trpc_agent_sdk.models._openai_model import (
     ApiParamsKey,
@@ -285,14 +285,24 @@ class TestCreateCompleteToolCalls:
         assert result[0].name == "search"
         assert result[0].arguments == {"q": "test"}
 
-    def test_incomplete_json_skipped(self):
-        """Incomplete JSON arguments are skipped."""
+    def test_malformed_json_repaired(self):
+        """Malformed JSON arguments are repaired after stream completion."""
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: '{"incomplete":'},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: '{"queries": [{"sql": "xxx", "csv_filename": "xxx"]}}',
+            },
         }]
-        assert model._create_complete_tool_calls(acc) is None
+        result = model._create_complete_tool_calls(acc)
+        assert result is not None
+        assert result[0].arguments == {
+            "queries": [{
+                "sql": "xxx",
+                "csv_filename": "xxx",
+            }],
+        }
 
     def test_empty_arguments_yields_empty_dict(self):
         """Empty argument string produces empty dict."""
@@ -388,8 +398,8 @@ class TestProcessToolCallsFromMessage:
         assert result[0].name == "search"
         assert result[0].arguments == {"q": "hello"}
 
-    def test_malformed_json_skipped(self):
-        """Malformed JSON arguments cause the tool call to be skipped."""
+    def test_unrecoverable_json_preserved(self):
+        """Unrecoverable arguments retain their raw value and JSON error."""
         model = _model()
         message = {
             "tool_calls": [{
@@ -398,7 +408,11 @@ class TestProcessToolCallsFromMessage:
                 "function": {"name": "f", "arguments": "NOT_JSON"},
             }]
         }
-        assert model._process_tool_calls_from_message(message) is None
+        result = model._process_tool_calls_from_message(message)
+        assert result is not None
+        argument_errors = result[0].arguments[TOOL_CALL_ARGUMENT_ERRORS]
+        assert argument_errors["raw_arguments"] == "NOT_JSON"
+        assert "Expecting value" in argument_errors["json_error"]
 
     def test_none_entry_skipped(self):
         """None entries in tool_calls list are skipped."""
