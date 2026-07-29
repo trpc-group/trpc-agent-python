@@ -78,7 +78,8 @@ max_file_write_bytes: 52428800  # 50 MB
 review_shell_pipelines: true
 review_package_install: true
 
-# Regex patterns for detecting secrets in script content (case-insensitive).
+# Extra regex patterns for sanitizing audit evidence. Built-in secret value,
+# sensitive environment key, path, and word detectors still always run.
 secret_patterns:
   - (?i)api[_-]?key\s*[:=]\s*['\"]?\w+
   - (?i)secret[_-]?key\s*[:=]\s*['\"]?\w+

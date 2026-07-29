@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Batch scan 26 safety samples and produce report + audit artifacts.
+"""Batch scan 32 safety samples and produce report + audit artifacts.
 
 Usage: python scripts/run_safety_scan.py [samples_dir]
 """
@@ -56,6 +56,9 @@ EXPECTED = {
     "27": "deny",  # curl evil.com (bare domain, no scheme)
     "28": "allow",  # curl github.com (bare domain, whitelisted)
     "29": "deny",  # rm --recursive --force / (long options)
+    "30": "deny",  # Python parse failure fails closed
+    "31": "deny",  # curl -o x evil.com checks the later bare domain
+    "32": "allow",  # inline comments are stripped before safety regex scans
 }
 
 

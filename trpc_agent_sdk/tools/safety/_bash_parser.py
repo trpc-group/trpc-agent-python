@@ -30,7 +30,40 @@ from ._types import RiskType
 from ._types import SafetyFinding
 
 _URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
-_HOSTNAME_RE = re.compile(r'\b(nc|netcat|socat)\s+([^\s;|&]+)')
+_NETWORK_OPTIONS_WITH_VALUE = frozenset({
+    "-A",
+    "--agent",
+    "--ca-certificate",
+    "--cert",
+    "--connect-timeout",
+    "-d",
+    "--data",
+    "--data-ascii",
+    "--data-binary",
+    "--data-raw",
+    "--data-urlencode",
+    "-e",
+    "--referer",
+    "-F",
+    "--form",
+    "--form-string",
+    "-H",
+    "--header",
+    "-m",
+    "--max-time",
+    "-o",
+    "--output",
+    "-T",
+    "--upload-file",
+    "-u",
+    "--user",
+    "-U",
+    "--proxy-user",
+    "-w",
+    "--write-out",
+    "-X",
+    "--request",
+})
 
 
 class BashParser:
@@ -45,7 +78,7 @@ class BashParser:
         lines = script.split("\n")
 
         for i, line in enumerate(lines, start=1):
-            stripped = line.strip()
+            stripped = self._strip_inline_comment(line).strip()
             if not stripped or stripped.startswith("#"):
                 continue
 
@@ -156,12 +189,13 @@ class BashParser:
             except Exception:
                 all_whitelisted = False
 
-        # Check raw hostnames for nc/netcat/socat (no http:// prefix)
-        # Use _extract_bare_hostname which skips option tokens (e.g. "-l").
-        host_match = _HOSTNAME_RE.search(line)
-        if host_match:
-            hostname = self._extract_bare_hostname(line)
-            if hostname and not self._policy.is_domain_allowed(hostname):
+        # Check raw hostnames without an http:// prefix.
+        bare_hosts: List[str] = []
+        if has_network_tool and not urls_found:
+            bare_hosts = self._extract_bare_hostnames(line)
+            for hostname in bare_hosts:
+                if self._policy.is_domain_allowed(hostname):
+                    continue
                 all_whitelisted = False
                 findings.append(
                     SafetyFinding(
@@ -173,29 +207,8 @@ class BashParser:
                         line=line_num,
                         recommendation=f"Domain '{hostname}' is not in the network allowlist.",
                     ))
-
-        # Fallback: curl/wget with bare domain (no http:// scheme).
-        # Extract the first non-option argument as a bare hostname and
-        # check it against the allowlist. Without this, "curl evil.com"
-        # produces only MEDIUM (R002_CURL_EXTERNAL_REQUEST) instead of
-        # HIGH+DENY, allowing detection bypass.
-        if has_network_tool and not urls_found and not host_match:
-            bare_host = self._extract_bare_hostname(line)
-            if bare_host:
-                if not self._policy.is_domain_allowed(bare_host):
-                    all_whitelisted = False
-                    findings.append(
-                        SafetyFinding(
-                            rule_id="R002_NON_WHITELIST_DOMAIN_ACCESS",
-                            rule_name="Non-Whitelisted Domain Access",
-                            risk_type=RiskType.NETWORK_EGRESS,
-                            risk_level=RiskLevel.HIGH,
-                            evidence=sanitize_text(line, self._policy.secret_patterns),
-                            line=line_num,
-                            recommendation=f"Domain '{bare_host}' is not in the network allowlist.",
-                        ))
-                else:
-                    all_whitelisted = True
+            if bare_hosts and all(self._policy.is_domain_allowed(hostname) for hostname in bare_hosts):
+                all_whitelisted = True
 
         # Add network tool finding only if domains are not all whitelisted
         if has_network_tool and not all_whitelisted:
@@ -293,11 +306,35 @@ class BashParser:
         return findings
 
     @staticmethod
+    def _strip_inline_comment(line: str) -> str:
+        """Strip unquoted shell comments while preserving quoted # chars."""
+        in_single = False
+        in_double = False
+        escaped = False
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == "'" and not in_double:
+                in_single = not in_single
+                continue
+            if char == '"' and not in_single:
+                in_double = not in_double
+                continue
+            if char == "#" and not in_single and not in_double:
+                if index == 0 or line[index - 1].isspace():
+                    return line[:index]
+        return line
+
+    @staticmethod
     def _strip_comments_and_quotes(text: str) -> str:
         """Remove comment lines and quoted content to reduce false positives."""
         lines = []
         for line in text.split("\n"):
-            stripped = line.strip()
+            stripped = BashParser._strip_inline_comment(line).strip()
             if stripped.startswith("#"):
                 continue
             cleaned = re.sub(r"'[^']*'", "''", stripped)
@@ -306,27 +343,36 @@ class BashParser:
         return "\n".join(lines)
 
     @staticmethod
-    def _extract_bare_hostname(line: str) -> str | None:
-        """Extract a bare hostname from curl/wget command without scheme.
-
-        Skips the command name and any option-like tokens (starting with
-        ``-``), then takes the first remaining token.  Returns the
-        hostname portion (before any ``/`` or ``:``) or None.
-        """
-        tokens = line.split()
+    def _extract_bare_hostnames(line: str) -> List[str]:
+        """Extract bare hostnames from network commands without a URL scheme."""
+        try:
+            tokens = shlex.split(line)
+        except ValueError:
+            tokens = line.split()
         if len(tokens) < 2:
-            return None
-        # Skip the command name (tokens[0]) and option flags
+            return []
+
+        hosts: List[str] = []
+        skip_next = False
         for token in tokens[1:]:
-            if token.startswith("-"):
+            if skip_next:
+                skip_next = False
                 continue
-            # Extract hostname: strip path and port
-            host = token.split("/")[0].split(":")[0]
-            # Basic validation: must look like a domain (contains a dot)
+            if token.startswith("-"):
+                option = token.split("=", 1)[0]
+                if option in _NETWORK_OPTIONS_WITH_VALUE and "=" not in token:
+                    skip_next = True
+                continue
+            host = token.split("/")[0].split(":")[0].strip("[]")
             if "." in host and not host.startswith("."):
-                return host
-            break  # Only try the first non-option token
-        return None
+                hosts.append(host)
+        return hosts
+
+    @staticmethod
+    def _extract_bare_hostname(line: str) -> str | None:
+        """Extract the first bare hostname from a network command."""
+        hosts = BashParser._extract_bare_hostnames(line)
+        return hosts[0] if hosts else None
 
     def _check_command_policy(self, script: str) -> List[SafetyFinding]:
         findings: List[SafetyFinding] = []
@@ -350,7 +396,7 @@ class BashParser:
         # Check each line individually (multi-line scripts can have
         # dangerous commands on non-first lines)
         for line_num, raw_line in enumerate(script.split("\n"), 1):
-            stripped = raw_line.strip()
+            stripped = self._strip_inline_comment(raw_line).strip()
             if not stripped or stripped.startswith("#"):
                 continue
             try:

@@ -9,8 +9,13 @@ from __future__ import annotations
 
 import pytest
 
+from trpc_agent_sdk.tools.safety import Decision
 from trpc_agent_sdk.tools.safety import PolicyConfig
 from trpc_agent_sdk.tools.safety import PythonParser
+from trpc_agent_sdk.tools.safety import RiskLevel
+from trpc_agent_sdk.tools.safety import SafetyScanner
+from trpc_agent_sdk.tools.safety import ScanRequest
+from trpc_agent_sdk.tools.safety import ScriptLanguage
 
 
 @pytest.fixture
@@ -118,10 +123,22 @@ class TestPythonParserRegexFallback:
 
     def test_syntax_error_falls_back(self, parser):
         findings = parser.parse("this is not valid python !!!")
-        # Should still produce findings via regex (or at least parse-failure finding)
-        has_parse_failure = any(f.rule_id == "R003_SHELL_PIPE_EXECUTION" and f.metadata.get("parse_failed")
-                                for f in findings)
-        assert len(findings) >= 1 or has_parse_failure
+        parse_failures = [f for f in findings if f.rule_id == "R007_PARSE_FAILURE"]
+        assert len(parse_failures) == 1
+        assert parse_failures[0].risk_level == RiskLevel.HIGH
+        assert parse_failures[0].metadata.get("parse_failed") is True
+
+    def test_syntax_error_with_os_system_fails_closed(self):
+        scanner = SafetyScanner(PolicyConfig.default())
+        report = scanner.scan(
+            ScanRequest(
+                script="!\nimport os\nos.system('rm -rf /')",
+                language=ScriptLanguage.PYTHON,
+                tool_name="test",
+            ))
+        assert report.decision == Decision.DENY
+        assert report.risk_level == RiskLevel.HIGH
+        assert "R007_PARSE_FAILURE" in report.rule_ids
 
 
 class TestGetattrEvasionCoverage:

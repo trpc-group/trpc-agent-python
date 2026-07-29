@@ -175,3 +175,19 @@ class TestGenerateSummary:
     def test_review_summary(self):
         summary = _Scanner._generate_summary(Decision.NEEDS_HUMAN_REVIEW, RiskLevel.MEDIUM, ["R002_TEST"])
         assert "review" in summary.lower()
+
+
+class TestToolSafetyCheckExitCode:
+
+    def test_review_exit_code_defaults_to_two(self):
+        from scripts.tool_safety_check import _exit_code_for_decision
+        assert _exit_code_for_decision(Decision.NEEDS_HUMAN_REVIEW) == 2
+
+    def test_block_on_review_exit_code_is_one(self):
+        from scripts.tool_safety_check import _exit_code_for_decision
+        assert _exit_code_for_decision(Decision.NEEDS_HUMAN_REVIEW, block_on_review=True) == 1
+
+    def test_deny_and_allow_exit_codes_are_stable(self):
+        from scripts.tool_safety_check import _exit_code_for_decision
+        assert _exit_code_for_decision(Decision.DENY) == 1
+        assert _exit_code_for_decision(Decision.ALLOW) == 0

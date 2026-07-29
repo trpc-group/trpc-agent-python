@@ -1,0 +1,394 @@
+[
+  {
+    "label": "01_safe_python",
+    "decision": "allow",
+    "risk_level": "low",
+    "expected": "allow",
+    "match": true,
+    "rule_ids": [],
+    "findings_count": 0,
+    "summary": "Safety scan passed. Risk level: low."
+  },
+  {
+    "label": "02_dangerous_delete",
+    "decision": "deny",
+    "risk_level": "critical",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_BASH_RECURSIVE_DELETE",
+      "R003_SYSTEM_COMMAND"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_BASH_RECURSIVE_DELETE, R003_SYSTEM_COMMAND"
+  },
+  {
+    "label": "03_read_credentials",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_CREDENTIAL_FILE_ACCESS"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_CREDENTIAL_FILE_ACCESS"
+  },
+  {
+    "label": "04_network_egress",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R002_CURL_EXTERNAL_REQUEST",
+      "R002_NON_WHITELIST_DOMAIN_ACCESS"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R002_CURL_EXTERNAL_REQUEST, R002_NON_WHITELIST_DOMAIN_ACCESS"
+  },
+  {
+    "label": "05_whitelist_network",
+    "decision": "allow",
+    "risk_level": "low",
+    "expected": "allow",
+    "match": true,
+    "rule_ids": [],
+    "findings_count": 0,
+    "summary": "Safety scan passed. Risk level: low."
+  },
+  {
+    "label": "06_subprocess_call",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_SUBPROCESS_EXECUTION"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R003_SUBPROCESS_EXECUTION"
+  },
+  {
+    "label": "07_shell_injection",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R002_CURL_EXTERNAL_REQUEST",
+      "R002_NON_WHITELIST_DOMAIN_ACCESS",
+      "R003_SHELL_PIPE_EXECUTION"
+    ],
+    "findings_count": 3,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R002_CURL_EXTERNAL_REQUEST, R002_NON_WHITELIST_DOMAIN_ACCESS, R003_SHELL_PIPE_EXECUTION"
+  },
+  {
+    "label": "08_dependency_install",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R003_SYSTEM_COMMAND",
+      "R004_PIP_INSTALL"
+    ],
+    "findings_count": 2,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R003_SYSTEM_COMMAND, R004_PIP_INSTALL"
+  },
+  {
+    "label": "09_infinite_loop",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R005_INFINITE_LOOP"
+    ],
+    "findings_count": 2,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R005_INFINITE_LOOP"
+  },
+  {
+    "label": "10_secret_output",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R006_SECRET_OUTPUT"
+    ],
+    "findings_count": 1,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R006_SECRET_OUTPUT"
+  },
+  {
+    "label": "11_bash_pipeline",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_CREDENTIAL_FILE_ACCESS",
+      "R002_NON_WHITELIST_DOMAIN_ACCESS",
+      "R002_SOCKET_EXTERNAL_CONNECTION",
+      "R003_SHELL_PIPE_EXECUTION"
+    ],
+    "findings_count": 4,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_CREDENTIAL_FILE_ACCESS, R002_NON_WHITELIST_DOMAIN_ACCESS, R002_SOCKET_EXTERNAL_CONNECTION, R003_SHELL_PIPE_EXECUTION"
+  },
+  {
+    "label": "12_needs_human_review",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R003_SYSTEM_COMMAND",
+      "R004_NPM_INSTALL"
+    ],
+    "findings_count": 2,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R003_SYSTEM_COMMAND, R004_NPM_INSTALL"
+  },
+  {
+    "label": "13_alias_os_system",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_OS_SYSTEM_EXECUTION"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R003_OS_SYSTEM_EXECUTION"
+  },
+  {
+    "label": "14_from_import_subprocess",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_SUBPROCESS_EXECUTION"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R003_SUBPROCESS_EXECUTION"
+  },
+  {
+    "label": "15_base64_pipe",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R003_SHELL_PIPE_EXECUTION"
+    ],
+    "findings_count": 1,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R003_SHELL_PIPE_EXECUTION"
+  },
+  {
+    "label": "16_pathlib_ssh",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_CREDENTIAL_FILE_ACCESS"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_CREDENTIAL_FILE_ACCESS"
+  },
+  {
+    "label": "17_requests_session",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R002_NETWORK_EGRESS",
+      "R002_REQUESTS_EXTERNAL_REQUEST"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R002_NETWORK_EGRESS, R002_REQUESTS_EXTERNAL_REQUEST"
+  },
+  {
+    "label": "18_env_secret_print",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R006_SECRET_ENV_ACCESS"
+    ],
+    "findings_count": 1,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R006_SECRET_ENV_ACCESS"
+  },
+  {
+    "label": "19_getattr_system",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_DYNAMIC_CODE_EXECUTION"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R003_DYNAMIC_CODE_EXECUTION"
+  },
+  {
+    "label": "20_eval_exec",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_DYNAMIC_CODE_EXECUTION"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R003_DYNAMIC_CODE_EXECUTION"
+  },
+  {
+    "label": "21_find_delete",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_FILE_DANGEROUS_DELETE"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_FILE_DANGEROUS_DELETE"
+  },
+  {
+    "label": "22_xargs_rm",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_FILE_DANGEROUS_DELETE",
+      "R003_SHELL_PIPE_EXECUTION"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_FILE_DANGEROUS_DELETE, R003_SHELL_PIPE_EXECUTION"
+  },
+  {
+    "label": "23_fork_bomb",
+    "decision": "deny",
+    "risk_level": "critical",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_SHELL_PIPE_EXECUTION",
+      "R005_FORK_BOMB"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: critical. Rules triggered: R003_SHELL_PIPE_EXECUTION, R005_FORK_BOMB"
+  },
+  {
+    "label": "24_builtins_eval",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R003_DYNAMIC_CODE_EXECUTION"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R003_DYNAMIC_CODE_EXECUTION"
+  },
+  {
+    "label": "25_cat_pem",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_CREDENTIAL_FILE_ACCESS"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_CREDENTIAL_FILE_ACCESS"
+  },
+  {
+    "label": "26_open_key_write",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_CREDENTIAL_FILE_ACCESS",
+      "R001_FILE_DANGEROUS_OPEN",
+      "R005_LARGE_FILE_WRITE"
+    ],
+    "findings_count": 3,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R001_CREDENTIAL_FILE_ACCESS, R001_FILE_DANGEROUS_OPEN, R005_LARGE_FILE_WRITE"
+  },
+  {
+    "label": "27_curl_bare_domain",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R002_CURL_EXTERNAL_REQUEST",
+      "R002_NON_WHITELIST_DOMAIN_ACCESS"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R002_CURL_EXTERNAL_REQUEST, R002_NON_WHITELIST_DOMAIN_ACCESS"
+  },
+  {
+    "label": "28_curl_bare_whitelist",
+    "decision": "allow",
+    "risk_level": "low",
+    "expected": "allow",
+    "match": true,
+    "rule_ids": [],
+    "findings_count": 0,
+    "summary": "Safety scan passed. Risk level: low."
+  },
+  {
+    "label": "29_rm_long_option",
+    "decision": "deny",
+    "risk_level": "critical",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_BASH_RECURSIVE_DELETE"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_BASH_RECURSIVE_DELETE"
+  },
+  {
+    "label": "30_python_parse_failure_os_system",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R007_PARSE_FAILURE"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R007_PARSE_FAILURE"
+  },
+  {
+    "label": "31_curl_output_bare_domain",
+    "decision": "deny",
+    "risk_level": "high",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R002_CURL_EXTERNAL_REQUEST",
+      "R002_NON_WHITELIST_DOMAIN_ACCESS"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: high. Rules triggered: R002_CURL_EXTERNAL_REQUEST, R002_NON_WHITELIST_DOMAIN_ACCESS"
+  },
+  {
+    "label": "32_inline_comment_safe",
+    "decision": "allow",
+    "risk_level": "low",
+    "expected": "allow",
+    "match": true,
+    "rule_ids": [],
+    "findings_count": 0,
+    "summary": "Safety scan passed. Risk level: low."
+  }
+]

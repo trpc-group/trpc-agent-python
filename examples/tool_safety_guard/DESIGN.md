@@ -21,7 +21,8 @@ Tool / Skill / MCP Tool / CodeExecutor 请求
         ├── PythonParser: AST NodeVisitor + regex fallback
         │     ├── 别名解析: from os import system → system → os.system
         │     ├── getattr 检测: getattr(__builtins__, 'eval')
-        │     └── 危险调用: open/subprocess/requests/eval/exec 等
+        │     ├── 危险调用: open/subprocess/requests/eval/exec 等
+        │     └── 解析失败: 保留 regex 证据并 fail-closed 为 DENY
         ├── BashParser: 正则 + shlex + 域名白名单检查
         │     └── 危险命令: rm/curl/sudo/pip install/fork bomb 等
         ├── _scan_context_safety(): args/cwd/metadata 超限检查
@@ -63,6 +64,7 @@ Tool / Skill / MCP Tool / CodeExecutor 请求
 | HIGH / CRITICAL | `deny` | `true` |
 
 `set_blocked()` 可在决策后显式覆盖 `blocked` 字段。`ToolSafetyFilter` 和 `SafeCodeExecutor` 的 `block_on_review` 参数控制 `NEEDS_HUMAN_REVIEW` 是否也阻断。
+CLI 中的 `--block-on-review` 同样会把 `NEEDS_HUMAN_REVIEW` 标记为 `blocked=true`，并以退出码 1 作为 CI 阻断信号。
 
 ## 风险类型与规则体系
 
@@ -135,6 +137,7 @@ report = scanner.scan(ScanRequest(script="rm -rf /", language="bash", tool_name=
 
 ```bash
 python scripts/tool_safety_check.py script.sh              # exit 0/1/2
+python scripts/tool_safety_check.py --block-on-review script.sh  # review exits 1
 python scripts/tool_safety_check.py --json script.py       # JSON output
 echo "rm -rf /" | python scripts/tool_safety_check.py --stdin
 ```
@@ -152,9 +155,8 @@ Safety Guard 执行 **静态分析**，不是运行时沙箱。生产环境应�
 
 - **误报**：安全的 `subprocess.run` 调用可能被标记。通过 `allowed_commands` 和 `network_allowlist` 策略调整。
 - **漏报**：混淆代码（字符串拼接、base64 编码）、间接调用可绕过静态规则。
-- **别名导入**：`from os import system` 现已检测。但 `getattr(__builtins__, 'ev'+'al')` 字符串拼接仍无法检测。
+- **别名导入**：`from os import system` 现已检测。Python 解析失败不再降级放行，而是返回 `R007_PARSE_FAILURE` 并 fail-closed。
 - **动态 URL**：通过字符串格式化构造的 URL 无法检查白名单。
-- **Python 解析失败**：语法错误的脚本回退到 regex 启发式扫描，准确度降低。
 
 ## 扩展规则
 

@@ -389,11 +389,10 @@ class PythonParser:
         findings: List[SafetyFinding] = []
         self._scan_text_patterns(script, findings)
 
-        # Mark all findings as needs_human_review due to parse failure
+        # Mark regex-derived findings as parse-failure heuristics.
         for f in findings:
-            f.risk_level = RiskLevel.MEDIUM
             f.metadata["parse_failed"] = True
-            f.recommendation = "AST parsing failed — results are from regex heuristics. Manual review required."
+            f.recommendation = "AST parsing failed; regex heuristic finding retained. Execution is fail-closed."
 
         # Also add a top-level finding about the parse failure
         findings.append(
@@ -401,9 +400,9 @@ class PythonParser:
                 rule_id=PYTHON_PARSE_FAILURE_RULE_ID,
                 rule_name="Python Parse Failure",
                 risk_type=RiskType.SYSTEM_COMMAND,
-                risk_level=RiskLevel.MEDIUM,
+                risk_level=RiskLevel.HIGH,
                 evidence=sanitize_text(script[:200], self._policy.secret_patterns),
-                recommendation="Python script could not be parsed as AST. Manual review required.",
+                recommendation="Python script could not be parsed as AST. Execution is denied fail-closed.",
                 metadata={"parse_failed": True},
             ))
         return findings
