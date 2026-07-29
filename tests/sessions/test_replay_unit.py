@@ -26,6 +26,7 @@ from tests.sessions.replay.report import BackendStatus
 from tests.sessions.replay.report import CaseResult
 from tests.sessions.replay.report import Comparison
 from tests.sessions.replay.report import build_diff_report
+from tests.sessions.replay.redis_support import redis_unavailable_reason
 from tests.sessions.replay.summary_checks import check_summary_issues
 from tests.sessions.replay.summary_checks import summary_text_similarity
 
@@ -365,3 +366,44 @@ class TestReport:
         # FPR 只按正常 case:normal_mismatch=1 / normal_total=2 = 0.5,drift 不进分子分母
         assert report["false_positive_rate"] == 0.5
         assert report["known_drift_cases"] == ["drift_one"]
+
+
+# ---------------------------------------------------------------------------
+# Task 10: Redis availability
+# ---------------------------------------------------------------------------
+
+
+class TestRedisSupport:
+
+    def test_probe_reports_reachability_and_closes_client(self, monkeypatch):
+        """验证 Redis PING 成功/失败，并确保连接和凭据得到安全处理。"""
+
+        class FakeClient:
+
+            def __init__(self, error=None):
+                self.error = error
+                self.closed = False
+
+            def ping(self):
+                if self.error:
+                    raise self.error
+                return True
+
+            def close(self):
+                self.closed = True
+
+        available = FakeClient()
+        unavailable = FakeClient(ConnectionError("refused"))
+        clients = [available, unavailable]
+        monkeypatch.setattr(
+            "tests.sessions.replay.redis_support.redis.Redis.from_url",
+            lambda *_args, **_kwargs: clients.pop(0),
+        )
+
+        assert redis_unavailable_reason("redis://localhost:6379/0") is None
+        assert available.closed
+
+        reason = redis_unavailable_reason("redis://:top-secret@localhost:6379/0")
+        assert "ConnectionError: refused" in reason
+        assert "top-secret" not in reason
+        assert unavailable.closed

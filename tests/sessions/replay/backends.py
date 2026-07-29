@@ -28,6 +28,7 @@ from trpc_agent_sdk.sessions import SqlSessionService
 from trpc_agent_sdk.sessions._summarizer_manager import SummarizerSessionManager
 
 from .harness import ReplayBackend
+from .redis_support import redis_unavailable_reason
 from .report import BackendStatus
 
 
@@ -75,7 +76,10 @@ def sqlite_backend(db_url: str = "sqlite:///:memory:") -> ReplayBackend:
 
 
 def redis_backend(url: str) -> ReplayBackend:
-    svc = RedisSessionService(db_url=url, summarizer_manager=_manager(), session_config=_session_config(), is_async=True)
+    svc = RedisSessionService(db_url=url,
+                              summarizer_manager=_manager(),
+                              session_config=_session_config(),
+                              is_async=True)
     mem = RedisMemoryService(db_url=url, enabled=True, is_async=True)
     return ReplayBackend("redis", svc, mem)
 
@@ -98,11 +102,19 @@ def enabled_backends(tmp_path: Optional[str] = None, ) -> tuple[list[ReplayBacke
 
     redis_url = os.environ.get("TRPC_REPLAY_REDIS_URL")
     if redis_url:
-        try:
-            backends.append(redis_backend(redis_url))
-            statuses.append(BackendStatus(name="redis", status="match"))
-        except Exception as exc:  # noqa: BLE001
-            statuses.append(BackendStatus(name="redis", status="skipped", reason=str(exc)))
+        # Redis clients connect lazily, so constructing the backend cannot
+        # prove the configured endpoint is reachable. Probe it explicitly
+        # before adding Redis to the replay candidates.
+        # Redis 客户端采用延迟连接；构造成功不代表服务可达，因此先执行 PING。
+        unavailable_reason = redis_unavailable_reason(redis_url)
+        if unavailable_reason:
+            statuses.append(BackendStatus(name="redis", status="skipped", reason=unavailable_reason))
+        else:
+            try:
+                backends.append(redis_backend(redis_url))
+                statuses.append(BackendStatus(name="redis", status="match"))
+            except Exception as exc:  # noqa: BLE001
+                statuses.append(BackendStatus(name="redis", status="skipped", reason=str(exc)))
     else:
         statuses.append(BackendStatus(name="redis", status="skipped", reason="TRPC_REPLAY_REDIS_URL unset"))
 

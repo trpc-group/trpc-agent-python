@@ -14,6 +14,7 @@ import os
 
 import pytest
 
+from .replay.redis_support import require_replay_redis
 from .replay_harness import DEFAULT_CASES_PATH
 from .replay_harness import compare_snapshots
 from .replay_harness import load_replay_cases
@@ -99,12 +100,15 @@ async def test_summary_faults_are_all_located(tmp_path):
         assert all(difference.reference_backend and difference.candidate_backend for difference in differences)
 
 
-@pytest.mark.skipif(not os.getenv("TRPC_REPLAY_REDIS_URL"), reason="TRPC_REPLAY_REDIS_URL is not configured")
 async def test_optional_redis_integration(tmp_path):
     """Compare Redis when its opt-in integration URL is configured.
 
     配置可选集成 URL 时，对比 Redis 后端的一致性。
     """
+    # Check the actual endpoint instead of treating the mere presence of an
+    # environment variable as proof that Redis is running.
+    # 检查真实端点，不能仅凭环境变量存在就认为 Redis 已启动。
+    require_replay_redis()
     report = await run_replay_suite(
         work_dir=tmp_path,
         backend_names=["inmemory", "redis"],

@@ -13,10 +13,7 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-
-import pytest
 
 from tests.sessions.replay.backends import in_memory_backend
 from tests.sessions.replay.backends import sqlite_backend
@@ -28,6 +25,7 @@ from tests.sessions.replay.injectors import inject_redis_diff
 from tests.sessions.replay.injectors import inject_snapshot_diff
 from tests.sessions.replay.injectors import inject_sql_diff
 from tests.sessions.replay.normalizer import normalize_snapshot
+from tests.sessions.replay.redis_support import require_replay_redis
 from tests.sessions.replay.summary_checks import check_summary_issues
 
 CASES_DIR = str(Path(__file__).parent / "replay" / "replay_cases")
@@ -184,9 +182,10 @@ class TestEndToEndSqlInjection:
 class TestEndToEndRedisInjection:
 
     async def test_event_author_drift_detected(self):
-        redis_url = os.environ.get("TRPC_REPLAY_REDIS_URL")
-        if not redis_url:
-            pytest.skip("TRPC_REPLAY_REDIS_URL unset")
+        # Resolve and probe Redis before replaying so an unavailable optional
+        # service is reported as skipped instead of producing a long traceback.
+        # 回放前解析并探测 Redis，使不可用的可选服务明确标记为跳过。
+        redis_url = require_replay_redis()
         from tests.sessions.replay.backends import redis_backend
 
         case = _find("single_turn")
@@ -227,9 +226,9 @@ class TestEndToEndRedisInjection:
         """验收 state_value 端到端测试(helloopenworld review 建议):注入后读回 app_state,
         断言含注入键且与 SDK 写入格式可被 compare_snapshots 正确比较。
         """
-        redis_url = os.environ.get("TRPC_REPLAY_REDIS_URL")
-        if not redis_url:
-            pytest.skip("TRPC_REPLAY_REDIS_URL unset")
+        # Reuse the same reachability guard as the integration suite.
+        # 与集成一致性测试复用同一可达性检查。
+        redis_url = require_replay_redis()
         from tests.sessions.replay.backends import redis_backend
 
         case = _find("state_overwrite")
