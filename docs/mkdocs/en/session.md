@@ -109,11 +109,18 @@ session = await session_service.get_session(
 
 **List Sessions**:
 ```python
+# Specify user_id: returns all sessions for that user (without events)
 session_list = await session_service.list_sessions(
     app_name="my_app",
     user_id="user_001"
 )
-# Returns ListSessionsResponse, containing all sessions for the user (without events)
+
+# user_id=None: returns sessions across all users for the app
+all_session_list = await session_service.list_sessions(
+    app_name="my_app",
+    user_id=None
+)
+# Returns ListSessionsResponse, containing matching sessions (without events)
 ```
 
 **Delete Session**:
@@ -128,7 +135,7 @@ await session_service.delete_session(
 **Implementation Logic** (`_base_session_service.py`):
 - `create_session`: Creates a session, separates and stores app/user/session state
 - `get_session`: Retrieves a session, merges app/user/session state, applies event filtering
-- `list_sessions`: Lists sessions (excludes events to reduce data transfer)
+- `list_sessions`: Lists sessions (excludes events to reduce data transfer); passing `user_id=None` returns sessions across all users for the app
 - `delete_session`: Deletes a session and its associated data
 
 ---
@@ -611,6 +618,7 @@ session = await session_service.get_session(
 )
 
 # List existing Sessions
+# Specify user_id to return that user's sessions; user_id=None returns sessions across all users for the app
 session_list = await session_service.list_sessions(
     app_name=app_name,
     user_id=user_id

@@ -19,7 +19,9 @@ is threaded into the spawned run via ``Runner.run_async(..., agent_context=...)`
 from __future__ import annotations
 
 from typing import Any
+from typing import AsyncIterator
 from typing import Optional
+from typing import TypedDict
 from typing import Union
 
 from trpc_agent_sdk.abc import ArtifactId
@@ -246,21 +248,99 @@ def _extract_final_text(last_event) -> str:
     return "\n".join(p.text for p in last_event.content.parts if getattr(p, "text", None))
 
 
-async def run_subagent(
+class SubAgentProgress(TypedDict, total=False):
+    """Wire contract for a forwarded sub-agent progress event.
+
+    This is the ``payload`` dict a consumer receives for each ``partial=True``
+    progress event when ``forward_events`` is enabled.
+
+    ``content`` is the sub-agent event's :class:`Content` dumped with
+    ``model_dump(exclude_none=True)`` — the same shape used everywhere else in
+    the framework (``parts[i].function_call.name``, ``parts[i].text`` /
+    ``thought``), so consumers reuse the structure they already know instead of
+    a bespoke schema. ``error`` and ``usage`` are lifted from the ``Event``
+    itself (they do not live on ``content``). ``total=False`` because
+    ``content`` / ``error`` / ``usage`` are only present when the underlying
+    event carries them.
+
+    Only ``content`` — never the whole ``Event`` — crosses the boundary, so
+    ``actions`` / ``state_delta`` (parent-context state) are not leaked.
+    """
+
+    author: Optional[str]
+    partial: bool
+    content: dict
+    error: dict
+    usage: dict
+
+
+def _project_subagent_event(event: Any) -> SubAgentProgress:
+    """Project a sub-agent event into a lightweight, JSON-serializable dict.
+
+    Forwarded to the parent runner's consumer as the ``payload`` of a progress
+    event when ``forward_events`` is enabled. See :class:`SubAgentProgress` for
+    the shape. Uses the framework-native ``Content`` dump for the event body
+    rather than a custom projection, and deliberately dumps only ``content``
+    (not the whole ``Event``) so parent-context state never crosses the
+    isolation boundary.
+    """
+    payload: SubAgentProgress = {
+        "author": getattr(event, "author", None),
+        "partial": bool(getattr(event, "partial", False)),
+    }
+
+    # Framework-native content shape (parts / function_call / text / thought).
+    # Dump only content — actions / state_delta live on the Event and must not
+    # cross the isolation boundary.
+    content = getattr(event, "content", None)
+    dump = getattr(content, "model_dump", None) if content is not None else None
+    if callable(dump):
+        payload["content"] = dump(exclude_none=True)
+
+    # Surface sub-agent run errors so the consumer can render them instead of
+    # showing an empty event. Added conditionally to keep the payload clean on
+    # the common (no-error) path. See Event.is_error(): error_code drives it.
+    error_code = getattr(event, "error_code", None)
+    error_message = getattr(event, "error_message", None)
+    if error_code is not None or error_message is not None:
+        payload["error"] = {"code": error_code, "message": error_message}
+
+    # Token usage for cost observability. Only the headline counts are lifted
+    # out of the usage_metadata object (which is not JSON-serializable as-is).
+    usage = getattr(event, "usage_metadata", None)
+    if usage is not None:
+        payload["usage"] = {
+            "prompt_tokens": getattr(usage, "prompt_token_count", None),
+            "completion_tokens": getattr(usage, "candidates_token_count", None),
+            "total_tokens": getattr(usage, "total_token_count", None),
+        }
+
+    return payload
+
+
+async def run_subagent_streaming(
     *,
     parent_ctx: InvocationContext,
     archetype: SubAgentArchetype,
     prompt: str,
     agent_config=None,
     tool_filter: Optional[list] = None,
-) -> Union[str, dict]:
-    """Run an isolated sub-agent and return its final assistant text.
+) -> AsyncIterator[Union[str, dict]]:
+    """Run an isolated sub-agent, yielding progress projections then the result.
 
-    Returns:
-        Final assistant text on success, ``"[sub-agent cancelled]"`` if the
-        run was cancelled, or ``{"status": "error", "message": ...}`` on
-        unexpected exceptions. Errors are not raised back to the parent so
-        the orchestrator can decide how to react.
+    Yields one projection ``dict`` (see :func:`_project_subagent_event`) per
+    sub-agent event, and finally the sub-agent's final result as the **last**
+    yielded value. The final value is the assistant text on success,
+    ``"[sub-agent cancelled]"`` on cancellation, or
+    ``{"status": "error", "message": ...}`` on unexpected exceptions — errors are
+    surfaced as the final value rather than raised, matching
+    :func:`run_subagent`'s graceful-degradation contract.
+
+    Contract with the progress-streaming tool path: every yielded value except
+    the last becomes a ``partial=True`` progress event surfaced to the parent
+    runner's consumer; the last value becomes the tool's ``function_response``
+    fed back to the parent LLM. The projection dicts are never persisted into
+    the parent session nor seen by the parent LLM.
     """
     # Imported lazily to mirror AgentTool and avoid a circular import at module load.
     from trpc_agent_sdk.runners import Runner
@@ -269,7 +349,8 @@ async def run_subagent(
         sub_agent = _build_sub_agent(archetype, parent_ctx, agent_config=agent_config, tool_filter=tool_filter)
     except Exception as ex:  # noqa: BLE001
         logger.error("sub-agent build failed: %s", ex, exc_info=True)
-        return {"status": "error", "message": str(ex)}
+        yield {"status": "error", "message": str(ex)}
+        return
 
     parent_app_name = getattr(parent_ctx.session, "app_name", "trpc_app")
     sub_app_name = f"{parent_app_name}{SUBAGENT_APP_NAME_SUFFIX}{archetype.name}"
@@ -285,6 +366,7 @@ async def run_subagent(
 
     last_event = None
     max_turns_reached = False
+    final_value: Union[str, dict, None] = None
     try:
         sub_session = await sub_runner.session_service.create_session(
             app_name=sub_app_name,
@@ -308,6 +390,10 @@ async def run_subagent(
                 new_message=content,
         ):
             last_event = event
+            # Forward this sub-agent event to the parent consumer as a progress
+            # projection. This is the only divergence from run_subagent's silent
+            # drain; the projection never reaches the parent LLM.
+            yield _project_subagent_event(event)
             # Count LLM calls (one non-partial event per request, including
             # those with tool calls).  Aligns with claw-code-agent.
             if event.content and not event.partial and not event.is_error():
@@ -322,21 +408,55 @@ async def run_subagent(
 
         await _forward_artifacts(sub_runner, sub_session, parent_ctx)
     except RunCancelledException:
-        return "[sub-agent cancelled]"
+        final_value = "[sub-agent cancelled]"
     except Exception as ex:  # noqa: BLE001
         logger.error("sub-agent run failed: %s", ex, exc_info=True)
-        return {"status": "error", "message": str(ex)}
+        final_value = {"status": "error", "message": str(ex)}
     finally:
         try:
             await sub_runner.close()
         except Exception as close_ex:  # noqa: BLE001
             logger.warning("sub-agent runner close failed: %s", close_ex)
 
-    result = _extract_final_text(last_event)
-    if max_turns_reached:
-        note = "[sub-agent stopped: max turns reached]"
-        return f"{result}\n\n{note}" if result else note
-    return result
+    if final_value is None:
+        result = _extract_final_text(last_event)
+        if max_turns_reached:
+            note = "[sub-agent stopped: max turns reached]"
+            final_value = f"{result}\n\n{note}" if result else note
+        else:
+            final_value = result
+    yield final_value
 
 
-__all__ = ["run_subagent"]
+async def run_subagent(
+    *,
+    parent_ctx: InvocationContext,
+    archetype: SubAgentArchetype,
+    prompt: str,
+    agent_config=None,
+    tool_filter: Optional[list] = None,
+) -> Union[str, dict]:
+    """Run an isolated sub-agent and return its final assistant text.
+
+    Non-streaming wrapper around :func:`run_subagent_streaming`: it drains the
+    progress projections and returns only the final value.
+
+    Returns:
+        Final assistant text on success, ``"[sub-agent cancelled]"`` if the
+        run was cancelled, or ``{"status": "error", "message": ...}`` on
+        unexpected exceptions. Errors are not raised back to the parent so
+        the orchestrator can decide how to react.
+    """
+    final: Union[str, dict] = ""
+    async for value in run_subagent_streaming(
+            parent_ctx=parent_ctx,
+            archetype=archetype,
+            prompt=prompt,
+            agent_config=agent_config,
+            tool_filter=tool_filter,
+    ):
+        final = value
+    return final
+
+
+__all__ = ["run_subagent", "run_subagent_streaming", "SubAgentProgress"]

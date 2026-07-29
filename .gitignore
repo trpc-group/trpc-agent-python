@@ -29,3 +29,5 @@ pyrightconfig.json
 .env
 .env.local
 *.env
+# spec-workflow tool artifacts
+.spec-workflow

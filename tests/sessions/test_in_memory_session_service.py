@@ -34,8 +34,9 @@ from trpc_agent_sdk.types import Content, EventActions, Part, State, Ttl
 def _make_session_config(ttl_seconds=0, cleanup_interval=0.0, enable_ttl=False, **kwargs):
     config = SessionServiceConfig(**kwargs)
     if enable_ttl:
-        config.ttl = SessionServiceConfig.create_ttl_config(
-            enable=True, ttl_seconds=ttl_seconds, cleanup_interval_seconds=cleanup_interval)
+        config.ttl = SessionServiceConfig.create_ttl_config(enable=True,
+                                                            ttl_seconds=ttl_seconds,
+                                                            cleanup_interval_seconds=cleanup_interval)
     else:
         config.clean_ttl_config()
     return config
@@ -56,7 +57,9 @@ def _make_event(author="agent", text="hello", state_delta=None, partial=False):
 # SessionWithTTL
 # ---------------------------------------------------------------------------
 
+
 class TestSessionWithTTL:
+
     def test_update_and_get(self):
         session = Session(id="s1", app_name="app", user_id="user", save_key="k")
         wrapper = SessionWithTTL(session=session)
@@ -85,7 +88,9 @@ class TestSessionWithTTL:
 # StateWithTTL
 # ---------------------------------------------------------------------------
 
+
 class TestStateWithTTL:
+
     def test_update(self):
         wrapper = StateWithTTL()
         result = wrapper.update({"key": "value"})
@@ -119,7 +124,9 @@ class TestStateWithTTL:
 # InMemorySessionService — create_session
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryCreateSession:
+
     async def test_create_basic_session(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         session = await svc.create_session(app_name="app", user_id="user")
@@ -143,13 +150,13 @@ class TestInMemoryCreateSession:
 
     async def test_create_with_state(self):
         svc = InMemorySessionService(session_config=_make_session_config())
-        session = await svc.create_session(
-            app_name="app", user_id="user",
-            state={
-                "session_key": "session_val",
-                f"{State.APP_PREFIX}app_key": "app_val",
-                f"{State.USER_PREFIX}user_key": "user_val",
-            })
+        session = await svc.create_session(app_name="app",
+                                           user_id="user",
+                                           state={
+                                               "session_key": "session_val",
+                                               f"{State.APP_PREFIX}app_key": "app_val",
+                                               f"{State.USER_PREFIX}user_key": "user_val",
+                                           })
         assert session.state["session_key"] == "session_val"
         assert session.state[f"{State.APP_PREFIX}app_key"] == "app_val"
         assert session.state[f"{State.USER_PREFIX}user_key"] == "user_val"
@@ -168,7 +175,9 @@ class TestInMemoryCreateSession:
 # InMemorySessionService — get_session
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryGetSession:
+
     async def test_get_existing_session(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         created = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -185,13 +194,14 @@ class TestInMemoryGetSession:
 
     async def test_get_returns_merged_state(self):
         svc = InMemorySessionService(session_config=_make_session_config())
-        await svc.create_session(
-            app_name="app", user_id="user", session_id="s1",
-            state={
-                "sk": "sv",
-                f"{State.APP_PREFIX}ak": "av",
-                f"{State.USER_PREFIX}uk": "uv",
-            })
+        await svc.create_session(app_name="app",
+                                 user_id="user",
+                                 session_id="s1",
+                                 state={
+                                     "sk": "sv",
+                                     f"{State.APP_PREFIX}ak": "av",
+                                     f"{State.USER_PREFIX}uk": "uv",
+                                 })
         result = await svc.get_session(app_name="app", user_id="user", session_id="s1")
         assert result.state["sk"] == "sv"
         assert result.state[f"{State.APP_PREFIX}ak"] == "av"
@@ -212,7 +222,9 @@ class TestInMemoryGetSession:
 # InMemorySessionService — list_sessions
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryListSessions:
+
     async def test_list_empty(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         result = await svc.list_sessions(app_name="app", user_id="user")
@@ -251,12 +263,31 @@ class TestInMemoryListSessions:
         assert result.sessions == []
         await svc.close()
 
+    async def test_list_all_users_when_user_id_none(self):
+        svc = InMemorySessionService(session_config=_make_session_config())
+        await svc.create_session(app_name="app", user_id="user1", session_id="s1")
+        await svc.create_session(app_name="app", user_id="user2", session_id="s2")
+        result = await svc.list_sessions(app_name="app", user_id=None)
+        ids = sorted(s.id for s in result.sessions)
+        assert ids == ["s1", "s2"]
+        await svc.close()
+
+    async def test_list_all_users_filtered_by_app(self):
+        svc = InMemorySessionService(session_config=_make_session_config())
+        await svc.create_session(app_name="app1", user_id="user1", session_id="s1")
+        await svc.create_session(app_name="app2", user_id="user1", session_id="s2")
+        result = await svc.list_sessions(app_name="app1", user_id=None)
+        assert [s.id for s in result.sessions] == ["s1"]
+        await svc.close()
+
 
 # ---------------------------------------------------------------------------
 # InMemorySessionService — delete_session
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryDeleteSession:
+
     async def test_delete_existing(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -275,7 +306,9 @@ class TestInMemoryDeleteSession:
 # InMemorySessionService — append_event
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryAppendEvent:
+
     async def test_append_basic(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -351,7 +384,9 @@ class TestInMemoryAppendEvent:
 # InMemorySessionService — update_session
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryUpdateSession:
+
     async def test_update_existing(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -384,7 +419,9 @@ class TestInMemoryUpdateSession:
 # InMemorySessionService — cleanup
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryCleanupExpired:
+
     async def test_cleanup_removes_expired_sessions(self):
         config = _make_session_config(enable_ttl=True, ttl_seconds=1, cleanup_interval=3600.0)
         svc = InMemorySessionService(session_config=config)
@@ -436,7 +473,9 @@ class TestInMemoryCleanupExpired:
 # InMemorySessionService — cleanup task lifecycle
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryCleanupTask:
+
     def test_no_cleanup_task_when_ttl_disabled(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         assert svc._InMemorySessionService__cleanup_task is None
@@ -490,7 +529,9 @@ class TestInMemoryCleanupTask:
 # InMemorySessionService — internal helpers
 # ---------------------------------------------------------------------------
 
+
 class TestInMemoryInternalHelpers:
+
     async def test_get_app_state_nonexistent(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         assert svc._get_app_state("nonexistent") == {}

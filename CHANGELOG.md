@@ -1,5 +1,66 @@
 # Changelog
 
+## [1.1.14](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.14) (2026-07-24)
+
+### Features
+
+* Telemetry: Added support for reporting model thinking text inside a dedicated `<trace_think>` block, making it easier to distinguish reasoning content from normal response text while keeping the existing trace format compatible.
+* Sessions: Added Redis Cluster-backed session and memory services, allowing deployments that use Redis Cluster to persist conversation sessions and long-term memory through the same service interfaces as existing storage backends.
+* Storage: Formatted Redis Cluster session and memory service code to keep the new implementation consistent with the repository style.
+* Examples/Docs: Added a script for running with `uv` on macOS and updated the related installation docs and README instructions, making the macOS setup path easier to follow.
+
+## [1.1.13](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.13) (2026-07-17)
+
+### Features
+
+* Plan Mode: Added Claude Code-style Plan Mode (`setup_plan` / `PlanToolSet`), so agents can enter a design-and-approval phase before implementation. Supports model-initiated entry via `enter_plan_mode` and user/UI-driven entry through session state, with plan drafting (`update_plan_content`), clarifying questions, approval gating (`exit_plan_mode`), and write-tool restrictions while planning.
+* Tools: Added Tavily as a provider for `WebSearchTool` and `WebFetchTool`. Search can return LLM-ready answers plus optional image hits; fetch can use Tavily Extract as an alternative to direct HTTP fetching.
+* AG-UI: Expanded long-running tool discovery so nested `ToolSet` tools (including Plan Mode tools) are recognized during AG-UI runs, and tool names can be resolved from session history when the client payload only carries a tool call id.
+
+### Bug Fixes
+
+* AG-UI: Fixed session state updates from the AG-UI protocol not being persisted. State-change events are now appended as non-partial events so session services apply them correctly.
+* Runner: Avoided repeated string concatenation while accumulating streaming partial text. Partial chunks are kept as a list and joined only when cancellation cleanup needs the full text.
+* Examples: Fixed a few example agents (LangGraph and Mem0) so the full example pipeline can run more reliably.
+
+### Docs
+
+* Docs: Added English and Chinese Plan Mode guides, plus dedicated pages for TodoWrite, Task, and Goal tools.
+* Docs: Documented Tavily configuration and usage for web search and web fetch.
+* Examples: Added `plan_mode` and `plan_mode_with_goal_and_task` AG-UI examples for trying Plan Mode end to end.
+
+### Internal
+
+* CI: Added a GitHub Actions release workflow for publishing releases.
+* CI: Added code-review helper prompts and scripts under `.github/code_review/`.
+* CI: Added `pipeline_test/run_all_examples.sh` to drive the full examples pipeline more consistently.
+
+## [1.1.12](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.12) (2026-07-10)
+
+### Features
+
+* Agent: Added support for dynamically created sub-agents to forward runtime events directly into the parent agent event stream, so callers can observe child-agent progress, tool activity, and final outputs without waiting for the whole delegated task to finish.
+* Agent: Added dynamic sub-agent creation support, allowing agents to create and use child agents at runtime for more flexible task decomposition and delegation.
+* Goal: Added Goal support aligned with the Go implementation, giving agents a structured way to carry task objectives through the execution flow.
+* A2A: Added optional `app_name` support to `TrpcA2aAgentService`, allowing the Runner app identity to differ from the exposed A2A service name while keeping the existing `service_name` fallback behavior.
+* Session: Updated `list_sessions()` so `user_id` can be omitted. When `user_id=None`, InMemory, SQL, Redis, and Eval session services now return all sessions under the specified `app_name` without loading session events.
+* Skill: Added the `skills_hub` module to support centralized skill discovery and management.
+
+### Bug Fixes
+
+* Graph: Fixed `GraphAgent` `AgentNode.last_response` so it no longer records thinking text or intermediate tool-call round text as the node's final response. The graph now uses `Event.is_final_response()` and removes thinking content before saving the last response.
+* A2A: Fixed internal pipeline example scripts and paths so the example workflow can be triggered and run with the expected files.
+* Docs: Fixed README optional dependency installation commands by quoting extras, removing extra spaces, and normalizing package-extra casing so shell parsing works correctly.
+
+### Docs
+
+* Docs: Added MkDocs site entry pages and navigation for the existing English and Chinese documentation, plus a GitHub Pages workflow so the README documentation badge can point to a published documentation site.
+* Docs: Added documentation and test coverage for listing sessions across all users under an app by passing `user_id=None`.
+
+### Internal
+
+* CI: Added and adjusted internal pipeline test trigger files used by repository automation.
+
 ## [1.1.11](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.11) (2026-06-26)
 
 ### Features

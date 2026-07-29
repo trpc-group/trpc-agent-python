@@ -183,26 +183,32 @@ class InMemorySessionService(BaseSessionService):
         return self._merge_state(app_state, user_state, copied_session)
 
     @override
-    async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
+    async def list_sessions(self, *, app_name: str, user_id: Optional[str] = None) -> ListSessionsResponse:
         empty_response = ListSessionsResponse()
-        if app_name not in self._sessions:
-            return empty_response
-        if user_id not in self._sessions[app_name]:
+        app_sessions = self._sessions.get(app_name)
+        if not app_sessions:
             return empty_response
 
+        if user_id is None:
+            user_sessions = app_sessions
+        elif user_id in app_sessions:
+            user_sessions = {user_id: app_sessions[user_id]}
+        else:
+            return empty_response
+
+        app_state = self._get_app_state(app_name)
         sessions_without_events = []
-        for session_id in self._sessions[app_name][user_id].keys():
-            session = self._get_session(app_name, user_id, session_id)
-            if session is None:
-                continue
+        for uid, session_dict in user_sessions.items():
+            user_state = self._get_user_state(app_name, uid)
+            for session_id in session_dict.keys():
+                session = self._get_session(app_name, uid, session_id)
+                if session is None:
+                    continue
 
-            copied_session = copy.deepcopy(session)
-            copied_session.events = []
-            copied_session.historical_events = []
-            app_state = self._get_app_state(app_name)
-            user_state = self._get_user_state(app_name, user_id)
-            copied_session = self._merge_state(app_state, user_state, copied_session)
-            sessions_without_events.append(copied_session)
+                copied_session = copy.deepcopy(session)
+                copied_session.events = []
+                copied_session.historical_events = []
+                sessions_without_events.append(self._merge_state(app_state, user_state, copied_session))
         return ListSessionsResponse(sessions=sessions_without_events)
 
     @override

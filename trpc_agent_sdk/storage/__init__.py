@@ -15,6 +15,9 @@ from ._redis import RedisCondition
 from ._redis import RedisExpire
 from ._redis import RedisSession
 from ._redis import RedisStorage
+from ._redis_cluster import RedisClusterAsyncContextManager
+from ._redis_cluster import RedisClusterClient
+from ._redis_cluster import RedisClusterStorage
 from ._sql import SqlAsyncContextManager
 from ._sql import SqlCondition
 from ._sql import SqlKey
@@ -45,6 +48,9 @@ __all__ = [
     "RedisExpire",
     "RedisSession",
     "RedisStorage",
+    "RedisClusterAsyncContextManager",
+    "RedisClusterClient",
+    "RedisClusterStorage",
     "SqlAsyncContextManager",
     "SqlCondition",
     "SqlKey",

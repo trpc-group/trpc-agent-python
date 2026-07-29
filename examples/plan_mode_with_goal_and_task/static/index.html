@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan + Goal + Task · AG-UI Demo</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --text-dim: #8b93a7;
+    --accent: #5b8cff;
+    --accent-2: #7c5bff;
+    --green: #35c88a;
+    --red: #ef5a6f;
+    --amber: #e2a93b;
+    --purple: #b794f6;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #1a2036 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(23, 26, 33, 0.7);
+    backdrop-filter: blur(6px);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header h1 .dot { color: var(--accent); }
+  header .meta { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 12px; }
+  header button {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  header button:hover { color: var(--text); border-color: var(--accent); }
+
+  .mode-toggle {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(8, 10, 14, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .mode-toggle button {
+    border: none;
+    border-radius: 999px;
+    padding: 7px 13px;
+    min-width: 58px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .mode-toggle button:hover:not(.active) {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .mode-toggle button.active {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .mode-toggle button.active[data-mode="plan"] {
+    color: #b8ccff;
+    background: linear-gradient(180deg, rgba(91, 140, 255, 0.22), rgba(91, 140, 255, 0.12));
+    box-shadow: 0 0 0 1px rgba(91, 140, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  .mode-toggle button .mode-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.45;
+    flex-shrink: 0;
+  }
+  .mode-toggle button.active .mode-dot { opacity: 1; }
+
+  #composer {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(23, 26, 33, 0.35), rgba(23, 26, 33, 0.15));
+  }
+  #composer input {
+    flex: 1;
+    min-width: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  #composer input:focus {
+    outline: none;
+    border-color: rgba(91, 140, 255, 0.55);
+    box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+  }
+  #send-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    min-height: 42px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  #send-btn:hover:not(:disabled) { filter: brightness(1.06); }
+  #send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
+    gap: 16px;
+    padding: 16px;
+    height: calc(100vh - 57px);
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel-title {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #chat { padding: 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border-bottom-right-radius: 3px; }
+  .msg.assistant { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .msg.sys { align-self: center; color: var(--text-dim); background: transparent; font-size: 12px; padding: 2px 6px; max-width: 100%; }
+  .msg.error { align-self: center; color: var(--red); background: rgba(239, 90, 111, 0.08); border: 1px solid rgba(239, 90, 111, 0.3); font-size: 12px; }
+
+  .hitl-card {
+    align-self: stretch;
+    border: 1px solid var(--amber);
+    background: rgba(226, 169, 59, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 14px;
+  }
+  .hitl-card .label { color: var(--amber); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .hitl-card .content { white-space: pre-wrap; margin-bottom: 10px; }
+  .hitl-card textarea {
+    width: 100%; min-height: 56px; resize: vertical; margin-bottom: 10px;
+    background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 13px; font-family: inherit;
+  }
+  .hitl-card .options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .hitl-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .btn.approve { background: var(--green); color: #06281a; }
+  .btn.reject { background: var(--red); color: #2a0910; }
+  .btn.option { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn.option:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  #side-body { padding: 14px; overflow-y: auto; flex: 1; font-size: 13px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .badge.exploring, .badge.drafting { background: rgba(91, 140, 255, .15); color: var(--accent); }
+  .badge.pending_enter { background: rgba(124, 91, 255, .16); color: var(--accent-2); }
+  .badge.pending_approval { background: rgba(226, 169, 59, .18); color: var(--amber); }
+  .badge.approved { background: rgba(53, 200, 138, .18); color: var(--green); }
+  .badge.active { background: rgba(183, 148, 246, .18); color: var(--purple); }
+  .badge.complete { background: rgba(53, 200, 138, .18); color: var(--green); }
+  .badge.blocked { background: rgba(239, 90, 111, .15); color: var(--red); }
+  .badge.pending, .badge.in_progress, .badge.completed { font-size: 10px; padding: 1px 8px; }
+  .badge.in_progress { background: rgba(91, 140, 255, .15); color: var(--accent); }
+  .badge.pending { background: rgba(139, 147, 167, .15); color: var(--text-dim); }
+  .badge.completed { background: rgba(53, 200, 138, .18); color: var(--green); }
+  .kv { display: flex; justify-content: space-between; margin: 6px 0; color: var(--text-dim); gap: 8px; }
+  .kv b { color: var(--text); font-weight: 500; text-align: right; }
+  #plan-content {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    white-space: pre-wrap; margin-top: 10px; font-size: 13px; line-height: 1.6; max-height: 28vh; overflow-y: auto;
+  }
+  .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 24px 8px; line-height: 1.6; }
+  .qa { border-top: 1px dashed var(--border); margin-top: 12px; padding-top: 10px; }
+  .qa .q { color: var(--text-dim); font-size: 12px; }
+  .qa .a { color: var(--green); font-size: 12px; margin-top: 2px; }
+  .side-section-title {
+    font-size: 11px; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+  }
+  .side-block { border-top: 1px dashed var(--border); margin-top: 14px; padding-top: 12px; }
+  .side-block:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  .side-empty { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+  .goal-objective {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px; margin-top: 8px; font-size: 13px; line-height: 1.55; word-break: break-word;
+  }
+  .task-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .task-item {
+    display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; line-height: 1.45;
+  }
+  .task-item.in_progress { border-color: rgba(91, 140, 255, .55); background: rgba(91, 140, 255, .06); }
+  .task-item.completed { opacity: .58; }
+  .task-item.completed .task-title { text-decoration: line-through; color: var(--text-dim); }
+  .task-id { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-dim); min-width: 22px; }
+  .task-item.in_progress .task-id { color: var(--accent); }
+  .task-item.completed .task-id { color: var(--green); }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { word-break: break-word; }
+  .task-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+  .task-active { font-size: 11px; color: var(--accent); margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot">●</span> Plan + Goal + Task <span style="color:var(--text-dim); font-weight:400;">/ AG-UI Demo</span></h1>
+  <div class="meta">
+    <span id="thread-label">thread: -</span>
+    <button id="reset-btn">重置会话</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="panel-title">对话</div>
+    <div id="chat"></div>
+    <form id="composer">
+      <div class="mode-toggle" role="group" aria-label="Agent 模式">
+        <button type="button" id="mode-agent-btn" class="active" data-mode="agent">
+          <span class="mode-dot" aria-hidden="true"></span>Agent
+        </button>
+        <button type="button" id="mode-plan-btn" data-mode="plan">
+          <span class="mode-dot" aria-hidden="true"></span>Plan
+        </button>
+      </div>
+      <input id="input" type="text" value="帮我参考QQ音乐生成一个类似的前端项目" placeholder="描述你的多步工程需求…" autocomplete="off" />
+      <button id="send-btn" type="submit">发送</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">计划 · 目标 · 任务</div>
+    <div id="side-body"><div class="empty">还没有状态。先发一条消息让 agent 进入 Plan Mode，审批通过后会创建 Goal 与 Task 看板。</div></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const AGENT_URL = window.location.origin + "/plan_agent";
+  const PLAN_STATE_KEY_PREFIX = "plan";
+  const GOAL_STATE_KEY_PREFIX = "goal";
+  const TASK_STATE_KEY_PREFIX = "tasks";
+  const FORCE_ENTER_PLAN_STATE_KEY = "agent_mode";
+  const FORCE_ENTER_PLAN_STATE_VALUE = "plan";
+  const AGENT_BRANCH = "orchestrator";
+
+  const chatEl = document.getElementById("chat");
+  const sideBodyEl = document.getElementById("side-body");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("send-btn");
+  const composer = document.getElementById("composer");
+  const threadLabel = document.getElementById("thread-label");
+  const resetBtn = document.getElementById("reset-btn");
+  const modeAgentBtn = document.getElementById("mode-agent-btn");
+  const modePlanBtn = document.getElementById("mode-plan-btn");
+
+  let threadId = crypto.randomUUID();
+  let agentMode = "agent";
+  let running = false;
+  let latestPlan = null;
+  let latestGoal = null;
+  let latestTaskStore = null;
+  // Merged session state from STATE_SNAPSHOT + STATE_DELTA (AG-UI emits delta per tool).
+  let sessionStateCache = {};
+  let lastToolCallIdByName = {};
+  let lastToolNameByCallId = {};
+  let questionToolCallIds = {};
+  let pendingAskToolCallId = null;
+  let lastAutoEnterNotifyRunId = null;
+
+  threadLabel.textContent = "thread: " + threadId.slice(0, 8);
+
+  function buildRunState() {
+    return {
+      [FORCE_ENTER_PLAN_STATE_KEY]: agentMode === "plan" ? FORCE_ENTER_PLAN_STATE_VALUE : "agent",
+    };
+  }
+
+  function setAgentMode(mode) {
+    agentMode = mode === "plan" ? "plan" : "agent";
+    modeAgentBtn.classList.toggle("active", agentMode === "agent");
+    modePlanBtn.classList.toggle("active", agentMode === "plan");
+    addSystemLine(agentMode === "plan"
+      ? "已切换到 Plan 模式 — 下一条消息将自动进入规划"
+      : "已切换到 Agent 模式 — 由模型自行决定是否 enter_plan_mode");
+  }
+
+  modeAgentBtn.addEventListener("click", () => setAgentMode("agent"));
+  modePlanBtn.addEventListener("click", () => setAgentMode("plan"));
+
+  function scrollChatToBottom() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function addMessageBubble(role, text) {
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = text;
+    chatEl.appendChild(div);
+    scrollChatToBottom();
+    return div;
+  }
+
+  function addSystemLine(text) {
+    return addMessageBubble("sys", text);
+  }
+
+  function addErrorLine(text) {
+    return addMessageBubble("error", "⚠ " + text);
+  }
+
+  function removeHitlCards() {
+    chatEl.querySelectorAll(".hitl-card").forEach((el) => el.remove());
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  function findBranchStateKey(snapshot, prefix) {
+    return Object.keys(snapshot).find(
+      (k) => k === `${prefix}:${AGENT_BRANCH}` || k === prefix
+    );
+  }
+
+  function parseJsonRaw(raw) {
+    if (raw == null) return null;
+    if (typeof raw === "string") {
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        console.error("Failed to parse JSON snapshot", e);
+        return null;
+      }
+    }
+    return typeof raw === "object" ? raw : null;
+  }
+
+  function taskIdSortKey(id) {
+    const n = Number(id);
+    return Number.isFinite(n) ? n : id;
+  }
+
+  function tasksFromStore(store) {
+    if (!store || !store.tasks) return [];
+    return Object.values(store.tasks)
+      .filter((t) => t.status !== "deleted")
+      .sort((a, b) => {
+        const ka = taskIdSortKey(a.id);
+        const kb = taskIdSortKey(b.id);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+  }
+
+  function ensureTaskStore() {
+    if (!latestTaskStore) {
+      latestTaskStore = { highwatermark: 0, tasks: {} };
+    }
+    if (!latestTaskStore.tasks || typeof latestTaskStore.tasks !== "object") {
+      latestTaskStore.tasks = {};
+    }
+  }
+
+  function mergeTaskRecord(task) {
+    if (!task || task.id == null) return;
+    ensureTaskStore();
+    const id = String(task.id);
+    const prev = latestTaskStore.tasks[id] || {};
+    latestTaskStore.tasks[id] = {
+      ...prev,
+      ...task,
+      id,
+      status: task.status || prev.status || "pending",
+    };
+    const hw = Number(id);
+    if (Number.isFinite(hw) && hw > (latestTaskStore.highwatermark || 0)) {
+      latestTaskStore.highwatermark = hw;
+    }
+  }
+
+  function applyTaskFromToolResult(content, toolName) {
+    if (!content) return;
+    try {
+      const payload = typeof content === "string" ? JSON.parse(content) : content;
+      if (payload.error) return;
+
+      if (payload.task) {
+        mergeTaskRecord(payload.task);
+        renderSidePanel();
+        return;
+      }
+
+      // task_list returns summaries (no description); still enough for the side panel.
+      if (toolName === "task_list" && Array.isArray(payload.tasks)) {
+        for (const summary of payload.tasks) {
+          mergeTaskRecord(summary);
+        }
+        renderSidePanel();
+      }
+    } catch (e) {
+      console.error("Failed to parse task tool result", e);
+    }
+  }
+
+  function applyGoalFromToolResult(content) {
+    if (!content) return;
+    try {
+      const payload = typeof content === "string" ? JSON.parse(content) : content;
+      if (payload.goal) {
+        latestGoal = payload.goal;
+        renderSidePanel();
+      }
+    } catch (e) {
+      console.error("Failed to parse goal tool result", e);
+    }
+  }
+
+  function applyStateSnapshot(snapshot) {
+    sessionStateCache = { ...sessionStateCache, ...snapshot };
+
+    const planKey = findBranchStateKey(sessionStateCache, PLAN_STATE_KEY_PREFIX);
+    if (planKey) {
+      latestPlan = parseJsonRaw(sessionStateCache[planKey]);
+      if (latestPlan) correlateAskToolCall(latestPlan);
+    }
+    const goalKey = findBranchStateKey(sessionStateCache, GOAL_STATE_KEY_PREFIX);
+    if (goalKey) {
+      latestGoal = parseJsonRaw(sessionStateCache[goalKey]);
+    }
+    const taskKey = findBranchStateKey(sessionStateCache, TASK_STATE_KEY_PREFIX);
+    if (taskKey) {
+      const parsed = parseJsonRaw(sessionStateCache[taskKey]);
+      if (parsed) latestTaskStore = parsed;
+    }
+    renderSidePanel();
+  }
+
+  function applyStateDelta(patches) {
+    if (!Array.isArray(patches)) return;
+    for (const patch of patches) {
+      if (!patch || !patch.path) continue;
+      const key = patch.path.replace(/^\//, "");
+      if (patch.op === "add" || patch.op === "replace") {
+        sessionStateCache[key] = patch.value;
+      } else if (patch.op === "remove") {
+        delete sessionStateCache[key];
+      }
+    }
+    applyStateSnapshot(sessionStateCache);
+  }
+
+  function correlateAskToolCall(plan) {
+    if (!pendingAskToolCallId || !plan) return;
+    const unanswered = (plan.askedQuestions || []).filter((q) => q.answer == null);
+    if (unanswered.length === 0) return;
+    const newest = unanswered[unanswered.length - 1];
+    if (!questionToolCallIds[newest.id]) {
+      questionToolCallIds[newest.id] = pendingAskToolCallId;
+    }
+    pendingAskToolCallId = null;
+  }
+
+  function renderPlanSectionHtml(p) {
+    let html = '<div class="side-block plan-block">';
+    html += '<div class="side-section-title">当前计划</div>';
+    html += `<div class="kv"><span>状态</span><span class="badge ${p.status}">${p.status}</span></div>`;
+    html += `<div class="kv"><span>目标</span><b>${escapeHtml(p.objective || "-")}</b></div>`;
+    html += `<div class="kv"><span>修改次数</span><b>${p.contentRevisions ?? 0}</b></div>`;
+    if (p.approval && p.approval.reviewerNote) {
+      html += `<div class="kv"><span>审批意见</span><b>${escapeHtml(p.approval.reviewerNote)}</b></div>`;
+    }
+    html += `<div id="plan-content">${escapeHtml(p.content || "(计划内容为空)")}</div>`;
+
+    const questions = p.askedQuestions || [];
+    if (questions.length) {
+      html += '<div class="qa">';
+      for (const q of questions) {
+        html += `<div class="q">Q${q.id}: ${escapeHtml(q.question)}</div>`;
+        html += q.answer != null
+          ? `<div class="a">A: ${escapeHtml(q.answer)}</div>`
+          : `<div class="a" style="color:var(--amber)">等待回答…</div>`;
+      }
+      html += "</div>";
+    }
+    html += "</div>";
+    return html;
+  }
+
+  function renderGoalSectionHtml(goal) {
+    let html = '<div class="side-block goal-block">';
+    html += '<div class="side-section-title">会话目标 (Goal)</div>';
+    if (!goal) {
+      html += '<div class="side-empty">计划审批通过后，agent 可调用 create_goal 设定会话完成契约。</div>';
+      html += "</div>";
+      return html;
+    }
+    const status = goal.status || "active";
+    html += `<div class="kv"><span>状态</span><span class="badge ${status}">${status}</span></div>`;
+    html += `<div class="goal-objective">${escapeHtml(goal.objective || "(无 objective)")}</div>`;
+    html += "</div>";
+    return html;
+  }
+
+  function renderTasksSectionHtml(store) {
+    let html = '<div class="side-block tasks-block">';
+    html += '<div class="side-section-title">任务看板 (Task)</div>';
+    const tasks = tasksFromStore(store);
+    if (tasks.length === 0) {
+      html += '<div class="side-empty">计划审批通过后，agent 可用 task_create 分解实施步骤并 task_update 跟踪进度。</div>';
+      html += "</div>";
+      return html;
+    }
+
+    const done = tasks.filter((t) => t.status === "completed").length;
+    html += `<div class="kv"><span>进度</span><b>${done} / ${tasks.length}</b></div>`;
+    html += '<ul class="task-list">';
+    for (const item of tasks) {
+      const status = item.status || "pending";
+      const icon = status === "completed" ? "✓" : status === "in_progress" ? "▸" : "○";
+      const title = item.subject || "(无标题)";
+      html += `<li class="task-item ${status}">`;
+      html += `<span class="task-id">${icon}#${escapeHtml(String(item.id))}</span>`;
+      html += '<div class="task-body">';
+      html += `<div class="task-title">${escapeHtml(title)}</div>`;
+      if (status === "in_progress" && item.activeForm && item.activeForm !== title) {
+        html += `<div class="task-active">${escapeHtml(item.activeForm)}</div>`;
+      }
+      if (item.blockedBy && item.blockedBy.length) {
+        html += `<div class="task-meta">blocked by: ${escapeHtml(item.blockedBy.join(", "))}</div>`;
+      }
+      html += "</div></li>";
+    }
+    html += "</ul></div>";
+    return html;
+  }
+
+  function renderSidePanel() {
+    if (!latestPlan && !latestGoal && !latestTaskStore) {
+      sideBodyEl.innerHTML = '<div class="empty">还没有状态。先发一条消息让 agent 进入 Plan Mode，审批通过后会创建 Goal 与 Task 看板。</div>';
+      return;
+    }
+    let html = "";
+    if (latestPlan) html += renderPlanSectionHtml(latestPlan);
+    html += renderGoalSectionHtml(latestGoal);
+    html += renderTasksSectionHtml(latestTaskStore);
+    sideBodyEl.innerHTML = html;
+  }
+
+  function renderEnterPlanModeCard(toolCallId) {
+    removeHitlCards();
+    const objective = latestPlan && latestPlan.objective ? latestPlan.objective : "（无目标描述）";
+    const card = document.createElement("div");
+    card.className = "hitl-card";
+    card.innerHTML = `
+      <div class="label">确认进入 Plan Mode</div>
+      <div class="content">模型请求进入规划模式，目标：${escapeHtml(objective)}</div>
+      <textarea placeholder="备注（可选）"></textarea>
+      <div class="actions">
+        <button class="btn approve">✅ 确认进入</button>
+        <button class="btn reject">❌ 拒绝</button>
+      </div>`;
+    const [textarea] = card.querySelectorAll("textarea");
+    const [approveBtn, rejectBtn] = card.querySelectorAll("button");
+    approveBtn.onclick = () => respondEnterPlanMode(toolCallId, "approved", textarea.value);
+    rejectBtn.onclick = () => respondEnterPlanMode(toolCallId, "rejected", textarea.value);
+    chatEl.appendChild(card);
+    scrollChatToBottom();
+  }
+
+  function renderApprovalCard(toolCallId) {
+    removeHitlCards();
+    const card = document.createElement("div");
+    card.className = "hitl-card";
+    card.innerHTML = `
+      <div class="label">需要人工审批计划</div>
+      <div class="content">模型已提交计划，请在右侧查看完整内容。通过后 agent 将创建 Goal 并用 Task 看板跟踪实施。</div>
+      <textarea placeholder="审批意见（可选）"></textarea>
+      <div class="actions">
+        <button class="btn approve">✅ 通过</button>
+        <button class="btn reject">❌ 拒绝</button>
+      </div>`;
+    const [textarea] = card.querySelectorAll("textarea");
+    const [approveBtn, rejectBtn] = card.querySelectorAll("button");
+    approveBtn.onclick = () => respondExitPlanMode(toolCallId, "approved", textarea.value);
+    rejectBtn.onclick = () => respondExitPlanMode(toolCallId, "rejected", textarea.value);
+    chatEl.appendChild(card);
+    scrollChatToBottom();
+  }
+
+  function renderQuestionCard(toolCallId, question) {
+    removeHitlCards();
+    const card = document.createElement("div");
+    card.className = "hitl-card";
+    const optionsHtml = (question.options || [])
+      .map((opt) => `<button class="btn option" data-opt="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`)
+      .join("");
+    card.innerHTML = `
+      <div class="label">模型有一个澄清问题</div>
+      <div class="content">${escapeHtml(question.question)}</div>
+      ${optionsHtml ? `<div class="options">${optionsHtml}</div>` : ""}
+      <textarea placeholder="${optionsHtml ? '或者输入自定义回答…' : '输入回答…'}"></textarea>
+      <div class="actions"><button class="btn approve" data-submit="1">提交回答</button></div>`;
+    const textarea = card.querySelector("textarea");
+    card.querySelectorAll("button[data-opt]").forEach((btn) => {
+      btn.onclick = () => respondAskPlanQuestion(toolCallId, question.id, btn.dataset.opt);
+    });
+    card.querySelector("button[data-submit]").onclick = () => {
+      if (textarea.value.trim()) respondAskPlanQuestion(toolCallId, question.id, textarea.value.trim());
+    };
+    chatEl.appendChild(card);
+    scrollChatToBottom();
+  }
+
+  function maybeNotifyUiAutoEnter(runId) {
+    if (agentMode !== "plan" || !latestPlan || lastAutoEnterNotifyRunId === runId) return;
+    if (latestPlan.status === "exploring" || latestPlan.status === "drafting") {
+      addSystemLine("✅ 已通过 UI Plan 模式自动进入规划（无需确认 enter_plan_mode）");
+      lastAutoEnterNotifyRunId = runId;
+    }
+  }
+
+  function maybeRenderHitlCard() {
+    if (!latestPlan) return;
+    if (latestPlan.status === "pending_enter" && lastToolCallIdByName["enter_plan_mode"]) {
+      if (agentMode === "plan") {
+        addSystemLine("ℹ️ UI 已选 Plan 模式，忽略 enter_plan_mode 确认卡片");
+        return;
+      }
+      renderEnterPlanModeCard(lastToolCallIdByName["enter_plan_mode"]);
+      return;
+    }
+    if (latestPlan.status === "pending_approval" && lastToolCallIdByName["exit_plan_mode"]) {
+      renderApprovalCard(lastToolCallIdByName["exit_plan_mode"]);
+      return;
+    }
+    const pendingQuestion = (latestPlan.askedQuestions || []).slice().reverse().find((q) => q.answer == null);
+    const toolCallId = pendingQuestion
+      ? (questionToolCallIds[pendingQuestion.id] || lastToolCallIdByName["ask_user_question"])
+      : null;
+    if (pendingQuestion && toolCallId) {
+      renderQuestionCard(toolCallId, pendingQuestion);
+    }
+  }
+
+  function buildHitlToolResultMessages(toolCallId, toolName, toolPayload) {
+    return [
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        toolCalls: [{
+          id: toolCallId,
+          type: "function",
+          function: { name: toolName, arguments: "{}" },
+        }],
+      },
+      {
+        id: crypto.randomUUID(),
+        role: "tool",
+        toolCallId,
+        content: JSON.stringify(toolPayload),
+      },
+    ];
+  }
+
+  function setRunning(value) {
+    running = value;
+    inputEl.disabled = value;
+    sendBtn.disabled = value;
+    sendBtn.textContent = value ? "运行中…" : "发送";
+  }
+
+  function handleToolResult(toolName, content) {
+    if (toolName === "create_goal" || toolName === "update_goal" || toolName === "get_goal") {
+      applyGoalFromToolResult(content);
+      const status = latestGoal ? latestGoal.status : "?";
+      addSystemLine(`🎯 Goal 已更新（status=${status}）`);
+      return;
+    }
+    if (toolName === "task_create" || toolName === "task_update" || toolName === "task_get"
+        || toolName === "task_list") {
+      applyTaskFromToolResult(content, toolName);
+      const count = tasksFromStore(latestTaskStore).length;
+      addSystemLine(`📋 Task 看板已更新（${count} 项）`);
+      return;
+    }
+    addSystemLine(`✅ 工具返回: ${String(content || "").slice(0, 200)}`);
+  }
+
+  async function runOnce(messagesOrSingle) {
+    const messages = Array.isArray(messagesOrSingle) ? messagesOrSingle : [messagesOrSingle];
+    setRunning(true);
+    removeHitlCards();
+    const runId = crypto.randomUUID();
+    let streamingBubble = null;
+
+    try {
+      const res = await fetch(AGENT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({
+          threadId,
+          runId,
+          state: buildRunState(),
+          messages,
+          tools: [],
+          context: [],
+          forwardedProps: {},
+        }),
+      });
+      if (!res.ok || !res.body) {
+        addErrorLine(`HTTP ${res.status}: ${await res.text()}`);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sepIdx;
+        while ((sepIdx = buf.indexOf("\n\n")) >= 0) {
+          const rawChunk = buf.slice(0, sepIdx);
+          buf = buf.slice(sepIdx + 2);
+          const line = rawChunk.split("\n").find((l) => l.startsWith("data:"));
+          if (!line) continue;
+          let event;
+          try {
+            event = JSON.parse(line.slice(5).trim());
+          } catch (e) {
+            console.error("Failed to parse AG-UI event", e, line);
+            continue;
+          }
+
+          switch (event.type) {
+            case "TEXT_MESSAGE_START":
+              streamingBubble = addMessageBubble("assistant", "");
+              break;
+            case "TEXT_MESSAGE_CONTENT":
+              if (streamingBubble) streamingBubble.textContent += event.delta || "";
+              scrollChatToBottom();
+              break;
+            case "TEXT_MESSAGE_END":
+              streamingBubble = null;
+              break;
+            case "TOOL_CALL_START":
+              lastToolCallIdByName[event.toolCallName] = event.toolCallId;
+              lastToolNameByCallId[event.toolCallId] = event.toolCallName;
+              if (event.toolCallName === "ask_user_question") {
+                pendingAskToolCallId = event.toolCallId;
+              }
+              addSystemLine(`🔧 调用工具 ${event.toolCallName}`);
+              break;
+            case "TOOL_CALL_RESULT": {
+              const toolName = lastToolNameByCallId[event.toolCallId];
+              handleToolResult(toolName, event.content);
+              break;
+            }
+            case "STATE_SNAPSHOT":
+              applyStateSnapshot(event.snapshot || {});
+              break;
+            case "STATE_DELTA":
+              applyStateDelta(event.delta || []);
+              break;
+            case "RUN_ERROR":
+              addErrorLine(event.message || "run error");
+              break;
+            default:
+              break;
+          }
+        }
+      }
+
+      maybeNotifyUiAutoEnter(runId);
+      maybeRenderHitlCard();
+    } catch (err) {
+      addErrorLine(err.message || String(err));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function respondEnterPlanMode(toolCallId, status, reviewerNote) {
+    removeHitlCards();
+    addSystemLine(status === "approved" ? "👤 已确认进入 Plan Mode" : "👤 已拒绝进入 Plan Mode");
+    runOnce(buildHitlToolResultMessages(toolCallId, "enter_plan_mode", {
+      status,
+      reviewer_note: reviewerNote || "",
+    }));
+  }
+
+  function respondExitPlanMode(toolCallId, status, reviewerNote) {
+    removeHitlCards();
+    addSystemLine(status === "approved" ? "👤 已通过计划 — 可开始 Goal + Task 实施" : "👤 已拒绝计划");
+    runOnce(buildHitlToolResultMessages(toolCallId, "exit_plan_mode", {
+      status,
+      reviewer_note: reviewerNote || "",
+    }));
+  }
+
+  function respondAskPlanQuestion(toolCallId, questionId, answer) {
+    removeHitlCards();
+    addMessageBubble("user", answer);
+    runOnce(buildHitlToolResultMessages(toolCallId, "ask_user_question", {
+      answer,
+      question_id: questionId,
+    }));
+  }
+
+  composer.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text || running) return;
+    addMessageBubble("user", text);
+    inputEl.value = "";
+    runOnce({ id: crypto.randomUUID(), role: "user", content: text });
+  });
+
+  resetBtn.addEventListener("click", () => {
+    threadId = crypto.randomUUID();
+    threadLabel.textContent = "thread: " + threadId.slice(0, 8);
+    latestPlan = null;
+    latestGoal = null;
+    latestTaskStore = null;
+    sessionStateCache = {};
+    lastToolCallIdByName = {};
+    lastToolNameByCallId = {};
+    questionToolCallIds = {};
+    pendingAskToolCallId = null;
+    lastAutoEnterNotifyRunId = null;
+    chatEl.innerHTML = "";
+    renderSidePanel();
+  });
+})();
+</script>
+</body>
+</html>
