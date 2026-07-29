@@ -335,12 +335,17 @@ class OpenAIModel(LLMModel):
                 # Separate function responses from other content
                 function_responses: list[FunctionResponse] = []
                 text_parts = []
+                reasoning_parts: list[str] = []
                 image_parts = []
                 tool_calls = []
 
                 for part in parts:  # type: ignore
                     if part.text:
                         if part.thought:
+                            # Reasoning is stripped by default, but some providers
+                            # (e.g. Hunyuan hy3) require it to be replayed.
+                            if self._adapter.should_preserve_reasoning_content():
+                                reasoning_parts.append(part.text)
                             continue
                         text_parts.append(part.text)
                     elif part.inline_data and part.inline_data.mime_type:
@@ -453,7 +458,9 @@ class OpenAIModel(LLMModel):
                     if tool_calls and not self.add_tools_to_prompt:
                         message[const.TOOL_CALLS] = tool_calls
 
-                    if self._adapter.should_backfill_reasoning_content(role, message):
+                    if reasoning_parts and self._adapter.should_preserve_reasoning_content():
+                        message[const.REASONING_CONTENT] = "".join(reasoning_parts)
+                    elif self._adapter.should_backfill_reasoning_content(role, message):
                         message[const.REASONING_CONTENT] = ""
 
                     formatted_messages.append(message)

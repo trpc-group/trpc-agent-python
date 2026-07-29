@@ -34,12 +34,13 @@ from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegist
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, FunctionCall, FunctionResponse, GenerateContentConfig, Part
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 class _MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-rp-ext-.*"]
@@ -71,9 +72,7 @@ def session_service():
 
 @pytest.fixture
 def session(session_service):
-    return asyncio.run(
-        session_service.create_session(app_name="test", user_id="u1", session_id="s_ext")
-    )
+    return asyncio.run(session_service.create_session(app_name="test", user_id="u1", session_id="s_ext"))
 
 
 @pytest.fixture
@@ -99,6 +98,7 @@ def ctx(session_service, session, agent):
 
 
 class TestSetGenerateContentConfig:
+
     def test_default_config_when_agent_has_none(self, processor, ctx):
         """Config is created as empty GenerateContentConfig when agent has none."""
         request = LlmRequest(model="test-rp-ext-model")
@@ -123,9 +123,7 @@ class TestSetGenerateContentConfig:
         ctx.agent.tools = []
         request = LlmRequest(model="test-rp-ext-model")
         ctx.agent.generate_content_config = None
-        with patch(
-            "trpc_agent_sdk.agents.core._request_processor.LlmRequest.set_output_schema"
-        ) as mock_set:
+        with patch("trpc_agent_sdk.agents.core._request_processor.LlmRequest.set_output_schema") as mock_set:
             processor._set_generate_content_config(request, ctx.agent, ctx)
             mock_set.assert_called_once_with({"type": "object"})
 
@@ -135,9 +133,7 @@ class TestSetGenerateContentConfig:
         ctx.agent.tools = [MagicMock()]
         request = LlmRequest(model="test-rp-ext-model")
         ctx.agent.generate_content_config = None
-        with patch(
-            "trpc_agent_sdk.agents.core._request_processor.LlmRequest.set_output_schema"
-        ) as mock_set:
+        with patch("trpc_agent_sdk.agents.core._request_processor.LlmRequest.set_output_schema") as mock_set:
             processor._set_generate_content_config(request, ctx.agent, ctx)
             mock_set.assert_not_called()
 
@@ -158,6 +154,7 @@ class TestSetGenerateContentConfig:
 
 
 class TestAddInstructionsToRequest:
+
     @pytest.mark.asyncio
     async def test_global_instruction_string(self, processor, ctx):
         """Global instruction as a string is included in system prompt."""
@@ -183,6 +180,7 @@ class TestAddInstructionsToRequest:
     @pytest.mark.asyncio
     async def test_async_callable_instruction(self, processor, ctx):
         """Agent instruction as an async callable is awaited."""
+
         async def async_instr(_ctx):
             return "async instruction"
 
@@ -227,6 +225,7 @@ class TestAddInstructionsToRequest:
 
 
 class TestAddToolsToRequest:
+
     @pytest.mark.asyncio
     async def test_no_tools_no_error(self, processor, ctx):
         """No error when agent has no tools and no transfer."""
@@ -259,6 +258,7 @@ class TestAddToolsToRequest:
 
 
 class TestAddSkillsToRequest:
+
     @pytest.mark.asyncio
     async def test_no_skill_repository_returns_none(self, processor, ctx):
         """Returns None (no error) when agent has no skill_repository."""
@@ -287,6 +287,7 @@ class TestAddSkillsToRequest:
 
 
 class TestAddAgentTransferCapabilities:
+
     @pytest.mark.asyncio
     async def test_skipped_when_transfer_disabled(self, processor, ctx):
         """No-op when agent transfer is not enabled."""
@@ -301,16 +302,17 @@ class TestAddAgentTransferCapabilities:
         ctx.agent._should_enable_agent_transfer = MagicMock(return_value=True)
         request = LlmRequest(model="test-rp-ext-model")
         with patch(
-            "trpc_agent_sdk.agents.core._request_processor.default_agent_transfer_processor",
-            create=True,
+                "trpc_agent_sdk.agents.core._request_processor.default_agent_transfer_processor",
+                create=True,
         ) as mock_proc:
             mock_proc.process_agent_transfer = AsyncMock(side_effect=RuntimeError("transfer boom"))
             # The import inside the method means we need to patch the module
             with patch.dict(
-                "sys.modules",
-                {"trpc_agent_sdk.agents.core._agent_transfer_processor": MagicMock(
-                    default_agent_transfer_processor=mock_proc
-                )},
+                    "sys.modules",
+                {
+                    "trpc_agent_sdk.agents.core._agent_transfer_processor":
+                    MagicMock(default_agent_transfer_processor=mock_proc)
+                },
             ):
                 result = await processor._add_agent_transfer_capabilities(ctx.agent, ctx, request)
                 assert result is not None
@@ -323,6 +325,7 @@ class TestAddAgentTransferCapabilities:
 
 
 class TestAddConversationHistory:
+
     @pytest.mark.asyncio
     async def test_no_session_events_returns_none(self, processor, ctx):
         """No error when session has no events."""
@@ -347,6 +350,7 @@ class TestAddConversationHistory:
 
 
 class TestAddContentToRequest:
+
     def test_empty_event_skipped(self, processor):
         """Events with no content are skipped."""
         request = LlmRequest(model="test-rp-ext-model")
@@ -354,8 +358,8 @@ class TestAddContentToRequest:
         processor._add_content_to_request(request, event)
         assert len(request.contents) == 0
 
-    def test_thought_parts_filtered(self, processor):
-        """Parts with thought=True are filtered out when agent has no planner."""
+    def test_thought_parts_kept_without_planner(self, processor):
+        """Request history preserves thought parts for model-level filtering."""
         request = LlmRequest(model="test-rp-ext-model")
         thought_part = Part(text="internal reasoning", thought=True)
         normal_part = Part(text="visible text")
@@ -368,8 +372,10 @@ class TestAddContentToRequest:
         agent.planner = None
         processor._add_content_to_request(request, event, agent)
         assert len(request.contents) == 1
-        assert len(request.contents[0].parts) == 1
-        assert request.contents[0].parts[0].text == "visible text"
+        assert len(request.contents[0].parts) == 2
+        assert request.contents[0].parts[0].text == "internal reasoning"
+        assert request.contents[0].parts[0].thought is True
+        assert request.contents[0].parts[1].text == "visible text"
 
     def test_thought_parts_kept_when_planner(self, processor):
         """Parts with thought=True are kept when agent has a planner."""
@@ -385,8 +391,8 @@ class TestAddContentToRequest:
         processor._add_content_to_request(request, event, agent)
         assert len(request.contents) == 1
 
-    def test_all_thoughts_filtered_means_nothing_added(self, processor):
-        """Content is not added if all parts are thought-only."""
+    def test_thought_only_content_is_kept(self, processor):
+        """Thought-only content is retained for the model serializer."""
         request = LlmRequest(model="test-rp-ext-model")
         event = Event(
             invocation_id="inv-1",
@@ -396,7 +402,8 @@ class TestAddContentToRequest:
         agent = MagicMock()
         agent.planner = None
         processor._add_content_to_request(request, event, agent)
-        assert len(request.contents) == 0
+        assert len(request.contents) == 1
+        assert request.contents[0].parts[0].thought is True
 
     def test_default_role_is_user(self, processor):
         """Content with no role defaults to user."""
@@ -416,6 +423,7 @@ class TestAddContentToRequest:
 
 
 class TestResolveInstruction:
+
     @pytest.mark.asyncio
     async def test_string_instruction(self, processor, ctx):
         """String instruction is returned as-is (with template substitution)."""
@@ -433,6 +441,7 @@ class TestResolveInstruction:
     @pytest.mark.asyncio
     async def test_async_callable_instruction(self, processor, ctx):
         """Async callable instruction is awaited."""
+
         async def instr(c):
             return "from async"
 
@@ -442,6 +451,7 @@ class TestResolveInstruction:
 
 
 class TestResolveGlobalInstruction:
+
     @pytest.mark.asyncio
     async def test_no_global_instruction(self, processor, ctx):
         """Empty string returned when no global instruction."""
@@ -465,6 +475,7 @@ class TestResolveGlobalInstruction:
 
 
 class TestAddPlanningCapabilities:
+
     @pytest.mark.asyncio
     async def test_no_planner_returns_none(self, processor, ctx):
         """Returns None when agent has no planner."""
@@ -478,9 +489,7 @@ class TestAddPlanningCapabilities:
         """Returns error event when planner processing raises."""
         ctx.agent.planner = MagicMock()
         request = LlmRequest(model="test-rp-ext-model")
-        with patch(
-            "trpc_agent_sdk.agents.core._request_processor.default_planning_processor"
-        ) as mock_pp:
+        with patch("trpc_agent_sdk.agents.core._request_processor.default_planning_processor") as mock_pp:
             mock_pp.process_request.side_effect = RuntimeError("plan boom")
             result = await processor._add_planning_capabilities(ctx.agent, ctx, request)
             assert result is not None
@@ -488,6 +497,7 @@ class TestAddPlanningCapabilities:
 
 
 class TestAddOutputSchemaCapabilities:
+
     @pytest.mark.asyncio
     async def test_no_schema_returns_none(self, processor, ctx):
         """Returns None when agent has no output_schema."""
@@ -503,10 +513,11 @@ class TestAddOutputSchemaCapabilities:
         ctx.agent.tools = [MagicMock()]
         request = LlmRequest(model="test-rp-ext-model")
         with patch.dict(
-            "sys.modules",
-            {"trpc_agent_sdk.agents.core._output_schema_processor": MagicMock(
-                default_output_schema_processor=MagicMock(run_async=AsyncMock())
-            )},
+                "sys.modules",
+            {
+                "trpc_agent_sdk.agents.core._output_schema_processor":
+                MagicMock(default_output_schema_processor=MagicMock(run_async=AsyncMock()))
+            },
         ):
             result = await processor._add_output_schema_capabilities(ctx.agent, ctx, request)
             assert result is None
@@ -518,6 +529,7 @@ class TestAddOutputSchemaCapabilities:
 
 
 class TestRearrangeEventsForAsyncFunctionResponses:
+
     def test_plain_events_unchanged(self, processor):
         """Events without function calls or responses pass through."""
         e1 = Event(invocation_id="inv-1", author="user", content=Content(role="user", parts=[Part(text="hi")]))
@@ -545,8 +557,7 @@ class TestRearrangeEventsForAsyncFunctionResponses:
             content=Content(role="model", parts=[Part(text="done")]),
         )
         result = processor._rearrange_events_for_async_function_responses_in_history(
-            [response_event, call_event, text_event]
-        )
+            [response_event, call_event, text_event])
         assert len(result) == 3
         assert result[0].content.parts[0].function_call is not None
         assert result[1].content.parts[0].function_response is not None
@@ -558,6 +569,7 @@ class TestRearrangeEventsForAsyncFunctionResponses:
 
 
 class TestMergeFunctionResponseEvents:
+
     def test_empty_list_raises(self, processor):
         """Raises ValueError for empty list."""
         with pytest.raises(ValueError):
@@ -598,6 +610,7 @@ class TestMergeFunctionResponseEvents:
 
 
 class TestConvertForeignEventExt:
+
     def test_no_name_when_disabled(self, processor, ctx):
         """Agent name prefix omitted when add_name_to_instruction is False."""
         ctx.agent.add_name_to_instruction = False
@@ -639,6 +652,7 @@ class TestConvertForeignEventExt:
 
 
 class TestBuildRequest:
+
     @pytest.mark.asyncio
     async def test_override_messages_used(self, processor, ctx):
         """Override messages bypass history building."""
