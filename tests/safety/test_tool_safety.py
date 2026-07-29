@@ -466,6 +466,54 @@ class TestNeedsHumanReview:
 
 
 # ---------------------------------------------------------------------------
+# Allowed commands (BASH-COMMAND-WHITELIST)
+# ---------------------------------------------------------------------------
+
+class TestAllowedCommands:
+    """The optional Bash command allow-list (disabled by default)."""
+
+    def test_disabled_by_default(self, guard):
+        """With an empty allowed_commands list, no whitelist check runs."""
+        report = guard.scan("ls -la\n", tool_name="BashTool")
+        assert not any("COMMAND-WHITELIST" in f.rule_id for f in report.findings)
+
+    def test_non_whitelisted_command_flagged(self):
+        """A command not in the allow-list should be flagged for review."""
+        policy = SafetyPolicy.default()
+        policy.allowed_commands = ["ls", "cat", "echo"]
+        g = SafetyGuard(policy=policy)
+        report = g.scan("rm -rf /tmp/old\n", tool_name="BashTool")
+        assert any("COMMAND-WHITELIST" in f.rule_id for f in report.findings)
+        assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+
+    def test_whitelisted_command_allowed(self):
+        """A command in the allow-list should not be flagged."""
+        policy = SafetyPolicy.default()
+        policy.allowed_commands = ["ls", "cat", "echo"]
+        g = SafetyGuard(policy=policy)
+        report = g.scan("ls -la /tmp\n", tool_name="BashTool")
+        assert not any("COMMAND-WHITELIST" in f.rule_id for f in report.findings)
+
+    def test_shell_keywords_not_flagged(self):
+        """Shell control structures should not be treated as commands."""
+        policy = SafetyPolicy.default()
+        policy.allowed_commands = ["ls"]
+        g = SafetyGuard(policy=policy)
+        script = "if true; then\n  ls\nfi\n"
+        report = g.scan(script, tool_name="BashTool")
+        # 'if' and 'then' are keywords, only 'ls' is a command
+        assert not any("COMMAND-WHITELIST" in f.rule_id for f in report.findings)
+
+    def test_assignment_prefix_skipped(self):
+        """VAR=value before a command should not confuse the check."""
+        policy = SafetyPolicy.default()
+        policy.allowed_commands = ["python3"]
+        g = SafetyGuard(policy=policy)
+        report = g.scan("FOO=bar python3 -c 'print(1)'\n", tool_name="BashTool")
+        assert not any("COMMAND-WHITELIST" in f.rule_id for f in report.findings)
+
+
+# ---------------------------------------------------------------------------
 # Report structure
 # ---------------------------------------------------------------------------
 
@@ -1024,6 +1072,7 @@ class TestPolicyEdgeCases:
             "redact_secrets_in_evidence": False,
             "large_script_threshold": 500,
             "credential_read_commands": ["cat", "less"],
+            "allowed_commands": ["ls", "echo"],
         }
         policy = SafetyPolicy.from_dict(data)
         assert policy.allowed_domains == ["example.com"]
@@ -1036,6 +1085,7 @@ class TestPolicyEdgeCases:
         assert policy.redact_secrets_in_evidence is False
         assert policy.large_script_threshold == 500
         assert policy.credential_read_commands == ["cat", "less"]
+        assert policy.allowed_commands == ["ls", "echo"]
 
     def test_from_dict_rule_override_non_dict_skipped(self):
         """from_dict should skip rule overrides that are not dicts."""
@@ -1085,6 +1135,7 @@ class TestPolicyEdgeCases:
         assert "redact_secrets_in_evidence" in d
         assert "large_script_threshold" in d
         assert "credential_read_commands" in d
+        assert "allowed_commands" in d
         assert "rules" in d
 
     def test_from_dict_rejects_string_for_list_field(self):

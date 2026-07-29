@@ -383,6 +383,34 @@ rules: {}
     report3 = guard.scan(script2, tool_name="verify", script_type_hint="python")
     r.info(f"Default policy: open('/etc/passwd') -> {report3.decision.value}")
 
+    # 4. Verify allowed_commands can be configured (issue #90 requirement)
+    whitelist_policy = """
+allowed_commands:
+  - ls
+  - cat
+  - echo
+rules: {}
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(whitelist_policy)
+        wl_path = f.name
+
+    try:
+        wl_guard = SafetyGuard.from_yaml(wl_path)
+        # 'rm' is not in the allow-list -> should be flagged
+        report4 = wl_guard.scan(
+            "rm -rf /tmp/old\n", tool_name="verify", script_type_hint="bash"
+        )
+        r.info(f"Whitelist policy: rm -> {report4.decision.value}")
+        if any("COMMAND-WHITELIST" in f.rule_id for f in report4.findings):
+            r.ok("allowed_commands whitelist flags non-listed command")
+        else:
+            r.fail("allowed_commands should flag 'rm' as non-whitelisted")
+    finally:
+        os.unlink(wl_path)
+
     return r
 
 

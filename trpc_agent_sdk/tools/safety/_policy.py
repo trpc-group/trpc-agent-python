@@ -132,6 +132,13 @@ class SafetyPolicy:
         "base64", "xargs", "awk", "sed", "grep", "type",
     ])
 
+    # Optional Bash command allow-list.  When non-empty, any Bash command
+    # whose first token is not in this list is flagged for human review
+    # (BASH-COMMAND-WHITELIST rule).  When empty (default) the rule is
+    # disabled — no command-whitelist check is performed.
+    allowed_commands: list[str] = field(default_factory=list)
+    """Optional Bash command allow-list. Empty = disabled (no check)."""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SafetyPolicy":
         """Build a policy from a plain dictionary (parsed YAML).
@@ -160,6 +167,7 @@ class SafetyPolicy:
             ("protected_system_dirs", "protected_system_dirs"),
             ("secret_patterns", "secret_patterns"),
             ("credential_read_commands", "credential_read_commands"),
+            ("allowed_commands", "allowed_commands"),
         ):
             val = _list_field(key)
             if val is not None:
@@ -297,6 +305,7 @@ class SafetyPolicy:
             "redact_secrets_in_evidence": self.redact_secrets_in_evidence,
             "large_script_threshold": self.large_script_threshold,
             "credential_read_commands": list(self.credential_read_commands),
+            "allowed_commands": list(self.allowed_commands),
             "rules": {
                 rid: {
                     "enabled": ov.enabled,

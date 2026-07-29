@@ -21,36 +21,11 @@ allowed_domains:
   - raw.githubusercontent.com
 
 # ---------------------------------------------------------------------------
-# Bash command control
-# ---------------------------------------------------------------------------
-# Commands allowed outside the working directory.  When a script only uses
-# commands from this list, it gets a lower risk score.
-allowed_commands:
-  - ls
-  - pwd
-  - cat
-  - grep
-  - find
-  - head
-  - tail
-  - wc
-  - echo
-  - python
-  - python3
-  - pip
-  - git
-  - mkdir
-  - cp
-  - mv
-  - touch
-  - sort
-  - uniq
-
-# ---------------------------------------------------------------------------
 # Forbidden file paths / patterns
 # ---------------------------------------------------------------------------
-# Paths that scripts must never read, write or delete.  Both literal and
-# substring matching are used (case-insensitive).
+# Paths that scripts must never read, write or delete.  Path-boundary
+# matching is used (case-insensitive): ".env" matches ".env" and
+# "/app/.env" but not ".environment".
 forbidden_paths:
   - "~/.ssh"
   - "~/.aws"
@@ -135,6 +110,23 @@ credential_read_commands:
   - type
   - strings
   - tee
+
+# ---------------------------------------------------------------------------
+# Optional Bash command allow-list
+# ---------------------------------------------------------------------------
+# When this list is non-empty, any Bash command whose first token is not
+# in the list is flagged for human review (BASH-COMMAND-WHITELIST rule).
+# When empty (default), the rule is disabled — no command-whitelist check
+# is performed.
+#
+# Example (only allow safe read-only commands):
+#   allowed_commands:
+#     - ls
+#     - cat
+#     - echo
+#     - grep
+#     - find
+allowed_commands: []
 
 # ---------------------------------------------------------------------------
 # Per-rule overrides

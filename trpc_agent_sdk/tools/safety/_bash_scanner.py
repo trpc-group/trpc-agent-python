@@ -454,6 +454,73 @@ class BashShellInjectionRule(Rule):
         return findings
 
 
+class BashAllowedCommandRule(Rule):
+    """Flag Bash commands not in the configured allow-list.
+
+    This rule is **disabled by default** — it only runs when the policy's
+    ``allowed_commands`` list is non-empty.  When enabled, any command
+    whose first token is not in the allow-list is flagged for human
+    review (not denied, because a non-whitelisted command is not
+    necessarily dangerous).
+    """
+
+    rule_id = "BASH-COMMAND-WHITELIST"
+    description = "Command not in the configured allow-list"
+    category = RiskCategory.PROCESS_SYSTEM
+    default_risk_level = RiskLevel.LOW
+    default_decision = Decision.NEEDS_HUMAN_REVIEW
+    applies_to = (ScriptType.BASH,)
+
+    # Shell keywords / control structures that are never "commands".
+    _KEYWORDS = frozenset({
+        "if", "then", "else", "elif", "fi", "for", "in", "do", "done",
+        "while", "until", "case", "esac", "function", "select",
+        "{", "}", "!", "[", "[[",
+    })
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        allowed = ctx.policy.allowed_commands
+        if not allowed:  # disabled by default
+            return []
+        allowed_lower = {c.lower().strip() for c in allowed}
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            try:
+                tokens = shlex.split(stripped, posix=True)
+            except ValueError:
+                # Unbalanced quotes etc — skip; other rules will catch.
+                continue
+            if not tokens:
+                continue
+            cmd = tokens[0]
+            # Skip leading variable assignments:  VAR=value cmd ...
+            while "=" in cmd and not cmd.startswith("-"):
+                tokens = tokens[1:]
+                if not tokens:
+                    break
+                cmd = tokens[0]
+            if not cmd:
+                continue
+            # Skip shell keywords / control structures
+            if cmd in self._KEYWORDS:
+                continue
+            # Strip directory prefix: /usr/bin/curl -> curl
+            cmd_name = cmd.rsplit("/", 1)[-1].lower()
+            if cmd_name not in allowed_lower:
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    f"Command '{cmd}' is not in the allowed_commands "
+                    "allow-list; add it to the policy file or use a "
+                    "whitelisted alternative.",
+                ))
+        return findings
+
+
 # ---------------------------------------------------------------------------
 # Register all built-in Bash rules
 # ---------------------------------------------------------------------------
@@ -468,6 +535,7 @@ def _register_bash_rules() -> None:
         BashResourceAbuseRule,
         BashSecretLeakRule,
         BashShellInjectionRule,
+        BashAllowedCommandRule,
     ):
         instance = rule_cls()
         global_rule_registry.register(instance)

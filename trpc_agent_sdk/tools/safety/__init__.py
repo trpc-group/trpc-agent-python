@@ -28,6 +28,7 @@ See ``docs/tool_safety_guard.md`` for the full design document.
 """
 
 from ._audit import AuditLogger
+from ._bash_scanner import BashAllowedCommandRule
 from ._bash_scanner import BashDangerousFileOpsRule
 from ._bash_scanner import BashDependencyInstallRule
 from ._bash_scanner import BashNetworkEgressRule
@@ -90,6 +91,7 @@ __all__ = [
     "PyResourceAbuseRule",
     "PySecretLeakRule",
     # Bash rules
+    "BashAllowedCommandRule",
     "BashDangerousFileOpsRule",
     "BashNetworkEgressRule",
     "BashProcessSystemRule",
