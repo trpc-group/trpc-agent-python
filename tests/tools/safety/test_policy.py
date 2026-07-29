@@ -85,6 +85,11 @@ def test_strict_policy_rejects_unknown_fields():
         ToolSafetyPolicy.from_dict({"allowed_domains": [], "unknown": True}, strict=True)
 
 
+def test_strict_policy_rejects_prompt_bypass_field():
+    with pytest.raises(ValueError, match="Unknown tool safety policy field"):
+        ToolSafetyPolicy.from_dict({"bypass_safety": True}, strict=True)
+
+
 def test_policy_rejects_non_mapping_data():
     with pytest.raises(ValueError, match="must be a mapping"):
         ToolSafetyPolicy.from_dict([], strict=True)

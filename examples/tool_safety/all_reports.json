@@ -1720,38 +1720,23 @@
           "risk_level": "high",
           "risk_type": "sensitive_information_leak",
           "rule_id": "SENSITIVE_OUTPUT"
-        },
-        {
-          "column": null,
-          "decision": "deny",
-          "evidence": "print(os.environ[\"API_KEY\"])",
-          "line": 3,
-          "message": "Script references denied path .env.",
-          "metadata": {
-            "language": "python",
-            "path": ".env"
-          },
-          "recommendation": "Remove direct credential file access or explicitly scope the tool to safe workspace files.",
-          "risk_level": "critical",
-          "risk_type": "dangerous_file_operation",
-          "rule_id": "FILE_SECRET_PATH_ACCESS"
         }
       ],
       "language": "python",
       "required_rule_ids": [
         "SENSITIVE_OUTPUT"
       ],
-      "risk_level": "critical",
+      "risk_level": "high",
       "sample": "examples/tool_safety/samples/sensitive_output.py",
       "sanitized": false,
       "scan_id": "manifest:033:sensitive_output.py",
-      "summary": "Decision deny with critical risk from rules: SENSITIVE_OUTPUT, FILE_SECRET_PATH_ACCESS.",
+      "summary": "Decision deny with high risk from rules: SENSITIVE_OUTPUT.",
       "telemetry_attributes": {
         "tool.safety.blocked": true,
         "tool.safety.decision": "deny",
         "tool.safety.duration_ms": 0.0,
-        "tool.safety.risk_level": "critical",
-        "tool.safety.rule_id": "SENSITIVE_OUTPUT,FILE_SECRET_PATH_ACCESS",
+        "tool.safety.risk_level": "high",
+        "tool.safety.rule_id": "SENSITIVE_OUTPUT",
         "tool.safety.sanitized": false,
         "tool.safety.scan_id": "manifest:033:sensitive_output.py",
         "tool.safety.tool_name": "sensitive_output.py"
