@@ -1,10 +1,10 @@
 {
   "schema_version": "eval-optimize-loop-v1",
   "run": {
-    "mode": "real",
-    "started_at": "2026-07-29T07:46:53.491932+00:00",
-    "finished_at": "2026-07-29T07:47:25.010475+00:00",
-    "duration_seconds": 31.518541,
+    "mode": "fake",
+    "started_at": "2026-07-29T09:10:49.915072+00:00",
+    "finished_at": "2026-07-29T09:10:49.915505+00:00",
+    "duration_seconds": 0.00043,
     "seed": 42
   },
   "inputs": {
@@ -105,7 +105,7 @@
             "actual": "答案：11 个",
             "tool_calls": []
           },
-          "latency": 0.0003851220244541764,
+          "latency": 1.5296973288059235e-07,
           "cost": 0.0,
           "failure_analysis": null
         },
@@ -116,14 +116,14 @@
             "final_response_avg_score": 0.0
           },
           "passed": false,
-          "failure_reason": "final_response_avg_score failed.",
+          "failure_reason": "Failed metrics: final_response_avg_score.",
           "trace": {
             "user": "一件衣服原价 200 元，打 8 折后多少钱？",
             "expected": "答案：160 元",
             "actual": "答案：180 元",
             "tool_calls": []
           },
-          "latency": 0.0002015280188061297,
+          "latency": 1.5401747077703476e-07,
           "cost": 0.0,
           "failure_analysis": {
             "category": "final_answer_mismatch",
@@ -137,12 +137,12 @@
                   "score": 0.0,
                   "threshold": 1.0,
                   "eval_status": "FAILED",
-                  "reason": null
+                  "reason": "Final response does not match the reference answer."
                 }
               ],
               "expected": "答案：160 元",
               "actual": "答案：180 元",
-              "failure_reason": "final_response_avg_score failed."
+              "failure_reason": "Failed metrics: final_response_avg_score."
             }
           }
         },
@@ -160,7 +160,7 @@
             "actual": "计算 40 的 25%，答案：10 人",
             "tool_calls": []
           },
-          "latency": 0.00017735798610374331,
+          "latency": 7.497146725654602e-08,
           "cost": 0.0,
           "failure_analysis": null
         }
@@ -195,7 +195,7 @@
             "actual": "答案：40 个",
             "tool_calls": []
           },
-          "latency": 0.00013485999079421163,
+          "latency": 6.798654794692993e-08,
           "cost": 0.0,
           "failure_analysis": null
         },
@@ -206,14 +206,14 @@
             "final_response_avg_score": 0.0
           },
           "passed": false,
-          "failure_reason": "final_response_avg_score failed.",
+          "failure_reason": "Failed metrics: final_response_avg_score.",
           "trace": {
             "user": "1 升水重 1 千克，3.5 升水重多少千克？",
             "expected": "答案：3.5 千克",
             "actual": "答案：4 千克",
             "tool_calls": []
           },
-          "latency": 0.00013199500972405076,
+          "latency": 6.600748747587204e-08,
           "cost": 0.0,
           "failure_analysis": {
             "category": "final_answer_mismatch",
@@ -227,12 +227,12 @@
                   "score": 0.0,
                   "threshold": 1.0,
                   "eval_status": "FAILED",
-                  "reason": null
+                  "reason": "Final response does not match the reference answer."
                 }
               ],
               "expected": "答案：3.5 千克",
               "actual": "答案：4 千克",
-              "failure_reason": "final_response_avg_score failed."
+              "failure_reason": "Failed metrics: final_response_avg_score."
             }
           }
         },
@@ -243,14 +243,14 @@
             "final_response_avg_score": 0.0
           },
           "passed": false,
-          "failure_reason": "final_response_avg_score failed.",
+          "failure_reason": "Failed metrics: final_response_avg_score.",
           "trace": {
             "user": "班里 30 人，其中 60% 是女生，有多少名女生？",
             "expected": "答案：18 人",
             "actual": "答案：20 人",
             "tool_calls": []
           },
-          "latency": 0.0001270869979634881,
+          "latency": 4.901085048913956e-08,
           "cost": 0.0,
           "failure_analysis": {
             "category": "final_answer_mismatch",
@@ -264,12 +264,12 @@
                   "score": 0.0,
                   "threshold": 1.0,
                   "eval_status": "FAILED",
-                  "reason": null
+                  "reason": "Final response does not match the reference answer."
                 }
               ],
               "expected": "答案：18 人",
               "actual": "答案：20 人",
-              "failure_reason": "final_response_avg_score failed."
+              "failure_reason": "Failed metrics: final_response_avg_score."
             }
           }
         }
@@ -288,7 +288,7 @@
         "unknown": 0
       },
       "candidate": {
-        "final_answer_mismatch": 1,
+        "final_answer_mismatch": 0,
         "tool_call_error": 0,
         "parameter_error": 0,
         "llm_rubric_failed": 0,
@@ -318,7 +318,7 @@
       }
     },
     "overall_summary": {
-      "final_answer_mismatch": 6,
+      "final_answer_mismatch": 5,
       "tool_call_error": 0,
       "parameter_error": 0,
       "llm_rubric_failed": 0,
@@ -342,12 +342,12 @@
               "score": 0.0,
               "threshold": 1.0,
               "eval_status": "FAILED",
-              "reason": null
+              "reason": "Final response does not match the reference answer."
             }
           ],
           "expected": "答案：160 元",
           "actual": "答案：180 元",
-          "failure_reason": "final_response_avg_score failed."
+          "failure_reason": "Failed metrics: final_response_avg_score."
         }
       },
       {
@@ -365,12 +365,12 @@
               "score": 0.0,
               "threshold": 1.0,
               "eval_status": "FAILED",
-              "reason": null
+              "reason": "Final response does not match the reference answer."
             }
           ],
           "expected": "答案：3.5 千克",
           "actual": "答案：4 千克",
-          "failure_reason": "final_response_avg_score failed."
+          "failure_reason": "Failed metrics: final_response_avg_score."
         }
       },
       {
@@ -388,58 +388,35 @@
               "score": 0.0,
               "threshold": 1.0,
               "eval_status": "FAILED",
-              "reason": null
+              "reason": "Final response does not match the reference answer."
             }
           ],
           "expected": "答案：18 人",
           "actual": "答案：20 人",
-          "failure_reason": "final_response_avg_score failed."
-        }
-      },
-      {
-        "variant": "candidate",
-        "split": "train",
-        "case_id": "train_discount_fail",
-        "category": "final_answer_mismatch",
-        "confidence": 0.9,
-        "explanation": "Final response did not match the reference answer.",
-        "evidence": {
-          "case_id": "train_discount_fail",
-          "failed_metrics": [
-            {
-              "metric_name": "final_response_avg_score",
-              "score": 0.0,
-              "threshold": 1.0,
-              "eval_status": "FAILED",
-              "reason": null
-            }
-          ],
-          "expected": "答案：160 元",
-          "actual": "答案：180 元",
-          "failure_reason": "final_response_avg_score failed."
+          "failure_reason": "Failed metrics: final_response_avg_score."
         }
       },
       {
         "variant": "candidate",
         "split": "val",
-        "case_id": "val_water_fail",
+        "case_id": "val_multiply_pass",
         "category": "final_answer_mismatch",
         "confidence": 0.9,
         "explanation": "Final response did not match the reference answer.",
         "evidence": {
-          "case_id": "val_water_fail",
+          "case_id": "val_multiply_pass",
           "failed_metrics": [
             {
               "metric_name": "final_response_avg_score",
               "score": 0.0,
               "threshold": 1.0,
               "eval_status": "FAILED",
-              "reason": null
+              "reason": "Final response does not match the reference answer."
             }
           ],
-          "expected": "答案：3.5 千克",
-          "actual": "答案：4 千克",
-          "failure_reason": "final_response_avg_score failed."
+          "expected": "答案：40 个",
+          "actual": "答案：42 个",
+          "failure_reason": "Failed metrics: final_response_avg_score."
         }
       },
       {
@@ -457,12 +434,12 @@
               "score": 0.0,
               "threshold": 1.0,
               "eval_status": "FAILED",
-              "reason": null
+              "reason": "Final response does not match the reference answer."
             }
           ],
           "expected": "答案：18 人",
           "actual": "答案：20 人",
-          "failure_reason": "final_response_avg_score failed."
+          "failure_reason": "Failed metrics: final_response_avg_score."
         }
       }
     ]
@@ -471,10 +448,10 @@
     "train": {
       "eval_set_id": "eval_optimize_loop_train",
       "case_count": 3,
-      "passed_count": 2,
-      "failed_count": 1,
+      "passed_count": 3,
+      "failed_count": 0,
       "failure_attribution_summary": {
-        "final_answer_mismatch": 1,
+        "final_answer_mismatch": 0,
         "tool_call_error": 0,
         "parameter_error": 0,
         "llm_rubric_failed": 0,
@@ -497,46 +474,27 @@
             "actual": "答案：11 个",
             "tool_calls": []
           },
-          "latency": 0.0006882919697090983,
+          "latency": 8.69622454047203e-08,
           "cost": 0.0,
           "failure_analysis": null
         },
         {
           "id": "train_discount_fail",
-          "metric_score": 0.0,
+          "metric_score": 1.0,
           "metric_scores": {
-            "final_response_avg_score": 0.0
+            "final_response_avg_score": 1.0
           },
-          "passed": false,
-          "failure_reason": "final_response_avg_score failed.",
+          "passed": true,
+          "failure_reason": "",
           "trace": {
             "user": "一件衣服原价 200 元，打 8 折后多少钱？",
             "expected": "答案：160 元",
-            "actual": "答案：180 元",
+            "actual": "答案：160 元",
             "tool_calls": []
           },
-          "latency": 0.0005271550035104156,
+          "latency": 6.30388967692852e-08,
           "cost": 0.0,
-          "failure_analysis": {
-            "category": "final_answer_mismatch",
-            "confidence": 0.9,
-            "explanation": "Final response did not match the reference answer.",
-            "evidence": {
-              "case_id": "train_discount_fail",
-              "failed_metrics": [
-                {
-                  "metric_name": "final_response_avg_score",
-                  "score": 0.0,
-                  "threshold": 1.0,
-                  "eval_status": "FAILED",
-                  "reason": null
-                }
-              ],
-              "expected": "答案：160 元",
-              "actual": "答案：180 元",
-              "failure_reason": "final_response_avg_score failed."
-            }
-          }
+          "failure_analysis": null
         },
         {
           "id": "train_percent_pass",
@@ -549,10 +507,10 @@
           "trace": {
             "user": "40 名学生中 25% 戴眼镜，戴眼镜的有多少人？",
             "expected": "答案：10 人",
-            "actual": "计算 40 的 25%，答案：10 人",
+            "actual": "答案：10 人",
             "tool_calls": []
           },
-          "latency": 0.0004119730438105762,
+          "latency": 6.199115887284279e-08,
           "cost": 0.0,
           "failure_analysis": null
         }
@@ -575,6 +533,43 @@
       "cases": [
         {
           "id": "val_multiply_pass",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "Failed metrics: final_response_avg_score.",
+          "trace": {
+            "user": "教室里有 5 排座位，每排 8 个，一共有多少个座位？",
+            "expected": "答案：40 个",
+            "actual": "答案：42 个",
+            "tool_calls": []
+          },
+          "latency": 5.00003807246685e-08,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "val_multiply_pass",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": "Final response does not match the reference answer."
+                }
+              ],
+              "expected": "答案：40 个",
+              "actual": "答案：42 个",
+              "failure_reason": "Failed metrics: final_response_avg_score."
+            }
+          }
+        },
+        {
+          "id": "val_water_fail",
           "metric_score": 1.0,
           "metric_scores": {
             "final_response_avg_score": 1.0
@@ -582,51 +577,14 @@
           "passed": true,
           "failure_reason": "",
           "trace": {
-            "user": "教室里有 5 排座位，每排 8 个，一共有多少个座位？",
-            "expected": "答案：40 个",
-            "actual": "答案：40 个",
-            "tool_calls": []
-          },
-          "latency": 0.0001963640097528696,
-          "cost": 0.0,
-          "failure_analysis": null
-        },
-        {
-          "id": "val_water_fail",
-          "metric_score": 0.0,
-          "metric_scores": {
-            "final_response_avg_score": 0.0
-          },
-          "passed": false,
-          "failure_reason": "final_response_avg_score failed.",
-          "trace": {
             "user": "1 升水重 1 千克，3.5 升水重多少千克？",
             "expected": "答案：3.5 千克",
-            "actual": "答案：4 千克",
+            "actual": "答案：3.5 千克",
             "tool_calls": []
           },
-          "latency": 0.0001838289899751544,
+          "latency": 4.0046870708465576e-08,
           "cost": 0.0,
-          "failure_analysis": {
-            "category": "final_answer_mismatch",
-            "confidence": 0.9,
-            "explanation": "Final response did not match the reference answer.",
-            "evidence": {
-              "case_id": "val_water_fail",
-              "failed_metrics": [
-                {
-                  "metric_name": "final_response_avg_score",
-                  "score": 0.0,
-                  "threshold": 1.0,
-                  "eval_status": "FAILED",
-                  "reason": null
-                }
-              ],
-              "expected": "答案：3.5 千克",
-              "actual": "答案：4 千克",
-              "failure_reason": "final_response_avg_score failed."
-            }
-          }
+          "failure_analysis": null
         },
         {
           "id": "val_percent_fail",
@@ -635,14 +593,14 @@
             "final_response_avg_score": 0.0
           },
           "passed": false,
-          "failure_reason": "final_response_avg_score failed.",
+          "failure_reason": "Failed metrics: final_response_avg_score.",
           "trace": {
             "user": "班里 30 人，其中 60% 是女生，有多少名女生？",
             "expected": "答案：18 人",
             "actual": "答案：20 人",
             "tool_calls": []
           },
-          "latency": 0.00017802900401875377,
+          "latency": 3.597233444452286e-08,
           "cost": 0.0,
           "failure_analysis": {
             "category": "final_answer_mismatch",
@@ -656,38 +614,38 @@
                   "score": 0.0,
                   "threshold": 1.0,
                   "eval_status": "FAILED",
-                  "reason": null
+                  "reason": "Final response does not match the reference answer."
                 }
               ],
               "expected": "答案：18 人",
               "actual": "答案：20 人",
-              "failure_reason": "final_response_avg_score failed."
+              "failure_reason": "Failed metrics: final_response_avg_score."
             }
           }
         }
       ]
     },
     "prompts": {
-      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
-      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n\nFake optimizer guidance: verify arithmetic before answering, preserve the requested answer format, and address Address failure attribution categories: final_answer_mismatch=3. [fake_optimizer:final_answer_mismatch]\n",
+      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n\nWhen a baseline failure is attributed to final_answer_mismatch, recompute the numeric result and keep the expected unit in the final answer.\n"
     }
   },
   "delta": {
     "summary": {
-      "overall_change_type": "unchanged",
+      "overall_change_type": "mixed",
       "train": {
         "split": "train",
         "baseline_score": 0.666667,
-        "candidate_score": 0.666667,
-        "score_delta": 0.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.333333,
         "baseline_pass_rate": 0.666667,
-        "candidate_pass_rate": 0.666667,
-        "pass_rate_delta": 0.0,
+        "candidate_pass_rate": 1.0,
+        "pass_rate_delta": 0.333333,
         "case_count": 3,
-        "new_pass_count": 0,
+        "new_pass_count": 1,
         "new_fail_count": 0,
         "regression_count": 0,
-        "improvement_count": 0,
+        "improvement_count": 1,
         "missing_candidate_case_ids": [],
         "extra_candidate_case_ids": []
       },
@@ -700,28 +658,28 @@
         "candidate_pass_rate": 0.333333,
         "pass_rate_delta": 0.0,
         "case_count": 3,
-        "new_pass_count": 0,
-        "new_fail_count": 0,
-        "regression_count": 0,
-        "improvement_count": 0,
+        "new_pass_count": 1,
+        "new_fail_count": 1,
+        "regression_count": 1,
+        "improvement_count": 1,
         "missing_candidate_case_ids": [],
         "extra_candidate_case_ids": []
       },
-      "regression_count": 0,
-      "improvement_count": 0,
-      "new_pass_count": 0,
-      "new_fail_count": 0,
+      "regression_count": 1,
+      "improvement_count": 2,
+      "new_pass_count": 2,
+      "new_fail_count": 1,
       "missing_candidate_case_ids": [],
       "extra_candidate_case_ids": []
     },
     "train": {
       "split": "train",
       "baseline_score": 0.666667,
-      "candidate_score": 0.666667,
-      "score_delta": 0.0,
+      "candidate_score": 1.0,
+      "score_delta": 0.333333,
       "baseline_pass_rate": 0.666667,
-      "candidate_pass_rate": 0.666667,
-      "pass_rate_delta": 0.0,
+      "candidate_pass_rate": 1.0,
+      "pass_rate_delta": 0.333333,
       "case_deltas": [
         {
           "id": "train_addition_pass",
@@ -731,14 +689,14 @@
             "passed": true,
             "metric_score": 1.0,
             "failure_category": null,
-            "latency": 0.0003851220244541764,
+            "latency": 1.5296973288059235e-07,
             "cost": 0.0
           },
           "candidate": {
             "passed": true,
             "metric_score": 1.0,
             "failure_category": null,
-            "latency": 0.0006882919697090983,
+            "latency": 8.69622454047203e-08,
             "cost": 0.0
           },
           "score_delta": 0.0,
@@ -753,7 +711,7 @@
               "status_transition": "passed_to_passed"
             }
           ],
-          "latency_delta": 0.000303,
+          "latency_delta": -0.0,
           "cost_delta": 0.0,
           "regression": false,
           "improvement": false,
@@ -762,37 +720,37 @@
         {
           "id": "train_discount_fail",
           "split": "train",
-          "change_type": "unchanged",
+          "change_type": "new_pass",
           "baseline": {
             "passed": false,
             "metric_score": 0.0,
             "failure_category": "final_answer_mismatch",
-            "latency": 0.0002015280188061297,
+            "latency": 1.5401747077703476e-07,
             "cost": 0.0
           },
           "candidate": {
-            "passed": false,
-            "metric_score": 0.0,
-            "failure_category": "final_answer_mismatch",
-            "latency": 0.0005271550035104156,
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 6.30388967692852e-08,
             "cost": 0.0
           },
-          "score_delta": 0.0,
+          "score_delta": 1.0,
           "metric_deltas": [
             {
               "metric_name": "final_response_avg_score",
               "baseline_score": 0.0,
-              "candidate_score": 0.0,
-              "score_delta": 0.0,
+              "candidate_score": 1.0,
+              "score_delta": 1.0,
               "baseline_passed": false,
-              "candidate_passed": false,
-              "status_transition": "failed_to_failed"
+              "candidate_passed": true,
+              "status_transition": "failed_to_passed"
             }
           ],
-          "latency_delta": 0.000326,
+          "latency_delta": -0.0,
           "cost_delta": 0.0,
           "regression": false,
-          "improvement": false,
+          "improvement": true,
           "notes": []
         },
         {
@@ -803,14 +761,14 @@
             "passed": true,
             "metric_score": 1.0,
             "failure_category": null,
-            "latency": 0.00017735798610374331,
+            "latency": 7.497146725654602e-08,
             "cost": 0.0
           },
           "candidate": {
             "passed": true,
             "metric_score": 1.0,
             "failure_category": null,
-            "latency": 0.0004119730438105762,
+            "latency": 6.199115887284279e-08,
             "cost": 0.0
           },
           "score_delta": 0.0,
@@ -825,7 +783,7 @@
               "status_transition": "passed_to_passed"
             }
           ],
-          "latency_delta": 0.000235,
+          "latency_delta": -0.0,
           "cost_delta": 0.0,
           "regression": false,
           "improvement": false,
@@ -847,36 +805,36 @@
         {
           "id": "val_multiply_pass",
           "split": "val",
-          "change_type": "unchanged",
+          "change_type": "new_fail",
           "baseline": {
             "passed": true,
             "metric_score": 1.0,
             "failure_category": null,
-            "latency": 0.00013485999079421163,
+            "latency": 6.798654794692993e-08,
             "cost": 0.0
           },
           "candidate": {
-            "passed": true,
-            "metric_score": 1.0,
-            "failure_category": null,
-            "latency": 0.0001963640097528696,
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 5.00003807246685e-08,
             "cost": 0.0
           },
-          "score_delta": 0.0,
+          "score_delta": -1.0,
           "metric_deltas": [
             {
               "metric_name": "final_response_avg_score",
               "baseline_score": 1.0,
-              "candidate_score": 1.0,
-              "score_delta": 0.0,
+              "candidate_score": 0.0,
+              "score_delta": -1.0,
               "baseline_passed": true,
-              "candidate_passed": true,
-              "status_transition": "passed_to_passed"
+              "candidate_passed": false,
+              "status_transition": "passed_to_failed"
             }
           ],
-          "latency_delta": 6.2e-05,
+          "latency_delta": -0.0,
           "cost_delta": 0.0,
-          "regression": false,
+          "regression": true,
           "improvement": false,
           "notes": []
         },
@@ -888,14 +846,14 @@
             "passed": false,
             "metric_score": 0.0,
             "failure_category": "final_answer_mismatch",
-            "latency": 0.0001270869979634881,
+            "latency": 4.901085048913956e-08,
             "cost": 0.0
           },
           "candidate": {
             "passed": false,
             "metric_score": 0.0,
             "failure_category": "final_answer_mismatch",
-            "latency": 0.00017802900401875377,
+            "latency": 3.597233444452286e-08,
             "cost": 0.0
           },
           "score_delta": 0.0,
@@ -910,7 +868,7 @@
               "status_transition": "failed_to_failed"
             }
           ],
-          "latency_delta": 5.1e-05,
+          "latency_delta": -0.0,
           "cost_delta": 0.0,
           "regression": false,
           "improvement": false,
@@ -919,37 +877,37 @@
         {
           "id": "val_water_fail",
           "split": "val",
-          "change_type": "unchanged",
+          "change_type": "new_pass",
           "baseline": {
             "passed": false,
             "metric_score": 0.0,
             "failure_category": "final_answer_mismatch",
-            "latency": 0.00013199500972405076,
+            "latency": 6.600748747587204e-08,
             "cost": 0.0
           },
           "candidate": {
-            "passed": false,
-            "metric_score": 0.0,
-            "failure_category": "final_answer_mismatch",
-            "latency": 0.0001838289899751544,
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 4.0046870708465576e-08,
             "cost": 0.0
           },
-          "score_delta": 0.0,
+          "score_delta": 1.0,
           "metric_deltas": [
             {
               "metric_name": "final_response_avg_score",
               "baseline_score": 0.0,
-              "candidate_score": 0.0,
-              "score_delta": 0.0,
+              "candidate_score": 1.0,
+              "score_delta": 1.0,
               "baseline_passed": false,
-              "candidate_passed": false,
-              "status_transition": "failed_to_failed"
+              "candidate_passed": true,
+              "status_transition": "failed_to_passed"
             }
           ],
-          "latency_delta": 5.2e-05,
+          "latency_delta": -0.0,
           "cost_delta": 0.0,
           "regression": false,
-          "improvement": false,
+          "improvement": true,
           "notes": []
         }
       ],
@@ -960,7 +918,7 @@
   "gate_decision": {
     "decision": "reject",
     "accepted": false,
-    "reason": "Validation score gain is below the minimum threshold.",
+    "reason": "Validation score gain is below the minimum threshold. Candidate introduced new validation failures. Candidate introduced validation regressions. One or more critical validation cases regressed.",
     "rule_results": [
       {
         "rule_name": "validation_score_gain",
@@ -988,34 +946,40 @@
       },
       {
         "rule_name": "new_failures",
-        "passed": true,
+        "passed": false,
         "severity": "required",
-        "message": "No new validation failures were introduced.",
+        "message": "Candidate introduced new validation failures.",
         "evidence": {
           "allow_new_failures": false,
-          "new_fail_case_ids": []
+          "new_fail_case_ids": [
+            "val_multiply_pass"
+          ]
         }
       },
       {
         "rule_name": "validation_regressions",
-        "passed": true,
+        "passed": false,
         "severity": "required",
-        "message": "No validation regressions were detected.",
+        "message": "Candidate introduced validation regressions.",
         "evidence": {
           "allow_regressions": false,
-          "regression_case_ids": []
+          "regression_case_ids": [
+            "val_multiply_pass"
+          ]
         }
       },
       {
         "rule_name": "critical_case_regressions",
-        "passed": true,
+        "passed": false,
         "severity": "required",
-        "message": "No critical validation cases regressed.",
+        "message": "One or more critical validation cases regressed.",
         "evidence": {
           "critical_case_ids": [
             "val_multiply_pass"
           ],
-          "critical_regression_case_ids": []
+          "critical_regression_case_ids": [
+            "val_multiply_pass"
+          ]
         }
       },
       {
@@ -1039,7 +1003,7 @@
         "message": "No train-only overfit pattern was detected.",
         "evidence": {
           "enabled": true,
-          "train_score_delta": 0.0,
+          "train_score_delta": 0.333333,
           "val_score_delta": 0.0,
           "train_gain_min": 0.05,
           "val_drop_tolerance": 0.0
@@ -1051,10 +1015,10 @@
       "candidate_val_score": 0.333333,
       "val_score_delta": 0.0,
       "val_pass_rate_delta": 0.0,
-      "train_score_delta": 0.0,
-      "new_fail_count": 0,
-      "regression_count": 0,
-      "critical_regression_count": 0,
+      "train_score_delta": 0.333333,
+      "new_fail_count": 1,
+      "regression_count": 1,
+      "critical_regression_count": 1,
       "overfit_detected": false,
       "baseline_cost": 0.0,
       "candidate_cost": 0.0,
@@ -1080,7 +1044,7 @@
       }
     },
     "recommended_action": "keep_baseline_prompts",
-    "generated_at": "2026-07-29T07:47:25.010467+00:00"
+    "generated_at": "2026-07-29T09:10:49.915499+00:00"
   },
   "optimization": {
     "target_prompt_names": [
@@ -1092,32 +1056,14 @@
       "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
     },
     "best_prompts": {
-      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
-      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n\nFake optimizer guidance: verify arithmetic before answering, preserve the requested answer format, and address Address failure attribution categories: final_answer_mismatch=3. [fake_optimizer:final_answer_mismatch]\n",
+      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n\nWhen a baseline failure is attributed to final_answer_mismatch, recompute the numeric result and keep the expected unit in the final answer.\n"
     },
     "rounds": [
       {
         "round": 1,
         "optimized_field_names": [
-          "system_prompt"
-        ],
-        "before": {
-          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
-          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
-        },
-        "after": {
-          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
-          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
-        },
-        "reason": "no candidate produced this round",
-        "accepted": false,
-        "validation_pass_rate": 0.0,
-        "duration_seconds": 19.865978,
-        "cost": 0.0
-      },
-      {
-        "round": 2,
-        "optimized_field_names": [
+          "system_prompt",
           "skill"
         ],
         "before": {
@@ -1125,32 +1071,29 @@
           "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
         },
         "after": {
-          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
-          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n\nFake optimizer guidance: verify arithmetic before answering, preserve the requested answer format, and address Address failure attribution categories: final_answer_mismatch=3. [fake_optimizer:final_answer_mismatch]\n",
+          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n\nWhen a baseline failure is attributed to final_answer_mismatch, recompute the numeric result and keep the expected unit in the final answer.\n"
         },
-        "reason": "no candidate produced this round",
-        "accepted": false,
+        "reason": "Address failure attribution categories: final_answer_mismatch=3",
+        "accepted": true,
         "validation_pass_rate": 0.0,
-        "duration_seconds": 10.44344,
+        "duration_seconds": 0.0,
         "cost": 0.0
       }
     ],
-    "total_rounds": 2,
+    "total_rounds": 1,
     "total_cost": 0.0,
-    "duration_seconds": 30.389949,
+    "duration_seconds": 4.211196210235357e-05,
     "seed": 42,
-    "reason": "Optimizer finished with status=SUCCEEDED, finish_reason=no_improvement, improvement=0.0.",
+    "reason": "Address failure attribution categories: final_answer_mismatch=3",
     "artifacts": {
-      "mode": "real",
-      "source_prompts_updated": false,
-      "optimizer_artifact_dir": "output/optimizer_artifacts",
-      "train_call_agent_evalset_path": "output/optimizer_inputs/train.call_agent.evalset.json",
-      "val_call_agent_evalset_path": "output/optimizer_inputs/val.call_agent.evalset.json"
+      "mode": "fake",
+      "source_prompts_updated": false
     }
   },
   "metadata": {
     "example_root": ".",
-    "reproduction_command": "python run_pipeline.py --mode real",
+    "reproduction_command": "python run_pipeline.py --mode fake",
     "output_dir": "output",
     "output_paths": {
       "json": "output/optimization_report.json",

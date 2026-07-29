@@ -46,4 +46,10 @@ async def test_real_mode_uses_agent_optimizer_without_updating_source(
     assert sorted(captured["target_prompt"].names()) == ["skill", "system_prompt"]
     assert Path(captured["train_dataset_path"]).parent == output_dir / "optimizer_inputs"
     assert Path(captured["validation_dataset_path"]).parent == output_dir / "optimizer_inputs"
+    train_artifact = report["optimization"]["artifacts"]["train_call_agent_evalset_path"]
+    val_artifact = report["optimization"]["artifacts"]["val_call_agent_evalset_path"]
+    assert not Path(train_artifact).is_absolute()
+    assert not Path(val_artifact).is_absolute()
+    assert train_artifact.endswith("optimizer_inputs/train.call_agent.evalset.json")
+    assert val_artifact.endswith("optimizer_inputs/val.call_agent.evalset.json")
     assert report["metadata"]["reproduction_command"] == "python run_pipeline.py --mode real"

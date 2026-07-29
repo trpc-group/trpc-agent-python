@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -75,9 +76,15 @@ class PromptOptimizer:
         optimizer_payload: dict[str, Any],
         train_baseline: BaselineSplitResult,
         val_baseline: BaselineSplitResult,
+        call_agent_train_path: Path | None = None,
+        call_agent_val_path: Path | None = None,
     ) -> OptimizationRunRecord:
         if mode == "real":
-            return await self._run_real_optimizer(optimizer_payload)
+            return await self._run_real_optimizer(
+                optimizer_payload,
+                train_path=call_agent_train_path,
+                val_path=call_agent_val_path,
+            )
         return self._run_fake_optimizer(
             optimizer_payload=optimizer_payload,
             train_baseline=train_baseline,
@@ -140,13 +147,20 @@ class PromptOptimizer:
             },
         )
 
-    async def _run_real_optimizer(self, optimizer_payload: dict[str, Any]) -> OptimizationRunRecord:
+    async def _run_real_optimizer(
+        self,
+        optimizer_payload: dict[str, Any],
+        *,
+        train_path: Path | None,
+        val_path: Path | None,
+    ) -> OptimizationRunRecord:
         from trpc_agent_sdk.evaluation import AgentOptimizer
         from trpc_agent_sdk.evaluation import TargetPrompt
 
         started = time.perf_counter()
         baseline_prompts = self.read_baseline_prompts()
-        train_path, val_path = self.write_call_agent_evalsets()
+        if train_path is None or val_path is None:
+            raise ValueError("real mode requires call_agent evalset paths")
         artifact_dir = self.output_dir / "optimizer_artifacts"
         target_prompt = TargetPrompt()
         for name, path in self.prompt_paths().items():
@@ -317,4 +331,4 @@ def _relative_to_example(path: Path, example_root: Path) -> str:
     try:
         return str(path.resolve().relative_to(example_root.resolve()))
     except ValueError:
-        return str(path)
+        return os.path.relpath(path.resolve(), example_root.resolve())

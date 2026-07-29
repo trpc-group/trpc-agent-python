@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from datetime import datetime
@@ -73,12 +74,15 @@ class EvalOptimizePipeline:
             val_evalset = _load_real_evalset(self.val_evalset_path)
             train = await self._run_real_split(train_evalset, eval_config)
             val = await self._run_real_split(val_evalset, eval_config)
+            call_agent_train_path, call_agent_val_path = prompt_optimizer.write_call_agent_evalsets()
         else:
             metrics = _fake_metrics_from_optimizer(optimizer_payload)
             train_evalset = _load_json(self.train_evalset_path)
             val_evalset = _load_json(self.val_evalset_path)
             train = self._run_fake_split(train_evalset, metrics)
             val = self._run_fake_split(val_evalset, metrics)
+            call_agent_train_path = None
+            call_agent_val_path = None
 
         attributor = FailureAttributor()
         attributor.annotate_split(train)
@@ -89,17 +93,18 @@ class EvalOptimizePipeline:
             optimizer_payload=optimizer_payload,
             train_baseline=train,
             val_baseline=val,
+            call_agent_train_path=call_agent_train_path,
+            call_agent_val_path=call_agent_val_path,
         )
 
         if self.mode == "real":
-            train_path, val_path = prompt_optimizer.write_call_agent_evalsets()
             candidate_train = await self._run_call_agent_split(
-                _load_real_evalset(train_path),
+                _load_real_evalset(call_agent_train_path),
                 eval_config,
                 prompt_optimizer.call_agent_from_prompts(optimization.best_prompts),
             )
             candidate_val = await self._run_call_agent_split(
-                _load_real_evalset(val_path),
+                _load_real_evalset(call_agent_val_path),
                 eval_config,
                 prompt_optimizer.call_agent_from_prompts(optimization.best_prompts),
             )
@@ -262,7 +267,7 @@ def _relative_to_example(path: Path, example_root: Path) -> str:
     try:
         return str(path.resolve().relative_to(example_root.resolve()))
     except ValueError:
-        return str(path)
+        return os.path.relpath(path.resolve(), example_root.resolve())
 
 
 def _failure_attribution_payload(
@@ -415,7 +420,7 @@ def _trace_from_result(result: Any) -> dict[str, Any]:
 
 def _trace_from_case(case: Any) -> dict[str, Any]:
     expected = case.conversation[0] if case.conversation else None
-    actual = case.actual_conversation[0] if case.actual_conversation else expected
+    actual = case.actual_conversation[0] if case.actual_conversation else None
     return _trace_from_invocations(expected=expected, actual=actual)
 
 
@@ -538,7 +543,7 @@ def _fake_record(
     if candidate_prompts:
         actual = _candidate_invocation(case, expected, candidate_prompts)
     else:
-        actual = actual_conversation[0] if actual_conversation else expected
+        actual = actual_conversation[0] if actual_conversation else None
     metric_scores: dict[str, float] = {}
     failed_metrics: list[str] = []
     metric_results: list[dict[str, Any]] = []

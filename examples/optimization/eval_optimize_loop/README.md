@@ -58,6 +58,8 @@ python run_pipeline.py --mode real
 - `output/optimization_report.json`
 - `output/optimization_report.md`
 
+仓库中提交的 `output/` 产物固定作为 fake 模式参考报告。如果运行 `--mode real` 覆盖了这两个文件，提交前请重新执行 `python run_pipeline.py --mode fake`。
+
 ## 输入与输出
 
 输入包括：
