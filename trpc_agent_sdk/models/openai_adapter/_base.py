@@ -64,6 +64,15 @@ class OpenAIAdapter:
         """Whether assistant history should include an empty reasoning_content field."""
         return False
 
+    def should_preserve_reasoning_content(self) -> bool:
+        """Whether assistant history should carry back the model's reasoning_content.
+
+        Most OpenAI-compatible reasoning models expect prior thinking to be
+        stripped from the request. Providers that require the reasoning to be
+        replayed (e.g. Hunyuan hy3) override this to return True.
+        """
+        return False
+
     def build_response_format(self, config: Any) -> tuple[bool, Optional[dict[str, Any]]]:
         """Return provider-specific response_format.
 
