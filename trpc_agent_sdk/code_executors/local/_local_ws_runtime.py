@@ -147,10 +147,14 @@ class LocalWorkspaceManager(BaseWorkspaceManager):
         self.ws_paths.pop(exec_id, None)
 
     @staticmethod
-    def _remove_read_only_path(function, path: str, _exception_info) -> None:
-        """删除本地只读 staged Skill 时暂时恢复写权限，保证 workspace 可在 finally 中清理。"""
+    def _remove_read_only_path(function, path: str, exception_info) -> None:
+        """仅对权限错误恢复写权限，其他清理异常保留原始失败语义。"""
 
-        os.chmod(path, stat.S_IWRITE)
+        exception = exception_info[1]
+        if not isinstance(exception, PermissionError):
+            raise exception.with_traceback(exception_info[2])
+        current_mode = os.stat(path, follow_symlinks=False).st_mode
+        os.chmod(path, current_mode | stat.S_IWRITE)
         function(path)
 
 

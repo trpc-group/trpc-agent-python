@@ -415,6 +415,52 @@ class TestPutFiles:
 
 class TestStageDirectory:
 
+    @pytest.mark.parametrize(
+        "unsafe_destination",
+        ("../../../etc", "/etc", r"C:\Windows"),
+    )
+    async def test_rejects_parent_traversal_destination(self, tmp_path, unsafe_destination):
+        """验证目录暂存会拒绝逃逸 workspace 的相对目标路径。"""
+        src = tmp_path / "source"
+        src.mkdir()
+        ws = _make_ws()
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+
+        with pytest.raises(ValueError, match="escapes"):
+            await fs.stage_directory(
+                ws,
+                str(src),
+                unsafe_destination,
+                WorkspaceStageOptions(),
+            )
+
+        cc.exec_run.assert_not_awaited()
+
+    async def test_quotes_mounted_source_and_destination(self, tmp_path):
+        """验证目录暂存会安全转义挂载源路径和用户目标路径。"""
+        skills_root = tmp_path / "skill's root"
+        source = skills_root / "source"
+        source.mkdir(parents=True)
+        ws = _make_ws()
+        cc = _mock_container_client()
+        cfg = RuntimeConfig(
+            skills_host_base=str(skills_root),
+            skills_container_base="/mounted/skill's root",
+        )
+        fs = ContainerWorkspaceFS(cc, cfg)
+
+        await fs.stage_directory(
+            ws,
+            str(source),
+            "work/user's target",
+            WorkspaceStageOptions(allow_mount=True),
+        )
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert _shell_quote("/mounted/skill's root/source/.") in command
+        assert _shell_quote("/tmp/run/ws_test_123/work/user's target") in command
+
     async def test_stage_without_mount(self, tmp_path):
         src = tmp_path / "src"
         src.mkdir()
@@ -560,6 +606,33 @@ class TestCollect:
 
 
 class TestStageInputs:
+
+    @pytest.mark.parametrize(
+        "unsafe_destination",
+        ("../../../etc", "/etc", r"C:\Windows"),
+    )
+    async def test_rejects_parent_traversal_destination(self, unsafe_destination):
+        """验证输入暂存会拒绝逃逸 workspace 的相对目标路径。"""
+        ws = _make_ws()
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+        specs = [
+            WorkspaceInputSpec(
+                src="workspace://work/source",
+                dst=unsafe_destination,
+                mode="copy",
+            )
+        ]
+
+        with pytest.raises(ValueError, match="escapes"):
+            await fs.stage_inputs(ws, specs)
+
+        stage_commands = [
+            call.kwargs["cmd"][2]
+            for call in cc.exec_run.await_args_list
+            if "cp -a" in call.kwargs["cmd"][2]
+        ]
+        assert stage_commands == []
 
     async def test_stage_host_input(self):
         ws = _make_ws()
@@ -951,6 +1024,19 @@ class TestCopyFileOut:
 
 class TestPutBytesTar:
 
+    async def test_put_bytes_tar_quotes_parent_path(self):
+        """验证 tar 暂存命令会安全转义包含单引号的父目录。"""
+        cc = _mock_container_client()
+        cc.client.api.put_archive.return_value = True
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+        destination = "/container/user's inputs/data.txt"
+
+        await fs._put_bytes_tar(b"hello", destination)
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert _shell_quote("/container/user's inputs") in command
+        cc.client.api.put_archive.assert_called_once()
+
     async def test_put_bytes_tar_success(self):
         cc = _mock_container_client()
         cc.client.api.put_archive.return_value = True
@@ -1067,6 +1153,34 @@ class TestStageHostInput:
         ("mode", "operation"),
         (("copy", "cp -a"), ("link", "ln -sfn")),
     )
+    async def test_quotes_command_paths(self, mode, operation):
+        """验证 host 输入命令会安全转义容器源路径和目标路径。"""
+        ws = _make_ws()
+        cc = _mock_container_client()
+        cfg = RuntimeConfig(
+            inputs_host_base="/host/inputs",
+            inputs_container_base="/container/user's inputs",
+        )
+        fs = ContainerWorkspaceFS(cc, cfg)
+        container_source = "/container/user's inputs/data"
+        container_target = "/tmp/run/workspace/work/user's target"
+
+        await fs._stage_host_input(
+            ws,
+            "/host/inputs/data",
+            container_target,
+            mode,
+            "work/user's target",
+        )
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert f"{operation} {_shell_quote(container_source)}" in command
+        assert _shell_quote(container_target) in command
+
+    @pytest.mark.parametrize(
+        ("mode", "operation"),
+        (("copy", "cp -a"), ("link", "ln -sfn")),
+    )
     async def test_normalizes_command_destination(self, mode, operation):
         """验证 host 输入命令会在执行边界归一化容器目标路径。"""
         ws = _make_ws()
@@ -1130,6 +1244,22 @@ class TestStageHostInput:
 
 
 class TestStageWorkspaceInput:
+
+    @pytest.mark.parametrize(
+        ("mode", "operation"),
+        (("copy", "cp -a"), ("link", "ln -sfn")),
+    )
+    async def test_quotes_command_paths(self, mode, operation):
+        """验证 workspace 输入命令会安全转义容器源路径和目标路径。"""
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+        source = "/tmp/run/workspace/user's source"
+        target = "/tmp/run/workspace/work/user's target"
+
+        await fs._stage_workspace_input(source, target, mode)
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert f"{operation} {_shell_quote(source)} {_shell_quote(target)}" in command
 
     @pytest.mark.parametrize(
         ("mode", "operation"),
@@ -1208,6 +1338,22 @@ class TestShellQuote:
 
 
 class TestRunProgram:
+
+    @pytest.mark.parametrize(
+        "unsafe_cwd",
+        ("../../etc", "/etc", r"C:\Windows"),
+    )
+    async def test_run_rejects_parent_traversal_cwd(self, unsafe_cwd):
+        """验证程序执行会拒绝逃逸 workspace 的相对工作目录。"""
+        cc = _mock_container_client()
+        runner = ContainerProgramRunner(cc, RuntimeConfig())
+        ws = _make_ws()
+        spec = WorkspaceRunProgramSpec(cmd="ls", cwd=unsafe_cwd)
+
+        with pytest.raises(ValueError, match="escapes"):
+            await runner.run_program(ws, spec)
+
+        cc.exec_run.assert_not_awaited()
 
     async def test_basic_run(self):
         cc = _mock_container_client()

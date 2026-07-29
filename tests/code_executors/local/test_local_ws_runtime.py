@@ -159,6 +159,19 @@ class TestLocalWorkspaceManager:
 
         assert not Path(ws.path).exists()
 
+    def test_remove_read_only_path_reraises_non_permission_error(self):
+        """验证只读清理回调不会用 chmod 异常掩盖非权限类原始错误。"""
+        original_error = FileNotFoundError("path disappeared")
+
+        with pytest.raises(FileNotFoundError) as caught:
+            self.manager._remove_read_only_path(
+                os.unlink,
+                str(Path(self.tmpdir) / "missing"),
+                (FileNotFoundError, original_error, None),
+            )
+
+        assert caught.value is original_error
+
     @pytest.mark.asyncio
     async def test_cleanup_nonexistent_workspace(self):
         await self.manager.cleanup("nonexistent")
