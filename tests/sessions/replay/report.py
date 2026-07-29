@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from typing import Literal
 
@@ -140,6 +141,10 @@ def build_diff_report(
 
 
 def write_report(report: dict[str, Any], path: str) -> None:
-    """把报告写入 JSON 文件(默认 tests/sessions/session_memory_summary_diff_report.json,路径由调用方传入)。"""
-    with open(path, "w", encoding="utf-8") as f:
+    """把报告写入 JSON 文件(默认 tests/sessions/artifacts/session_memory_summary_diff_report.json,路径由调用方传入)。"""
+    # The report directory is intentionally generated and may not exist in a clean checkout.
+    # 报告目录属于运行时产物，干净检出中可能不存在，因此写入前主动创建。
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)

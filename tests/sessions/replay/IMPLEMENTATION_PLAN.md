@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **PR 干净**:全部落在 `tests/sessions/` 下 —— 测试代码 + 本计划/设计文档(置于 `tests/sessions/replay/`)+ 报告产物 `tests/sessions/session_memory_summary_diff_report.json`。**不改 `trpc_agent_sdk/` 生产代码**;发现的 SDK bug 只在报告/文档记录。
+- **PR 干净**:全部落在 `tests/sessions/` 下 —— 测试代码 + 本计划/设计文档(置于 `tests/sessions/replay/`)+ 报告产物 `tests/sessions/artifacts/session_memory_summary_diff_report.json`。若差异定位为 SDK bug，则只做最小生产代码修复并补回归测试。
 - **CI lint**:提交前本地 `PYTHONUTF8=1` 跑 `yapf -ri` + `flake8`([[ci-lint-yapf-flake8]])。
 - **Windows**:`python-magic` 用 `python-magic-bin`([[python-magic-windows-cygwin-crash]])。
 - **提交纪律**:`git add` 只加本计划列出的确切路径,禁用 `-A`/`.`([[subagent-git-add-scope]])。用户未要求不主动 commit/push。
@@ -236,7 +236,7 @@
 **Files:**
 - Create: `tests/sessions/test_replay_consistency.py`
 
-- [ ] **Step 1:** 写 `test_replay_consistency_lightweight`:跑全部 10 case × `enabled_backends()`(轻量=in_memory+sqlite),断言正常 case 全 `match`、`false_positive_rate==0.0`,生成 `tests/sessions/session_memory_summary_diff_report.json`。
+- [ ] **Step 1:** 写 `test_replay_consistency_lightweight`:跑全部 10 case × `enabled_backends()`(轻量=in_memory+sqlite),断言正常 case 全 `match`、`false_positive_rate==0.0`,生成 `tests/sessions/artifacts/session_memory_summary_diff_report.json`。
 - [ ] **Step 2:** 写 `test_injection_detection_100pct`:`test_replay_injections.py` 里 10 case 各注入一种 → `detected == [True]*10`。
 - [ ] **Step 3:** 写 `test_summary_three_classes_100pct`:loss/overwrite/affiliation 各注入 → 全检出。
 - [ ] **Step 4:** 跑 `PYTHONUTF8=1 pytest tests/sessions/test_replay_*.py tests/sessions/test_allowed_diff_governance.py tests/sessions/test_summary_checks.py -v`,确认全绿、轻量 ≤30s、报告产物生成且可定位。

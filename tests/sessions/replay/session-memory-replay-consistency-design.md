@@ -103,7 +103,7 @@ tests/sessions/test_replay_consistency.py        # 主 E2E
 tests/sessions/test_replay_injections.py         # 快照层 + 端到端注入检出
 tests/sessions/test_allowed_diff_governance.py   # 精确匹配 + 覆盖率上限
 tests/sessions/test_summary_checks.py            # 三类 summary 故障
-tests/sessions/session_memory_summary_diff_report.json   # 报告产物(运行时生成)
+tests/sessions/artifacts/session_memory_summary_diff_report.json   # 报告产物(运行时生成)
 ```
 
 ---
@@ -408,7 +408,7 @@ Redis/MySQL 不可用时 `pytest.skip`(满足 issue"不要求本地装真 Redis/
 
 1. `tests/sessions/test_replay_consistency.py` + `tests/sessions/replay/` harness 包
 2. `tests/sessions/replay/replay_cases/*.jsonl`(10 条)
-3. `tests/sessions/session_memory_summary_diff_report.json`(运行时生成)
+3. `tests/sessions/artifacts/session_memory_summary_diff_report.json`(运行时生成)
 4. 150–300 字设计说明(本文档 §10 + 测试包 `__init__.py` docstring)
 5. 本设计文档 + 实施计划(均置于 `tests/sessions/replay/`,随测试代码同置)
 

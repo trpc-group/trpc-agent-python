@@ -53,7 +53,9 @@ from trpc_agent_sdk.types import FunctionResponse
 from trpc_agent_sdk.types import Part
 
 DEFAULT_CASES_PATH = Path(__file__).with_name("replay_cases") / "standard_cases.jsonl"
-DEFAULT_REPORT_PATH = Path(__file__).parents[2] / "session_memory_summary_diff_report.json"
+# Keep generated reports with test artifacts instead of rewriting the repo root.
+# 将生成报告放在测试产物目录，避免每次 CLI 运行都改写仓库根目录。
+DEFAULT_REPORT_PATH = Path(__file__).parent / "artifacts" / "session_memory_summary_diff_report.json"
 
 
 @dataclass(frozen=True)
@@ -1008,7 +1010,16 @@ def mutate_snapshot(snapshot: dict[str, Any], mutation: str) -> dict[str, Any]:
     elif mutation == "wrong_summary_session":
         mutated["summary"]["session_id"] = "another-session"
     elif mutation == "stale_summary_version":
-        mutated["summary"]["version"] = max(0, mutated["summary"]["version"] - 1)
+        # A stale version must still be a valid persisted version. Version 1
+        # has no earlier valid value, so fail instead of creating version 0 or
+        # silently returning an unchanged mutation.
+        # 陈旧版本也必须是合法持久化版本。版本 1 不存在更早的合法值，因此显式
+        # 报错，不能制造版本 0，也不能静默返回一个没有变化的故障注入。
+        current_version = mutated["summary"]["version"]
+        if (not isinstance(current_version, int) or isinstance(current_version, bool)
+                or current_version <= 1):
+            raise ValueError("stale_summary_version requires an integer summary version greater than one")
+        mutated["summary"]["version"] = current_version - 1
     elif mutation == "wrong_summary_replacement":
         mutated["summary"]["replaces_summary_id"] = "summary:wrong"
     elif mutation == "drop_retained_event":

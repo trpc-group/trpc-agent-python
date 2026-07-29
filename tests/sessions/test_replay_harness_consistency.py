@@ -11,11 +11,13 @@ Session / Memory / Summary 跨后端回放框架测试。
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
 from .replay.redis_support import require_replay_redis
 from .replay_harness import DEFAULT_CASES_PATH
+from .replay_harness import DEFAULT_REPORT_PATH
 from .replay_harness import compare_snapshots
 from .replay_harness import load_replay_cases
 from .replay_harness import mutate_snapshot
@@ -30,6 +32,15 @@ def test_public_replay_case_catalog_has_ten_unique_cases():
     cases = load_replay_cases(DEFAULT_CASES_PATH)
     assert len(cases) == 10
     assert len({case.case_id for case in cases}) == 10
+
+
+def test_default_report_path_uses_test_artifact_directory():
+    """Keep generated CLI reports out of tracked source locations.
+
+    确保 CLI 生成报告只写入测试产物目录，不污染受版本控制的源码位置。
+    """
+    expected = Path(__file__).parent / "artifacts" / "session_memory_summary_diff_report.json"
+    assert DEFAULT_REPORT_PATH == expected
 
 
 async def test_inmemory_and_sqlite_replay_consistency(tmp_path):
@@ -98,6 +109,19 @@ async def test_summary_faults_are_all_located(tmp_path):
         assert any(difference.field_path == expected_path for difference in differences)
         assert all(difference.session_id for difference in differences)
         assert all(difference.reference_backend and difference.candidate_backend for difference in differences)
+
+
+def test_stale_summary_version_mutation_remains_valid():
+    """Produce a valid older version and reject an impossible v1 mutation.
+
+    生成合法的旧版本，并拒绝无法再回退的 v1 摘要故障注入。
+    """
+    reference = {"backend": "inmemory", "summary": {"version": 2}}
+    assert mutate_snapshot(reference, "stale_summary_version")["summary"]["version"] == 1
+
+    reference["summary"]["version"] = 1
+    with pytest.raises(ValueError, match="greater than one"):
+        mutate_snapshot(reference, "stale_summary_version")
 
 
 async def test_optional_redis_integration(tmp_path):

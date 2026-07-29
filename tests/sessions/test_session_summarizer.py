@@ -24,8 +24,10 @@ from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._session import Session
 from trpc_agent_sdk.sessions._session_summarizer import (
     DEFAULT_SUMMARIZER_PROMPT,
+    SESSION_SUMMARY_METADATA_KEY,
     SessionSummarizer,
     SessionSummary,
+    session_summary_from_event,
 )
 from trpc_agent_sdk.types import Content, EventActions, FunctionCall, FunctionResponse, Part
 
@@ -48,6 +50,17 @@ def _make_event(author="agent", text="hello", partial=False, branch=None, skip_s
         branch=branch,
         actions=actions,
     )
+
+
+def _make_persisted_summary_event(metadata: dict[str, object]) -> Event:
+    """Build a persisted summary event for recovery tests.
+
+    构造持久化摘要事件，用于验证恢复和异常元数据处理。
+    """
+    event = _make_event(text="summary text")
+    event.custom_metadata = {SESSION_SUMMARY_METADATA_KEY: metadata}
+    event.set_summary_event(True)
+    return event
 
 
 def _make_model_mock():
@@ -90,6 +103,55 @@ class TestSessionSummary:
             summary_timestamp=time.time(),
         )
         assert summary.get_compression_ratio() == 0.0
+
+
+    def test_from_event_converts_numeric_metadata(self):
+        """Recover valid legacy numeric strings without losing compatibility.
+
+        验证合法的旧式数字字符串仍可恢复，保持存量数据兼容性。
+        """
+        event = _make_persisted_summary_event({
+            "session_id": "s1",
+            "summary_text": "persisted summary",
+            "version": "2",
+            "original_event_count": "8",
+            "compressed_event_count": "3",
+            "summary_timestamp": "123.5",
+        })
+
+        summary = session_summary_from_event(event)
+
+        assert summary is not None
+        assert summary.version == 2
+        assert summary.original_event_count == 8
+        assert summary.compressed_event_count == 3
+        assert summary.summary_timestamp == 123.5
+
+    @pytest.mark.parametrize(
+        ("field", "invalid_value"),
+        [
+            ("version", {"invalid": 1}),
+            ("original_event_count", "not-an-integer"),
+            ("compressed_event_count", None),
+            ("summary_timestamp", "not-a-timestamp"),
+        ],
+    )
+    def test_from_event_rejects_malformed_numeric_metadata(self, field, invalid_value):
+        """Return None rather than raising for malformed persisted anchors.
+
+        持久化数字锚点畸形时返回 None，而不是抛异常中断摘要恢复。
+        """
+        metadata = {
+            "session_id": "s1",
+            "summary_text": "persisted summary",
+            "version": 2,
+            "original_event_count": 8,
+            "compressed_event_count": 3,
+            "summary_timestamp": 123.5,
+        }
+        metadata[field] = invalid_value
+
+        assert session_summary_from_event(_make_persisted_summary_event(metadata)) is None
 
 
 # ---------------------------------------------------------------------------

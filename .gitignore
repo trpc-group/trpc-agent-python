@@ -27,3 +27,6 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+# Replay harness runtime reports / 回放框架运行时报告
+/tests/sessions/artifacts/

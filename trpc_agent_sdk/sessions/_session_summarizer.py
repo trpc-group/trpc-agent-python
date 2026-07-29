@@ -202,15 +202,27 @@ def session_summary_from_event(event: Event, fallback_session_id: Optional[str] 
     summary_timestamp = metadata.get("summary_timestamp", event.timestamp)
     replaces_summary_id = metadata.get("replaces_summary_id")
 
+    # Persisted metadata may come from older versions or external storage.
+    # Reject malformed numeric anchors instead of breaking session recovery.
+    # 持久化元数据可能来自旧版本或外部存储；遇到畸形数字锚点时返回 None，
+    # 避免单条坏数据中断整个 Session 的摘要恢复。
+    try:
+        version_int = int(version)
+        original_event_count_int = int(original_event_count)
+        compressed_event_count_int = int(compressed_event_count)
+        summary_timestamp_float = float(summary_timestamp)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
     return SessionSummary(
         summary_id=event.id,
         session_id=session_id,
         summary_text=summary_text,
-        version=int(version),
+        version=version_int,
         replaces_summary_id=replaces_summary_id if isinstance(replaces_summary_id, str) else None,
-        original_event_count=int(original_event_count),
-        compressed_event_count=int(compressed_event_count),
-        summary_timestamp=float(summary_timestamp),
+        original_event_count=original_event_count_int,
+        compressed_event_count=compressed_event_count_int,
+        summary_timestamp=summary_timestamp_float,
         metadata=metadata,
     )
 

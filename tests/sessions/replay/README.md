@@ -58,9 +58,9 @@ TRPC_REPLAY_REDIS_URL=redis://localhost:6379/0 PYTHONUTF8=1 pytest tests/session
 - `python-magic` 在 Windows 上会致 SDK 导入崩溃,需改用 `python-magic-bin`(venv 内替换)。
 
 ### 7. 报告产物位置
-- 运行 `test_replay_consistency.py` 会生成 / 覆盖 `tests/sessions/session_memory_summary_diff_report.json`
+- 运行 `test_replay_consistency.py` 会生成 / 覆盖 `tests/sessions/artifacts/session_memory_summary_diff_report.json`
   (schema_version=3,每条 diff 内联 `session_id` / `event_index` / `summary_id` / `field_path` + 双后端值,
-  不嵌全量 snapshot)。该文件作为测试基线产物**已纳入版本管理**,review/排障时可直接查看。
+  不嵌全量 snapshot)。该文件是可重复生成的运行时产物，目录已加入 `.gitignore`，需要时通过测试或 CLI 重新生成。
 
 ## 目录结构
 
@@ -83,5 +83,5 @@ tests/sessions/
 ├── test_replay_consistency.py    # 主 E2E(正向:一致性 + FPR)
 ├── test_replay_injections.py     # 注入检出(负向:错误场景)
 ├── test_replay_unit.py           # 模块单测
-└── session_memory_summary_diff_report.json   # 报告产物(运行时生成)
+└── artifacts/session_memory_summary_diff_report.json   # 报告产物(运行时生成，Git 忽略)
 ```
