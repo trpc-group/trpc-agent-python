@@ -69,6 +69,7 @@ from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.filter import FilterRunner
 from trpc_agent_sdk.filter import FilterType
 from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.models import TOOL_CALL_ARGUMENT_ERRORS
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import Tool
@@ -138,6 +139,26 @@ class BaseTool(ToolABC, FilterRunner):
         """Get API variant."""
         return DEFAULT_API_VARIANT
 
+    def _get_argument_error_response(self, args: dict[str, Any]) -> Optional[dict[str, str]]:
+        """Build a tool response for unrecoverable model arguments."""
+        argument_errors = args.get(TOOL_CALL_ARGUMENT_ERRORS)
+        if not isinstance(argument_errors, dict):
+            return None
+
+        raw_arguments = argument_errors.get("raw_arguments")
+        json_error = argument_errors.get("json_error")
+        if not isinstance(raw_arguments, str) or not isinstance(json_error, str):
+            return None
+
+        return {
+            "error": "invalid_tool_arguments",
+            "message": (f"Tool '{self.name}' arguments were invalid JSON and "
+                        f"could not be repaired: {json_error}"),
+            "raw_arguments": raw_arguments,
+            "json_error": json_error,
+            "status": "failed",
+        }
+
     @override
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
         """Gets the OpenAPI specification of this tool in the form of a FunctionDeclaration.
@@ -168,6 +189,10 @@ class BaseTool(ToolABC, FilterRunner):
          Returns:
            The result of running the tool.
         """
+        argument_error_response = self._get_argument_error_response(args)
+        if argument_error_response is not None:
+            return argument_error_response
+
         agent_context = tool_context.agent_context
         if agent_context is None:
             agent_context = create_agent_context()

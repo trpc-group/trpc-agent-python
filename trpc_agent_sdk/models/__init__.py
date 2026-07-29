@@ -30,6 +30,7 @@ from ._constants import SYSTEM
 from ._constants import THINKING_ENABLED
 from ._constants import THINKING_TOKENS
 from ._constants import TOOL
+from ._constants import TOOL_CALL_ARGUMENT_ERRORS
 from ._constants import TOOL_CALLS
 from ._constants import TOOL_CALL_ID
 from ._constants import TOOL_STREAMING
@@ -67,6 +68,7 @@ __all__ = [
     "CHOICES",
     "USAGE",
     "MESSAGE",
+    "TOOL_CALL_ARGUMENT_ERRORS",
     "TOOL_CALLS",
     "TOOL_CALL_ID",
     "DELTA",
