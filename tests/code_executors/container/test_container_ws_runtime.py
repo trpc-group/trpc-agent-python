@@ -166,6 +166,18 @@ class TestCreateWorkspace:
         assert "exec-1" in mgr.ws_paths
         cc.exec_run.assert_called_once()
 
+    async def test_create_workspace_uses_posix_paths_for_container_commands(self):
+        """容器内部路径即使在 Windows 宿主上也必须使用正斜杠。"""
+
+        cc = _mock_container_client()
+        mgr = ContainerWorkspaceManager(cc, RuntimeConfig(), MagicMock())
+
+        workspace = await mgr.create_workspace("exec-1")
+
+        command = cc.exec_run.call_args.kwargs["cmd"][2]
+        assert workspace.path.startswith("/tmp/run/ws_exec-1_")
+        assert "\\" not in command
+
     async def test_create_workspace_idempotent(self):
         cc = _mock_container_client()
         cfg = RuntimeConfig()

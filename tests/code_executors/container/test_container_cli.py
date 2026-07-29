@@ -318,13 +318,19 @@ class TestContainerClientBuildDockerImage:
 class TestContainerClientCleanup:
 
     def test_cleanup_with_container(self):
+        """清理后应释放容器引用，使析构期再次清理成为无操作。"""
+
         cc = ContainerClient.__new__(ContainerClient)
-        cc._container = MagicMock()
+        container = MagicMock()
+        cc._container = container
 
         cc._cleanup_container()
 
-        cc._container.stop.assert_called_once()
-        cc._container.remove.assert_called_once()
+        container.stop.assert_called_once()
+        container.remove.assert_called_once()
+        assert cc._container is None
+        cc._cleanup_container()
+        container.stop.assert_called_once()
 
     def test_cleanup_without_container(self):
         cc = ContainerClient.__new__(ContainerClient)

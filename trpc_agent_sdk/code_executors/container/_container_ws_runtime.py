@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 from typing import Dict
 from typing import List
@@ -94,6 +95,18 @@ def _shell_quote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
+def _container_path(*parts: str) -> str:
+    """按 POSIX 规则拼接容器内部路径，避免 Windows 宿主生成反斜杠。"""
+
+    return str(PurePosixPath(*(str(part).replace("\\", "/") for part in parts)))
+
+
+def _container_parent(path: str) -> str:
+    """返回容器内部路径的 POSIX 父目录，兼容 Python 3.10 的 f-string 语法限制。"""
+
+    return str(PurePosixPath(path.replace("\\", "/")).parent)
+
+
 class ContainerWorkspaceManager(BaseWorkspaceManager):
     """
     Docker container-based workspace manager implementation.
@@ -133,17 +146,17 @@ class ContainerWorkspaceManager(BaseWorkspaceManager):
         safe_id = self._sanitize(exec_id)
         suffix = time.time_ns()
 
-        ws_path = str(Path(self.config.run_container_base) / f"ws_{safe_id}_{suffix}")
+        ws_path = _container_path(self.config.run_container_base, f"ws_{safe_id}_{suffix}")
 
         # Create standard directory layout
         cmd_str = ("set -e; "
                    f"mkdir -p {_shell_quote(ws_path)} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_SKILLS))} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_WORK))} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_RUNS))} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_OUT))}; "
-                   f"[ -f {_shell_quote(str(Path(ws_path) / META_FILE_NAME))} ] || "
-                   f"echo '{{}}' > {_shell_quote(str(Path(ws_path) / META_FILE_NAME))}")
+                   f"{_shell_quote(_container_path(ws_path, DIR_SKILLS))} "
+                   f"{_shell_quote(_container_path(ws_path, DIR_WORK))} "
+                   f"{_shell_quote(_container_path(ws_path, DIR_RUNS))} "
+                   f"{_shell_quote(_container_path(ws_path, DIR_OUT))}; "
+                   f"[ -f {_shell_quote(_container_path(ws_path, META_FILE_NAME))} ] || "
+                   f"echo '{{}}' > {_shell_quote(_container_path(ws_path, META_FILE_NAME))}")
         cmd = ["/bin/bash", "-lc", cmd_str]
 
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
@@ -157,7 +170,7 @@ class ContainerWorkspaceManager(BaseWorkspaceManager):
             logger.info("Auto-mapping inputs for workspace %s", exec_id)
             specs = [
                 WorkspaceInputSpec(src=f"host://{self.config.inputs_host_base}",
-                                   dst=str(Path("work") / "inputs"),
+                                   dst=_container_path("work", "inputs"),
                                    mode="link")
             ]
             await self.fs.stage_inputs(ws, specs, ctx)
@@ -270,12 +283,12 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             RuntimeError: If staging fails
         """
         src_abs_path = os.path.abspath(src)
-        container_dst = str(Path(ws.path) / dst) if dst else ws.path
+        container_dst = _container_path(ws.path, dst) if dst else ws.path
         # Fast path: within skills mount
         if opt.allow_mount and self.config.skills_host_base:
             rel_path = get_rel_path(self.config.skills_host_base, src_abs_path)
             if rel_path:
-                container_src = str(Path(self.config.skills_container_base) / rel_path)
+                container_src = _container_path(self.config.skills_container_base, rel_path)
                 cmd_str = f"mkdir -p '{container_dst}' && cp -a '{container_src}/.' '{container_dst}'"
                 if opt.read_only:
                     cmd_str += f" && chmod -R a-w '{container_dst}'"
@@ -343,8 +356,8 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         md = await self._load_workspace_metadata(ws)
         for spec in specs:
             mode = (spec.mode or "").lower().strip() or "copy"
-            dst_rel = (spec.dst or "").strip() or str(Path(DIR_WORK) / "inputs" / self._input_base(spec.src))
-            dst_abs = str(Path(ws.path) / dst_rel)
+            dst_rel = (spec.dst or "").strip() or _container_path(DIR_WORK, "inputs", self._input_base(spec.src))
+            dst_abs = _container_path(ws.path, dst_rel)
 
             resolved = ""
             version: Optional[int] = None
@@ -367,12 +380,12 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 resolved = host_path
             elif spec.src.startswith("workspace://"):
                 rel = spec.src.removeprefix("workspace://")
-                src = str(Path(ws.path) / rel)
+                src = _container_path(ws.path, rel)
                 await self._stage_workspace_input(src, dst_abs, mode)
                 resolved = rel
             elif spec.src.startswith("skill://"):
                 rest = spec.src.removeprefix("skill://")
-                src = str(Path(ws.path) / DIR_SKILLS / rest)
+                src = _container_path(ws.path, DIR_SKILLS, rest)
                 await self._stage_workspace_input(src, dst_abs, mode)
                 resolved = src
             else:
@@ -495,11 +508,11 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if not src or not str(src).strip():
             raise ValueError("source path is empty")
         abs_src = os.path.abspath(src)
-        container_dst = str(Path(ws.path) / dst) if dst else ws.path
+        container_dst = _container_path(ws.path, dst) if dst else ws.path
         if self.config.skills_host_base:
             rel_path = get_rel_path(self.config.skills_host_base, abs_src)
             if rel_path:
-                container_src = str(Path(self.config.skills_container_base) / rel_path)
+                container_src = _container_path(self.config.skills_container_base, rel_path)
                 # Create destination directory
                 cmd = ["/bin/bash", "-lc", f"mkdir -p '{container_dst}' && cp -a '{container_src}/.' '{container_dst}'"]
                 result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
@@ -525,7 +538,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
     async def _put_bytes_tar(self, data: bytes, dest: str, mode: int = 0o644) -> None:
         """Copy bytes to container using tar."""
         # Create a tar with single file named as dest's base
-        base = Path(dest).name
+        base = PurePosixPath(dest.replace("\\", "/")).name
         tar_buffer = io.BytesIO()
         with tarfile.open(fileobj=tar_buffer, mode='w') as tar:
             tarinfo = tarfile.TarInfo(name=base)
@@ -538,7 +551,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         # Ensure parent directory exists. Parent can be a symlink (for example
         # work/inputs in container mode when auto_inputs is enabled), so avoid
         # running plain `mkdir -p <symlink>` which may return "File exists".
-        parent = Path(dest).parent
+        parent = PurePosixPath(dest.replace("\\", "/")).parent
         cmd = ["/bin/bash", "-lc", f"[ -e '{parent.as_posix()}' ] || mkdir -p '{parent.as_posix()}'"]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code:
@@ -552,14 +565,14 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if self.config.inputs_host_base:
             rel_path = get_rel_path(self.config.inputs_host_base, host)
             if rel_path:
-                container_src = str(Path(self.config.inputs_container_base) / rel_path)
+                container_src = _container_path(self.config.inputs_container_base, rel_path)
 
                 if mode == "link":
-                    cmd_str = (f"parent='{Path(dst).parent}'; "
+                    cmd_str = (f"parent='{_container_parent(dst)}'; "
                                f"[ -e \"$parent\" ] || mkdir -p \"$parent\"; "
                                f"ln -sfn '{container_src}' '{dst}'")
                 else:
-                    cmd_str = (f"parent='{Path(dst).parent}'; "
+                    cmd_str = (f"parent='{_container_parent(dst)}'; "
                                f"[ -e \"$parent\" ] || mkdir -p \"$parent\"; "
                                f"cp -a '{container_src}' '{dst}'")
 
@@ -569,11 +582,11 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                     raise RuntimeError(f"Failed to stage host input: {result.stderr}")
                 return
         # Fallback to tar copy
-        await self._put_directory(ws, host, str(Path(dst_rel).parent))
+        await self._put_directory(ws, host, _container_parent(dst_rel))
 
     async def _stage_workspace_input(self, src: str, dst: str, mode: str) -> None:
         """Stage input from workspace path."""
-        parent = Path(dst).parent
+        parent = PurePosixPath(_container_parent(dst))
         if mode == "link":
             cmd_str = (f"[ -e '{parent}' ] || mkdir -p '{parent}'; "
                        f"ln -sfn '{src}' '{dst}'")
@@ -678,7 +691,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
 
     async def _load_workspace_metadata(self, ws: WorkspaceInfo):
         now = datetime.now()
-        cmd = ["/bin/bash", "-lc", f"cat {_shell_quote(str(Path(ws.path) / META_FILE_NAME))}"]
+        cmd = ["/bin/bash", "-lc", f"cat {_shell_quote(_container_path(ws.path, META_FILE_NAME))}"]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code != 0 or not result.stdout.strip():
             return WorkspaceMetadata(version=1, created_at=now, updated_at=now, last_access=now, skills={})
@@ -707,7 +720,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if md.skills is None:
             md.skills = {}
         payload = json.dumps(md.model_dump(exclude_none=True, by_alias=True, mode="json"), ensure_ascii=False, indent=2)
-        await self._put_bytes_tar(payload.encode("utf-8"), str(Path(ws.path) / META_FILE_NAME), mode=0o600)
+        await self._put_bytes_tar(payload.encode("utf-8"), _container_path(ws.path, META_FILE_NAME), mode=0o600)
 
     @staticmethod
     def _detect_mime_type(data: bytes) -> str:

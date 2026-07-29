@@ -15,6 +15,7 @@ import asyncio
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import time
@@ -142,8 +143,15 @@ class LocalWorkspaceManager(BaseWorkspaceManager):
 
         path = Path(ws.path)
         if path.exists():
-            shutil.rmtree(path)
+            shutil.rmtree(path, onerror=self._remove_read_only_path)
         self.ws_paths.pop(exec_id, None)
+
+    @staticmethod
+    def _remove_read_only_path(function, path: str, _exception_info) -> None:
+        """删除本地只读 staged Skill 时暂时恢复写权限，保证 workspace 可在 finally 中清理。"""
+
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
 
 
 class LocalWorkspaceFS(BaseWorkspaceFS):

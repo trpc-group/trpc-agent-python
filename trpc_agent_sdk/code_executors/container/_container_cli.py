@@ -211,7 +211,7 @@ class ContainerClient:
         except Exception:  # pylint: disable=broad-except
             pass
         logger.info("Container %s stopped and removed.", self._container.id)
-        # self._container = None
+        self._container = None
 
     def _exec_run_with_stdin(
         self,
