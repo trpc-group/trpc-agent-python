@@ -32,6 +32,21 @@ def test_rejects_insufficient_improvement():
     assert decision.checks["min_improvement"] is False
 
 
+def test_rejects_when_candidate_validation_is_unavailable():
+    decision = decide(
+        BASELINE,
+        _delta(0.0),
+        GateConfig(min_improvement=0.0),
+        candidate_validation_error=(
+            "missing trace candidate val fixture: trace_val_candidate.evalset.json"
+        ),
+    )
+    assert decision.accepted is False
+    assert decision.checks["min_improvement"] is False
+    assert "候选验证结果不可用" in decision.reason
+    assert "trace_val_candidate.evalset.json" in decision.reason
+
+
 def test_rejects_newly_failing_case():
     regression = CaseDelta(
         case_id="val_003",

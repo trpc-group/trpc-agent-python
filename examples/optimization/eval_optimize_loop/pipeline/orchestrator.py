@@ -217,7 +217,7 @@ async def run_pipeline(
                 total_rounds=1, total_reflection_lm_calls=0,
                 duration_seconds=0.0, started_at=now, finished_at=now,
             )
-            print(f"  Optimization complete. Diagnosis → Prompt fix applied.")
+            print("  Optimization complete. Diagnosis → Prompt fix applied.")
         else:
             # ── Live: analysis-driven prompt fix with targeted repair ──
             # Candidate construction is based only on training failures and
@@ -237,7 +237,6 @@ async def run_pipeline(
                 has_verb = ftypes.get("excessive_verbosity", 0) > 0
                 has_hall = ftypes.get("hallucination", 0) > 0
                 has_contra = ftypes.get("contradictory_information", 0) > 0
-                has_mi = ftypes.get("missing_information", 0) > 0
                 has_reason = ftypes.get("reasoning_failure", 0) > 0
                 has_overgen = ftypes.get("overgeneralization", 0) > 0
 
@@ -360,7 +359,7 @@ async def run_pipeline(
                 duration_seconds=round(time.time() - t0, 1),
                 started_at=now, finished_at=now,
             )
-            print(f"  Optimization complete. Diagnosis → Prompt fix applied.")
+            print("  Optimization complete. Diagnosis → Prompt fix applied.")
 
             # Save optimizer detail
             import json as _json
@@ -408,6 +407,7 @@ async def run_pipeline(
             os.environ[_SYSTEM_PROMPT_ENV] = str(candidate_system_path)
             os.environ[_SKILL_PROMPT_ENV] = str(candidate_skill_path)
 
+        candidate_validation_error = ""
         if ctx.is_trace_mode:
             # trace_train_candidate.evalset.json is optional — not all
             # trace-mode scenarios provide a pre-recorded train candidate.
@@ -420,15 +420,33 @@ async def run_pipeline(
                 print(f"  Candidate train pass_rate: {ctx.candidate_train.pass_rate:.2%}")
             else:
                 ctx.candidate_train = ctx.baseline_train
-                print(f"  trace_train_candidate.evalset.json not found — using baseline_train."
-                      f" (train delta=0, overfit Gate disabled)")
-            candidate_val_path = str(
-                Path(ctx.project_dir) / "agent" / "trace_val_candidate.evalset.json")
-            ctx.candidate_val = await run_evaluation(
-                evalset_path=candidate_val_path,
-                eval_config_path=eval_config, print_results=False,
+                print("  trace_train_candidate.evalset.json not found — using baseline_train."
+                      " (train delta=0, overfit Gate disabled)")
+            candidate_val_path = (
+                Path(ctx.project_dir)
+                / "agent"
+                / "trace_val_candidate.evalset.json"
             )
-            print(f"  Candidate val pass_rate: {ctx.candidate_val.pass_rate:.2%}")
+            if candidate_val_path.exists():
+                ctx.candidate_val = await run_evaluation(
+                    evalset_path=str(candidate_val_path),
+                    eval_config_path=eval_config,
+                    print_results=False,
+                )
+                print(
+                    f"  Candidate val pass_rate: "
+                    f"{ctx.candidate_val.pass_rate:.2%}"
+                )
+            else:
+                ctx.candidate_val = ctx.baseline_val
+                candidate_validation_error = (
+                    "missing trace candidate val fixture: "
+                    f"{candidate_val_path}"
+                )
+                print(
+                    "  trace_val_candidate.evalset.json not found — "
+                    "using baseline_val; Gate will reject the candidate."
+                )
         elif best_prompts.get("system_prompt"):
             print("  Using candidate prompt snapshot...")
             ctx.candidate_train = await run_evaluation(
@@ -446,7 +464,7 @@ async def run_pipeline(
         else:
             ctx.candidate_val = ctx.baseline_val
             ctx.candidate_train = ctx.baseline_train
-            print(f"  No candidate available — using baseline for both sets.")
+            print("  No candidate available — using baseline for both sets.")
 
         if ctx.optimize_result is not None and ctx.candidate_train is not None:
             ctx.optimize_result.best_pass_rate = ctx.candidate_train.pass_rate
@@ -500,7 +518,10 @@ async def run_pipeline(
 
         ctx.gate_decision = decide(ctx.baseline_val, ctx.delta_report, gate_cfg,
                                    total_cost_usd=0.0,
-                                   delta_report_train=ctx.delta_report_train)
+                                   delta_report_train=ctx.delta_report_train,
+                                   candidate_validation_error=(
+                                       candidate_validation_error
+                                   ))
 
         status = "ACCEPTED" if ctx.gate_decision.accepted else "REJECTED"
         print(f"  Gate: {status}")

@@ -18,6 +18,7 @@ def decide(
     gate_config: GateConfig,
     total_cost_usd: float = 0.0,
     delta_report_train: DeltaReport | None = None,
+    candidate_validation_error: str = "",
 ) -> GateDecision:
     """Run the composite acceptance gate.
 
@@ -30,6 +31,9 @@ def decide(
         total_cost_usd: Total LLM cost across all stages.
         delta_report_train: Optional delta report for the train set, used
             to detect classic overfitting (train ↑ but val ↓).
+        candidate_validation_error: Non-empty when candidate validation
+            evidence is unavailable.  The candidate is always rejected in
+            that case, even if the configured minimum improvement is zero.
 
     Returns:
         GateDecision with accepted flag, reason, and per-check results.
@@ -39,8 +43,15 @@ def decide(
     warnings: list[str] = []
 
     # ── Check 1: min improvement on val set ──────────────────────
-    checks["min_improvement"] = delta.delta >= gate_config.min_improvement
-    if not checks["min_improvement"]:
+    checks["min_improvement"] = (
+        not candidate_validation_error
+        and delta.delta >= gate_config.min_improvement
+    )
+    if candidate_validation_error:
+        reasons.append(
+            f"候选验证结果不可用: {candidate_validation_error}"
+        )
+    elif not checks["min_improvement"]:
         reasons.append(
             f"通过率提升不足: val delta={delta.delta:.3f}, "
             f"要求 >= {gate_config.min_improvement:.3f}"
