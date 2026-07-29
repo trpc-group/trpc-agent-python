@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Batch scan 32 safety samples and produce report + audit artifacts.
+"""Batch scan 35 safety samples and produce report + audit artifacts.
 
 Usage: python scripts/run_safety_scan.py [samples_dir]
 """
@@ -59,6 +59,9 @@ EXPECTED = {
     "30": "deny",  # Python parse failure fails closed
     "31": "deny",  # curl -o x evil.com checks the later bare domain
     "32": "allow",  # inline comments are stripped before safety regex scans
+    "33": "needs_human_review",  # regular open() is review, not deny
+    "34": "allow",  # curl --help has no network target
+    "35": "deny",  # rm -rf$HOME is still recursive delete
 }
 
 
@@ -67,6 +70,7 @@ def main() -> None:
     out_dir = Path("examples/tool_safety_guard")
     audit_path = str(out_dir / "tool_safety_audit.jsonl")
     report_path = str(out_dir / "tool_safety_report.json")
+    Path(audit_path).write_text("", encoding="utf-8")
 
     policy = PolicyConfig.default()
     # Use empty allowed_commands for demo — test safety rules, not command whitelist

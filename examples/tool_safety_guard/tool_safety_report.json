@@ -390,5 +390,39 @@
     "rule_ids": [],
     "findings_count": 0,
     "summary": "Safety scan passed. Risk level: low."
+  },
+  {
+    "label": "33_regular_open_review",
+    "decision": "needs_human_review",
+    "risk_level": "medium",
+    "expected": "needs_human_review",
+    "match": true,
+    "rule_ids": [
+      "R001_FILE_DANGEROUS_OPEN"
+    ],
+    "findings_count": 1,
+    "summary": "Human review required. Risk level: medium. Rules triggered: R001_FILE_DANGEROUS_OPEN"
+  },
+  {
+    "label": "34_curl_help_no_target",
+    "decision": "allow",
+    "risk_level": "low",
+    "expected": "allow",
+    "match": true,
+    "rule_ids": [],
+    "findings_count": 0,
+    "summary": "Safety scan passed. Risk level: low."
+  },
+  {
+    "label": "35_rm_rf_env_no_space",
+    "decision": "deny",
+    "risk_level": "critical",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_BASH_RECURSIVE_DELETE"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_BASH_RECURSIVE_DELETE"
   }
 ]

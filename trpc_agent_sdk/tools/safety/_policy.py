@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+import fnmatch
 from pathlib import Path
 import re
 from typing import Any
@@ -189,34 +190,38 @@ class PolicyConfig:
         return command in self.allowed_commands
 
     @staticmethod
-    def _path_has_extension(path: str) -> bool:
-        """Return True if the path basename contains a dot after position 0.
-
-        Hidden directories like .ssh, .aws, .kube return False (dot at
-        position 0). File entries like docker.sock, cert.pem return True.
-        """
-        basename = path.rstrip("/").rsplit("/", 1)[-1]
-        return "." in basename[1:]
-
-    # Credential directories: exact match should also be denied
-    # (being IN the credential dir is already dangerous).
-    _CREDENTIAL_DIRS = frozenset({"~/.ssh", "~/.aws", "~/.kube"})
+    def _normalize_path(path_text: str) -> str:
+        """Normalize path text for policy comparisons."""
+        normalized = path_text.strip().strip("'\"").replace("\\", "/")
+        while "//" in normalized:
+            normalized = normalized.replace("//", "/")
+        if normalized not in ("/", "~"):
+            normalized = normalized.rstrip("/")
+        return normalized
 
     def is_path_denied(self, path_text: str) -> bool:
-        """Return True if path_text is a proper sub-path of any denied entry.
+        """Return True if path_text matches or is under any denied entry."""
+        normalized = self._normalize_path(path_text)
+        if not normalized:
+            return False
+        expanded = self._normalize_path(str(Path(normalized).expanduser()))
+        candidates = {normalized, expanded}
 
-        A path that equals a denied directory exactly (e.g. cwd="/root")
-        is not denied — only paths inside it (e.g. "/root/.ssh") are.
-        File-like entries (e.g. /var/run/docker.sock) and credential
-        directories (~/.ssh, ~/.aws, ~/.kube) are denied on exact match.
-        """
         for denied in self.denied_paths:
-            if path_text == denied:
-                if self._path_has_extension(denied) or denied in self._CREDENTIAL_DIRS:
-                    return True
+            denied_normalized = self._normalize_path(denied)
+            if not denied_normalized:
                 continue
-            if path_text.startswith(denied + "/") or path_text.startswith(denied + "\\"):
-                return True
+            denied_expanded = self._normalize_path(str(Path(denied_normalized).expanduser()))
+            denied_candidates = {denied_normalized, denied_expanded}
+
+            for candidate in candidates:
+                for denied_candidate in denied_candidates:
+                    if fnmatch.fnmatchcase(candidate, denied_candidate):
+                        return True
+                    if fnmatch.fnmatchcase(candidate, f"{denied_candidate.rstrip('/')}/*"):
+                        return True
+                    if candidate == denied_candidate or candidate.startswith(f"{denied_candidate.rstrip('/')}/"):
+                        return True
         return False
 
     def is_domain_allowed(self, domain: str) -> bool:

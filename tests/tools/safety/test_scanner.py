@@ -34,6 +34,12 @@ class TestSafetyScannerScan:
         assert report.tool_name == "test"
         assert report.decision == Decision.ALLOW
 
+    def test_regular_python_open_does_not_deny(self, scanner):
+        req = ScanRequest(script="open('data.txt').read()", language=ScriptLanguage.PYTHON, tool_name="regular_open")
+        report = scanner.scan(req)
+        assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+        assert report.risk_level == RiskLevel.MEDIUM
+
     def test_dangerous_bash(self, scanner):
         req = ScanRequest(script="rm -rf /", language=ScriptLanguage.BASH, tool_name="danger")
         report = scanner.scan(req)
@@ -92,6 +98,12 @@ class TestScanContextSafety:
 
     def test_cwd_denied(self, scanner):
         req = ScanRequest(script="echo hi", language=ScriptLanguage.BASH, tool_name="t", cwd="/etc/nginx")
+        findings = scanner._scan_context_safety(req)
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_SYSTEM_PATH_OVERWRITE" in rule_ids
+
+    def test_cwd_exact_denied_path_denied(self, scanner):
+        req = ScanRequest(script="echo hi", language=ScriptLanguage.BASH, tool_name="t", cwd="/root")
         findings = scanner._scan_context_safety(req)
         rule_ids = {f.rule_id for f in findings}
         assert "R001_SYSTEM_PATH_OVERWRITE" in rule_ids

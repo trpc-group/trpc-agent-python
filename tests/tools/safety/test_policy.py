@@ -180,10 +180,20 @@ class TestPolicyConfigQueryMethods:
     def test_is_path_denied_false(self, cfg):
         assert cfg.is_path_denied("/home/user/file.txt") is False
 
-    def test_is_path_denied_exact_match_not_denied(self, cfg):
-        """cwd="/root" should not be denied — it IS the denied dir, not a sub-path."""
-        assert cfg.is_path_denied("/root") is False
-        assert cfg.is_path_denied("/etc") is False
+    def test_is_path_denied_exact_match_denied(self, cfg):
+        """cwd equal to a denied directory is denied."""
+        assert cfg.is_path_denied("/root") is True
+        assert cfg.is_path_denied("/etc") is True
+
+    def test_is_path_denied_credential_dir_exact_match_denied(self):
+        cfg = PolicyConfig(denied_paths=["~/.ssh"])
+        assert cfg.is_path_denied("~/.ssh") is True
+
+    def test_is_path_denied_supports_wildcards(self):
+        cfg = PolicyConfig(denied_paths=["*.pem", "*/.env"])
+        assert cfg.is_path_denied("certs/client.pem") is True
+        assert cfg.is_path_denied("nested/.env") is True
+        assert cfg.is_path_denied("workspace/.env.sample") is False
 
     def test_is_path_denied_sub_path_is_denied(self, cfg):
         """cwd="/root/.ssh" should be denied (sub-path of /root)."""

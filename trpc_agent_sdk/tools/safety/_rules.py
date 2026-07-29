@@ -69,11 +69,11 @@ SECRET_KEY_VALUE_RE = re.compile(r"(?i)(api[_-]?key|token|password|passwd|secret
 
 PYTHON_DANGEROUS_FILE_CALLS = {
     "open": {
-        "risk": "high",
+        "risk": "medium",
         "rule_id": "R001_FILE_DANGEROUS_OPEN"
     },
     "Path.open": {
-        "risk": "high",
+        "risk": "medium",
         "rule_id": "R001_FILE_DANGEROUS_OPEN"
     },
     "read_text": {
@@ -81,7 +81,7 @@ PYTHON_DANGEROUS_FILE_CALLS = {
         "rule_id": "R001_FILE_READ"
     },
     "write_text": {
-        "risk": "high",
+        "risk": "medium",
         "rule_id": "R001_FILE_WRITE"
     },
     "read_bytes": {
@@ -89,7 +89,7 @@ PYTHON_DANGEROUS_FILE_CALLS = {
         "rule_id": "R001_FILE_READ"
     },
     "write_bytes": {
-        "risk": "high",
+        "risk": "medium",
         "rule_id": "R001_FILE_WRITE"
     },
 }
@@ -183,8 +183,8 @@ PYTHON_RESOURCE_PATTERNS = [
 # ---------------------------------------------------------------------------
 
 BASH_DANGEROUS_DELETE_PATTERNS = [
-    (re.compile(r"rm\s+-rf?\s"), "R001_BASH_RECURSIVE_DELETE", "critical"),
-    (re.compile(r"rm\s+--(recursive|force|-[rRf]+)\s"), "R001_BASH_RECURSIVE_DELETE", "critical"),
+    (re.compile(r"rm\s+-rf?(?:\s|$|/|\$)"), "R001_BASH_RECURSIVE_DELETE", "critical"),
+    (re.compile(r"rm\s+--(recursive|force|-[rRf]+)(?:\s|$|/|\$)"), "R001_BASH_RECURSIVE_DELETE", "critical"),
     (re.compile(r"find\s+.*-delete\b"), "R001_FILE_DANGEROUS_DELETE", "high"),
     (re.compile(r"xargs\s+rm\b"), "R001_FILE_DANGEROUS_DELETE", "high"),
 ]

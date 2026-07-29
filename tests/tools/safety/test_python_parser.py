@@ -42,6 +42,18 @@ class TestPythonParserDangerousFileOps:
         assert len(findings) >= 1
         assert "R001_FILE_DANGEROUS_OPEN" in rule_ids or "R001_CREDENTIAL_FILE_ACCESS" in rule_ids
 
+    def test_regular_open_is_not_high_risk(self, parser):
+        findings = parser.parse("open('data.txt').read()")
+        open_findings = [f for f in findings if f.rule_id == "R001_FILE_DANGEROUS_OPEN"]
+        assert open_findings
+        assert all(f.risk_level == RiskLevel.MEDIUM for f in open_findings)
+
+    def test_sensitive_open_still_high_risk(self, parser):
+        findings = parser.parse("open('.env').read()")
+        credential_findings = [f for f in findings if f.rule_id == "R001_CREDENTIAL_FILE_ACCESS"]
+        assert credential_findings
+        assert any(f.risk_level == RiskLevel.HIGH for f in credential_findings)
+
     def test_shutil_rmtree(self, parser):
         findings = parser.parse("import shutil; shutil.rmtree('/tmp/danger')")
         rule_ids = {f.rule_id for f in findings}

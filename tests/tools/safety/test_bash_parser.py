@@ -42,6 +42,21 @@ class TestBashParserDangerousDelete:
         rule_ids = {f.rule_id for f in findings}
         assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
 
+    def test_rm_rf_without_target_boundary(self, parser):
+        findings = parser.parse("rm -rf")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
+    def test_rm_rf_slash_without_space(self, parser):
+        findings = parser.parse("rm -rf/")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
+    def test_rm_rf_env_without_space(self, parser):
+        findings = parser.parse("rm -rf$HOME")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
 
 class TestBashParserNetworkEgress:
 
@@ -86,6 +101,33 @@ class TestBashParserNetworkEgress:
         rule_ids = {f.rule_id for f in findings}
         assert "R002_NON_WHITELIST_DOMAIN_ACCESS" not in rule_ids
         assert "R002_CURL_EXTERNAL_REQUEST" not in rule_ids
+
+    def test_curl_help_has_no_network_target(self):
+        policy = PolicyConfig.default()
+        policy.allowed_commands = []
+        parser = BashParser(policy)
+        findings = parser.parse("curl --help")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" not in rule_ids
+        assert "R002_CURL_EXTERNAL_REQUEST" not in rule_ids
+
+    def test_curl_version_has_no_network_target(self):
+        policy = PolicyConfig.default()
+        policy.allowed_commands = []
+        parser = BashParser(policy)
+        findings = parser.parse("curl -V")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" not in rule_ids
+        assert "R002_CURL_EXTERNAL_REQUEST" not in rule_ids
+
+    def test_wget_help_has_no_network_target(self):
+        policy = PolicyConfig.default()
+        policy.allowed_commands = []
+        parser = BashParser(policy)
+        findings = parser.parse("wget --help")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R002_NON_WHITELIST_DOMAIN_ACCESS" not in rule_ids
+        assert "R002_WGET_EXTERNAL_REQUEST" not in rule_ids
 
 
 class TestBashParserSystemCommands:
