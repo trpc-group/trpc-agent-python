@@ -262,9 +262,8 @@ class InMemorySessionService(BaseSessionService):
         # A duplicate is complete only when storage also has the ID. If the
         # caller has it but storage does not, continue below as failure recovery.
         # 只有存储中也存在该 ID 才算完整重复；若仅调用方存在，则继续执行补偿写入。
-        if not appended and any(
-                stored.id == event.id
-                for stored in [*storage_session.events, *storage_session.historical_events]):
+        if not appended and any(stored.id == event.id
+                                for stored in [*storage_session.events, *storage_session.historical_events]):
             return event
 
         # This is either the normal first write or recovery of a write that

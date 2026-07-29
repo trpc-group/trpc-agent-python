@@ -516,9 +516,9 @@ class SessionSummarizer:
                 # datetime value, so use a millisecond-scale ordering gap.
                 # 浮点数减一微秒在转换为 SQL datetime 时可能舍入成相同值，
                 # 因此使用毫秒级排序间隔。
-                summary_event_timestamp = (
-                    min(event.timestamp for event in retained_events) - _SUMMARY_EVENT_ORDERING_GAP_SECONDS
-                    if retained_events else summary_timestamp)
+                summary_event_timestamp = (min(event.timestamp
+                                               for event in retained_events) - _SUMMARY_EVENT_ORDERING_GAP_SECONDS
+                                           if retained_events else summary_timestamp)
                 # Persist the summary as a normal event so every session backend
                 # can reload it without a backend-specific summary table.
                 # 将摘要作为普通事件持久化，使所有后端无需专用摘要表即可重载。
