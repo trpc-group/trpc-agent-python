@@ -1,5 +1,4 @@
 {
-  "_comment": "--mode optimize 使用：真实调用 AgentOptimizer.optimize(update_source=false)。reflection_lm 变量由 TRPC_AGENT_* 环境提供；fake 回归不会读取这些凭据。",
   "evaluate": {
     "metrics": [
       {
@@ -26,7 +25,7 @@
       "name": "gepa_reflective",
       "seed": 42,
       "reflection_lm": {
-        "provider_name": "${TRPC_AGENT_PROVIDER_NAME:openai}",
+        "provider_name": "openai",
         "model_name": "${TRPC_AGENT_MODEL_NAME}",
         "base_url": "${TRPC_AGENT_BASE_URL}",
         "api_key": "${TRPC_AGENT_API_KEY}",

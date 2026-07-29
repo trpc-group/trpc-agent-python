@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -27,9 +28,16 @@ for _path in (str(_REPO_ROOT), str(_HERE)):
 
 import fake_agent  # type: ignore[unresolved-import]
 import gates  # type: ignore[unresolved-import]
-import live_agent  # type: ignore[unresolved-import]
 import report  # type: ignore[unresolved-import]
 import runner  # type: ignore[unresolved-import]
+
+try:
+    # 本地凭据从同目录 .env 读取（已被 gitignore）；已有环境变量优先。
+    from dotenv import load_dotenv
+
+    load_dotenv(_HERE / ".env")
+except ImportError:
+    pass
 
 DEFAULT_RUN_JSON: dict[str, Any] = {
     "champion_prompt": "prompts/system.md",
@@ -218,16 +226,23 @@ async def _run_optimize_for_candidate(
     from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
     target = TargetPrompt().add_path("system", str(champion_prompt_path))
-    result = await AgentOptimizer.optimize(
-        config_path=str(optimizer_config_path),
-        call_agent=call_agent,
-        target_prompt=target,
-        train_dataset_path=str(train_evalset_path),
-        validation_dataset_path=str(val_evalset_path),
-        output_dir=str(output_dir),
-        update_source=False,
-        verbose=0,
-    )
+    # Windows 盘符含冒号，会被 evalset 的 "file.json:case_id" 语法误切；
+    # 与 runner._run_evaluator 一致，切到示例根目录并传相对路径。
+    previous_cwd = Path.cwd()
+    try:
+        os.chdir(_HERE)
+        result = await AgentOptimizer.optimize(
+            config_path=str(optimizer_config_path),
+            call_agent=call_agent,
+            target_prompt=target,
+            train_dataset_path=os.path.relpath(train_evalset_path, _HERE),
+            validation_dataset_path=os.path.relpath(val_evalset_path, _HERE),
+            output_dir=str(output_dir),
+            update_source=False,
+            verbose=0,
+        )
+    finally:
+        os.chdir(previous_cwd)
     status = _enum_value(result.status)
     if status != "SUCCEEDED" or not result.best_prompts:
         raise RuntimeError(
@@ -316,7 +331,11 @@ def _failure_frozen(
 
 
 async def _amain(args: argparse.Namespace, *, call_agent=None) -> int:
-    config_path = _resolve(_HERE, args.config) if args.config else None
+    if args.config:
+        config_path: Optional[Path] = _resolve(_HERE, args.config)
+    else:
+        default_run_json = _HERE / "run.json"
+        config_path = default_run_json if default_run_json.exists() else None
     config = _load_config(config_path)
     champion_path = _resolve(_HERE, config["champion_prompt"])
     train_path = _resolve(_HERE, config["train_evalset"])
@@ -339,6 +358,9 @@ async def _amain(args: argparse.Namespace, *, call_agent=None) -> int:
         try:
             base_call_agent = call_agent
             if base_call_agent is None:
+                # 懒加载：fake 模式无需引入真实模型 SDK 依赖链。
+                import live_agent  # type: ignore[unresolved-import]
+
                 model_info = live_agent.model_info_from_env()
                 base_call_agent = live_agent.build_call_agent(champion_path)
             else:

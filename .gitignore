@@ -27,3 +27,5 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+.claude/settings.local.json

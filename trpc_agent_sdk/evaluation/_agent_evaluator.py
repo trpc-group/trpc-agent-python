@@ -660,14 +660,18 @@ class AgentEvaluator:
             FileNotFoundError: If file doesn't exist
             ValueError: If file format is invalid or eval case not found
         """
-        # Check if file_path contains a case selector (ADK style: "file.json:case_id")
+        # Check if file_path contains a case selector (ADK style: "file.json:case_id").
+        # A Windows drive letter also contains ":", so only treat the colon as a
+        # selector when the full string is not an existing file and the part
+        # before the last colon is.
         selected_case_id = None
         actual_file_path = eval_set_file
 
-        if ":" in eval_set_file:
-            parts = eval_set_file.split(":", 1)
-            actual_file_path = parts[0]
-            selected_case_id = parts[1]
+        if ":" in eval_set_file and not os.path.exists(eval_set_file):
+            file_part, _, case_part = eval_set_file.rpartition(":")
+            if file_part and os.path.exists(file_part):
+                actual_file_path = file_part
+                selected_case_id = case_part
 
         if not os.path.exists(actual_file_path):
             raise FileNotFoundError(f"Eval set file not found: {actual_file_path}")
