@@ -217,9 +217,7 @@ def _format_per_model_reason(per_model: list[ScoreResult], threshold: float) -> 
     return "\n".join(lines)
 
 
-def _single_model_rubric_scores(
-    per_model: list[ScoreResult],
-) -> list[RubricScore]:
+def _single_model_rubric_scores(per_model: list[ScoreResult]) -> list[RubricScore]:
     """Preserve rubric evidence when cross-model aggregation is a no-op."""
     if len(per_model) != 1:
         return []

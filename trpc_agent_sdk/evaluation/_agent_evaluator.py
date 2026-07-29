@@ -88,7 +88,7 @@ def _split_eval_set_selector(eval_set_file: str) -> tuple[str, str | None]:
         return eval_set_file, None
 
     path_end = marker_index + len(".json")
-    selected_case_id = eval_set_file[path_end + 1 :]
+    selected_case_id = eval_set_file[path_end + 1:]
     if not selected_case_id:
         return eval_set_file, None
     return eval_set_file[:path_end], selected_case_id
@@ -680,9 +680,7 @@ class AgentEvaluator:
             ValueError: If file format is invalid or eval case not found
         """
         # Check if file_path contains a case selector (ADK style: "file.json:case_id")
-        actual_file_path, selected_case_id = _split_eval_set_selector(
-            eval_set_file
-        )
+        actual_file_path, selected_case_id = _split_eval_set_selector(eval_set_file)
 
         if not os.path.exists(actual_file_path):
             raise FileNotFoundError(f"Eval set file not found: {actual_file_path}")
