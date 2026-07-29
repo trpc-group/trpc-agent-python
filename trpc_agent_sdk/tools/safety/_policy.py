@@ -78,6 +78,7 @@ class PolicyConfig:
                 "sudo",
                 "shutdown",
                 "reboot",
+                "dd if=",
             ],
             denied_paths=[
                 "/etc",

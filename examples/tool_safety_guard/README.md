@@ -4,7 +4,7 @@ tRPC-Agent-Python 中用于工具/脚本执行的安全过滤器，在执行前�
 
 ## 快速开始
 
-运行 36 条安全扫描样例：
+运行 37 条安全扫描样例：
 
 ```bash
 cd trpc-agent-python
@@ -111,10 +111,10 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 
 ## 输出产物
 
-- `tool_safety_report.json` — 结构化扫描结果（36 条记录，每条对应一个样例）
+- `tool_safety_report.json` — 结构化扫描结果（37 条记录，每条对应一个样例）
 - `tool_safety_audit.jsonl` — JSONL 格式审计日志（每次扫描一行）
 
-## 36 条样例
+## 37 条样例
 
 | # | 样例 | 预期结果 |
 |---|---|---|
@@ -154,6 +154,7 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 | 34 | `curl --help` | ALLOW |
 | 35 | `rm -rf$HOME` | DENY |
 | 36 | `rm -fr /` | DENY |
+| 37 | `dd if=/dev/zero of=/dev/sda` | DENY |
 
 ## 与其他组件的关系
 

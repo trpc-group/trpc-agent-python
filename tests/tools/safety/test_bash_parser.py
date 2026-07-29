@@ -221,6 +221,42 @@ class TestBashParserCoverage:
         assert "R003_SYSTEM_COMMAND" in rule_ids
         assert any(f.risk_level.value == "medium" and "Requires Review" in f.rule_name for f in findings)
 
+    def test_denied_command_prefix_with_value_argument(self):
+        policy = PolicyConfig.from_dict({
+            "denied_commands": ["dd if="],
+            "allowed_commands": [],
+        })
+        parser = BashParser(policy)
+        findings = parser.parse("dd if=/dev/zero of=/dev/sda")
+        denied = [f for f in findings if f.rule_name == "Denied Command"]
+        assert denied
+        assert denied[0].rule_id == "R003_SYSTEM_COMMAND"
+        assert denied[0].risk_level.value == "critical"
+
+    def test_denied_command_in_shell_chain(self):
+        policy = PolicyConfig.from_dict({
+            "denied_commands": ["custom-danger"],
+            "allowed_commands": [],
+        })
+        parser = BashParser(policy)
+        findings = parser.parse("echo ok && custom-danger --flag")
+        assert any(f.rule_name == "Denied Command" for f in findings)
+
+    def test_review_command_in_shell_chain(self):
+        policy = PolicyConfig.from_dict({
+            "review_commands": ["custom-review"],
+            "allowed_commands": [],
+        })
+        parser = BashParser(policy)
+        findings = parser.parse("echo ok ; custom-review --flag")
+        assert any(f.rule_name == "Command Requires Review" for f in findings)
+
+    def test_allowed_commands_check_shell_chain_segments(self):
+        policy = PolicyConfig.from_dict({"allowed_commands": ["echo"]})
+        parser = BashParser(policy)
+        findings = parser.parse("echo ok && custom-tool")
+        assert any(f.rule_name == "Command Not Allowed" and "custom-tool" in f.recommendation for f in findings)
+
 
 class TestShellKeywordExemption:
 

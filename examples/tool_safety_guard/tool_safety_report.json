@@ -436,5 +436,18 @@
     ],
     "findings_count": 1,
     "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_BASH_RECURSIVE_DELETE"
+  },
+  {
+    "label": "37_dd_if_zero",
+    "decision": "deny",
+    "risk_level": "critical",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_CREDENTIAL_FILE_ACCESS",
+      "R003_SYSTEM_COMMAND"
+    ],
+    "findings_count": 2,
+    "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_CREDENTIAL_FILE_ACCESS, R003_SYSTEM_COMMAND"
   }
 ]

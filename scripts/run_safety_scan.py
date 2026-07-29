@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Batch scan 36 safety samples and produce report + audit artifacts.
+"""Batch scan 37 safety samples and produce report + audit artifacts.
 
 Usage: python scripts/run_safety_scan.py [samples_dir]
 """
@@ -63,6 +63,7 @@ EXPECTED = {
     "34": "allow",  # curl --help has no network target
     "35": "deny",  # rm -rf$HOME is still recursive delete
     "36": "deny",  # rm -fr / is normalized as forced recursive delete
+    "37": "deny",  # dd if= prefix denied command matches valued args
 }
 
 

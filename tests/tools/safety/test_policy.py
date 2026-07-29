@@ -29,6 +29,7 @@ class TestPolicyConfigDefault:
         cfg = PolicyConfig.default()
         assert "rm -rf /" in cfg.denied_commands
         assert "sudo" in cfg.denied_commands
+        assert "dd if=" in cfg.denied_commands
 
     def test_network_allowlist(self):
         cfg = PolicyConfig.default()

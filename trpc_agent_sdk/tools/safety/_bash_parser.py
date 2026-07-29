@@ -447,78 +447,77 @@ class BashParser:
             stripped = self._strip_inline_comment(raw_line).strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            try:
-                lexer = shlex.shlex(stripped, posix=True, punctuation_chars="|;&")
-                lexer.whitespace_split = True
-                tokens = list(lexer)
-            except Exception:
-                tokens = stripped.split()
-            if not tokens:
-                continue
-
-            base_cmd = tokens[0]
-            if base_cmd in _SHELL_KEYWORDS:
+            command_segments = self._split_command_segments(stripped)
+            if not command_segments:
                 continue
 
             # Denied commands via token-prefix match
             found_denied = False
-            for denied in self._policy.denied_commands:
-                try:
-                    denied_tokens = shlex.split(denied)
-                except Exception:
-                    denied_tokens = denied.split()
-                if tokens[:len(denied_tokens)] == denied_tokens:
-                    findings.append(
-                        SafetyFinding(
-                            rule_id="R003_SYSTEM_COMMAND",
-                            rule_name="Denied Command",
-                            risk_type=RiskType.SYSTEM_COMMAND,
-                            risk_level=RiskLevel.CRITICAL,
-                            evidence=sanitize_text(stripped, self._policy.secret_patterns),
-                            line=line_num,
-                            recommendation=f"Command '{denied}' is denied by safety policy.",
-                        ))
-                    found_denied = True
-                    break  # Break inner loop; continue scanning remaining lines
+            for command_tokens in command_segments:
+                base_cmd = command_tokens[0]
+                if base_cmd in _SHELL_KEYWORDS:
+                    continue
+                for denied in self._policy.denied_commands:
+                    if self._command_prefix_matches(command_tokens, denied):
+                        findings.append(
+                            SafetyFinding(
+                                rule_id="R003_SYSTEM_COMMAND",
+                                rule_name="Denied Command",
+                                risk_type=RiskType.SYSTEM_COMMAND,
+                                risk_level=RiskLevel.CRITICAL,
+                                evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                                line=line_num,
+                                recommendation=f"Command '{denied}' is denied by safety policy.",
+                            ))
+                        found_denied = True
+                        break
+                if found_denied:
+                    break
             if found_denied:
                 continue
 
             # Review commands via token-prefix match
             found_review = False
-            for review_cmd in self._policy.review_commands:
-                try:
-                    review_tokens = shlex.split(review_cmd)
-                except Exception:
-                    review_tokens = review_cmd.split()
-                if tokens[:len(review_tokens)] == review_tokens:
+            for command_tokens in command_segments:
+                base_cmd = command_tokens[0]
+                if base_cmd in _SHELL_KEYWORDS:
+                    continue
+                for review_cmd in self._policy.review_commands:
+                    if self._command_prefix_matches(command_tokens, review_cmd):
+                        findings.append(
+                            SafetyFinding(
+                                rule_id="R003_SYSTEM_COMMAND",
+                                rule_name="Command Requires Review",
+                                risk_type=RiskType.SYSTEM_COMMAND,
+                                risk_level=RiskLevel.MEDIUM,
+                                evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                                line=line_num,
+                                recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
+                            ))
+                        found_review = True
+                        break
+                if found_review:
+                    break
+            if found_review:
+                continue
+
+            # Allowed commands check for this line's command segments
+            if self._policy.allowed_commands:
+                for command_tokens in command_segments:
+                    base_cmd = command_tokens[0]
+                    if base_cmd in _SHELL_KEYWORDS or base_cmd in self._policy.allowed_commands:
+                        continue
                     findings.append(
                         SafetyFinding(
                             rule_id="R003_SYSTEM_COMMAND",
-                            rule_name="Command Requires Review",
+                            rule_name="Command Not Allowed",
                             risk_type=RiskType.SYSTEM_COMMAND,
                             risk_level=RiskLevel.MEDIUM,
                             evidence=sanitize_text(stripped, self._policy.secret_patterns),
                             line=line_num,
-                            recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
+                            recommendation=f"Command '{base_cmd}' is not in the allowed commands list.",
                         ))
-                    found_review = True
-                    break  # Break inner loop; continue scanning remaining lines
-            if found_review:
-                continue
-
-            # Allowed commands check for this line
-            if (self._policy.allowed_commands and base_cmd not in _SHELL_KEYWORDS
-                    and base_cmd not in self._policy.allowed_commands):
-                findings.append(
-                    SafetyFinding(
-                        rule_id="R003_SYSTEM_COMMAND",
-                        rule_name="Command Not Allowed",
-                        risk_type=RiskType.SYSTEM_COMMAND,
-                        risk_level=RiskLevel.MEDIUM,
-                        evidence=sanitize_text(stripped, self._policy.secret_patterns),
-                        line=line_num,
-                        recommendation=f"Command '{base_cmd}' is not in the allowed commands list.",
-                    ))
+                    break
 
         # Check for shell pipelines requiring review (whole-script check)
         if self._policy.review_shell_pipelines:
@@ -539,3 +538,45 @@ class BashParser:
                     ))
 
         return findings
+
+    @staticmethod
+    def _split_command_segments(line: str) -> List[List[str]]:
+        """Split a shell line into command token segments."""
+        try:
+            lexer = shlex.shlex(line, posix=True, punctuation_chars="|;&")
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except Exception:
+            tokens = line.split()
+
+        separators = {"|", "||", "&", "&&", ";"}
+        segments: List[List[str]] = []
+        current: List[str] = []
+        for token in tokens:
+            if token in separators:
+                if current:
+                    segments.append(current)
+                    current = []
+                continue
+            current.append(token)
+        if current:
+            segments.append(current)
+        return segments
+
+    @staticmethod
+    def _command_prefix_matches(command_tokens: List[str], policy_entry: str) -> bool:
+        """Return True if command_tokens start with a policy command entry."""
+        try:
+            policy_tokens = shlex.split(policy_entry)
+        except Exception:
+            policy_tokens = policy_entry.split()
+        if not policy_tokens or len(command_tokens) < len(policy_tokens):
+            return False
+
+        for actual, expected in zip(command_tokens, policy_tokens):
+            if expected.endswith("="):
+                if not actual.startswith(expected):
+                    return False
+            elif actual != expected:
+                return False
+        return True
