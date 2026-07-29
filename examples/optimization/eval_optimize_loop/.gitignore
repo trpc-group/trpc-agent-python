@@ -1,0 +1,9 @@
+# Runtime artifact output
+runs/
+optimization_report.json
+optimization_report.md
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

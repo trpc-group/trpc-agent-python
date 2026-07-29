@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pip install:*)",
+      "Bash(where:*)",
+      "Bash(python:*)",
+      "Bash(\"E:/code/study/trpc-agent-python/.venv/Scripts/python.exe\" -m pip --version:*)",
+      "Bash(\"E:/code/study/trpc-agent-python/.venv/Scripts/python.exe\" -m pip install -r E:/code/study/trpc-agent-python/requirements-test.txt)",
+      "Bash(\"E:/code/study/trpc-agent-python/.venv/Scripts/python.exe\" -c:*)",
+      "WebSearch",
+      "Bash(\"E:/code/study/trpc-agent-python/.venv/Scripts/python.exe\" -m pytest tests -q --tb=no -p no:cacheprovider)",
+      "Bash(tee:*)",
+      "Bash(powershell:*)",
+      "Bash(\"E:/code/study/trpc-agent-python/.venv/Scripts/python.exe\" -m pytest:*)",
+      "Bash(Tee-Object:*)",
+      "Bash(pytest_eval.log)",
+      "Bash(\"E:\\code\\study\\trpc-agent-python\\.venv\\Scripts\\python.exe\" -m pytest \"E:\\code\\study\\trpc-agent-python\\examples\\optimization\\eval_optimize_loop\\tests\" -q --tb=line)",
+      "Bash(E:codestudytrpc-agent-pythonpytest_out.txt)",
+      "Bash(Get-Content E:codestudytrpc-agent-pythonpytest_out.txt -Tail 100)",
+      "Bash(\"E:\\code\\study\\trpc-agent-python\\pytest_out.txt\")",
+      "Bash(\"E:\\code\\study\\trpc-agent-python\\.venv\\Scripts\\python.exe\" -m pytest:*)",
+      "Bash(\"E:\\code\\study\\trpc-agent-python\\.venv\\Scripts\\python.exe\" -c \"import sys; sys.path.insert(0, r''E:\\code\\study\\trpc-agent-python\\examples\\optimization\\eval_optimize_loop''); from runner import sha256_text, sha256_file; print(sha256_text(''a\\nb\\n''))\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

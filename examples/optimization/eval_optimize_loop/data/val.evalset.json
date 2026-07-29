@@ -1,0 +1,88 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "eval_optimize_loop 验证集（3 条，独立裁判）",
+  "description": "eval_id 与 train 互斥。包含一条 protected case、一条 high risk case、一条 noop。",
+  "eval_cases": [
+    {
+      "eval_id": "val_add_steps_b",
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "val",
+        "state": {
+          "split": "val",
+          "slice": "math",
+          "risk_level": "low",
+          "protected": false,
+          "scenario_tag": "add_steps"
+        }
+      },
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [{"text": "小轿车一共有 4 个轮子，5 辆小轿车一共有多少个轮子？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "步骤：4 × 5 = 20\n答案：20 个"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_protected_highrisk",
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "val",
+        "state": {
+          "split": "val",
+          "slice": "risky",
+          "risk_level": "high",
+          "protected": true,
+          "scenario_tag": "protected_must_pass"
+        }
+      },
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [{"text": "班里 40 名学生，25% 戴眼镜，戴眼镜的有多少人？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "步骤：40 × 25% = 10\n答案：10 人"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_noop_b",
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "val",
+        "state": {
+          "split": "val",
+          "slice": "noop",
+          "risk_level": "low",
+          "protected": false,
+          "scenario_tag": "noop_ambiguous"
+        }
+      },
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [{"text": "另一个含糊不清的问题，候选 prompt 无论怎么改都答不对。"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：42"}],
+            "role": "model"
+          }
+        }
+      ]
+    }
+  ]
+}

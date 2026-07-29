@@ -1,0 +1,345 @@
+{
+  "version": "2.0",
+  "candidate_source": "agent_optimizer",
+  "frozen": {
+    "run_id": "2026-07-28T00-00-00.000000Z-a1b2c3d4",
+    "champion_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "challenger_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "train_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "val_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "metric_config_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "run_config_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "optimizer_config_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+    "seed": 42,
+    "started_at": "2026-07-28T00:00:00.000Z",
+    "mode": "optimize",
+    "candidate_source": "agent_optimizer",
+    "scenario": null,
+    "gate_config": {
+      "min_val_lift": 0.02,
+      "slice_tolerance": 0.05,
+      "budget_tokens": 100000,
+      "budget_usd": null,
+      "epsilon": 0.001
+    },
+    "model_info": {
+      "provider": "test-stub",
+      "model_name": "injected-call-agent"
+    },
+    "evaluator_info": {
+      "name": "AgentEvaluator",
+      "metric_config_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "optimizer_info": {
+      "algorithm": "gepa_reflective",
+      "status": "SUCCEEDED",
+      "total_rounds": 1
+    }
+  },
+  "results": {
+    "train": {
+      "champion_avg": 0.0,
+      "challenger_avg": 1.0,
+      "delta": 1.0
+    },
+    "val": {
+      "champion_avg": 0.333333,
+      "challenger_avg": 1.0,
+      "delta": 0.666667
+    }
+  },
+  "train_delta": 1.0,
+  "val_delta": 0.666667,
+  "per_case": [
+    {
+      "eval_id": "val_add_steps_b",
+      "split": "val",
+      "slice": "math",
+      "risk_level": "low",
+      "protected": false,
+      "scenario_tag": "add_steps",
+      "champion_status": "FAILED",
+      "challenger_status": "PASSED",
+      "champion_score": 0.0,
+      "challenger_score": 1.0,
+      "delta": 1.0,
+      "transition": "newly_passed",
+      "failure_kind": "none",
+      "category": "none",
+      "failure_reason": "case 已通过，无失败归因。",
+      "runs": 1,
+      "evidence": {
+        "actual_text": "步骤：4 × 5 = 20\n答案：20 个",
+        "expected_text": "步骤：4 × 5 = 20\n答案：20 个",
+        "metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "score": 1.0,
+            "threshold": 1.0,
+            "eval_status": "PASSED",
+            "reason": null,
+            "rubric_scores": []
+          }
+        ],
+        "actual_tool_uses": [],
+        "expected_tool_uses": [],
+        "actual_tool_responses": [],
+        "expected_tool_responses": [],
+        "error_message": null,
+        "metric_reasons": [],
+        "trace_ref": "val_eval.json#eval_id=val_add_steps_b",
+        "attribution": {}
+      }
+    },
+    {
+      "eval_id": "evidence_tool_missing",
+      "split": "val",
+      "slice": "tool",
+      "risk_level": "low",
+      "protected": false,
+      "scenario_tag": null,
+      "champion_status": "FAILED",
+      "challenger_status": "FAILED",
+      "champion_score": 0.0,
+      "challenger_score": 0.0,
+      "delta": 0.0,
+      "transition": "unchanged",
+      "failure_kind": "agent_quality_failure",
+      "category": "tool_call_error",
+      "failure_reason": "缺少期望工具调用，或调用了错误的工具。",
+      "runs": 1,
+      "evidence": {
+        "actual_text": "已查询价格。",
+        "expected_text": "已查询价格。",
+        "metric_results": [
+          {
+            "metric_name": "tool_trajectory_avg_score",
+            "score": 0.0,
+            "threshold": 1.0,
+            "eval_status": "FAILED",
+            "reason": "expected tool call was not found",
+            "rubric_scores": []
+          }
+        ],
+        "actual_tool_uses": [],
+        "expected_tool_uses": [
+          {
+            "id": "t1",
+            "name": "search",
+            "args": {
+              "query": "pricing"
+            }
+          }
+        ],
+        "actual_tool_responses": [],
+        "expected_tool_responses": [],
+        "error_message": null,
+        "metric_reasons": [
+          "expected tool call was not found"
+        ],
+        "trace_ref": "val_eval.json#eval_id=evidence_tool_missing",
+        "attribution": {
+          "expected_tool_uses": [
+            {
+              "id": "t1",
+              "name": "search",
+              "args": {
+                "query": "pricing"
+              }
+            }
+          ],
+          "actual_tool_uses": []
+        }
+      }
+    },
+    {
+      "eval_id": "evidence_param_wrong",
+      "split": "val",
+      "slice": "tool",
+      "risk_level": "low",
+      "protected": false,
+      "scenario_tag": null,
+      "champion_status": "FAILED",
+      "challenger_status": "FAILED",
+      "champion_score": 0.0,
+      "challenger_score": 0.0,
+      "delta": 0.0,
+      "transition": "unchanged",
+      "failure_kind": "agent_quality_failure",
+      "category": "param_error",
+      "failure_reason": "工具名称匹配，但调用参数与期望轨迹不一致。",
+      "runs": 1,
+      "evidence": {
+        "actual_text": "已查询。",
+        "expected_text": "已查询。",
+        "metric_results": [
+          {
+            "metric_name": "tool_trajectory_avg_score",
+            "score": 0.0,
+            "threshold": 1.0,
+            "eval_status": "FAILED",
+            "reason": "tool arguments did not match",
+            "rubric_scores": []
+          }
+        ],
+        "actual_tool_uses": [
+          {
+            "id": "a1",
+            "name": "search",
+            "args": {
+              "query": "weather"
+            }
+          }
+        ],
+        "expected_tool_uses": [
+          {
+            "id": "t1",
+            "name": "search",
+            "args": {
+              "query": "pricing"
+            }
+          }
+        ],
+        "actual_tool_responses": [],
+        "expected_tool_responses": [],
+        "error_message": null,
+        "metric_reasons": [
+          "tool arguments did not match"
+        ],
+        "trace_ref": "val_eval.json#eval_id=evidence_param_wrong",
+        "attribution": {
+          "parameter_differences": [
+            {
+              "tool_name": "search",
+              "expected_args": {
+                "query": "pricing"
+              },
+              "actual_args": {
+                "query": "weather"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "evidence_rubric_failed",
+      "split": "val",
+      "slice": "quality",
+      "risk_level": "low",
+      "protected": false,
+      "scenario_tag": null,
+      "champion_status": "FAILED",
+      "challenger_status": "FAILED",
+      "champion_score": 0.0,
+      "challenger_score": 0.0,
+      "delta": 0.0,
+      "transition": "unchanged",
+      "failure_kind": "agent_quality_failure",
+      "category": "rubric_fail",
+      "failure_reason": "LLM rubric 指标未达到阈值。",
+      "runs": 1,
+      "evidence": {
+        "actual_text": "答案是 20。",
+        "expected_text": "清晰解释计算过程并给出答案。",
+        "metric_results": [
+          {
+            "metric_name": "llm_rubric_response",
+            "score": 0.0,
+            "threshold": 1.0,
+            "eval_status": "FAILED",
+            "reason": "rubric reasoning_clear failed",
+            "rubric_scores": [
+              {
+                "id": "reasoning_clear",
+                "score": 0.0,
+                "reason": "missing explanation"
+              }
+            ]
+          }
+        ],
+        "actual_tool_uses": [],
+        "expected_tool_uses": [],
+        "actual_tool_responses": [],
+        "expected_tool_responses": [],
+        "error_message": null,
+        "metric_reasons": [
+          "rubric reasoning_clear failed"
+        ],
+        "trace_ref": "val_eval.json#eval_id=evidence_rubric_failed",
+        "attribution": {
+          "failed_metrics": [
+            "llm_rubric_response"
+          ],
+          "metric_reasons": [
+            "rubric reasoning_clear failed"
+          ]
+        }
+      }
+    }
+  ],
+  "transition_counts": {
+    "newly_passed": 1,
+    "unchanged": 3
+  },
+  "fail_category_counts": {
+    "none": 1,
+    "tool_call_error": 1,
+    "param_error": 1,
+    "rubric_fail": 1
+  },
+  "decision": {
+    "accepted": true,
+    "violated": [],
+    "reasons": []
+  },
+  "cost_status": "measured",
+  "cost": {
+    "status": "measured",
+    "total_tokens": 123,
+    "total_usd": 0.0123
+  },
+  "optimizer": {
+    "info": {
+      "algorithm": "gepa_reflective",
+      "status": "SUCCEEDED",
+      "total_rounds": 1
+    },
+    "rounds": [
+      {
+        "round": 1,
+        "candidate_prompts": {
+          "system": "Example candidate prompt"
+        },
+        "accepted": true,
+        "validation_pass_rate": 1.0,
+        "artifact_path": "runs/<run_id>/optimizer/rounds/round_001.json"
+      }
+    ],
+    "artifacts": {
+      "optimizer_result": "runs/<run_id>/optimizer/result.json",
+      "optimizer_best_prompt": "runs/<run_id>/optimizer/best_prompts/system.md"
+    }
+  },
+  "audit": {
+    "run_id": "2026-07-28T00-00-00.000000Z-a1b2c3d4",
+    "applied": false,
+    "duration_seconds": 12.3456,
+    "candidate_source": "agent_optimizer",
+    "scenario": null,
+    "cost_status": "measured",
+    "cost": 0.0123,
+    "artifact_dir": "runs/<run_id>",
+    "artifacts": {
+      "frozen_json": "runs/<run_id>/frozen.json",
+      "train_eval_log": "runs/<run_id>/train_eval.json",
+      "val_eval_log": "runs/<run_id>/val_eval.json"
+    },
+    "before_apply_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "after_apply_sha256": null,
+    "repro_cmd": "python pipeline.py --mode optimize"
+  },
+  "limitations": {
+    "hidden_sample_accuracy": "未使用官方隐藏集；公开 fixture 只用于可复现测试。"
+  }
+}

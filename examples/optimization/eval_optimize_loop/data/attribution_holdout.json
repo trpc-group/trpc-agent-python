@@ -1,0 +1,73 @@
+{
+  "description": "公开、可复现的人工标注 evaluator-evidence holdout；不是官方隐藏集。",
+  "cases": [
+    {
+      "eval_id": "holdout_reply",
+      "expected_category": "reply_mismatch",
+      "status": "FAILED",
+      "failed_metrics": ["final_response_avg_score"],
+      "metric_reasons": ["final response text mismatch"],
+      "expected_text": "答案：11",
+      "actual_text": "答案：22"
+    },
+    {
+      "eval_id": "holdout_format",
+      "expected_category": "format_fail",
+      "status": "FAILED",
+      "failed_metrics": ["final_response_avg_score"],
+      "metric_reasons": ["required answer structure is missing"],
+      "expected_text": "步骤：4 + 7 = 11\n答案：11 个",
+      "actual_text": "11"
+    },
+    {
+      "eval_id": "holdout_tool",
+      "expected_category": "tool_call_error",
+      "status": "FAILED",
+      "failed_metrics": ["tool_trajectory_avg_score"],
+      "metric_reasons": ["expected tool call was not found"],
+      "expected_tool_uses": [{"id": "t1", "name": "search", "args": {"query": "pricing"}}],
+      "actual_tool_uses": []
+    },
+    {
+      "eval_id": "holdout_param",
+      "expected_category": "param_error",
+      "status": "FAILED",
+      "failed_metrics": ["tool_trajectory_avg_score"],
+      "metric_reasons": ["tool arguments did not match"],
+      "expected_tool_uses": [{"id": "t1", "name": "search", "args": {"query": "pricing", "top_k": 3}}],
+      "actual_tool_uses": [{"id": "a1", "name": "search", "args": {"query": "weather", "top_k": 1}}]
+    },
+    {
+      "eval_id": "holdout_rubric",
+      "expected_category": "rubric_fail",
+      "status": "FAILED",
+      "failed_metrics": ["llm_rubric_response"],
+      "metric_reasons": ["rubric reasoning_clear failed"],
+      "expected_text": "清晰解释计算过程",
+      "actual_text": "答案是 20"
+    },
+    {
+      "eval_id": "holdout_knowledge",
+      "expected_category": "knowledge_fail",
+      "status": "FAILED",
+      "failed_metrics": ["llm_rubric_knowledge_recall"],
+      "metric_reasons": ["knowledge recall does not support rubric kr1"],
+      "expected_tool_uses": [{"id": "t1", "name": "knowledge_search", "args": {"query": "产品"}}],
+      "actual_tool_uses": [{"id": "a1", "name": "knowledge_search", "args": {"query": "产品"}}],
+      "actual_tool_responses": [{"id": "a1", "name": "knowledge_search", "response": {"documents": []}}]
+    },
+    {
+      "eval_id": "holdout_infra",
+      "expected_category": "infrastructure_failure",
+      "status": "NOT_EVALUATED",
+      "error_message": "TimeoutError: model endpoint unavailable"
+    },
+    {
+      "eval_id": "holdout_insufficient",
+      "expected_category": "insufficient_evidence",
+      "status": "FAILED",
+      "failed_metrics": ["final_response_avg_score"],
+      "metric_reasons": ["score below threshold"]
+    }
+  ]
+}

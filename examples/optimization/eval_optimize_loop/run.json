@@ -1,0 +1,15 @@
+{
+  "_comment": "eval_optimize_loop 运行配置。所有路径相对本文件所在目录；gate 阈值在此调整。",
+  "champion_prompt": "prompts/system.md",
+  "train_evalset": "data/train.evalset.json",
+  "val_evalset": "data/val.evalset.json",
+  "metric_config": "data/test_config.json",
+  "gate": {
+    "min_val_lift": 0.02,
+    "slice_tolerance": 0.05,
+    "budget_tokens": 100000,
+    "budget_usd": null,
+    "epsilon": 0.001
+  },
+  "seed": 42
+}

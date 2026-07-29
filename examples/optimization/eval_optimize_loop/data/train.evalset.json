@@ -1,0 +1,88 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "eval_optimize_loop 训练集（3 条）",
+  "description": "用于优化器发现问题。覆盖三种可优化情景：可优化成功 (T-ADD)、优化无效 (T-NOOP)、优化后退退 (T-OVERFIT-MEM)。",
+  "eval_cases": [
+    {
+      "eval_id": "train_add_steps",
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "train",
+        "state": {
+          "split": "train",
+          "slice": "math",
+          "risk_level": "low",
+          "protected": false,
+          "scenario_tag": "add_steps"
+        }
+      },
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [{"text": "小明买了 4 个苹果又买了 7 个苹果，他一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "步骤：4 + 7 = 11\n答案：11 个"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_noop",
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "train",
+        "state": {
+          "split": "train",
+          "slice": "noop",
+          "risk_level": "low",
+          "protected": false,
+          "scenario_tag": "noop_ambiguous"
+        }
+      },
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {
+            "parts": [{"text": "一个含糊不清的问题，候选 prompt 无论怎么改都答不对。"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：42"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_overfit_mem",
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "train",
+        "state": {
+          "split": "train",
+          "slice": "math",
+          "risk_level": "low",
+          "protected": false,
+          "scenario_tag": "memorize_train"
+        }
+      },
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {
+            "parts": [{"text": "一件衣服原价 200 元，打 8 折，折后价是多少？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：160 元"}],
+            "role": "model"
+          }
+        }
+      ]
+    }
+  ]
+}
