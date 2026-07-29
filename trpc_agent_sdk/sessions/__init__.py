@@ -20,6 +20,16 @@ from ._in_memory_session_service import InMemorySessionService
 from ._in_memory_session_service import SessionWithTTL
 from ._in_memory_session_service import StateWithTTL
 from ._redis_session_service import RedisSessionService
+from ._replay import BackendReplayResult
+from ._replay import ReplayBackend
+from ._replay import ReplayCase
+from ._replay import ReplayCaseError
+from ._replay import ReplayComparator
+from ._replay import ReplayHarness
+from ._replay import ReplayNormalizer
+from ._replay import ReplayReport
+from ._replay import ReplayRunResult
+from ._replay import ReplaySummaryModel
 from ._session import Session
 from ._session_summarizer import SessionSummarizer
 from ._session_summarizer import SessionSummary
@@ -57,6 +67,16 @@ __all__ = [
     "SessionWithTTL",
     "StateWithTTL",
     "RedisSessionService",
+    "BackendReplayResult",
+    "ReplayBackend",
+    "ReplayCase",
+    "ReplayCaseError",
+    "ReplayComparator",
+    "ReplayHarness",
+    "ReplayNormalizer",
+    "ReplayReport",
+    "ReplayRunResult",
+    "ReplaySummaryModel",
     "Session",
     "SessionSummarizer",
     "SessionSummary",

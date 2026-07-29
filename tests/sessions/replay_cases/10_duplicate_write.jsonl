@@ -1,0 +1,5 @@
+{"op":"case","case_id":"duplicate_write","category":"recovery","expected_anomaly":true,"allow_duplicate_event_ids":true,"expected":{"sessions":{"duplicate":{"event_ids":["duplicate-e1"],"historical_event_ids":[],"state":{"dedupe_status":"applied"},"summary":null}},"memory":{}}}
+{"op":"create_session","operation_id":"create-duplicate","session_id":"duplicate"}
+{"op":"append_event","operation_id":"duplicate-first","session_id":"duplicate","event":{"id":"duplicate-e1","invocation_id":"duplicate-1","author":"user","timestamp":1700001001,"content":{"role":"user","parts":[{"text":"Submit idempotent payment request payment-key-4821."}]},"actions":{"state_delta":{"dedupe_status":"applied"}}}}
+{"op":"append_event","operation_id":"duplicate-second","session_id":"duplicate","event":{"id":"duplicate-e1","invocation_id":"duplicate-1","author":"user","timestamp":1700001001,"content":{"role":"user","parts":[{"text":"Submit idempotent payment request payment-key-4821."}]},"actions":{"state_delta":{"dedupe_status":"applied"}}}}
+{"op":"checkpoint","operation_id":"duplicate-checkpoint-op","checkpoint_id":"duplicate-observed"}

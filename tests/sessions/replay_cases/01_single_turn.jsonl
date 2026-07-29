@@ -1,0 +1,5 @@
+{"op":"case","case_id":"single_turn","category":"normal","expected_anomaly":false,"expected":{"sessions":{"single":{"event_ids":["single-user","single-agent"],"historical_event_ids":[],"state":{},"summary":null}},"memory":{}}}
+{"op":"create_session","operation_id":"create-single","session_id":"single"}
+{"op":"append_event","operation_id":"single-user-op","session_id":"single","logical_event_id":"single-user","event":{"invocation_id":"single-turn-1","author":"user","timestamp":1700000101,"content":{"role":"user","parts":[{"text":"Could you briefly explain what you can help me with?"}]}}}
+{"op":"append_event","operation_id":"single-agent-op","session_id":"single","logical_event_id":"single-agent","event":{"invocation_id":"single-turn-1","author":"agent","timestamp":1700000102,"content":{"role":"model","parts":[{"text":"I can help plan tasks, answer questions, and work with tools."}]}}}
+{"op":"checkpoint","operation_id":"single-checkpoint-op","checkpoint_id":"single-complete"}

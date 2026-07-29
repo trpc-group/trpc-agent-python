@@ -1,0 +1,1343 @@
+{
+  "backends": [
+    "in_memory",
+    "sqlite"
+  ],
+  "cases": [
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/single/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/single/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/single/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/single/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "single_turn",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/multi/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/4/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/5/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/multi/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/4/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/multi/events/5/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "multi_turn",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/tools/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/tools/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/tools/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/tools/events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/tools/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/tools/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/tools/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/tools/events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "tool_call",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/stateful/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/stateful/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/stateful/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/stateful/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/stateful/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/stateful/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "state_update",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [
+            {
+              "backend": "in_memory",
+              "backend_value": [
+                "{\"author\":\"user\",\"content\":{\"parts\":[{\"text\":\"Preference: for espresso-key drinks, I prefer oat milk and no sugar.\"}],\"role\":\"user\"},\"text\":\"Preference: for espresso-key drinks, I prefer oat milk and no sugar.\"}",
+                "{\"author\":\"user\",\"content\":{\"parts\":[{\"text\":\"Fact: my reusable cup discount applies to espresso-key orders.\"}],\"role\":\"user\"},\"text\":\"Fact: my reusable cup discount applies to espresso-key orders.\"}"
+              ],
+              "normalized_value": [
+                "{\"author\":\"user\",\"content\":{\"parts\":[{\"text\":\"Fact: my reusable cup discount applies to espresso-key orders.\"}],\"role\":\"user\"},\"text\":\"Fact: my reusable cup discount applies to espresso-key orders.\"}",
+                "{\"author\":\"user\",\"content\":{\"parts\":[{\"text\":\"Preference: for espresso-key drinks, I prefer oat milk and no sugar.\"}],\"role\":\"user\"},\"text\":\"Preference: for espresso-key drinks, I prefer oat milk and no sugar.\"}"
+              ],
+              "path": "/memory/espresso-search/entries",
+              "reason": "Memory services do not guarantee a common result order",
+              "strategy": "sort by normalized author/content fingerprint"
+            }
+          ],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/memory-a/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/memory-b/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/memory/espresso-search/entries",
+              "strategy": "documented memory result ordering"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/memory-a/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/memory-b/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "memory",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/summary-create/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/summary/manager_updated_at",
+              "strategy": "manager clock represented by persisted logical updated_at"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/summary-create/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/historical_events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-create/summary/manager_updated_at",
+              "strategy": "manager clock represented by persisted logical updated_at"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "summary_create",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/summary-update/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/4/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/5/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/6/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/7/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/8/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/summary/manager_updated_at",
+              "strategy": "manager clock represented by persisted logical updated_at"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/summary-update/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/4/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/5/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/6/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/7/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/historical_events/8/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-update/summary/manager_updated_at",
+              "strategy": "manager clock represented by persisted logical updated_at"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "summary_update",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/summary-truncate/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/4/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/summary/manager_updated_at",
+              "strategy": "manager clock represented by persisted logical updated_at"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/summary-truncate/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/events/4/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/historical_events/3/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/summary-truncate/summary/manager_updated_at",
+              "strategy": "manager clock represented by persisted logical updated_at"
+            }
+          ],
+          "operation_errors": [],
+          "status": "match"
+        }
+      },
+      "case_id": "summary_truncation",
+      "category": "normal",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [],
+          "reference_backend": "in_memory",
+          "status": "match"
+        }
+      ],
+      "expected_anomaly": false
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [
+            {
+              "allowed": false,
+              "backend": "in_memory",
+              "backend_value": 2,
+              "memory_index": 1,
+              "path": "/memory/failure-search/texts/length",
+              "query_id": "failure-search",
+              "reference_backend": "expected",
+              "reference_value": 1,
+              "session_id": null
+            },
+            {
+              "allowed": false,
+              "backend": "in_memory",
+              "backend_value": 3,
+              "event_index": 2,
+              "path": "/sessions/failure/event_ids/length",
+              "reference_backend": "expected",
+              "reference_value": 2,
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "in_memory",
+              "backend_value": "failure-e1",
+              "event_index": 1,
+              "path": "/sessions/failure/event_ids/1",
+              "reference_backend": "expected",
+              "reference_value": "failure-e2",
+              "session_id": "failure"
+            }
+          ],
+          "normalizations": [
+            {
+              "path": "/sessions/failure/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/failure/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/failure/events/2/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [
+            {
+              "event_id": "failure-e1",
+              "operation_id": "failure-after-session",
+              "session_id": "failure",
+              "stage": "inject_failure",
+              "type": "InjectedReplayFailure"
+            }
+          ],
+          "status": "expected_anomaly_detected"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/failure/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/failure/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [
+            {
+              "event_id": "failure-e1",
+              "operation_id": "failure-after-session",
+              "session_id": "failure",
+              "stage": "inject_failure",
+              "type": "InjectedReplayFailure"
+            },
+            {
+              "event_id": "failure-e1",
+              "operation_id": "failure-after-session",
+              "session_id": "failure",
+              "stage": "retry_append",
+              "type": "IntegrityError"
+            }
+          ],
+          "status": "expected_anomaly_detected"
+        }
+      },
+      "case_id": "write_failure",
+      "category": "recovery",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 1,
+              "memory_index": 1,
+              "path": "/memory/failure-search/entries/length",
+              "query_id": "failure-search",
+              "reference_backend": "in_memory",
+              "reference_value": 2,
+              "session_id": null
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 1,
+              "memory_index": 1,
+              "path": "/memory/failure-search/texts/length",
+              "query_id": "failure-search",
+              "reference_backend": "in_memory",
+              "reference_value": 2,
+              "session_id": null
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 2,
+              "path": "/operation_errors/length",
+              "reference_backend": "in_memory",
+              "reference_value": 1,
+              "session_id": null
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 2,
+              "event_index": 2,
+              "path": "/sessions/failure/event_ids/length",
+              "reference_backend": "in_memory",
+              "reference_value": 3,
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "failure-e2",
+              "event_index": 1,
+              "path": "/sessions/failure/event_ids/1",
+              "reference_backend": "in_memory",
+              "reference_value": "failure-e1",
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 2,
+              "event_index": 2,
+              "path": "/sessions/failure/events/length",
+              "reference_backend": "in_memory",
+              "reference_value": 3,
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "agent",
+              "event_index": 1,
+              "path": "/sessions/failure/events/1/author",
+              "reference_backend": "in_memory",
+              "reference_value": "user",
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "The transaction recovered and the request is complete.",
+              "event_index": 1,
+              "path": "/sessions/failure/events/1/content/parts/0/text",
+              "reference_backend": "in_memory",
+              "reference_value": "Request invoice-key processing for order 4821.",
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "model",
+              "event_index": 1,
+              "path": "/sessions/failure/events/1/content/role",
+              "reference_backend": "in_memory",
+              "reference_value": "user",
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "failure-e2",
+              "event_index": 1,
+              "path": "/sessions/failure/events/1/id",
+              "reference_backend": "in_memory",
+              "reference_value": "failure-e1",
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "failure-2",
+              "event_index": 1,
+              "path": "/sessions/failure/events/1/invocation_id",
+              "reference_backend": "in_memory",
+              "reference_value": "failure-1",
+              "session_id": "failure"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": "complete",
+              "event_index": 1,
+              "path": "/sessions/failure/events/1/state_delta/transaction_status",
+              "reference_backend": "in_memory",
+              "reference_value": "pending",
+              "session_id": "failure"
+            }
+          ],
+          "reference_backend": "in_memory",
+          "status": "mismatch"
+        }
+      ],
+      "expected_anomaly": true
+    },
+    {
+      "backends": {
+        "in_memory": {
+          "allowed_diff": [],
+          "differences_to_expected": [
+            {
+              "allowed": false,
+              "backend": "in_memory",
+              "backend_value": 2,
+              "event_index": 1,
+              "path": "/sessions/duplicate/event_ids/length",
+              "reference_backend": "expected",
+              "reference_value": 1,
+              "session_id": "duplicate"
+            }
+          ],
+          "normalizations": [
+            {
+              "path": "/sessions/duplicate/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            },
+            {
+              "path": "/sessions/duplicate/events/1/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [],
+          "status": "expected_anomaly_detected"
+        },
+        "sqlite": {
+          "allowed_diff": [],
+          "differences_to_expected": [],
+          "normalizations": [
+            {
+              "path": "/sessions/duplicate/events/0/timestamp",
+              "strategy": "validated positional timestamp token"
+            }
+          ],
+          "operation_errors": [
+            {
+              "event_id": "duplicate-e1",
+              "operation_id": "duplicate-second",
+              "session_id": "duplicate",
+              "stage": "append_event",
+              "type": "IntegrityError"
+            }
+          ],
+          "status": "expected_anomaly_detected"
+        }
+      },
+      "case_id": "duplicate_write",
+      "category": "recovery",
+      "comparisons": [
+        {
+          "backend": "sqlite",
+          "differences": [
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 1,
+              "path": "/operation_errors/length",
+              "reference_backend": "in_memory",
+              "reference_value": 0,
+              "session_id": null
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 1,
+              "event_index": 1,
+              "path": "/sessions/duplicate/event_ids/length",
+              "reference_backend": "in_memory",
+              "reference_value": 2,
+              "session_id": "duplicate"
+            },
+            {
+              "allowed": false,
+              "backend": "sqlite",
+              "backend_value": 1,
+              "event_index": 1,
+              "path": "/sessions/duplicate/events/length",
+              "reference_backend": "in_memory",
+              "reference_value": 2,
+              "session_id": "duplicate"
+            }
+          ],
+          "reference_backend": "in_memory",
+          "status": "mismatch"
+        }
+      ],
+      "expected_anomaly": true
+    }
+  ],
+  "metrics": {
+    "anomaly_cases": 2,
+    "backend_comparisons": 10,
+    "detected_mutations": 10,
+    "false_positive_case_backend_comparisons": 0,
+    "false_positive_rate": 0.0,
+    "mismatched_backend_comparisons": 2,
+    "mutation_detection_rate": 1.0,
+    "mutations": 10,
+    "normal_case_backend_comparisons": 8,
+    "normal_cases": 8,
+    "summary_defect_detection": {
+      "summary_missing": true,
+      "summary_overwrite": true,
+      "summary_session": true
+    },
+    "total_cases": 10
+  },
+  "mode": "lightweight",
+  "mutation_checks": [
+    {
+      "case_id": "single_turn",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:event_content",
+          "backend_value": "Could you briefly explain what you can help me with? [mutated]",
+          "event_index": 0,
+          "path": "/sessions/single/events/0/content/parts/0/text",
+          "reference_backend": "in_memory",
+          "reference_value": "Could you briefly explain what you can help me with?",
+          "session_id": "single"
+        }
+      ],
+      "mutation": "event_content"
+    },
+    {
+      "case_id": "multi_turn",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "agent",
+          "event_index": 0,
+          "path": "/sessions/multi/events/0/author",
+          "reference_backend": "in_memory",
+          "reference_value": "user",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "What budget and trail difficulty should I use?",
+          "event_index": 0,
+          "path": "/sessions/multi/events/0/content/parts/0/text",
+          "reference_backend": "in_memory",
+          "reference_value": "I need a two-day hiking trip near Lake Alder next weekend.",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "model",
+          "event_index": 0,
+          "path": "/sessions/multi/events/0/content/role",
+          "reference_backend": "in_memory",
+          "reference_value": "user",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "multi-a1",
+          "event_index": 0,
+          "path": "/sessions/multi/events/0/id",
+          "reference_backend": "in_memory",
+          "reference_value": "multi-u1",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "<timestamp:1>",
+          "event_index": 0,
+          "path": "/sessions/multi/events/0/timestamp",
+          "reference_backend": "in_memory",
+          "reference_value": "<timestamp:0>",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "user",
+          "event_index": 1,
+          "path": "/sessions/multi/events/1/author",
+          "reference_backend": "in_memory",
+          "reference_value": "agent",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "I need a two-day hiking trip near Lake Alder next weekend.",
+          "event_index": 1,
+          "path": "/sessions/multi/events/1/content/parts/0/text",
+          "reference_backend": "in_memory",
+          "reference_value": "What budget and trail difficulty should I use?",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "user",
+          "event_index": 1,
+          "path": "/sessions/multi/events/1/content/role",
+          "reference_backend": "in_memory",
+          "reference_value": "model",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "multi-u1",
+          "event_index": 1,
+          "path": "/sessions/multi/events/1/id",
+          "reference_backend": "in_memory",
+          "reference_value": "multi-a1",
+          "session_id": "multi"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:event_order",
+          "backend_value": "<timestamp:0>",
+          "event_index": 1,
+          "path": "/sessions/multi/events/1/timestamp",
+          "reference_backend": "in_memory",
+          "reference_value": "<timestamp:1>",
+          "session_id": "multi"
+        }
+      ],
+      "mutation": "event_order"
+    },
+    {
+      "case_id": "tool_call",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:tool_response",
+          "backend_value": "<missing>",
+          "event_index": 2,
+          "path": "/sessions/tools/events/2/content/parts/0/function_response/response/condition",
+          "reference_backend": "in_memory",
+          "reference_value": "sunny",
+          "session_id": "tools"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:tool_response",
+          "backend_value": "<missing>",
+          "event_index": 2,
+          "path": "/sessions/tools/events/2/content/parts/0/function_response/response/precipitation_probability",
+          "reference_backend": "in_memory",
+          "reference_value": 10,
+          "session_id": "tools"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:tool_response",
+          "backend_value": -99,
+          "event_index": 2,
+          "path": "/sessions/tools/events/2/content/parts/0/function_response/response/temperature",
+          "reference_backend": "in_memory",
+          "reference_value": 25,
+          "session_id": "tools"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:tool_response",
+          "backend_value": "<missing>",
+          "event_index": 2,
+          "path": "/sessions/tools/events/2/content/parts/0/function_response/response/unit",
+          "reference_backend": "in_memory",
+          "reference_value": "C",
+          "session_id": "tools"
+        }
+      ],
+      "mutation": "tool_response"
+    },
+    {
+      "case_id": "state_update",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:state_value",
+          "backend_value": "mutated",
+          "path": "/sessions/stateful/state/current_topic",
+          "reference_backend": "in_memory",
+          "reference_value": "checkout",
+          "session_id": "stateful"
+        }
+      ],
+      "mutation": "state_value"
+    },
+    {
+      "case_id": "memory",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:memory_value",
+          "backend_value": "mutated memory",
+          "memory_index": 0,
+          "path": "/memory/espresso-search/entries/0/text",
+          "query_id": "espresso-search",
+          "reference_backend": "in_memory",
+          "reference_value": "Fact: my reusable cup discount applies to espresso-key orders.",
+          "session_id": null
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:memory_value",
+          "backend_value": "mutated memory",
+          "memory_index": 0,
+          "path": "/memory/espresso-search/texts/0",
+          "query_id": "espresso-search",
+          "reference_backend": "in_memory",
+          "reference_value": "Fact: my reusable cup discount applies to espresso-key orders.",
+          "session_id": null
+        }
+      ],
+      "mutation": "memory_value"
+    },
+    {
+      "case_id": "summary_create",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:summary_missing",
+          "backend_value": null,
+          "path": "/sessions/summary-create/summary",
+          "reference_backend": "in_memory",
+          "reference_value": {
+            "compressed_event_count": 3,
+            "event_id": "summary-event-summary-create-v1",
+            "manager_session_id": "summary-create",
+            "manager_text": "The user plans an easy Saturday hike on Pine Ridge's lakeside loop, starting at 9 AM and finishing before 4 PM.",
+            "manager_updated_at": 1700000604.5,
+            "original_event_count": 6,
+            "replaces_summary_id": null,
+            "session_id": "summary-create",
+            "summary_id": "summary-create-v1",
+            "summary_text": "The user plans an easy Saturday hike on Pine Ridge's lakeside loop, starting at 9 AM and finishing before 4 PM.",
+            "updated_at": 1700000604.5,
+            "version": 1
+          },
+          "session_id": "summary-create",
+          "summary_id": "summary-create-v1"
+        }
+      ],
+      "mutation": "summary_missing"
+    },
+    {
+      "case_id": "summary_update",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:summary_overwrite",
+          "backend_value": "wrong-summary",
+          "path": "/sessions/summary-update/summary/replaces_summary_id",
+          "reference_backend": "in_memory",
+          "reference_value": "summary-update-v1",
+          "session_id": "summary-update",
+          "summary_id": "summary-update-v2"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:summary_overwrite",
+          "backend_value": 1,
+          "path": "/sessions/summary-update/summary/version",
+          "reference_backend": "in_memory",
+          "reference_value": 2,
+          "session_id": "summary-update",
+          "summary_id": "summary-update-v2"
+        }
+      ],
+      "mutation": "summary_overwrite"
+    },
+    {
+      "case_id": "summary_truncation",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:summary_session",
+          "backend_value": "foreign-session",
+          "path": "/sessions/summary-truncate/summary/session_id",
+          "reference_backend": "in_memory",
+          "reference_value": "summary-truncate",
+          "session_id": "summary-truncate",
+          "summary_id": "summary-truncate-v1"
+        }
+      ],
+      "mutation": "summary_session"
+    },
+    {
+      "case_id": "write_failure",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:dirty_state",
+          "backend_value": "dirty",
+          "path": "/sessions/failure/state/transaction_status",
+          "reference_backend": "in_memory",
+          "reference_value": "complete",
+          "session_id": "failure"
+        }
+      ],
+      "mutation": "dirty_state"
+    },
+    {
+      "case_id": "duplicate_write",
+      "detected": true,
+      "differences": [
+        {
+          "allowed": false,
+          "backend": "mutated:duplicate_event",
+          "backend_value": 3,
+          "event_index": 2,
+          "path": "/sessions/duplicate/event_ids/length",
+          "reference_backend": "in_memory",
+          "reference_value": 2,
+          "session_id": "duplicate"
+        },
+        {
+          "allowed": false,
+          "backend": "mutated:duplicate_event",
+          "backend_value": 3,
+          "event_index": 2,
+          "path": "/sessions/duplicate/events/length",
+          "reference_backend": "in_memory",
+          "reference_value": 2,
+          "session_id": "duplicate"
+        }
+      ],
+      "mutation": "duplicate_event"
+    }
+  ],
+  "normalization_policy": [
+    "NFKC and whitespace folding for message, tool payload, memory, and summary text",
+    "stable aliases for backend-generated event identifiers",
+    "validated timestamp tokens while preserving list order and timestamp presence",
+    "recursive dictionary comparison independent of serialized key order",
+    "memory result sorting only when recorded as a backend/path-scoped allowed_diff"
+  ],
+  "reference_backend": "in_memory",
+  "runtime_budget_seconds": 30,
+  "schema_version": 1
+}

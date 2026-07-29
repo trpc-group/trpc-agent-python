@@ -1,0 +1,8 @@
+{"op":"case","case_id":"memory","category":"normal","expected_anomaly":false,"expected":{"sessions":{"memory-a":{"event_ids":["memory-a-1"],"historical_event_ids":[],"state":{},"summary":null},"memory-b":{"event_ids":["memory-b-1"],"historical_event_ids":[],"state":{},"summary":null}},"memory":{"espresso-search":{"texts":["Fact: my reusable cup discount applies to espresso-key orders.","Preference: for espresso-key drinks, I prefer oat milk and no sugar."]}}}}
+{"op":"create_session","operation_id":"create-memory-a","session_id":"memory-a"}
+{"op":"append_event","operation_id":"memory-a-event","session_id":"memory-a","event":{"id":"memory-a-1","invocation_id":"memory-a","author":"user","timestamp":1700000501,"content":{"role":"user","parts":[{"text":"Preference: for espresso-key drinks, I prefer oat milk and no sugar."}]}}}
+{"op":"store_memory","operation_id":"store-memory-a","session_id":"memory-a"}
+{"op":"create_session","operation_id":"create-memory-b","session_id":"memory-b"}
+{"op":"append_event","operation_id":"memory-b-event","session_id":"memory-b","event":{"id":"memory-b-1","invocation_id":"memory-b","author":"user","timestamp":1700000502,"content":{"role":"user","parts":[{"text":"Fact: my reusable cup discount applies to espresso-key orders."}]}}}
+{"op":"store_memory","operation_id":"store-memory-b","session_id":"memory-b"}
+{"op":"search_memory","operation_id":"search-espresso","query_id":"espresso-search","query":"espresso-key","limit":100}
