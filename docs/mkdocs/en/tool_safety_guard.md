@@ -39,7 +39,8 @@ The guard detects **6 categories** of risk across Python (AST-based) and Bash
 | `resource_abuse` | `while True`, fork bomb, huge writes | `PY-RESOURCE-ABUSE` (deny) | `BASH-RESOURCE-ABUSE` (deny/critical) |
 | `secret_leak` | `api_key = 'sk-...'` in output | `PY-SECRET-LEAK` (deny) | `BASH-SECRET-LEAK` (deny/critical) |
 
-Bash also has `BASH-SHELL-INJECTION` for `$(...)` and backtick substitution.
+Bash also has `BASH-SHELL-INJECTION` for `$(...)` and backtick substitution, plus
+`BASH-COMMAND-WHITELIST` (an optional command allow-list, disabled by default).
 
 **Decisions**: `allow` (no risk) / `deny` (high risk, blocked) / `needs_human_review`
 (suspicious, human must approve). Worst finding wins.
@@ -53,12 +54,13 @@ HIGH deny; list arg → MEDIUM needs_human_review.
 allowed_domains:          # Network egress whitelist
   - localhost
   - pypi.org
-allowed_commands:         # Bash command whitelist
-  - ls
-  - git
 forbidden_paths:          # Blocked file paths
   - "~/.ssh"
   - ".env"
+allowed_commands:         # Bash command allow-list (empty = disabled)
+  - ls
+  - cat
+  - echo
 max_timeout_seconds: 300
 max_output_size_mb: 50
 secret_patterns:          # Custom secret detection regex

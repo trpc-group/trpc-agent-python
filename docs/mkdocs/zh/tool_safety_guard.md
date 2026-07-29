@@ -1,10 +1,10 @@
-# Tool 脚本安全卫士
+# Tool 脚本安全检测
 
 一个可插拔的安全层，在 Tool、MCP Tool、Skill 或 CodeExecutor **执行之前**扫描 Python 脚本和 Bash 命令。
 
 ## 概览
 
-tRPC-Agent 的 Tool、MCP Tool、Skill 和 CodeExecutor 允许 Agent 执行脚本、调用外部命令、读写文件和访问网络。安全卫士提供**执行前静态扫描**，基于可配置规则产生 `allow` / `deny` / `needs_human_review` 决策。它**不是**沙箱替代品——它是沙箱隔离的补充，提供快速、确定性的风险评估。
+tRPC-Agent 的 Tool、MCP Tool、Skill 和 CodeExecutor 允许 Agent 执行脚本、调用外部命令、读写文件和访问网络。安全检测**执行前静态扫描**，基于可配置规则产生 `allow` / `deny` / `needs_human_review` 决策，**不能**作为沙箱替代品，而是作为沙箱隔离的补充，提供快速、确定性的风险评估。
 
 ## 快速开始
 
@@ -33,7 +33,7 @@ bash = BashTool(filters=[ToolSafetyFilter(guard)])
 | `resource_abuse` | `while True`, fork 炸弹, 大文件写入 | `PY-RESOURCE-ABUSE` (deny) | `BASH-RESOURCE-ABUSE` (deny/critical) |
 | `secret_leak` | `api_key = 'sk-...'` 出现在输出中 | `PY-SECRET-LEAK` (deny) | `BASH-SECRET-LEAK` (deny/critical) |
 
-Bash 还有 `BASH-SHELL-INJECTION` 检测 `$(...)` 和反引号命令替换。
+Bash 还有 `BASH-SHELL-INJECTION` 检测 `$(...)` 和反引号命令替换，以及 `BASH-COMMAND-WHITELIST`（可选命令白名单，默认禁用）。
 
 **决策**：`allow`（无风险）/ `deny`（高风险，拦截）/ `needs_human_review`（可疑，需人工审核）。最严重的发现优先。
 
@@ -45,12 +45,13 @@ Bash 还有 `BASH-SHELL-INJECTION` 检测 `$(...)` 和反引号命令替换。
 allowed_domains:          # 网络外连白名单
   - localhost
   - pypi.org
-allowed_commands:         # Bash 命令白名单
-  - ls
-  - git
 forbidden_paths:          # 禁止访问的文件路径
   - "~/.ssh"
   - ".env"
+allowed_commands:         # Bash 命令白名单（留空=禁用检查）
+  - ls
+  - cat
+  - echo
 max_timeout_seconds: 300
 max_output_size_mb: 50
 secret_patterns:          # 自定义密钥检测正则
@@ -108,7 +109,7 @@ global_rule_registry.register(CustomRule())
 
 ## 与其他组件的关系
 
-- **沙箱 / CodeExecutor**：安全卫士是静态预扫描，不是运行时沙箱。无法捕获动态生成的代码、混淆命令或运行时资源耗尽。用安全卫士在脚本进入沙箱前拒绝明显威胁，用沙箱控制漏网之鱼。
+- **沙箱 / CodeExecutor**：是静态预扫描，不是运行时沙箱。无法捕获动态生成的代码、混淆命令或运行时资源耗尽。用安全检测在脚本进入沙箱前拒绝明显威胁，用沙箱控制漏网之鱼。
 - **Filter 系统**：作为 `BaseFilter`（`FilterType.TOOL`）集成，在 `_before` 阶段、`_run_async_impl` 之前运行。
 - **Telemetry**：安全决策作为 OpenTelemetry span 属性输出，用于分布式追踪和监控。
 
