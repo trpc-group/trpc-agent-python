@@ -124,11 +124,6 @@ class Rule(ABC):
             recommendation=recommendation,
         )
 
-    def _resolve_overrides(self, policy: SafetyPolicy) -> None:
-        """Cache the policy override for this rule (called by the scanner)."""
-        self._override = policy.get_rule_override(self.rule_id)  # type: ignore[attr-defined]
-        self.ctx = ScanContext  # type: ignore[assignment]  # placeholder, set per-scan
-
     @property
     def is_enabled(self) -> bool:
         """Whether this rule is enabled (checked against the cached override)."""

@@ -58,13 +58,6 @@ class SafetyPolicy:
     ])
     """Whitelisted domains for outbound network calls."""
 
-    # Bash command control
-    allowed_commands: list[str] = field(default_factory=lambda: [
-        "ls", "pwd", "cat", "grep", "find", "head", "tail", "wc",
-        "echo", "python", "python3", "pip", "git", "mkdir", "cp", "mv",
-    ])
-    """Whitelisted bash commands (used by the allowlist rule)."""
-
     # Forbidden file paths / patterns
     forbidden_paths: list[str] = field(default_factory=lambda: [
         "~/.ssh",
@@ -141,17 +134,37 @@ class SafetyPolicy:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SafetyPolicy":
-        """Build a policy from a plain dictionary (parsed YAML)."""
+        """Build a policy from a plain dictionary (parsed YAML).
+
+        Raises:
+            ValueError: If a field has an unexpected type (e.g. a string
+                where a list is expected).
+        """
         # Start from defaults so unspecified keys keep their default value.
         policy = cls()
-        if "allowed_domains" in data:
-            policy.allowed_domains = list(data["allowed_domains"])
-        if "allowed_commands" in data:
-            policy.allowed_commands = list(data["allowed_commands"])
-        if "forbidden_paths" in data:
-            policy.forbidden_paths = list(data["forbidden_paths"])
-        if "protected_system_dirs" in data:
-            policy.protected_system_dirs = list(data["protected_system_dirs"])
+
+        def _list_field(key: str) -> Optional[list]:
+            """Extract a list field with type validation."""
+            if key in data:
+                if not isinstance(data[key], list):
+                    raise ValueError(
+                        f"Policy field '{key}' must be a list, "
+                        f"got {type(data[key]).__name__}"
+                    )
+                return list(data[key])
+            return None
+
+        for key, attr in (
+            ("allowed_domains", "allowed_domains"),
+            ("forbidden_paths", "forbidden_paths"),
+            ("protected_system_dirs", "protected_system_dirs"),
+            ("secret_patterns", "secret_patterns"),
+            ("credential_read_commands", "credential_read_commands"),
+        ):
+            val = _list_field(key)
+            if val is not None:
+                setattr(policy, attr, val)
+
         if "max_timeout_seconds" in data:
             policy.max_timeout_seconds = int(data["max_timeout_seconds"])
         if "max_output_size_mb" in data:
@@ -162,14 +175,10 @@ class SafetyPolicy:
             policy.max_sleep_seconds = int(data["max_sleep_seconds"])
         if "max_range_size" in data:
             policy.max_range_size = int(data["max_range_size"])
-        if "secret_patterns" in data:
-            policy.secret_patterns = list(data["secret_patterns"])
         if "redact_secrets_in_evidence" in data:
             policy.redact_secrets_in_evidence = bool(data["redact_secrets_in_evidence"])
         if "large_script_threshold" in data:
             policy.large_script_threshold = int(data["large_script_threshold"])
-        if "credential_read_commands" in data:
-            policy.credential_read_commands = list(data["credential_read_commands"])
 
         # Parse per-rule overrides
         rules_data = data.get("rules", {})
@@ -232,14 +241,33 @@ class SafetyPolicy:
         return False
 
     def is_path_forbidden(self, path: str) -> bool:
-        """Check whether *path* matches a forbidden path pattern."""
-        path_lower = path.lower()
+        """Check whether *path* matches a forbidden path pattern.
+
+        Uses path-boundary matching to avoid false positives: ``.env``
+        matches ``.env`` and ``/app/.env`` but **not** ``.environment``;
+        ``/etc/passwd`` matches ``/etc/passwd`` but **not**
+        ``/etc/passwders``.
+        """
+        path_lower = path.lower().strip().replace("\\", "/")
         for forbidden in self.forbidden_paths:
-            forbidden_lower = forbidden.lower()
-            # Expand ~ for home-directory checks
-            expanded = os.path.expanduser(forbidden_lower)
-            if expanded.lower() in path_lower or forbidden_lower in path_lower:
-                return True
+            for candidate in (
+                forbidden.lower(),
+                os.path.expanduser(forbidden.lower()),
+            ):
+                candidate = candidate.replace("\\", "/")
+                if not candidate:
+                    continue
+                # Exact match
+                if path_lower == candidate:
+                    return True
+                # candidate is a suffix path component
+                # (e.g. ".env" in "/app/.env")
+                if path_lower.endswith("/" + candidate):
+                    return True
+                # candidate is a prefix directory
+                # (e.g. "~/.ssh" in "~/.ssh/id_rsa")
+                if path_lower.startswith(candidate + "/"):
+                    return True
         return False
 
     def is_system_dir(self, path: str) -> bool:
@@ -258,7 +286,6 @@ class SafetyPolicy:
         """Serialise the policy back to a plain dict (for debugging)."""
         return {
             "allowed_domains": list(self.allowed_domains),
-            "allowed_commands": list(self.allowed_commands),
             "forbidden_paths": list(self.forbidden_paths),
             "protected_system_dirs": list(self.protected_system_dirs),
             "max_timeout_seconds": self.max_timeout_seconds,

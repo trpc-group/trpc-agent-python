@@ -342,10 +342,6 @@ allowed_domains:
   - localhost
   - evil.com
 
-allowed_commands:
-  - ls
-  - echo
-
 forbidden_paths:
   - "~/.ssh"
   - ".env"

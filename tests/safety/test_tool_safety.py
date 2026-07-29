@@ -37,6 +37,7 @@ from trpc_agent_sdk.tools.safety import AuditLogger
 from trpc_agent_sdk.tools.safety import Decision
 from trpc_agent_sdk.tools.safety import RiskLevel
 from trpc_agent_sdk.tools.safety import Rule
+from trpc_agent_sdk.tools.safety import RuleOverride
 from trpc_agent_sdk.tools.safety import RuleRegistry
 from trpc_agent_sdk.tools.safety import SafetyGuard
 from trpc_agent_sdk.tools.safety import SafetyPolicy
@@ -343,6 +344,19 @@ class TestInfiniteLoop:
     def test_bash_while_true_no_break(self, guard):
         """Bash while true without break must be flagged."""
         report = guard.scan("while true; do echo hi; done\n", tool_name="BashTool")
+        assert any("RESOURCE-ABUSE" in f.rule_id for f in report.findings)
+
+    def test_python_sleep_int_literal(self, guard):
+        """time.sleep(7200) with an int literal must be flagged."""
+        script = "import time\ntime.sleep(7200)\n"
+        report = guard.scan(script, tool_name="test")
+        assert any("RESOURCE-ABUSE" in f.rule_id for f in report.findings)
+        assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+
+    def test_python_sleep_string_literal(self, guard):
+        """time.sleep('7200') with a string literal must also be flagged."""
+        script = "import time\ntime.sleep('7200')\n"
+        report = guard.scan(script, tool_name="test")
         assert any("RESOURCE-ABUSE" in f.rule_id for f in report.findings)
 
 
@@ -940,8 +954,8 @@ class TestRuleRegistry:
         registry.clear()
         assert len(registry.all_rules()) == 0
 
-    def test_resolve_overrides_sets_override(self):
-        """_resolve_overrides should cache the policy override for the rule."""
+    def test_override_sets_enabled(self):
+        """Setting _override directly should control is_enabled."""
         class TestRule(Rule):
             rule_id = "TEST-OVERRIDE"
 
@@ -949,10 +963,13 @@ class TestRuleRegistry:
                 return []
 
         rule = TestRule()
-        policy = SafetyPolicy.default()
-        rule._resolve_overrides(policy)
+        # Production code sets _override directly (not via _resolve_overrides)
+        rule._override = RuleOverride()
         assert hasattr(rule, "_override")
         assert rule.is_enabled is True
+
+        rule._override = RuleOverride(enabled=False)
+        assert rule.is_enabled is False
 
     def test_is_enabled_without_override_returns_true(self):
         """is_enabled should default to True when _override is not set."""
@@ -997,20 +1014,24 @@ class TestPolicyEdgeCases:
     def test_from_dict_all_fields(self):
         """from_dict should handle every configurable field."""
         data = {
-            "allowed_commands": ["ls", "pwd"],
+            "allowed_domains": ["example.com"],
             "protected_system_dirs": ["/custom"],
             "max_output_size_mb": 100,
             "max_script_lines": 2000,
+            "max_sleep_seconds": 7200,
+            "max_range_size": 500000,
             "secret_patterns": [r"custom_secret_\d+"],
             "redact_secrets_in_evidence": False,
             "large_script_threshold": 500,
             "credential_read_commands": ["cat", "less"],
         }
         policy = SafetyPolicy.from_dict(data)
-        assert policy.allowed_commands == ["ls", "pwd"]
+        assert policy.allowed_domains == ["example.com"]
         assert policy.protected_system_dirs == ["/custom"]
         assert policy.max_output_size_mb == 100
         assert policy.max_script_lines == 2000
+        assert policy.max_sleep_seconds == 7200
+        assert policy.max_range_size == 500000
         assert policy.secret_patterns == [r"custom_secret_\d+"]
         assert policy.redact_secrets_in_evidence is False
         assert policy.large_script_threshold == 500
@@ -1055,7 +1076,6 @@ class TestPolicyEdgeCases:
         policy = SafetyPolicy.default()
         d = policy.to_dict()
         assert "allowed_domains" in d
-        assert "allowed_commands" in d
         assert "forbidden_paths" in d
         assert "protected_system_dirs" in d
         assert "max_timeout_seconds" in d
@@ -1066,6 +1086,33 @@ class TestPolicyEdgeCases:
         assert "large_script_threshold" in d
         assert "credential_read_commands" in d
         assert "rules" in d
+
+    def test_from_dict_rejects_string_for_list_field(self):
+        """from_dict should raise ValueError when a list field gets a string."""
+        data = {"allowed_domains": "localhost"}
+        with pytest.raises(ValueError, match="must be a list"):
+            SafetyPolicy.from_dict(data)
+
+    def test_from_dict_rejects_string_for_secret_patterns(self):
+        """from_dict should raise ValueError when secret_patterns is a string."""
+        data = {"secret_patterns": "sk-.*"}
+        with pytest.raises(ValueError, match="must be a list"):
+            SafetyPolicy.from_dict(data)
+
+    def test_is_path_forbidden_boundary_matching(self):
+        """is_path_forbidden should use path boundaries, not substring."""
+        policy = SafetyPolicy.default()
+        # True positives — exact and path-component matches
+        assert policy.is_path_forbidden(".env")
+        assert policy.is_path_forbidden("/app/.env")
+        assert policy.is_path_forbidden("~/.ssh/id_rsa")
+        assert policy.is_path_forbidden("/etc/shadow")
+        assert policy.is_path_forbidden("/etc/passwd")
+        # False positives that substring matching would catch
+        assert not policy.is_path_forbidden(".environment")
+        assert not policy.is_path_forbidden("/etc/passwders")
+        assert not policy.is_path_forbidden("my_credentials.txt")
+        assert not policy.is_path_forbidden("/tmp/safe_file.txt")
 
 
 # ---------------------------------------------------------------------------

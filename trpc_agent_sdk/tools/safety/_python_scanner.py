@@ -174,6 +174,28 @@ def _get_str_arg(node: ast.Call, index: int = 0) -> Optional[str]:
     return None
 
 
+def _get_int_arg(node: ast.Call, index: int = 0) -> Optional[int]:
+    """Extract an integer literal from the *index*-th positional arg.
+
+    Handles plain ``int`` constants (e.g. ``time.sleep(3600)``) and
+    digit-only string constants (e.g. ``time.sleep("3600")``).
+    ``bool`` values are excluded since ``bool`` is a subclass of ``int``.
+    """
+    if index < len(node.args):
+        arg = node.args[index]
+        if isinstance(arg, ast.Constant):
+            if isinstance(arg.value, int) and not isinstance(arg.value, bool):
+                return arg.value
+            if isinstance(arg.value, str) and arg.value.isdigit():
+                return int(arg.value)
+        # Handle negative literals:  time.sleep(-1)
+        if isinstance(arg, ast.UnaryOp) and isinstance(arg.op, ast.USub):
+            if isinstance(arg.operand, ast.Constant):
+                if isinstance(arg.operand.value, int) and not isinstance(arg.operand.value, bool):
+                    return -arg.operand.value
+    return None
+
+
 def _get_all_str_args(node: ast.Call) -> list[str]:
     """Return all string-literal positional args."""
     result = []
@@ -675,8 +697,8 @@ class PyResourceAbuseRule(Rule):
                     ))
                 # Large sleep values
                 if dotted == ("time", "sleep"):
-                    val = _get_str_arg(node, 0)
-                    if val and val.isdigit() and int(val) > ctx.policy.max_sleep_seconds:
+                    val = _get_int_arg(node, 0)
+                    if val is not None and val > ctx.policy.max_sleep_seconds:
                         seg = _get_source_segment(ctx.script, node)
                         findings.append(self._make_finding(
                             seg or f"time.sleep({val})",
@@ -688,20 +710,18 @@ class PyResourceAbuseRule(Rule):
                         ))
 
             # Huge range in a loop that writes data
-            if isinstance(node, ast.Call):
-                dotted = _dotted_call(node)
-                if dotted in (("range",), ) or (isinstance(node.func, ast.Name) and node.func.id == "range"):
-                    args = [a for a in node.args if isinstance(a, ast.Constant)]
-                    for a in args:
-                        if isinstance(a.value, int) and a.value > ctx.policy.max_range_size:
-                            seg = _get_source_segment(ctx.script, node)
-                            findings.append(self._make_finding(
-                                seg or f"range({a.value})",
-                                line_no,
-                                "Very large iteration count may exhaust memory/CPU.",
-                                risk_level=RiskLevel.LOW,
-                                decision=Decision.NEEDS_HUMAN_REVIEW,
-                            ))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
+                args = [a for a in node.args if isinstance(a, ast.Constant)]
+                for a in args:
+                    if isinstance(a.value, int) and a.value > ctx.policy.max_range_size:
+                        seg = _get_source_segment(ctx.script, node)
+                        findings.append(self._make_finding(
+                            seg or f"range({a.value})",
+                            line_no,
+                            "Very large iteration count may exhaust memory/CPU.",
+                            risk_level=RiskLevel.LOW,
+                            decision=Decision.NEEDS_HUMAN_REVIEW,
+                        ))
         return findings
 
 

@@ -93,6 +93,14 @@ class BashDangerousFileOpsRule(Rule):
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
         lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+
+        # Compile credential-read command pattern once per scan.
+        read_cmds_pattern = re.compile(
+            r"\b(" + "|".join(
+                re.escape(c) for c in ctx.policy.credential_read_commands
+            ) + r")\b"
+        )
+
         for idx, line in enumerate(lines, start=1):
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
@@ -111,18 +119,17 @@ class BashDangerousFileOpsRule(Rule):
                     ))
                     continue
 
-            # Accessing credential files — uses configurable command list from policy.
-            read_cmds_pattern = r"\b(" + "|".join(
-                re.escape(c) for c in ctx.policy.credential_read_commands
-            ) + r")\b"
-            for forbidden in ctx.policy.forbidden_paths:
-                expanded = forbidden.replace("~", "")
-                if expanded and expanded in stripped:
-                    if re.search(read_cmds_pattern, stripped):
+            # Accessing credential files — check if any path token is forbidden.
+            if read_cmds_pattern.search(stripped):
+                for token in stripped.split():
+                    # Handle --flag=value tokens
+                    if "=" in token:
+                        token = token.split("=", 1)[1]
+                    if ctx.policy.is_path_forbidden(token):
                         findings.append(self._make_finding(
                             stripped[:200],
                             idx,
-                            f"Access to credential file/path '{forbidden}' is forbidden.",
+                            "Access to credential/forbidden file is not allowed.",
                         ))
                         break
 
@@ -197,7 +204,6 @@ class BashProcessSystemRule(Rule):
     applies_to = (ScriptType.BASH,)
 
     _SUDO = re.compile(r"\b(sudo|su\s+-|su\s+root|pkexec|doas)\b", re.IGNORECASE)
-    _BACKGROUND = re.compile(r"(?<!&)&\s*$|(?<!&)&&\s*$")  # trailing & (not &&)
     _EVAL = re.compile(r"\b(eval|exec|source|\.)\s+", re.IGNORECASE)
     _PIPE_TO_SH = re.compile(r"\|\s*(sh|bash|zsh|python\d*|perl|ruby)\b", re.IGNORECASE)
 
