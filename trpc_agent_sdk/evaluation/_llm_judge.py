@@ -217,6 +217,15 @@ def _format_per_model_reason(per_model: list[ScoreResult], threshold: float) -> 
     return "\n".join(lines)
 
 
+def _single_model_rubric_scores(
+    per_model: list[ScoreResult],
+) -> list[RubricScore]:
+    """Preserve rubric evidence when cross-model aggregation is a no-op."""
+    if len(per_model) != 1:
+        return []
+    return list(per_model[0].rubric_scores or [])
+
+
 class AllPassModelsAggregator:
     """All models must pass (AND); returned score = min(scores)."""
 
@@ -233,7 +242,11 @@ class AllPassModelsAggregator:
         passed_all = all(s >= threshold for s in scores)
         base_reason = _format_per_model_reason(per_model, threshold)
         reason = f"{base_reason}\naggregator=all_pass -> {'PASSED' if passed_all else 'FAILED'}"
-        return ScoreResult(score=overall, reason=reason)
+        return ScoreResult(
+            score=overall,
+            reason=reason,
+            rubric_scores=_single_model_rubric_scores(per_model),
+        )
 
 
 class AnyPassModelsAggregator:
@@ -252,7 +265,11 @@ class AnyPassModelsAggregator:
         passed_any = any(s >= threshold for s in scores)
         base_reason = _format_per_model_reason(per_model, threshold)
         reason = f"{base_reason}\naggregator=any_pass -> {'PASSED' if passed_any else 'FAILED'}"
-        return ScoreResult(score=overall, reason=reason)
+        return ScoreResult(
+            score=overall,
+            reason=reason,
+            rubric_scores=_single_model_rubric_scores(per_model),
+        )
 
 
 class MajorityPassModelsAggregator:
@@ -272,7 +289,11 @@ class MajorityPassModelsAggregator:
         passed_majority = passed_count * 2 > total
         reason = (_format_per_model_reason(per_model, threshold) + f"\naggregator=majority_pass -> "
                   f"{'PASSED' if passed_majority else 'FAILED'} ({passed_count}/{total})")
-        return ScoreResult(score=overall, reason=reason)
+        return ScoreResult(
+            score=overall,
+            reason=reason,
+            rubric_scores=_single_model_rubric_scores(per_model),
+        )
 
 
 class AverageModelsAggregator:
@@ -289,7 +310,11 @@ class AverageModelsAggregator:
         scores = [s.score or 0.0 for s in per_model]
         overall = sum(scores) / len(scores)
         reason = (_format_per_model_reason(per_model, threshold) + f"\naggregator=avg -> mean={overall:.4f}")
-        return ScoreResult(score=overall, reason=reason)
+        return ScoreResult(
+            score=overall,
+            reason=reason,
+            rubric_scores=_single_model_rubric_scores(per_model),
+        )
 
 
 class WeightedAverageModelsAggregator:
@@ -312,7 +337,11 @@ class WeightedAverageModelsAggregator:
             overall = sum(w * (s.score or 0.0) for w, s in zip(weights, per_model)) / total_w
         base_reason = _format_per_model_reason(per_model, threshold)
         reason = f"{base_reason}\naggregator=weighted_avg -> weighted_mean={overall:.4f} (total_w={total_w})"
-        return ScoreResult(score=overall, reason=reason)
+        return ScoreResult(
+            score=overall,
+            reason=reason,
+            rubric_scores=_single_model_rubric_scores(per_model),
+        )
 
 
 class WeightedMajorityModelsAggregator:
@@ -339,7 +368,11 @@ class WeightedMajorityModelsAggregator:
         reason = (_format_per_model_reason(per_model, threshold) + f"\naggregator=weighted_majority -> "
                   f"{'PASSED' if passed_majority else 'FAILED'} "
                   f"(passed_w={passed_w}, total_w={total_w})")
-        return ScoreResult(score=overall, reason=reason)
+        return ScoreResult(
+            score=overall,
+            reason=reason,
+            rubric_scores=_single_model_rubric_scores(per_model),
+        )
 
 
 _BUILTIN_MODELS_AGGREGATORS: dict[str, type] = {

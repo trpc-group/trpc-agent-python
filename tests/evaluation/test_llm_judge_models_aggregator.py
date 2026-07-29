@@ -10,6 +10,7 @@ import pytest
 import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation import ScoreResult
+from trpc_agent_sdk.evaluation import RubricScore
 from trpc_agent_sdk.evaluation._llm_judge import AllPassModelsAggregator
 from trpc_agent_sdk.evaluation._llm_judge import AnyPassModelsAggregator
 from trpc_agent_sdk.evaluation._llm_judge import AverageModelsAggregator
@@ -46,12 +47,20 @@ class TestAllPassModelsAggregator:
 
     def test_single_model_returns_its_score(self):
         agg = AllPassModelsAggregator()
+        rubric_scores = [
+            RubricScore(
+                id="completeness",
+                reason="covered",
+                score=1.0,
+            )
+        ]
         out = agg.aggregate_models(
-            [ScoreResult(score=0.7)],
+            [ScoreResult(score=0.7, rubric_scores=rubric_scores)],
             threshold=0.5,
             weights=[1.0],
         )
         assert out.score == pytest.approx(0.7)
+        assert out.rubric_scores == rubric_scores
 
 
 class TestAnyPassModelsAggregator:

@@ -75,6 +75,25 @@ DEFAULT_EVAL_APP_NAME = "test_app"
 _RESULT_HANDLER = _utils.EvalResultHandler()
 
 
+def _split_eval_set_selector(eval_set_file: str) -> tuple[str, str | None]:
+    """Split an optional ``.json:case_id`` suffix from an eval-set path.
+
+    Looking for any colon breaks Windows absolute paths such as
+    ``C:\\path\\evalset.json`` by treating the drive separator as a case
+    selector. Restricting the separator to the documented ``.json:`` form
+    keeps drive-letter paths intact.
+    """
+    marker_index = eval_set_file.lower().rfind(".json:")
+    if marker_index < 0:
+        return eval_set_file, None
+
+    path_end = marker_index + len(".json")
+    selected_case_id = eval_set_file[path_end + 1 :]
+    if not selected_case_id:
+        return eval_set_file, None
+    return eval_set_file[:path_end], selected_case_id
+
+
 class _EvaluationCasesFailed(AssertionError):
     """Signal raised by ``_EvalExecuter._run`` when one or more eval cases fail.
 
@@ -661,13 +680,9 @@ class AgentEvaluator:
             ValueError: If file format is invalid or eval case not found
         """
         # Check if file_path contains a case selector (ADK style: "file.json:case_id")
-        selected_case_id = None
-        actual_file_path = eval_set_file
-
-        if ":" in eval_set_file:
-            parts = eval_set_file.split(":", 1)
-            actual_file_path = parts[0]
-            selected_case_id = parts[1]
+        actual_file_path, selected_case_id = _split_eval_set_selector(
+            eval_set_file
+        )
 
         if not os.path.exists(actual_file_path):
             raise FileNotFoundError(f"Eval set file not found: {actual_file_path}")

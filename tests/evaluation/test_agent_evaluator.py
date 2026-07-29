@@ -16,6 +16,29 @@ from trpc_agent_sdk.evaluation import EvalSetAggregateResult
 from trpc_agent_sdk.evaluation import EvaluateResult
 from trpc_agent_sdk.evaluation import AgentEvaluator
 from trpc_agent_sdk.evaluation import PassNC
+from trpc_agent_sdk.evaluation._agent_evaluator import _split_eval_set_selector
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (
+            r"D:\work\trace_train.evalset.json",
+            (r"D:\work\trace_train.evalset.json", None),
+        ),
+        (
+            r"D:\work\trace_train.evalset.json:case_001",
+            (r"D:\work\trace_train.evalset.json", "case_001"),
+        ),
+        (
+            "/tmp/trace_train.evalset.json:case_001",
+            ("/tmp/trace_train.evalset.json", "case_001"),
+        ),
+    ],
+)
+def test_split_eval_set_selector(value, expected):
+    """Windows drive separators must not be parsed as case selectors."""
+    assert _split_eval_set_selector(value) == expected
 
 
 class TestPassNC:
