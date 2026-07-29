@@ -19,7 +19,26 @@ import yaml
 
 @dataclass
 class ToolSafetyPolicy:
-    """Configurable policy used by the script safety scanner."""
+    """Configurable policy used by the script safety scanner.
+
+    The policy is loaded by application code before execution and is not
+    controlled by the LLM or user prompt. There is intentionally no
+    prompt-level "bypass" option: changing whether a risky command is allowed
+    requires changing the policy object or registering an explicit custom rule
+    in trusted host code.
+
+    Examples:
+
+        policy = ToolSafetyPolicy.from_file("tool_safety_policy.yaml", strict=True)
+
+        policy = ToolSafetyPolicy.from_dict({
+            "allowed_domains": ["api.example.com"],
+            "allowed_commands": ["cat", "echo", "ls", "python3"],
+            "denied_paths": ["~/.ssh", ".env", "*.pem"],
+            "max_timeout_seconds": 60,
+            "max_output_bytes": 262144,
+        })
+    """
 
     allowed_domains: list[str]
     allowed_commands: list[str]

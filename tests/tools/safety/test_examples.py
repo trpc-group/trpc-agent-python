@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import yaml
@@ -47,3 +48,22 @@ def test_public_examples_scan_to_expected_decisions():
         assert set(sample.get("required_rule_ids", [])) <= rule_ids, name
         assert "decision" in report.to_dict()
         assert "risk_level" in report.to_dict()
+
+
+def test_custom_policy_example_is_runnable():
+    example_path = EXAMPLE_DIR / "custom_policy_example.py"
+    spec = importlib.util.spec_from_file_location("custom_policy_example", example_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    scanner = module.build_scanner_from_dict()
+    reports = module.scan_demo_cases(scanner)
+
+    assert reports["allowed_domain"]["decision"] == "allow"
+    assert reports["blocked_domain"]["decision"] == "deny"
+    assert reports["custom_rule"]["decision"] == "deny"
+    assert reports["prompt_bypass_attempt"]["decision"] == "deny"
+    assert any(
+        finding["rule_id"] == "CUSTOM_INTERNAL_ADMIN_COMMAND" for finding in reports["custom_rule"]["findings"]
+    )
