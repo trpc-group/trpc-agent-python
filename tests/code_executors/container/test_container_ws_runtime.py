@@ -1063,6 +1063,32 @@ class TestPutDirectory:
 
 class TestStageHostInput:
 
+    @pytest.mark.parametrize(
+        ("mode", "operation"),
+        (("copy", "cp -a"), ("link", "ln -sfn")),
+    )
+    async def test_normalizes_command_destination(self, mode, operation):
+        """验证 host 输入命令会在执行边界归一化容器目标路径。"""
+        ws = _make_ws()
+        cc = _mock_container_client()
+        cfg = RuntimeConfig(
+            inputs_host_base="/host/inputs",
+            inputs_container_base="/container/inputs",
+        )
+        fs = ContainerWorkspaceFS(cc, cfg)
+
+        await fs._stage_host_input(
+            ws,
+            "/host/inputs/data",
+            r"\tmp\run\workspace\work\target",
+            mode,
+            "work/target",
+        )
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert "\\" not in command
+        assert f"{operation} '/container/inputs/data' '/tmp/run/workspace/work/target'" in command
+
     async def test_with_inputs_host_base_copy(self):
         ws = _make_ws()
         cc = _mock_container_client()
@@ -1104,6 +1130,25 @@ class TestStageHostInput:
 
 
 class TestStageWorkspaceInput:
+
+    @pytest.mark.parametrize(
+        ("mode", "operation"),
+        (("copy", "cp -a"), ("link", "ln -sfn")),
+    )
+    async def test_normalizes_command_paths(self, mode, operation):
+        """验证 workspace 输入命令会在执行边界归一化源路径和目标路径。"""
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+
+        await fs._stage_workspace_input(
+            r"\tmp\run\workspace\source",
+            r"\tmp\run\workspace\work\target",
+            mode,
+        )
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert "\\" not in command
+        assert f"{operation} '/tmp/run/workspace/source' '/tmp/run/workspace/work/target'" in command
 
     async def test_copy_mode(self):
         cc = _mock_container_client()

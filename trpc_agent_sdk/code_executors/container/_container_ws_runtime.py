@@ -561,20 +561,21 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             raise RuntimeError(f"Failed to copy bytes to {dest}")
 
     async def _stage_host_input(self, ws: WorkspaceInfo, host: str, dst: str, mode: str, dst_rel: str) -> None:
-        """Stage input from host path."""
+        """将宿主输入暂存到容器，并在命令边界归一化目标路径。"""
+        container_dst = _container_path(dst)
         if self.config.inputs_host_base:
             rel_path = get_rel_path(self.config.inputs_host_base, host)
             if rel_path:
                 container_src = _container_path(self.config.inputs_container_base, rel_path)
 
                 if mode == "link":
-                    cmd_str = (f"parent='{_container_parent(dst)}'; "
+                    cmd_str = (f"parent='{_container_parent(container_dst)}'; "
                                f"[ -e \"$parent\" ] || mkdir -p \"$parent\"; "
-                               f"ln -sfn '{container_src}' '{dst}'")
+                               f"ln -sfn '{container_src}' '{container_dst}'")
                 else:
-                    cmd_str = (f"parent='{_container_parent(dst)}'; "
+                    cmd_str = (f"parent='{_container_parent(container_dst)}'; "
                                f"[ -e \"$parent\" ] || mkdir -p \"$parent\"; "
-                               f"cp -a '{container_src}' '{dst}'")
+                               f"cp -a '{container_src}' '{container_dst}'")
 
                 cmd = ["/bin/bash", "-lc", cmd_str]
                 result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
@@ -585,14 +586,16 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         await self._put_directory(ws, host, _container_parent(dst_rel))
 
     async def _stage_workspace_input(self, src: str, dst: str, mode: str) -> None:
-        """Stage input from workspace path."""
-        parent = PurePosixPath(_container_parent(dst))
+        """暂存 workspace 输入，并在命令边界归一化源路径和目标路径。"""
+        container_src = _container_path(src)
+        container_dst = _container_path(dst)
+        parent = PurePosixPath(_container_parent(container_dst))
         if mode == "link":
             cmd_str = (f"[ -e '{parent}' ] || mkdir -p '{parent}'; "
-                       f"ln -sfn '{src}' '{dst}'")
+                       f"ln -sfn '{container_src}' '{container_dst}'")
         else:
             cmd_str = (f"[ -e '{parent}' ] || mkdir -p '{parent}'; "
-                       f"cp -a '{src}' '{dst}'")
+                       f"cp -a '{container_src}' '{container_dst}'")
 
         cmd = ["/bin/bash", "-lc", cmd_str]
         # await _exec_cmd(self.container, cmd, self.config.command_args)
