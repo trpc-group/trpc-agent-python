@@ -376,6 +376,8 @@ class BaseProgramRunner(ABC):
         Provider values never override keys already present in ``spec.env``.
         The input ``spec`` is not mutated.
         """
+        if spec._provider_env_applied:
+            return spec
         provider = getattr(self, "_run_env_provider", None)
         if not getattr(self, "_enable_provider_env", False) or provider is None:
             return spec
@@ -383,14 +385,14 @@ class BaseProgramRunner(ABC):
             extra = provider(ctx) or {}
         except Exception as ex:  # pylint: disable=broad-except
             logger.warning("run env provider failed: %s", ex)
-            return spec
-        if not extra:
-            return spec
+            extra = {}
         merged = dict(spec.env or {})
         for key, value in extra.items():
             if key not in merged:
                 merged[key] = value
-        return spec.model_copy(update={"env": merged}, deep=True)
+        prepared = spec.model_copy(update={"env": merged}, deep=True)
+        prepared._provider_env_applied = True
+        return prepared
 
     @abstractmethod
     async def run_program(

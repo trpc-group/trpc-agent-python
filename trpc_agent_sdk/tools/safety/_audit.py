@@ -18,6 +18,9 @@ from trpc_agent_sdk.log import logger
 from ._models import SafetyAuditEvent
 from ._models import SafetyReport
 
+_JSONL_LOCKS: dict[Path, Lock] = {}
+_JSONL_LOCKS_GUARD = Lock()
+
 
 class AuditSink(Protocol):
     """Destination for one sanitized safety audit event."""
@@ -42,7 +45,9 @@ class JsonlAuditSink:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        self._lock = Lock()
+        lock_key = self.path.resolve(strict=False)
+        with _JSONL_LOCKS_GUARD:
+            self._lock = _JSONL_LOCKS.setdefault(lock_key, Lock())
 
     def emit(self, event: SafetyAuditEvent) -> None:
         line = event.model_dump_json() + "\n"
@@ -65,13 +70,16 @@ def record_safety_telemetry(report: SafetyReport) -> None:
         span = trace.get_current_span()
         if not span.is_recording():
             return
-        rule_ids = list(dict.fromkeys(finding.rule_id for finding in report.findings))
+        rule_ids = list(dict.fromkeys(finding.rule_id for finding in report.findings))[:32]
         span.set_attribute("tool.safety.decision", report.decision.value)
         span.set_attribute("tool.safety.risk_level", report.risk_level.value)
-        span.set_attribute("tool.safety.rule_id", rule_ids[0] if rule_ids else "")
+        span.set_attribute("tool.safety.rule_id", report.rule_id)
         span.set_attribute("tool.safety.rule_ids", rule_ids)
         span.set_attribute("tool.safety.blocked", report.decision.value != "allow")
         span.set_attribute("tool.safety.duration_ms", report.duration_ms)
         span.set_attribute("tool.safety.sanitized", report.sanitized)
+        span.set_attribute("tool.safety.analysis_complete", report.analysis_complete)
+        span.set_attribute("tool.safety.analysis_status", report.analysis_status.value)
+        span.set_attribute("tool.safety.blocks_scanned", report.blocks_scanned)
     except Exception as ex:  # pylint: disable=broad-except
-        logger.debug("failed to record tool safety telemetry: %s", ex)
+        logger.debug("failed to record tool safety telemetry: %s", type(ex).__name__)

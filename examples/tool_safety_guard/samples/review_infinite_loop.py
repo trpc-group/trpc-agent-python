@@ -1,2 +1,2 @@
-while True:
+while 1:
     pass

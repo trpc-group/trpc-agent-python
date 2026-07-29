@@ -8,12 +8,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
+from typing import Protocol
 
 from ._models import RiskCategory
 from ._models import RiskLevel
 from ._models import SafetyDecision
 from ._models import SafetyFinding
+from ._models import SafetyScanRequest
 from ._policy import SafetyPolicy
+
+NON_RELAXABLE_REVIEW_RULE_IDS = {
+    "NET-002",
+    "PARSE-001",
+    "POLICY-INPUT-001",
+    "PROC-003",
+    "PROC-UNKNOWN-001",
+}
 
 
 @dataclass(frozen=True)
@@ -26,6 +37,19 @@ class RuleSpec:
     action: SafetyDecision
     message: str
     recommendation: str
+
+
+class SafetyRule(Protocol):
+    """Extension point for project-specific rules without scanner edits."""
+
+    rule_id: str
+
+    def analyze(
+        self,
+        request: SafetyScanRequest,
+        policy: SafetyPolicy,
+    ) -> Iterable[SafetyFinding]:
+        """Return findings for one request without executing its content."""
 
 
 RULE_SPECS: dict[str, RuleSpec] = {
@@ -191,6 +215,24 @@ RULE_SPECS: dict[str, RuleSpec] = {
         "The input cannot be parsed reliably by the lightweight analyzer.",
         "Simplify the input or require human review and sandboxed execution.",
     ),
+    "POLICY-INPUT-001":
+    RuleSpec(
+        "POLICY-INPUT-001",
+        RiskCategory.POLICY,
+        RiskLevel.HIGH,
+        SafetyDecision.NEEDS_HUMAN_REVIEW,
+        "The execution request does not match the configured safety input contract.",
+        "Provide bounded, correctly typed tool arguments and retry the safety check.",
+    ),
+    "PROC-UNKNOWN-001":
+    RuleSpec(
+        "PROC-UNKNOWN-001",
+        RiskCategory.PROCESS,
+        RiskLevel.HIGH,
+        SafetyDecision.NEEDS_HUMAN_REVIEW,
+        "The analyzer found a possible external side effect that it cannot model safely.",
+        "Use a supported explicit operation or require sandboxed human review.",
+    ),
 }
 
 
@@ -201,14 +243,20 @@ def make_finding(
     *,
     line_number: int | None = None,
     column: int | None = None,
+    block_id: str = "block-0",
 ) -> SafetyFinding | None:
     """Create a finding after applying rule enablement and action overrides."""
 
     spec = RULE_SPECS[rule_id]
     override = policy.rule_overrides.get(rule_id)
-    if override is not None and not override.enabled:
+    non_relaxable = rule_id in NON_RELAXABLE_REVIEW_RULE_IDS
+    if override is not None and not override.enabled and not non_relaxable:
         return None
-    action = override.action if override is not None and override.action is not None else spec.action
+    if non_relaxable:
+        action = (SafetyDecision.DENY if override is not None and override.action == SafetyDecision.DENY else
+                  SafetyDecision.NEEDS_HUMAN_REVIEW)
+    else:
+        action = override.action if override is not None and override.action is not None else spec.action
     return SafetyFinding(
         rule_id=rule_id,
         category=spec.category,
@@ -216,6 +264,7 @@ def make_finding(
         action=action,
         message=spec.message,
         evidence=evidence,
+        block_id=block_id,
         line_number=line_number,
         column=column,
         recommendation=spec.recommendation,

@@ -98,6 +98,7 @@ from .mcp_tool import StdioConnectionParams
 from .mcp_tool import StreamableHTTPConnectionParams
 from .mcp_tool import patch_mcp_cancel_scope_exit_issue
 from .safety import FieldOutputLimiter
+from .safety import BashToolBlockResponseAdapter
 from .safety import GuardedCodeExecutor
 from .safety import GuardedProgramRunner
 from .safety import JsonlAuditSink
@@ -106,6 +107,7 @@ from .safety import SafetyGuard
 from .safety import SafetyPolicy
 from .safety import SafetyScanRequest
 from .safety import SafetyScanner
+from .safety import SafetyRule
 from .safety import ScriptLanguage
 from .safety import ToolSafetyFilter
 from .utils import build_function_declaration
@@ -200,6 +202,7 @@ __all__ = [
     "StreamableHTTPConnectionParams",
     "patch_mcp_cancel_scope_exit_issue",
     "FieldOutputLimiter",
+    "BashToolBlockResponseAdapter",
     "GuardedCodeExecutor",
     "GuardedProgramRunner",
     "JsonlAuditSink",
@@ -208,6 +211,7 @@ __all__ = [
     "SafetyPolicy",
     "SafetyScanRequest",
     "SafetyScanner",
+    "SafetyRule",
     "ScriptLanguage",
     "ToolSafetyFilter",
     "build_function_declaration",

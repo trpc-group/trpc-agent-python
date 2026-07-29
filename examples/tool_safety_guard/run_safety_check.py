@@ -62,6 +62,8 @@ def _manifest_entries(path: Path) -> list[dict[str, Any]]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
         raise ValueError("sample manifest must contain a YAML list")
+    if not raw:
+        raise ValueError("sample manifest cannot be empty")
     return raw
 
 
@@ -129,4 +131,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception as ex:  # pylint: disable=broad-except
+        print(f"tool safety scan failed: {type(ex).__name__}", file=sys.stderr)
+        raise SystemExit(1) from None

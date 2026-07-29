@@ -1,3 +1,4 @@
 from pathlib import Path
 
-private_key = Path("~/.ssh/id_rsa").read_text()
+key_path = "~/.ssh/id_rsa"
+private_key = Path(key_path).read_text()

@@ -411,7 +411,7 @@ Recommended first:
 - [examples/mcp_tools](./examples/mcp_tools/README.md) - `MCPToolset` (`stdio` / `sse` / `streamable-http`)
 - [examples/langchain_tools](./examples/langchain_tools/README.md) - LangChain tools integration
 - [examples/agent_tools](./examples/agent_tools/README.md) - Agent as a Tool
-- [examples/tool_safety_guard](./examples/tool_safety_guard/README.md) - Pre-execution safety checks for Tool, Skill, and CodeExecutor
+- [examples/tool_safety_guard](./examples/tool_safety_guard/README.en.md) - Pre-execution safety checks for Tool, Skill, MCP Tool, and CodeExecutor
 
 Related docs: [tool.md](./docs/mkdocs/en/tool.md)
 

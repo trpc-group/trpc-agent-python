@@ -51,7 +51,7 @@ def test_jsonl_sink_writes_one_parseable_line(tmp_path):
     assert len(lines) == 1
     data = json.loads(lines[0])
     assert data["decision"] == "allow"
-    assert data["rule_id"] is None
+    assert data["rule_id"] == "ALLOW-000"
 
 
 def test_default_logger_sink_emits_structured_event():

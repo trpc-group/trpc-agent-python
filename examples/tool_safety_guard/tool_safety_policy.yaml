@@ -1,4 +1,7 @@
-version: "1"
+api_version: "trpc-agent.io/tool-safety/v1"
+kind: "ToolSafetyPolicy"
+version: "2"
+policy_id: "tool-safety-example"
 
 network:
   allowed_domains:
@@ -12,12 +15,14 @@ commands:
     - "ls"
     - "pwd"
     - "cat"
+    - "curl"
     - "echo"
     - "head"
     - "tail"
     - "wc"
     - "grep"
     - "find"
+    - "rm"
     - "sort"
     - "uniq"
 
@@ -27,7 +32,16 @@ paths:
     - "~/.aws"
     - "~/.kube"
     - "~/.gcloud"
+    - "~/.netrc"
+    - "~/.npmrc"
+    - "~/.pypirc"
+    - "~/.curlrc"
+    - "~/.wgetrc"
+    - "~/.git-credentials"
+    - "~/.docker/config.json"
     - ".env"
+    - "credentials.json"
+    - "secrets.json"
     - "/etc/shadow"
     - "/etc/sudoers"
   workspace_only_delete: true

@@ -10,13 +10,17 @@ from ._audit import JsonlAuditSink
 from ._audit import LoggerAuditSink
 from ._audit import NullAuditSink
 from ._filter import FieldOutputLimiter
+from ._filter import BashToolBlockResponseAdapter
+from ._filter import BlockResponseAdapter
 from ._filter import OutputLimiter
+from ._filter import ReportBlockResponseAdapter
 from ._filter import ToolSafetyFilter
 from ._guard import GuardedCodeExecutor
 from ._guard import GuardedProgramRunner
 from ._guard import SafetyGuard
 from ._models import RiskCategory
 from ._models import RiskLevel
+from ._models import AnalysisStatus
 from ._models import SafetyAuditEvent
 from ._models import SafetyDecision
 from ._models import SafetyFinding
@@ -30,6 +34,7 @@ from ._policy import PathsPolicy
 from ._policy import RuleOverride
 from ._policy import SafetyPolicy
 from ._scanner import SafetyScanner
+from ._rules import SafetyRule
 
 __all__ = [
     "AuditSink",
@@ -37,13 +42,17 @@ __all__ = [
     "LoggerAuditSink",
     "NullAuditSink",
     "FieldOutputLimiter",
+    "BashToolBlockResponseAdapter",
+    "BlockResponseAdapter",
     "OutputLimiter",
+    "ReportBlockResponseAdapter",
     "ToolSafetyFilter",
     "GuardedCodeExecutor",
     "GuardedProgramRunner",
     "SafetyGuard",
     "RiskCategory",
     "RiskLevel",
+    "AnalysisStatus",
     "SafetyAuditEvent",
     "SafetyDecision",
     "SafetyFinding",
@@ -57,4 +66,5 @@ __all__ = [
     "RuleOverride",
     "SafetyPolicy",
     "SafetyScanner",
+    "SafetyRule",
 ]
