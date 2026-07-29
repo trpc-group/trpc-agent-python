@@ -1,0 +1,14 @@
+diff --git a/assets/logo.png b/assets/logo.png
+index 3f2a1bc..9d4e7fa 100644
+Binary files a/assets/logo.png and b/assets/logo.png differ
+diff --git a/docs/usage.md b/docs/usage.md
+index 8f086ab..07c4c60 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -2,4 +2,6 @@
+ 
+ The exporter reads board layouts and writes share images.
+ 
++Logos are embedded as PNG assets up to 512x512 pixels.
++
+ Run it with the board id as the only argument.

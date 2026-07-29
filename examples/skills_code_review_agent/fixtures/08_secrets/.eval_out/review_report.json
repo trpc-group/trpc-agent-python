@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "task": {
+    "id": "612dab832a7d",
+    "status": "succeeded",
+    "input_type": "fixture",
+    "input_ref": "08_secrets",
+    "mode": "diff_only",
+    "runtime": "local",
+    "dry_run": true,
+    "diff_digest": "0abf0b1d6bf86cf9",
+    "created_at": "2026-07-27T00:21:39.895079",
+    "error": ""
+  },
+  "summary": {
+    "finding_count": 4,
+    "warning_count": 0,
+    "needs_human_review_count": 0,
+    "suppressed_duplicates": 0,
+    "severity_stats": {
+      "critical": 3,
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "notes": []
+  },
+  "findings": [
+    {
+      "rule_id": "SECRET001",
+      "category": "secrets",
+      "severity": "critical",
+      "confidence": "high",
+      "source": "static",
+      "file": "config.py",
+      "line": 3,
+      "title": "Hardcoded AWS access key ID",
+      "evidence": "AWS_ACCESS_KEY_ID = \"AKIA…<redacted>\"",
+      "recommendation": "Deactivate and rotate the key in IAM immediately, audit CloudTrail for misuse, then read it from the environment or a secret manager.",
+      "fix": {
+        "before": "AWS_ACCESS_KEY_ID = \"AKIA…<redacted>\"",
+        "after": "AWS_ACCESS_KEY_ID = os.environ[\"AWS_ACCESS_KEY_ID\"]"
+      },
+      "status": "reported"
+    },
+    {
+      "rule_id": "SECRET003",
+      "category": "secrets",
+      "severity": "critical",
+      "confidence": "high",
+      "source": "static",
+      "file": "config.py",
+      "line": 4,
+      "title": "Hardcoded GitHub token",
+      "evidence": "GITHUB_TOKEN = \"ghp_…<redacted>\"",
+      "recommendation": "Revoke the token in GitHub settings, rotate dependent automation, and inject it via CI/environment secrets.",
+      "fix": {
+        "before": "GITHUB_TOKEN = \"ghp_…<redacted>\"",
+        "after": "GITHUB_TOKEN = os.environ[\"GITHUB_TOKEN\"]"
+      },
+      "status": "reported"
+    },
+    {
+      "rule_id": "SECRET011",
+      "category": "secrets",
+      "severity": "critical",
+      "confidence": "high",
+      "source": "static",
+      "file": "config.py",
+      "line": 5,
+      "title": "Credentials embedded in URL",
+      "evidence": "DATABASE_URL = \"postgresql://svc_admin:***@db.internal:5432/orders\"",
+      "recommendation": "Strip the password out of the URL (it leaks into logs, shell history and error messages), rotate it, and splice it in from the environment at runtime.",
+      "fix": {
+        "before": "DATABASE_URL = \"postgresql://svc_admin:***@db.internal:5432/orders\"",
+        "after": "DATABASE_URL = \"postgresql://svc_admin:${DB_PASSWORD}@db.internal:5432/orders\""
+      },
+      "status": "reported"
+    },
+    {
+      "rule_id": "SECRET012",
+      "category": "secrets",
+      "severity": "high",
+      "confidence": "medium",
+      "source": "static",
+      "file": "settings.yaml",
+      "line": 3,
+      "title": "Sensitive variable assigned hardcoded literal",
+      "evidence": "api_key: \"hC9w…<redacted>\" [regex]",
+      "recommendation": "Move the value out of source control: read it from the environment or a secret manager and rotate the exposed value.",
+      "fix": {
+        "before": "api_key: \"hC9w…<redacted>\"",
+        "after": "api_key: ${API_KEY}"
+      },
+      "status": "reported"
+    }
+  ],
+  "warnings": [],
+  "needs_human_review": [],
+  "filter_summary": {
+    "total_decisions": 2,
+    "blocked": 0,
+    "events": [
+      {
+        "tool_name": "skill_load",
+        "decision": "allow",
+        "rule": "skill_allowlist",
+        "reason": "ok",
+        "args_digest": "{\"skill_name\": \"code-review\", \"include_all_docs\": true} [sha256:73ec6ae324aa453f, 55 chars]"
+      },
+      {
+        "tool_name": "skill_run",
+        "decision": "allow",
+        "rule": "policy",
+        "reason": "ok",
+        "args_digest": "{\"skill\": \"code-review\", \"command\": \"python3 scripts/run_checks.py\", \"inputs\": [{\"src\": \"host:///tmp/cr-input-612dab832a7d-vedy8z8m/review_input.json\", \"dst\": \"\"}], \"timeout\": 60} [sha256:096d1b1321815a7c, 179 chars]"
+      }
+    ]
+  },
+  "sandbox_summary": [
+    {
+      "tool": "skill_run",
+      "command": "python3 scripts/run_checks.py",
+      "runtime": "local",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 97,
+      "timed_out": false,
+      "truncated": false,
+      "stdout_digest": "run_checks: 4 finding(s) from 3 file(s), 6/6 checks ok -> findings.json\\n [sha256:78d044c555b55535, 72 chars]",
+      "stderr_digest": ""
+    }
+  ],
+  "metrics": {
+    "total_ms": 1158,
+    "sandbox_ms": 556,
+    "tool_calls": 2,
+    "filter_blocks": 0,
+    "finding_count": 4,
+    "severity_dist": {
+      "critical": 3,
+      "high": 1
+    },
+    "error_dist": {},
+    "token_usage": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0,
+      "llm_calls": 3,
+      "source": "event_stream(usage_metadata); zeros in dry-run"
+    },
+    "phase_timings": {
+      "persist_input": 21,
+      "sandbox_setup": 62,
+      "agent_loop": 1049,
+      "collect_findings": 2,
+      "persist_findings": 23,
+      "render_report": 0,
+      "source_note": "tool_calls/sandbox_ms/errors/tokens from event stream; filter_blocks/findings/phases self-instrumented"
+    }
+  },
+  "fix_suggestions": [
+    {
+      "file": "config.py",
+      "line": 3,
+      "rule_id": "SECRET001",
+      "before": "AWS_ACCESS_KEY_ID = \"AKIA…<redacted>\"",
+      "after": "AWS_ACCESS_KEY_ID = os.environ[\"AWS_ACCESS_KEY_ID\"]"
+    },
+    {
+      "file": "config.py",
+      "line": 4,
+      "rule_id": "SECRET003",
+      "before": "GITHUB_TOKEN = \"ghp_…<redacted>\"",
+      "after": "GITHUB_TOKEN = os.environ[\"GITHUB_TOKEN\"]"
+    },
+    {
+      "file": "config.py",
+      "line": 5,
+      "rule_id": "SECRET011",
+      "before": "DATABASE_URL = \"postgresql://svc_admin:***@db.internal:5432/orders\"",
+      "after": "DATABASE_URL = \"postgresql://svc_admin:${DB_PASSWORD}@db.internal:5432/orders\""
+    },
+    {
+      "file": "settings.yaml",
+      "line": 3,
+      "rule_id": "SECRET012",
+      "before": "api_key: \"hC9w…<redacted>\"",
+      "after": "api_key: ${API_KEY}"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "description": "Clean one-hunk rename; the harness injects an 8s sleep under a 2s sandbox timeout and must degrade to a partial task instead of crashing.",
+  "expect_clean": true,
+  "expected_findings": [],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "file": "utils/slug.py"
+    }
+  ],
+  "meta": {
+    "run_timeout": 2,
+    "inject_sleep": 8,
+    "expect_sandbox": "timeout",
+    "expect_task_status": "partial"
+  }
+}

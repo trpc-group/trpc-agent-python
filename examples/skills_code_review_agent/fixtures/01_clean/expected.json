@@ -1,0 +1,11 @@
+{
+  "description": "Pure refactor of utils/format.py (local rename, extracted pure helper, new docstring) across 3 hunks; no category may report anything blocking.",
+  "expect_clean": true,
+  "expected_findings": [],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "file": "utils/format.py"
+    }
+  ]
+}

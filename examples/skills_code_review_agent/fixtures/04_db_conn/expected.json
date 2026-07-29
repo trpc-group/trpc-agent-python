@@ -1,0 +1,14 @@
+{
+  "description": "Leaky sqlite3 helper: save_order opens a connection that is never closed (DB001, line 8), a cursor that is never closed (DB002, line 9, precision=high so it stays a finding despite confidence=medium) and executes an INSERT with no commit (DB003, line 10, precision=low -> warnings in dry-run); good_db.py (with-managed connect, closing() cursor, commit + close-in-finally, ownership-transfer return) must stay silent for db_lifecycle.",
+  "expect_clean": false,
+  "expected_findings": [
+    {"category": "db_lifecycle", "file": "db_utils.py", "line": 8, "min_severity": "high"},
+    {"category": "db_lifecycle", "file": "db_utils.py", "line": 9, "min_severity": "medium"}
+  ],
+  "expected_warnings": [
+    {"category": "db_lifecycle", "file": "db_utils.py", "line": 10, "min_severity": "medium"}
+  ],
+  "forbidden": [
+    {"category": "db_lifecycle", "file": "good_db.py"}
+  ]
+}

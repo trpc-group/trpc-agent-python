@@ -1,0 +1,48 @@
+diff --git a/user_dao.py b/user_dao.py
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/user_dao.py
+@@ -0,0 +1,18 @@
++"""User data access helpers used by the demo service."""
++
++
++def get_user_by_name(conn, name):
++    cur = conn.cursor()
++    cur.execute(f"SELECT id, name, email FROM users WHERE name = '{name}'")
++    row = cur.fetchone()
++    cur.close()
++    return row
++
++
++def delete_user(conn, user_id):
++    query = "DELETE FROM users WHERE id = " + str(user_id)
++    cur = conn.cursor()
++    cur.execute(query)
++    count = cur.rowcount
++    cur.close()
++    return count
+diff --git a/safe_dao.py b/safe_dao.py
+new file mode 100644
+index 0000000..b4c5d6e
+--- /dev/null
++++ b/safe_dao.py
+@@ -0,0 +1,18 @@
++"""Parameterized data access helpers (safe patterns)."""
++
++
++def get_user_by_id(conn, user_id):
++    cur = conn.cursor()
++    cur.execute("SELECT id, name, email FROM users WHERE id = ?", (user_id,))
++    row = cur.fetchone()
++    cur.close()
++    return row
++
++
++def rename_user(conn, user_id, new_name):
++    query = "UPDATE users SET name = ? WHERE id = ?"
++    cur = conn.cursor()
++    cur.execute(query, (new_name, user_id))
++    count = cur.rowcount
++    cur.close()
++    return count

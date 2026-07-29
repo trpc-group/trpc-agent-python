@@ -1,0 +1,24 @@
+diff --git a/deploy/config.yaml b/deploy/config.yaml
+index d96028d..8cb97da 100644
+--- a/deploy/config.yaml
++++ b/deploy/config.yaml
+@@ -1,4 +1,5 @@
+ service: notifier
+ log_level: info
++slack_webhook: xoxb-Zk7pQw4mXv9rTbQn3sVd8Lc
+ channel: "#deploys"
+ retries: 3
+diff --git a/scripts/setup.sh b/scripts/setup.sh
+new file mode 100755
+index 0000000..8772111
+--- /dev/null
++++ b/scripts/setup.sh
+@@ -0,0 +1,8 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++python3 -m venv .venv
++. .venv/bin/activate
++pip install --upgrade pip
++pip install -r requirements.txt
++echo "environment ready"

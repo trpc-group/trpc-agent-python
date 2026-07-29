@@ -1,0 +1,45 @@
+{
+  "description": "Five new modules (~1220 diff lines): four clean (dataclasses, pure text/math helpers, constant tables) plus report_service.py hiding one f-string SQL execute and one hardcoded credential.",
+  "expect_clean": false,
+  "expected_findings": [
+    {
+      "category": "security",
+      "file": "services/report_service.py",
+      "line": [
+        38,
+        42
+      ],
+      "min_severity": "high"
+    },
+    {
+      "category": "secrets",
+      "file": "services/report_service.py",
+      "line": [
+        11,
+        11
+      ],
+      "min_severity": "high"
+    }
+  ],
+  "expected_warnings": [
+    {
+      "category": "missing_tests",
+      "file": "services/report_service.py",
+      "min_severity": "info"
+    }
+  ],
+  "forbidden": [
+    {
+      "file": "models/entities.py"
+    },
+    {
+      "file": "utils/textops.py"
+    },
+    {
+      "file": "utils/mathops.py"
+    },
+    {
+      "file": "constants/regions.py"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "description": "100% rename without hunks plus a deleted clean module; neither may produce findings (deleted lines are not candidate lines).",
+  "expect_clean": true,
+  "expected_findings": [],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "file": "src/new_name.py"
+    },
+    {
+      "file": "src/obsolete.py"
+    }
+  ],
+  "meta": {
+    "expect_change_types": {
+      "src/new_name.py": "renamed",
+      "src/obsolete.py": "deleted"
+    }
+  }
+}

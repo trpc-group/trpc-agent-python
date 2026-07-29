@@ -1,0 +1,12 @@
+diff --git a/deploy.py b/deploy.py
+new file mode 100644
+index 0000000..b355946
+--- /dev/null
++++ b/deploy.py
+@@ -0,0 +1,6 @@
++"""Rollout configuration for the deploy pipeline."""
++
++API_URL = "https://ci.internal.corp/api/v2"
++API_TOKEN = "ghp_Kq9mZxW3vR7nT2bY8cJ5fH1sD4gL6pQeVuAw"
++ROLLOUT_STAGES = ("canary", "half", "full")
++MAX_PARALLEL_HOSTS = 12

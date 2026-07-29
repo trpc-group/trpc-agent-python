@@ -1,0 +1,27 @@
+{
+  "description": "deploy.py line 4 matches both SECRET003 (github token) and SECRET012 (sensitive assignment); same category + line must collapse to one finding.",
+  "expect_clean": false,
+  "expected_findings": [
+    {
+      "category": "secrets",
+      "file": "deploy.py",
+      "line": 4,
+      "min_severity": "high"
+    }
+  ],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "category": "security",
+      "file": "deploy.py"
+    }
+  ],
+  "meta": {
+    "assert_dedup": {
+      "file": "deploy.py",
+      "line": 4,
+      "category": "secrets",
+      "max_reported": 1
+    }
+  }
+}

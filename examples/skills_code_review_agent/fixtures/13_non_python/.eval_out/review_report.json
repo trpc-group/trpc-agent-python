@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "task": {
+    "id": "06c2cc11f7f1",
+    "status": "succeeded",
+    "input_type": "fixture",
+    "input_ref": "13_non_python",
+    "mode": "diff_only",
+    "runtime": "local",
+    "dry_run": true,
+    "diff_digest": "e30188539f8410b4",
+    "created_at": "2026-07-27T00:21:47.118990",
+    "error": ""
+  },
+  "summary": {
+    "finding_count": 1,
+    "warning_count": 0,
+    "needs_human_review_count": 0,
+    "suppressed_duplicates": 0,
+    "severity_stats": {
+      "critical": 1,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "notes": []
+  },
+  "findings": [
+    {
+      "rule_id": "SECRET005",
+      "category": "secrets",
+      "severity": "critical",
+      "confidence": "high",
+      "source": "static",
+      "file": "deploy/config.yaml",
+      "line": 3,
+      "title": "Hardcoded Slack token",
+      "evidence": "slack_webhook: xoxb…<redacted>",
+      "recommendation": "Remove the credential from source, rotate/revoke it immediately, and load it at runtime from the environment or a secret manager.",
+      "fix": {
+        "before": "slack_webhook: xoxb…<redacted>",
+        "after": "slack_webhook: ${SLACK_WEBHOOK}"
+      },
+      "status": "reported"
+    }
+  ],
+  "warnings": [],
+  "needs_human_review": [],
+  "filter_summary": {
+    "total_decisions": 2,
+    "blocked": 0,
+    "events": [
+      {
+        "tool_name": "skill_load",
+        "decision": "allow",
+        "rule": "skill_allowlist",
+        "reason": "ok",
+        "args_digest": "{\"skill_name\": \"code-review\", \"include_all_docs\": true} [sha256:73ec6ae324aa453f, 55 chars]"
+      },
+      {
+        "tool_name": "skill_run",
+        "decision": "allow",
+        "rule": "policy",
+        "reason": "ok",
+        "args_digest": "{\"skill\": \"code-review\", \"command\": \"python3 scripts/run_checks.py\", \"inputs\": [{\"src\": \"host:///tmp/cr-input-06c2cc11f7f1-r0_hzppw/review_input.json\", \"dst\": \"\"}], \"timeout\": 60} [sha256:d75499864c20a23b, 179 chars]"
+      }
+    ]
+  },
+  "sandbox_summary": [
+    {
+      "tool": "skill_run",
+      "command": "python3 scripts/run_checks.py",
+      "runtime": "local",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 95,
+      "timed_out": false,
+      "truncated": false,
+      "stdout_digest": "run_checks: 1 finding(s) from 2 file(s), 6/6 checks ok -> findings.json\\n [sha256:4191d0dba34bccd3, 72 chars]",
+      "stderr_digest": ""
+    }
+  ],
+  "metrics": {
+    "total_ms": 1782,
+    "sandbox_ms": 802,
+    "tool_calls": 2,
+    "filter_blocks": 0,
+    "finding_count": 1,
+    "severity_dist": {
+      "critical": 1
+    },
+    "error_dist": {},
+    "token_usage": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0,
+      "llm_calls": 3,
+      "source": "event_stream(usage_metadata); zeros in dry-run"
+    },
+    "phase_timings": {
+      "persist_input": 19,
+      "sandbox_setup": 106,
+      "agent_loop": 1633,
+      "collect_findings": 0,
+      "persist_findings": 23,
+      "render_report": 0,
+      "source_note": "tool_calls/sandbox_ms/errors/tokens from event stream; filter_blocks/findings/phases self-instrumented"
+    }
+  },
+  "fix_suggestions": [
+    {
+      "file": "deploy/config.yaml",
+      "line": 3,
+      "rule_id": "SECRET005",
+      "before": "slack_webhook: xoxb…<redacted>",
+      "after": "slack_webhook: ${SLACK_WEBHOOK}"
+    }
+  ]
+}

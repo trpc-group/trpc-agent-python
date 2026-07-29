@@ -1,0 +1,25 @@
+{
+  "description": "New DAO module builds SQL with an f-string (line 6) and by + concatenation through a local variable that is then passed to execute() (line 15) -- both SEC001 critical; safe_dao.py uses only parameterized queries ('?' placeholders with a values tuple, including via a literal-assigned variable) and must produce no security finding.",
+  "expect_clean": false,
+  "expected_findings": [
+    {
+      "category": "security",
+      "file": "user_dao.py",
+      "line": 6,
+      "min_severity": "critical"
+    },
+    {
+      "category": "security",
+      "file": "user_dao.py",
+      "line": 15,
+      "min_severity": "critical"
+    }
+  ],
+  "expected_warnings": [],
+  "forbidden": [
+    {
+      "category": "security",
+      "file": "safe_dao.py"
+    }
+  ]
+}

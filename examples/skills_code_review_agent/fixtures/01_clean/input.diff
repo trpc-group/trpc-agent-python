@@ -1,0 +1,44 @@
+diff --git a/utils/format.py b/utils/format.py
+index a27ce46..32a22b8 100644
+--- a/utils/format.py
++++ b/utils/format.py
+@@ -7,8 +7,8 @@
+ 
+ def render_row(values, widths):
+     parts = []
+-    for v, w in zip(values, widths):
+-        parts.append(str(v).ljust(w))
++    for value, width in zip(values, widths):
++        parts.append(str(value).ljust(width))
+     return SEPARATOR.join(parts)
+ 
+ 
+@@ -25,13 +25,18 @@
+     return padded
+ 
+ 
+-def render_cell(text, limit):
+-    cleaned = " ".join(str(text).split())
++def _clip(cleaned, limit):
++    """Truncate to `limit` characters, marking the cut with an ellipsis."""
+     if len(cleaned) <= limit:
+         return cleaned
+     if limit <= len(ELLIPSIS):
+         return cleaned[:limit]
+     return cleaned[: limit - len(ELLIPSIS)] + ELLIPSIS
++
++
++def render_cell(text, limit):
++    cleaned = " ".join(str(text).split())
++    return _clip(cleaned, limit)
+ 
+ 
+ def render_table(rows, widths):
+@@ -42,6 +47,7 @@
+ 
+ 
+ def summarize(rows):
++    """Count rows and measure the widest rendered row."""
+     total = len(rows)
+     widest = max((len(str(row)) for row in rows), default=0)
+     return {"rows": total, "widest": widest}

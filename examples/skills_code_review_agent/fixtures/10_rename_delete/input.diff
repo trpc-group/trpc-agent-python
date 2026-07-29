@@ -1,0 +1,15 @@
+diff --git a/src/old_name.py b/src/new_name.py
+similarity index 100%
+rename from src/old_name.py
+rename to src/new_name.py
+diff --git a/src/obsolete.py b/src/obsolete.py
+deleted file mode 100644
+index d8489d5..0000000
+--- a/src/obsolete.py
++++ /dev/null
+@@ -1,5 +0,0 @@
+-"""Legacy CSV row splitter kept for the 1.x importers."""
+-
+-
+-def split_line(line, sep):
+-    return [part.strip() for part in line.split(sep)]

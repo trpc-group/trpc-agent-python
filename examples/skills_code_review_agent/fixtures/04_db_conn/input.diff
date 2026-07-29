@@ -1,0 +1,52 @@
+diff --git a/db_utils.py b/db_utils.py
+new file mode 100644
+index 0000000..7c1d2e9
+--- /dev/null
++++ b/db_utils.py
+@@ -0,0 +1,11 @@
++"""Small sqlite3 helpers for the demo order service."""
++
++import sqlite3
++
++
++def save_order(path, order_id, amount):
++    """Persist one order row; lifecycle handling is intentionally sloppy."""
++    conn = sqlite3.connect(path)
++    cur = conn.cursor()
++    cur.execute("INSERT INTO orders(id, amount) VALUES (?, ?)", (order_id, amount))
++    return cur.rowcount
+diff --git a/good_db.py b/good_db.py
+new file mode 100644
+index 0000000..9e4f5a1
+--- /dev/null
++++ b/good_db.py
+@@ -0,0 +1,29 @@
++"""Well-behaved sqlite3 usage: every path closes, commits or hands off ownership."""
++
++import contextlib
++import sqlite3
++
++
++def fetch_totals(path):
++    """Read-only query fully managed by context managers."""
++    with sqlite3.connect(path) as conn:
++        with contextlib.closing(conn.cursor()) as cur:
++            cur.execute("SELECT total FROM orders")
++            return cur.fetchall()
++
++
++def record_payment(path, amount):
++    """Write path with an explicit commit and a close in finally."""
++    conn = sqlite3.connect(path)
++    try:
++        conn.execute("INSERT INTO payments(amount) VALUES (?)", (amount,))
++        conn.commit()
++    finally:
++        conn.close()
++
++
++def open_shared_connection(path):
++    """The caller takes ownership of the returned connection and closes it."""
++    conn = sqlite3.connect(path)
++    conn.execute("PRAGMA foreign_keys = ON")
++    return conn
