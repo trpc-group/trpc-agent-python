@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Public deterministic proxy corpus. It is evidence for AC2 only, not a substitute for hidden samples.",
+  "positive_templates": [
+    {"id": "shell_true", "copies": 3, "lines": ["import subprocess", "subprocess.run('echo ok', shell=True)"], "line": 2, "category": "security", "scored": true},
+    {"id": "dynamic_eval", "copies": 2, "lines": ["value = eval(payload)"], "line": 1, "category": "security", "scored": true},
+    {"id": "dynamic_exec", "copies": 2, "lines": ["exec(payload)"], "line": 1, "category": "security", "scored": true},
+    {"id": "sql_fstring", "copies": 2, "lines": ["query = f\"SELECT * FROM users WHERE name = {name}\""], "line": 1, "category": "security", "scored": true},
+    {"id": "async_blocking", "copies": 3, "lines": ["async def fetch():", "    time.sleep(1)"], "line": 2, "category": "async-errors", "scored": true},
+    {"id": "resource_open", "copies": 2, "lines": ["handle = open('data.txt')"], "line": 1, "category": "resource-leak", "scored": false},
+    {"id": "transaction", "copies": 2, "lines": ["transaction = session.begin()"], "line": 1, "category": "db-lifecycle", "scored": true},
+    {"id": "connection", "copies": 1, "lines": ["conn = sqlite3.connect('audit.db')"], "line": 1, "category": "db-lifecycle", "scored": false},
+    {"id": "missing_test", "copies": 1, "lines": ["def changed_feature():", "    return 1"], "line": 1, "category": "missing-tests", "scored": false},
+    {"id": "secret", "copies": 2, "lines": ["access_key = 'AKIA0000000000000000'"], "line": 1, "category": "secrets", "scored": true}
+  ],
+  "clean_cases": [
+    ["value = 1"],
+    ["result = subprocess.run(['echo', 'ok'], check=True)"],
+    ["query = 'SELECT * FROM users'"],
+    ["async def fetch():", "    await asyncio.sleep(1)"],
+    ["with open('data.txt') as handle:", "    return handle.read()"],
+    ["conn = sqlite3.connect('audit.db')", "conn.close()"],
+    ["transaction = session.begin()", "transaction.commit()"],
+    ["# subprocess.run('echo ok', shell=True)"],
+    ["password = 'example'"],
+    ["token = 'your-token-here'"]
+  ],
+  "secret_case_count": 48,
+  "benign_secret_values": [
+    "example", "redacted", "changeme", "your-token-here", "your_github_token_here",
+    "api-key", "token", "example-api-key", "[REDACTED:token]", "your-api-key"
+  ],
+  "boundary_cases": [
+    {"id": "changed_lines_diff", "payload": "unified_diff", "expectation": "changed-lines only"},
+    {"id": "full_file_snapshot", "payload": "files_snapshot", "expectation": "full-file scope"},
+    {"id": "fixture_payload_type", "payload": "fixture_diff", "expectation": "payload retained"},
+    {"id": "incomplete_hunk", "payload": "unified_diff", "expectation": "parser warning or stable failure"},
+    {"id": "binary_rename", "payload": "unified_diff", "expectation": "binary and rename metadata"},
+    {"id": "zero_zero_coordinates", "payload": "unified_diff", "expectation": "added and deleted 0,0 coordinates"},
+    {"id": "context_line_mapping", "payload": "unified_diff", "expectation": "context old-to-new map only"},
+    {"id": "deleted_side_secret", "payload": "unified_diff", "expectation": "real old line and old side"}
+  ]
+}

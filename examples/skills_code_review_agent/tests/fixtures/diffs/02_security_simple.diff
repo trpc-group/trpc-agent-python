@@ -1,0 +1,18 @@
+diff --git a/src/query.py b/src/query.py
+new file mode 100644
+--- /dev/null
++++ b/src/query.py
+@@ -0,0 +1,6 @@
++import subprocess
++
++def find_user(cursor, user_id):
++    cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
++    subprocess.run("echo " + user_id, shell=True)
++    return user_id
+diff --git a/tests/test_query.py b/tests/test_query.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_query.py
+@@ -0,0 +1,2 @@
++def test_find_user_contract():
++    assert True

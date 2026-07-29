@@ -1,0 +1,93 @@
+diff --git a/src/profile_service.py b/src/profile_service.py
+new file mode 100644
+--- /dev/null
++++ b/src/profile_service.py
+@@ -0,0 +1,52 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, replace
++from datetime import datetime, timezone
++from typing import Iterable
++
++from src.profile_validation import normalize_tags, validate_display_name
++
++
++@dataclass(frozen=True)
++class Profile:
++    user_id: str
++    display_name: str
++    tags: tuple[str, ...]
++    updated_at: datetime
++
++
++def create_profile(
++    user_id: str,
++    display_name: str,
++    tags: Iterable[str],
++) -> Profile:
++    if not user_id.strip():
++        raise ValueError("user id is required")
++    return Profile(
++        user_id=user_id.strip(),
++        display_name=validate_display_name(display_name),
++        tags=normalize_tags(tags),
++        updated_at=datetime.now(timezone.utc),
++    )
++
++
++def rename_profile(profile: Profile, display_name: str) -> Profile:
++    return replace(
++        profile,
++        display_name=validate_display_name(display_name),
++        updated_at=datetime.now(timezone.utc),
++    )
++
++
++def add_profile_tags(profile: Profile, tags: Iterable[str]) -> Profile:
++    merged = normalize_tags((*profile.tags, *tags))
++    return replace(
++        profile,
++        tags=merged,
++        updated_at=datetime.now(timezone.utc),
++    )
++
++
++def profile_summary(profile: Profile) -> str:
++    tag_summary = ", ".join(profile.tags) if profile.tags else "no tags"
++    return f"{profile.display_name} ({tag_summary})"
+diff --git a/src/profile_validation.py b/src/profile_validation.py
+new file mode 100644
+--- /dev/null
++++ b/src/profile_validation.py
+@@ -0,0 +1,31 @@
++from __future__ import annotations
++
++from typing import Iterable
++
++
++def validate_display_name(value: str) -> str:
++    normalized = " ".join(value.split())
++    if len(normalized) < 2:
++        raise ValueError("display name is too short")
++    if len(normalized) > 80:
++        raise ValueError("display name is too long")
++    return normalized
++
++
++def normalize_tags(values: Iterable[str]) -> tuple[str, ...]:
++    normalized = {
++        value.strip().lower()
++        for value in values
++        if value and value.strip()
++    }
++    if any(len(value) > 32 for value in normalized):
++        raise ValueError("tag is too long")
++    return tuple(sorted(normalized))
++
++
++def is_supported_locale(locale: str) -> bool:
++    return locale.lower() in {"en", "en-us", "zh", "zh-cn"}
++
++
++def normalize_locale(locale: str) -> str:
++    return locale.strip().lower().replace("_", "-")

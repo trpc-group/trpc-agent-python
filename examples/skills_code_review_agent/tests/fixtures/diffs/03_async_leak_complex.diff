@@ -1,0 +1,96 @@
+diff --git a/src/refresh_service.py b/src/refresh_service.py
+new file mode 100644
+--- /dev/null
++++ b/src/refresh_service.py
+@@ -0,0 +1,63 @@
++from __future__ import annotations
++
++import asyncio
++import time
++from dataclasses import dataclass
++from typing import Any
++
++import aiohttp
++
++
++@dataclass(frozen=True)
++class RefreshResult:
++    resource_id: str
++    status: int
++    payload: dict[str, Any]
++
++
++async def fetch_payload(session: aiohttp.ClientSession, url: str) -> dict[str, Any]:
++    async with session.get(url) as response:
++        response.raise_for_status()
++        return await response.json()
++
++
++async def refresh_managed(resource_id: str, base_url: str) -> RefreshResult:
++    async with aiohttp.ClientSession() as managed_session:
++        payload = await fetch_payload(
++            managed_session,
++            f"{base_url}/resources/{resource_id}",
++        )
++    await asyncio.sleep(0.01)
++    return RefreshResult(resource_id, 200, payload)
++
++
++async def persist_snapshot(result: RefreshResult) -> None:
++    await asyncio.sleep(0)
++    if not result.resource_id:
++        raise ValueError("resource id is required")
++
++
++async def refresh_with_leak(resource_id: str, base_url: str) -> RefreshResult:
++    leaked_session = aiohttp.ClientSession()
++    time.sleep(1)
++    payload = await fetch_payload(
++        leaked_session,
++        f"{base_url}/resources/{resource_id}",
++    )
++    result = RefreshResult(resource_id, 200, payload)
++    persist_snapshot(result)
++    return result
++
++
++async def refresh_many(resource_ids: list[str], base_url: str) -> list[RefreshResult]:
++    tasks = [
++        asyncio.create_task(refresh_managed(resource_id, base_url))
++        for resource_id in resource_ids
++    ]
++    if not tasks:
++        return []
++    return list(await asyncio.gather(*tasks))
++
++
++def describe_async_policy() -> str:
++    return "Use await asyncio.sleep and async context managers for owned sessions."
+diff --git a/tests/test_refresh_service.py b/tests/test_refresh_service.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_refresh_service.py
+@@ -0,0 +1,23 @@
++import asyncio
++
++from src.refresh_service import RefreshResult, persist_snapshot
++
++
++def test_refresh_result_is_immutable_value_object():
++    result = RefreshResult("resource-1", 200, {"state": "ready"})
++
++    assert result.resource_id == "resource-1"
++    assert result.payload == {"state": "ready"}
++
++
++def test_persist_snapshot_accepts_valid_result():
++    result = RefreshResult("resource-2", 200, {})
++
++    asyncio.run(persist_snapshot(result))
++
++
++def test_refresh_result_retains_status():
++    result = RefreshResult("resource-3", 202, {"queued": True})
++
++    assert result.status == 202
++    assert result.payload == {"queued": True}

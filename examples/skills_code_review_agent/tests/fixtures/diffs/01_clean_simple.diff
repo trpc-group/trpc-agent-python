@@ -1,0 +1,14 @@
+diff --git a/src/math_tools.py b/src/math_tools.py
+new file mode 100644
+--- /dev/null
++++ b/src/math_tools.py
+@@ -0,0 +1,2 @@
++def add(left, right):
++    return left + right
+diff --git a/tests/test_math_tools.py b/tests/test_math_tools.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_math_tools.py
+@@ -0,0 +1,2 @@
++def test_add():
++    assert 1 + 2 == 3

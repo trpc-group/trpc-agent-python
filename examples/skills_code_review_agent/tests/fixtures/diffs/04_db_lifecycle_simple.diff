@@ -1,0 +1,20 @@
+diff --git a/src/persistence.py b/src/persistence.py
+new file mode 100644
+--- /dev/null
++++ b/src/persistence.py
+@@ -0,0 +1,8 @@
++import sqlite3
++
++def store(value):
++    connection = sqlite3.connect("review.db")
++    transaction = connection.begin()
++    connection.execute("INSERT INTO records VALUES (?)", (value,))
++    return transaction
++
+diff --git a/tests/test_persistence.py b/tests/test_persistence.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_persistence.py
+@@ -0,0 +1,2 @@
++def test_store_contract():
++    assert True

@@ -1,0 +1,97 @@
+diff --git a/src/customer_repository.py b/src/customer_repository.py
+new file mode 100644
+--- /dev/null
++++ b/src/customer_repository.py
+@@ -0,0 +1,64 @@
++from __future__ import annotations
++
++import sqlite3
++from dataclasses import dataclass
++from pathlib import Path
++from typing import Any
++
++
++@dataclass(frozen=True)
++class Customer:
++    customer_id: str
++    display_name: str
++    active: bool
++
++
++def create_schema(database_path: Path) -> None:
++    managed_connection = sqlite3.connect(database_path)
++    try:
++        managed_connection.execute(
++            "CREATE TABLE IF NOT EXISTS customers "
++            "(customer_id TEXT PRIMARY KEY, display_name TEXT, active INTEGER)"
++        )
++        managed_connection.commit()
++    finally:
++        managed_connection.close()
++
++
++def load_customer(database_path: Path, customer_id: str) -> Customer | None:
++    managed_reader = sqlite3.connect(database_path)
++    try:
++        row = managed_reader.execute(
++            "SELECT customer_id, display_name, active FROM customers WHERE customer_id = ?",
++            (customer_id,),
++        ).fetchone()
++    finally:
++        managed_reader.close()
++    if row is None:
++        return None
++    return Customer(str(row[0]), str(row[1]), bool(row[2]))
++
++
++def store_customer_unsafely(database_path: Path, customer: Customer) -> Any:
++    connection = sqlite3.connect(database_path)
++    transaction = connection.begin()
++    connection.execute(
++        "INSERT INTO customers(customer_id, display_name, active) VALUES (?, ?, ?)",
++        (customer.customer_id, customer.display_name, int(customer.active)),
++    )
++    return transaction
++
++
++def customer_to_mapping(customer: Customer) -> dict[str, object]:
++    return {
++        "customer_id": customer.customer_id,
++        "display_name": customer.display_name,
++        "active": customer.active,
++    }
++
++
++def normalize_display_name(value: str) -> str:
++    normalized = " ".join(value.split())
++    if not normalized:
++        raise ValueError("display name is required")
++    return normalized
+diff --git a/tests/test_customer_repository.py b/tests/test_customer_repository.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_customer_repository.py
+@@ -0,0 +1,23 @@
++from src.customer_repository import (
++    Customer,
++    customer_to_mapping,
++    normalize_display_name,
++)
++
++
++def test_normalize_display_name_collapses_whitespace():
++    assert normalize_display_name("  Ada   Lovelace ") == "Ada Lovelace"
++
++
++def test_customer_to_mapping_preserves_fields():
++    customer = Customer("customer-1", "Ada", True)
++
++    assert customer_to_mapping(customer) == {
++        "customer_id": "customer-1",
++        "display_name": "Ada",
++        "active": True,
++    }
++
++
++def test_customer_is_immutable_value_object():
++    assert Customer("customer-2", "Lin", False).active is False

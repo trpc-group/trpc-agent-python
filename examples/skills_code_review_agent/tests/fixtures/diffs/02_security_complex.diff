@@ -1,0 +1,103 @@
+diff --git a/src/account_export.py b/src/account_export.py
+new file mode 100644
+--- /dev/null
++++ b/src/account_export.py
+@@ -0,0 +1,69 @@
++from __future__ import annotations
++
++import subprocess
++from dataclasses import dataclass
++from pathlib import Path
++from typing import Any, Iterable
++
++
++@dataclass(frozen=True)
++class ExportRequest:
++    account_id: str
++    output_directory: Path
++    include_disabled: bool = False
++
++
++def load_account_safely(cursor: Any, account_id: str) -> dict[str, Any] | None:
++    cursor.execute(
++        "SELECT id, email, disabled FROM accounts WHERE id = ?",
++        (account_id,),
++    )
++    row = cursor.fetchone()
++    if row is None:
++        return None
++    return {"id": row[0], "email": row[1], "disabled": bool(row[2])}
++
++
++def list_repository_files(repository: Path) -> tuple[str, ...]:
++    completed = subprocess.run(
++        ["git", "-C", str(repository), "ls-files"],
++        check=True,
++        capture_output=True,
++        text=True,
++    )
++    return tuple(line for line in completed.stdout.splitlines() if line)
++
++
++def _normalized_ids(account_ids: Iterable[str]) -> tuple[str, ...]:
++    return tuple(
++        account_id.strip()
++        for account_id in account_ids
++        if account_id and account_id.strip()
++    )
++
++
++def load_accounts(cursor: Any, account_ids: Iterable[str]) -> list[dict[str, Any]]:
++    results = []
++    for account_id in _normalized_ids(account_ids):
++        account = load_account_safely(cursor, account_id)
++        if account is not None:
++            results.append(account)
++    return results
++
++
++def load_account_unsafely(cursor: Any, account_id: str) -> Any:
++    cursor.execute(f"SELECT * FROM accounts WHERE id = {account_id}")
++    return cursor.fetchone()
++
++
++def publish_export(request: ExportRequest, archive_name: str) -> None:
++    command = f"upload-report {request.output_directory / archive_name}"
++    subprocess.run(command, shell=True, check=True)
++
++
++def security_documentation() -> str:
++    return "Never copy examples such as eval(user_input) or shell=True into production."
++
++
++# This comment mentions os.system(command), but comments are not executable code.
++DEFAULT_EXPORT_COLUMNS = ("id", "email", "disabled")
+diff --git a/tests/test_account_export.py b/tests/test_account_export.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_account_export.py
+@@ -0,0 +1,24 @@
++from pathlib import Path
++
++from src.account_export import ExportRequest, _normalized_ids
++
++
++def test_normalized_ids_removes_empty_values():
++    assert _normalized_ids([" account-1 ", "", "account-2"]) == (
++        "account-1",
++        "account-2",
++    )
++
++
++def test_export_request_defaults_to_enabled_accounts():
++    request = ExportRequest(
++        account_id="account-1",
++        output_directory=Path("exports"),
++    )
++
++    assert request.include_disabled is False
++    assert request.output_directory == Path("exports")
++
++
++def test_normalized_ids_preserves_order():
++    assert _normalized_ids(["b", "a", "b"]) == ("b", "a", "b")

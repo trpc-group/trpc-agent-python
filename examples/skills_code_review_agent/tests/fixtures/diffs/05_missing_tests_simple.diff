@@ -1,0 +1,7 @@
+diff --git a/src/service.py b/src/service.py
+new file mode 100644
+--- /dev/null
++++ b/src/service.py
+@@ -0,0 +1,2 @@
++def normalize(value):
++    return value.strip().lower()

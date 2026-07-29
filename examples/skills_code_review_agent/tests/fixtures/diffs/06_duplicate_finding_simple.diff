@@ -1,0 +1,16 @@
+diff --git a/src/unsafe.py b/src/unsafe.py
+new file mode 100644
+--- /dev/null
++++ b/src/unsafe.py
+@@ -0,0 +1,4 @@
++def evaluate(user_input):
++    return eval(exec(user_input))
++
++
+diff --git a/tests/test_unsafe.py b/tests/test_unsafe.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_unsafe.py
+@@ -0,0 +1,2 @@
++def test_evaluate_contract():
++    assert True

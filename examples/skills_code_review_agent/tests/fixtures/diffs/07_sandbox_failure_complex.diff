@@ -1,0 +1,94 @@
+diff --git a/src/retry_policy.py b/src/retry_policy.py
+new file mode 100644
+--- /dev/null
++++ b/src/retry_policy.py
+@@ -0,0 +1,55 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++from datetime import timedelta
++from typing import Iterable
++
++
++@dataclass(frozen=True)
++class RetryPolicy:
++    attempts: int
++    initial_delay: timedelta
++    multiplier: float = 2.0
++    maximum_delay: timedelta = timedelta(seconds=30)
++
++    def delays(self) -> tuple[timedelta, ...]:
++        if self.attempts < 1:
++            raise ValueError("attempts must be positive")
++        current = self.initial_delay
++        values = []
++        for _ in range(self.attempts - 1):
++            values.append(min(current, self.maximum_delay))
++            current = timedelta(
++                seconds=current.total_seconds() * self.multiplier,
++            )
++        return tuple(values)
++
++
++def should_retry(status_code: int) -> bool:
++    return status_code in {408, 425, 429} or 500 <= status_code < 600
++
++
++def retryable_statuses(status_codes: Iterable[int]) -> tuple[int, ...]:
++    return tuple(
++        sorted(
++            {
++                status_code
++                for status_code in status_codes
++                if should_retry(status_code)
++            }
++        )
++    )
++
++
++def default_retry_policy() -> RetryPolicy:
++    return RetryPolicy(
++        attempts=4,
++        initial_delay=timedelta(milliseconds=250),
++        multiplier=2.0,
++        maximum_delay=timedelta(seconds=5),
++    )
++
++
++def describe_policy(policy: RetryPolicy) -> str:
++    delays = ", ".join(str(delay.total_seconds()) for delay in policy.delays())
++    return f"attempts={policy.attempts}; delays={delays}"
+diff --git a/tests/test_retry_policy.py b/tests/test_retry_policy.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_retry_policy.py
+@@ -0,0 +1,29 @@
++from datetime import timedelta
++
++from src.retry_policy import (
++    RetryPolicy,
++    default_retry_policy,
++    retryable_statuses,
++    should_retry,
++)
++
++
++def test_should_retry_transient_statuses():
++    assert should_retry(429) is True
++    assert should_retry(503) is True
++    assert should_retry(400) is False
++
++
++def test_retry_policy_caps_delays():
++    policy = RetryPolicy(4, timedelta(seconds=2), maximum_delay=timedelta(seconds=3))
++
++    assert policy.delays() == (
++        timedelta(seconds=2),
++        timedelta(seconds=3),
++        timedelta(seconds=3),
++    )
++
++
++def test_default_policy_and_status_normalization():
++    assert default_retry_policy().attempts == 4
++    assert retryable_statuses([503, 400, 429, 503]) == (429, 503)

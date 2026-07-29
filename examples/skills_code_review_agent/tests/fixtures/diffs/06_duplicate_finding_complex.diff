@@ -1,0 +1,105 @@
+diff --git a/src/expression_dispatch.py b/src/expression_dispatch.py
+new file mode 100644
+--- /dev/null
++++ b/src/expression_dispatch.py
+@@ -0,0 +1,58 @@
++from __future__ import annotations
++
++import ast
++import operator
++from collections.abc import Callable, Mapping
++from dataclasses import dataclass
++from typing import Any
++
++
++@dataclass(frozen=True)
++class Operation:
++    name: str
++    handler: Callable[[float, float], float]
++
++
++DEFAULT_OPERATIONS: Mapping[str, Operation] = {
++    "add": Operation("add", operator.add),
++    "subtract": Operation("subtract", operator.sub),
++    "multiply": Operation("multiply", operator.mul),
++}
++
++
++def calculate(operation_name: str, left: float, right: float) -> float:
++    operation = DEFAULT_OPERATIONS.get(operation_name)
++    if operation is None:
++        raise ValueError("operation is not supported")
++    return float(operation.handler(left, right))
++
++
++def parse_literal(value: str) -> Any:
++    return ast.literal_eval(value)
++
++
++def normalize_expression(value: str) -> str:
++    normalized = " ".join(value.split())
++    if not normalized:
++        raise ValueError("expression is required")
++    return normalized
++
++
++def execute_legacy_expression(user_expression: str) -> Any:
++    normalized = normalize_expression(user_expression)
++    return eval(exec(normalized))
++
++
++def available_operations() -> tuple[str, ...]:
++    return tuple(sorted(DEFAULT_OPERATIONS))
++
++
++def operation_documentation() -> str:
++    return (
++        "The old eval(user_input) example is intentionally documented as text; "
++        "new integrations must use calculate."
++    )
++
++
++# Calling exec(value) from a comment is not executable and must not add a finding.
++MAX_EXPRESSION_LENGTH = 1024
+diff --git a/tests/test_expression_dispatch.py b/tests/test_expression_dispatch.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_expression_dispatch.py
+@@ -0,0 +1,37 @@
++import pytest
++
++from src.expression_dispatch import (
++    available_operations,
++    calculate,
++    parse_literal,
++)
++
++
++def test_calculate_uses_allowlisted_operations():
++    assert calculate("add", 2, 3) == 5
++    assert calculate("multiply", 4, 5) == 20
++
++
++def test_calculate_rejects_unknown_operation():
++    with pytest.raises(ValueError, match="not supported"):
++        calculate("divide", 4, 2)
++
++
++def test_parse_literal_does_not_execute_code():
++    assert parse_literal("{'enabled': True}") == {"enabled": True}
++
++
++def test_available_operations_are_sorted():
++    assert available_operations() == ("add", "multiply", "subtract")
++
++
++def test_calculate_supports_subtraction():
++    assert calculate("subtract", 9, 4) == 5
++
++
++def test_parse_literal_accepts_nested_values():
++    assert parse_literal("{'roles': ['reader']}") == {"roles": ["reader"]}
++
++
++def test_parse_literal_accepts_tuple_values():
++    assert parse_literal("('left', 'right')") == ("left", "right")

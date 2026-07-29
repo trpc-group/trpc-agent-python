@@ -1,0 +1,476 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trpc.group/schemas/code-review/review-report-1.0.0.json",
+  "title": "Automatic Code Review Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rule_pack_version",
+    "config_digest",
+    "input_sha256",
+    "task_id",
+    "status",
+    "input_summary",
+    "findings",
+    "needs_human_review",
+    "warnings",
+    "suppressed",
+    "filter_summary",
+    "sandbox_summary",
+    "metrics",
+    "final_conclusion"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rule_pack_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "config_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "input_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "running",
+        "completed",
+        "completed_with_warnings",
+        "failed"
+      ]
+    },
+    "input_summary": {
+      "$ref": "#/$defs/inputSummary"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "needs_human_review": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    },
+    "suppressed": {
+      "$ref": "#/$defs/suppressedSummary"
+    },
+    "filter_summary": {
+      "$ref": "#/$defs/filterSummary"
+    },
+    "sandbox_summary": {
+      "$ref": "#/$defs/sandboxSummary"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "final_conclusion": {
+      "$ref": "#/$defs/finalConclusion"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "category",
+        "file",
+        "line",
+        "title",
+        "evidence",
+        "recommendation",
+        "confidence",
+        "source"
+      ],
+      "properties": {
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "recommendation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source": {
+          "enum": [
+            "rule-engine",
+            "ast",
+            "heuristic"
+          ]
+        },
+        "line_side": {
+          "enum": [
+            "new",
+            "old"
+          ],
+          "default": "new"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "bucket": {
+          "enum": [
+            "findings",
+            "needs_human_review",
+            "suppressed"
+          ]
+        },
+        "dedup_key": {
+          "type": "string"
+        },
+        "extra": {
+          "type": "object"
+        }
+      }
+    },
+    "inputSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "file_count",
+        "hunk_count",
+        "additions",
+        "deletions",
+        "files"
+      ],
+      "properties": {
+        "source_kind": {
+          "enum": [
+            "diff_file",
+            "repo_path",
+            "files",
+            "fixture"
+          ]
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hunk_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "additions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deletions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "status",
+              "review_scope"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "added",
+                  "modified",
+                  "deleted",
+                  "renamed",
+                  "snapshot"
+                ]
+              },
+              "review_scope": {
+                "enum": [
+                  "changed_lines",
+                  "full_file",
+                  "deleted_lines",
+                  "skipped"
+                ]
+              }
+            }
+          }
+        },
+        "parse_warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "type": "string"
+        }
+      }
+    },
+    "suppressedSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "reasons"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reasons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "filterSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allow_count",
+        "deny_count",
+        "needs_human_review_count",
+        "events"
+      ],
+      "properties": {
+        "allow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deny_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "needs_human_review_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "sandboxSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_type",
+        "run_count",
+        "runs"
+      ],
+      "properties": {
+        "runtime_type": {
+          "enum": [
+            "container",
+            "cube",
+            "local",
+            "fake"
+          ]
+        },
+        "run_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_duration_ms",
+        "sandbox_duration_ms",
+        "llm_duration_ms",
+        "tool_call_count",
+        "sandbox_run_count",
+        "filter_block_count",
+        "filter_review_count",
+        "finding_count",
+        "warning_count",
+        "needs_human_review_count",
+        "suppressed_count",
+        "severity_distribution",
+        "category_distribution",
+        "error_type_distribution",
+        "runtime_type",
+        "python_version",
+        "platform"
+      ],
+      "properties": {
+        "total_duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sandbox_duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "llm_duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tool_call_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sandbox_run_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filter_block_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filter_review_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "finding_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warning_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "needs_human_review_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "suppressed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "severity_distribution": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "category_distribution": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "error_type_distribution": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "runtime_type": {
+          "type": "string"
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        }
+      }
+    },
+    "finalConclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "recommendations"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string"
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "skill_name": "code-review",
+  "scripts": [
+    {
+      "script_id": "parse_diff",
+      "entrypoint": "parse_diff.py",
+      "sha256": "59852338b7963bd2bab95097bcea4be63bdec86ed8f3caa3bdef779324ad511f",
+      "files": [
+        {"path": "lib/__init__.py", "sha256": "b15737e1e5f4783a530a5d7bbbf5f2f5f1b2fa7415f1864ea15d15fabdf41e22"},
+        {"path": "lib/diff_parser.py", "sha256": "9646b351718f69c423f16f3b98d4b1bf4408f062cbaeac86eccca26d71f393de"},
+        {"path": "lib/rule_engine.py", "sha256": "8ec31a73adb459e2db4c816233231bb1b90ac34d1edf5897fb2babdeff11cd21"},
+        {"path": "lib/rules_ast.py", "sha256": "ce6caa68ba2bc025151a2b1dd4314b7ad866b76d11a0fcc634d526cc04c0f4c5"},
+        {"path": "lib/rules_async.py", "sha256": "0363b9653ffffb2cfd1d171e5a082e179495d8e255b8c889987f97741fed9378"},
+        {"path": "lib/rules_db.py", "sha256": "fdc765ed9ff03d6c00690d47c515a30379ce26d050240ebbce12448892094bcf"},
+        {"path": "lib/rules_resource.py", "sha256": "dd9182acc914f92ff61de0e3cd1e4a24bed63d7e0692975ccdaaaac9133f8488"},
+        {"path": "lib/rules_security.py", "sha256": "3e17e3bd8f1bf829d7e7a784ffd9c16c3080e54add2bddd5fc8b6d05d893cc9d"},
+        {"path": "lib/rules_tests.py", "sha256": "c51fcb4d7cb8e3bcb9e82f31f423ced874fb5a11ae82e03db7d2e8288f64b4f3"},
+        {"path": "lib/secret_rules.py", "sha256": "747950ef1deeb7f0b3dcfb9fd81fc89f1b78acdac03f9dbdfd63ff2972a62af8"},
+        {"path": "parse_diff.py", "sha256": "59852338b7963bd2bab95097bcea4be63bdec86ed8f3caa3bdef779324ad511f"},
+        {"path": "run_checks.py", "sha256": "6c7996e7c3df4ec5a70036e23eed8cc1a017e7e96ce1e86f3748a83993053936"}
+      ],
+      "arguments": {
+        "type": "object",
+        "additional_properties": false,
+        "properties": {}
+      },
+      "timeout_seconds": 30,
+      "max_output_bytes": 1048576,
+      "requires_network": false
+    },
+    {
+      "script_id": "run_checks",
+      "entrypoint": "run_checks.py",
+      "sha256": "6c7996e7c3df4ec5a70036e23eed8cc1a017e7e96ce1e86f3748a83993053936",
+      "files": [
+        {"path": "lib/__init__.py", "sha256": "b15737e1e5f4783a530a5d7bbbf5f2f5f1b2fa7415f1864ea15d15fabdf41e22"},
+        {"path": "lib/diff_parser.py", "sha256": "9646b351718f69c423f16f3b98d4b1bf4408f062cbaeac86eccca26d71f393de"},
+        {"path": "lib/rule_engine.py", "sha256": "8ec31a73adb459e2db4c816233231bb1b90ac34d1edf5897fb2babdeff11cd21"},
+        {"path": "lib/rules_ast.py", "sha256": "ce6caa68ba2bc025151a2b1dd4314b7ad866b76d11a0fcc634d526cc04c0f4c5"},
+        {"path": "lib/rules_async.py", "sha256": "0363b9653ffffb2cfd1d171e5a082e179495d8e255b8c889987f97741fed9378"},
+        {"path": "lib/rules_db.py", "sha256": "fdc765ed9ff03d6c00690d47c515a30379ce26d050240ebbce12448892094bcf"},
+        {"path": "lib/rules_resource.py", "sha256": "dd9182acc914f92ff61de0e3cd1e4a24bed63d7e0692975ccdaaaac9133f8488"},
+        {"path": "lib/rules_security.py", "sha256": "3e17e3bd8f1bf829d7e7a784ffd9c16c3080e54add2bddd5fc8b6d05d893cc9d"},
+        {"path": "lib/rules_tests.py", "sha256": "c51fcb4d7cb8e3bcb9e82f31f423ced874fb5a11ae82e03db7d2e8288f64b4f3"},
+        {"path": "lib/secret_rules.py", "sha256": "747950ef1deeb7f0b3dcfb9fd81fc89f1b78acdac03f9dbdfd63ff2972a62af8"},
+        {"path": "parse_diff.py", "sha256": "59852338b7963bd2bab95097bcea4be63bdec86ed8f3caa3bdef779324ad511f"},
+        {"path": "run_checks.py", "sha256": "6c7996e7c3df4ec5a70036e23eed8cc1a017e7e96ce1e86f3748a83993053936"}
+      ],
+      "arguments": {
+        "type": "object",
+        "additional_properties": false,
+        "properties": {}
+      },
+      "timeout_seconds": 30,
+      "max_output_bytes": 1048576,
+      "requires_network": false
+    }
+  ]
+}

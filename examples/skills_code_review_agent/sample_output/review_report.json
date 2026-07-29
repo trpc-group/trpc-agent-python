@@ -1,0 +1,142 @@
+{
+  "config_digest": "dd2f3a4d0768ccb4d4d83c0820345ac67e2c7fc5f3aff9531c628f74a187c708",
+  "filter_summary": {
+    "allow_count": 1,
+    "deny_count": 0,
+    "events": [
+      {
+        "action": "allow",
+        "reasons": [
+          "manifest_verified"
+        ],
+        "rule": "sandbox_governance",
+        "stage": "pre_execution",
+        "target": "run_checks"
+      }
+    ],
+    "needs_human_review_count": 0
+  },
+  "final_conclusion": {
+    "recommendations": [
+      "Pass an argument list with shell disabled and validate all command inputs.",
+      "Use parameterized queries and bind user-controlled values separately.",
+      "请在隔离分支完成修复并补充对应回归测试。"
+    ],
+    "summary": "已生成脱敏的人工复核摘要。"
+  },
+  "findings": [
+    {
+      "bucket": "findings",
+      "category": "security",
+      "confidence": 0.82,
+      "dedup_key": "src/query.py:4:security",
+      "evidence": "    cursor.execute(f\"SELECT * FROM users WHERE id = {user_id}\")",
+      "extra": {
+        "also_matched": []
+      },
+      "file": "src/query.py",
+      "line": 4,
+      "line_side": "new",
+      "recommendation": "请在隔离分支完成修复并补充对应回归测试。",
+      "rule_id": "security.sql-fstring",
+      "severity": "high",
+      "source": "heuristic",
+      "title": "SQL is built with an interpolated f-string"
+    },
+    {
+      "bucket": "findings",
+      "category": "security",
+      "confidence": 0.85,
+      "dedup_key": "src/query.py:5:security",
+      "evidence": "    subprocess.run(\"echo \" + user_id, shell=True)",
+      "extra": {
+        "also_matched": []
+      },
+      "file": "src/query.py",
+      "line": 5,
+      "line_side": "new",
+      "recommendation": "请在隔离分支完成修复并补充对应回归测试。",
+      "rule_id": "security.subprocess-shell-true",
+      "severity": "high",
+      "source": "heuristic",
+      "title": "subprocess executes with shell=True"
+    }
+  ],
+  "input_sha256": "196ef9c37609886fe3221d0bd2f07244fb697fa95a7e4811fa840316c94c7446",
+  "input_summary": {
+    "additions": 8,
+    "deletions": 0,
+    "file_count": 2,
+    "files": [
+      {
+        "path": "src/query.py",
+        "review_scope": "full_file",
+        "status": "added"
+      },
+      {
+        "path": "tests/test_query.py",
+        "review_scope": "full_file",
+        "status": "added"
+      }
+    ],
+    "hunk_count": 2,
+    "parse_warnings": [],
+    "source_kind": "fixture"
+  },
+  "metrics": {
+    "category_distribution": {
+      "security": 2
+    },
+    "error_type_distribution": {},
+    "filter_block_count": 0,
+    "filter_review_count": 0,
+    "finding_count": 2,
+    "llm_duration_ms": 4,
+    "needs_human_review_count": 0,
+    "platform": "Windows",
+    "python_version": "3.12",
+    "runtime_type": "local",
+    "sandbox_duration_ms": 267,
+    "sandbox_run_count": 1,
+    "severity_distribution": {
+      "high": 2
+    },
+    "suppressed_count": 0,
+    "tool_call_count": 2,
+    "total_duration_ms": 630,
+    "warning_count": 1
+  },
+  "needs_human_review": [],
+  "rule_pack_version": "1.0.0",
+  "sandbox_summary": {
+    "run_count": 1,
+    "runs": [
+      {
+        "duration_ms": 267,
+        "error_type": null,
+        "exit_code": 0,
+        "filter_action": "allow",
+        "status": "ok",
+        "stderr_excerpt": "",
+        "stdout_excerpt": "",
+        "timed_out": false,
+        "truncated": false
+      }
+    ],
+    "runtime_type": "local"
+  },
+  "schema_version": "1.0.0",
+  "status": "completed_with_warnings",
+  "suppressed": {
+    "count": 0,
+    "reasons": {}
+  },
+  "task_id": "review-dc105585ea724c808689045e3e2e3213",
+  "warnings": [
+    {
+      "code": "local_isolation_unverifiable",
+      "message": "local_isolation_unverifiable occurred during governance",
+      "stage": "governance"
+    }
+  ]
+}

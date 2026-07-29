@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Observed blind spots are deliberately excluded from AC2 proxy denominators.",
+  "cases": [
+    {"id": "split_secret", "lines": ["key = 'AKIA' + suffix"]},
+    {"id": "dynamic_secret", "lines": ["token = os.environ.get('TOKEN')"]},
+    {"id": "cross_function_resource", "lines": ["def create():", "    return open('data.txt')", "def close(handle):", "    handle.close()"]},
+    {"id": "nonstandard_test_directory", "lines": ["def test_feature():", "    assert True"]}
+  ]
+}

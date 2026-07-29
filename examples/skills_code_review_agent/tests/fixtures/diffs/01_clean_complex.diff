@@ -1,0 +1,93 @@
+diff --git a/src/order_summary.py b/src/order_summary.py
+new file mode 100644
+--- /dev/null
++++ b/src/order_summary.py
+@@ -0,0 +1,47 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++from decimal import Decimal
++from typing import Iterable
++
++
++@dataclass(frozen=True)
++class LineItem:
++    sku: str
++    quantity: int
++    unit_price: Decimal
++
++    @property
++    def subtotal(self) -> Decimal:
++        return self.unit_price * self.quantity
++
++
++@dataclass(frozen=True)
++class OrderSummary:
++    subtotal: Decimal
++    discount: Decimal
++    tax: Decimal
++    total: Decimal
++
++
++def _validated_items(items: Iterable[LineItem]) -> tuple[LineItem, ...]:
++    materialized = tuple(items)
++    if any(item.quantity <= 0 for item in materialized):
++        raise ValueError("quantity must be positive")
++    if any(item.unit_price < 0 for item in materialized):
++        raise ValueError("unit price must not be negative")
++    return materialized
++
++
++def summarize_order(
++    items: Iterable[LineItem],
++    *,
++    discount_rate: Decimal = Decimal("0"),
++    tax_rate: Decimal = Decimal("0"),
++) -> OrderSummary:
++    validated = _validated_items(items)
++    subtotal = sum((item.subtotal for item in validated), Decimal("0"))
++    discount = (subtotal * discount_rate).quantize(Decimal("0.01"))
++    taxable = subtotal - discount
++    tax = (taxable * tax_rate).quantize(Decimal("0.01"))
++    return OrderSummary(subtotal, discount, tax, taxable + tax)
+diff --git a/tests/test_order_summary.py b/tests/test_order_summary.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_order_summary.py
+@@ -0,0 +1,35 @@
++from decimal import Decimal
++
++import pytest
++
++from src.order_summary import LineItem, summarize_order
++
++
++def test_summarize_order_applies_discount_before_tax():
++    items = [
++        LineItem("book", 2, Decimal("12.50")),
++        LineItem("pen", 1, Decimal("5.00")),
++    ]
++
++    summary = summarize_order(
++        items,
++        discount_rate=Decimal("0.10"),
++        tax_rate=Decimal("0.05"),
++    )
++
++    assert summary.subtotal == Decimal("30.00")
++    assert summary.discount == Decimal("3.00")
++    assert summary.tax == Decimal("1.35")
++    assert summary.total == Decimal("28.35")
++
++
++def test_summarize_order_rejects_non_positive_quantity():
++    with pytest.raises(ValueError, match="quantity"):
++        summarize_order([LineItem("book", 0, Decimal("12.50"))])
++
++
++def test_summarize_order_accepts_empty_order():
++    summary = summarize_order([])
++
++    assert summary.subtotal == Decimal("0")
++    assert summary.discount == Decimal("0.00")
++    assert summary.total == Decimal("0.00")

@@ -1,0 +1,14 @@
+diff --git a/src/retry.py b/src/retry.py
+new file mode 100644
+--- /dev/null
++++ b/src/retry.py
+@@ -0,0 +1,2 @@
++def retry_once():
++    return "retry"
+diff --git a/tests/test_retry.py b/tests/test_retry.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_retry.py
+@@ -0,0 +1,2 @@
++def test_retry_contract():
++    assert True
