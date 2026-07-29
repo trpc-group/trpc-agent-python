@@ -421,7 +421,7 @@ async def run_pipeline(
             else:
                 ctx.candidate_train = ctx.baseline_train
                 print("  trace_train_candidate.evalset.json not found — using baseline_train."
-                      " (train delta=0, overfit Gate disabled)")
+                      " (train delta=0; no train-side overfit evidence)")
             candidate_val_path = (
                 Path(ctx.project_dir)
                 / "agent"
