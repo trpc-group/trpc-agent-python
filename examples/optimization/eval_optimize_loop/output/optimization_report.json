@@ -1,0 +1,1160 @@
+{
+  "schema_version": "eval-optimize-loop-v1",
+  "run": {
+    "mode": "real",
+    "started_at": "2026-07-29T07:46:53.491932+00:00",
+    "finished_at": "2026-07-29T07:47:25.010475+00:00",
+    "duration_seconds": 31.518541,
+    "seed": 42
+  },
+  "inputs": {
+    "train_evalset_path": "train.evalset.json",
+    "val_evalset_path": "val.evalset.json",
+    "optimizer_config_path": "optimizer.json",
+    "gate_config_path": "gate.json",
+    "prompt_paths": {
+      "system_prompt": "prompts/system.md",
+      "skill": "prompts/skill.md"
+    }
+  },
+  "config": {
+    "gate": {
+      "min_val_score_gain": 0.05,
+      "min_val_pass_rate_gain": 0.0,
+      "allow_new_failures": false,
+      "allow_regressions": false,
+      "critical_case_ids": [
+        "val_multiply_pass"
+      ],
+      "max_cost_delta": 0.0,
+      "max_cost_ratio": 1.2,
+      "require_validation_improvement": true,
+      "overfit_policy": {
+        "enabled": true,
+        "train_gain_min": 0.05,
+        "val_drop_tolerance": 0.0
+      }
+    },
+    "optimizer": {
+      "evaluate": {
+        "metrics": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "contains",
+                  "case_insensitive": true
+                }
+              }
+            }
+          }
+        ],
+        "num_runs": 1
+      },
+      "optimize": {
+        "eval_case_parallelism": 2,
+        "stop": {
+          "required_metrics": "all"
+        },
+        "algorithm": {
+          "name": "gepa_reflective",
+          "seed": 42,
+          "reflection_lm": {
+            "model_name": "${TRPC_AGENT_MODEL_NAME}",
+            "base_url": "${TRPC_AGENT_BASE_URL}",
+            "api_key": "${TRPC_AGENT_API_KEY}",
+            "generation_config": {
+              "max_tokens": 1024,
+              "temperature": 0.2
+            }
+          },
+          "max_metric_calls": 12
+        }
+      }
+    }
+  },
+  "baseline": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "case_count": 3,
+      "passed_count": 2,
+      "failed_count": 1,
+      "failure_attribution_summary": {
+        "final_answer_mismatch": 1,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      },
+      "cases": [
+        {
+          "id": "train_addition_pass",
+          "metric_score": 1.0,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "passed": true,
+          "failure_reason": "",
+          "trace": {
+            "user": "小明有 4 个苹果，又买了 7 个，现在一共有多少个苹果？",
+            "expected": "答案：11 个",
+            "actual": "答案：11 个",
+            "tool_calls": []
+          },
+          "latency": 0.0003851220244541764,
+          "cost": 0.0,
+          "failure_analysis": null
+        },
+        {
+          "id": "train_discount_fail",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "final_response_avg_score failed.",
+          "trace": {
+            "user": "一件衣服原价 200 元，打 8 折后多少钱？",
+            "expected": "答案：160 元",
+            "actual": "答案：180 元",
+            "tool_calls": []
+          },
+          "latency": 0.0002015280188061297,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "train_discount_fail",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": null
+                }
+              ],
+              "expected": "答案：160 元",
+              "actual": "答案：180 元",
+              "failure_reason": "final_response_avg_score failed."
+            }
+          }
+        },
+        {
+          "id": "train_percent_pass",
+          "metric_score": 1.0,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "passed": true,
+          "failure_reason": "",
+          "trace": {
+            "user": "40 名学生中 25% 戴眼镜，戴眼镜的有多少人？",
+            "expected": "答案：10 人",
+            "actual": "计算 40 的 25%，答案：10 人",
+            "tool_calls": []
+          },
+          "latency": 0.00017735798610374331,
+          "cost": 0.0,
+          "failure_analysis": null
+        }
+      ]
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "case_count": 3,
+      "passed_count": 1,
+      "failed_count": 2,
+      "failure_attribution_summary": {
+        "final_answer_mismatch": 2,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      },
+      "cases": [
+        {
+          "id": "val_multiply_pass",
+          "metric_score": 1.0,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "passed": true,
+          "failure_reason": "",
+          "trace": {
+            "user": "教室里有 5 排座位，每排 8 个，一共有多少个座位？",
+            "expected": "答案：40 个",
+            "actual": "答案：40 个",
+            "tool_calls": []
+          },
+          "latency": 0.00013485999079421163,
+          "cost": 0.0,
+          "failure_analysis": null
+        },
+        {
+          "id": "val_water_fail",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "final_response_avg_score failed.",
+          "trace": {
+            "user": "1 升水重 1 千克，3.5 升水重多少千克？",
+            "expected": "答案：3.5 千克",
+            "actual": "答案：4 千克",
+            "tool_calls": []
+          },
+          "latency": 0.00013199500972405076,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "val_water_fail",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": null
+                }
+              ],
+              "expected": "答案：3.5 千克",
+              "actual": "答案：4 千克",
+              "failure_reason": "final_response_avg_score failed."
+            }
+          }
+        },
+        {
+          "id": "val_percent_fail",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "final_response_avg_score failed.",
+          "trace": {
+            "user": "班里 30 人，其中 60% 是女生，有多少名女生？",
+            "expected": "答案：18 人",
+            "actual": "答案：20 人",
+            "tool_calls": []
+          },
+          "latency": 0.0001270869979634881,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "val_percent_fail",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": null
+                }
+              ],
+              "expected": "答案：18 人",
+              "actual": "答案：20 人",
+              "failure_reason": "final_response_avg_score failed."
+            }
+          }
+        }
+      ]
+    }
+  },
+  "failure_attribution": {
+    "train_summary": {
+      "baseline": {
+        "final_answer_mismatch": 1,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      },
+      "candidate": {
+        "final_answer_mismatch": 1,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      }
+    },
+    "val_summary": {
+      "baseline": {
+        "final_answer_mismatch": 2,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      },
+      "candidate": {
+        "final_answer_mismatch": 2,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      }
+    },
+    "overall_summary": {
+      "final_answer_mismatch": 6,
+      "tool_call_error": 0,
+      "parameter_error": 0,
+      "llm_rubric_failed": 0,
+      "retrieval_failure": 0,
+      "format_error": 0,
+      "unknown": 0
+    },
+    "failed_cases": [
+      {
+        "variant": "baseline",
+        "split": "train",
+        "case_id": "train_discount_fail",
+        "category": "final_answer_mismatch",
+        "confidence": 0.9,
+        "explanation": "Final response did not match the reference answer.",
+        "evidence": {
+          "case_id": "train_discount_fail",
+          "failed_metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "eval_status": "FAILED",
+              "reason": null
+            }
+          ],
+          "expected": "答案：160 元",
+          "actual": "答案：180 元",
+          "failure_reason": "final_response_avg_score failed."
+        }
+      },
+      {
+        "variant": "baseline",
+        "split": "val",
+        "case_id": "val_water_fail",
+        "category": "final_answer_mismatch",
+        "confidence": 0.9,
+        "explanation": "Final response did not match the reference answer.",
+        "evidence": {
+          "case_id": "val_water_fail",
+          "failed_metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "eval_status": "FAILED",
+              "reason": null
+            }
+          ],
+          "expected": "答案：3.5 千克",
+          "actual": "答案：4 千克",
+          "failure_reason": "final_response_avg_score failed."
+        }
+      },
+      {
+        "variant": "baseline",
+        "split": "val",
+        "case_id": "val_percent_fail",
+        "category": "final_answer_mismatch",
+        "confidence": 0.9,
+        "explanation": "Final response did not match the reference answer.",
+        "evidence": {
+          "case_id": "val_percent_fail",
+          "failed_metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "eval_status": "FAILED",
+              "reason": null
+            }
+          ],
+          "expected": "答案：18 人",
+          "actual": "答案：20 人",
+          "failure_reason": "final_response_avg_score failed."
+        }
+      },
+      {
+        "variant": "candidate",
+        "split": "train",
+        "case_id": "train_discount_fail",
+        "category": "final_answer_mismatch",
+        "confidence": 0.9,
+        "explanation": "Final response did not match the reference answer.",
+        "evidence": {
+          "case_id": "train_discount_fail",
+          "failed_metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "eval_status": "FAILED",
+              "reason": null
+            }
+          ],
+          "expected": "答案：160 元",
+          "actual": "答案：180 元",
+          "failure_reason": "final_response_avg_score failed."
+        }
+      },
+      {
+        "variant": "candidate",
+        "split": "val",
+        "case_id": "val_water_fail",
+        "category": "final_answer_mismatch",
+        "confidence": 0.9,
+        "explanation": "Final response did not match the reference answer.",
+        "evidence": {
+          "case_id": "val_water_fail",
+          "failed_metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "eval_status": "FAILED",
+              "reason": null
+            }
+          ],
+          "expected": "答案：3.5 千克",
+          "actual": "答案：4 千克",
+          "failure_reason": "final_response_avg_score failed."
+        }
+      },
+      {
+        "variant": "candidate",
+        "split": "val",
+        "case_id": "val_percent_fail",
+        "category": "final_answer_mismatch",
+        "confidence": 0.9,
+        "explanation": "Final response did not match the reference answer.",
+        "evidence": {
+          "case_id": "val_percent_fail",
+          "failed_metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "eval_status": "FAILED",
+              "reason": null
+            }
+          ],
+          "expected": "答案：18 人",
+          "actual": "答案：20 人",
+          "failure_reason": "final_response_avg_score failed."
+        }
+      }
+    ]
+  },
+  "candidate": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "case_count": 3,
+      "passed_count": 2,
+      "failed_count": 1,
+      "failure_attribution_summary": {
+        "final_answer_mismatch": 1,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      },
+      "cases": [
+        {
+          "id": "train_addition_pass",
+          "metric_score": 1.0,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "passed": true,
+          "failure_reason": "",
+          "trace": {
+            "user": "小明有 4 个苹果，又买了 7 个，现在一共有多少个苹果？",
+            "expected": "答案：11 个",
+            "actual": "答案：11 个",
+            "tool_calls": []
+          },
+          "latency": 0.0006882919697090983,
+          "cost": 0.0,
+          "failure_analysis": null
+        },
+        {
+          "id": "train_discount_fail",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "final_response_avg_score failed.",
+          "trace": {
+            "user": "一件衣服原价 200 元，打 8 折后多少钱？",
+            "expected": "答案：160 元",
+            "actual": "答案：180 元",
+            "tool_calls": []
+          },
+          "latency": 0.0005271550035104156,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "train_discount_fail",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": null
+                }
+              ],
+              "expected": "答案：160 元",
+              "actual": "答案：180 元",
+              "failure_reason": "final_response_avg_score failed."
+            }
+          }
+        },
+        {
+          "id": "train_percent_pass",
+          "metric_score": 1.0,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "passed": true,
+          "failure_reason": "",
+          "trace": {
+            "user": "40 名学生中 25% 戴眼镜，戴眼镜的有多少人？",
+            "expected": "答案：10 人",
+            "actual": "计算 40 的 25%，答案：10 人",
+            "tool_calls": []
+          },
+          "latency": 0.0004119730438105762,
+          "cost": 0.0,
+          "failure_analysis": null
+        }
+      ]
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "case_count": 3,
+      "passed_count": 1,
+      "failed_count": 2,
+      "failure_attribution_summary": {
+        "final_answer_mismatch": 2,
+        "tool_call_error": 0,
+        "parameter_error": 0,
+        "llm_rubric_failed": 0,
+        "retrieval_failure": 0,
+        "format_error": 0,
+        "unknown": 0
+      },
+      "cases": [
+        {
+          "id": "val_multiply_pass",
+          "metric_score": 1.0,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "passed": true,
+          "failure_reason": "",
+          "trace": {
+            "user": "教室里有 5 排座位，每排 8 个，一共有多少个座位？",
+            "expected": "答案：40 个",
+            "actual": "答案：40 个",
+            "tool_calls": []
+          },
+          "latency": 0.0001963640097528696,
+          "cost": 0.0,
+          "failure_analysis": null
+        },
+        {
+          "id": "val_water_fail",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "final_response_avg_score failed.",
+          "trace": {
+            "user": "1 升水重 1 千克，3.5 升水重多少千克？",
+            "expected": "答案：3.5 千克",
+            "actual": "答案：4 千克",
+            "tool_calls": []
+          },
+          "latency": 0.0001838289899751544,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "val_water_fail",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": null
+                }
+              ],
+              "expected": "答案：3.5 千克",
+              "actual": "答案：4 千克",
+              "failure_reason": "final_response_avg_score failed."
+            }
+          }
+        },
+        {
+          "id": "val_percent_fail",
+          "metric_score": 0.0,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "passed": false,
+          "failure_reason": "final_response_avg_score failed.",
+          "trace": {
+            "user": "班里 30 人，其中 60% 是女生，有多少名女生？",
+            "expected": "答案：18 人",
+            "actual": "答案：20 人",
+            "tool_calls": []
+          },
+          "latency": 0.00017802900401875377,
+          "cost": 0.0,
+          "failure_analysis": {
+            "category": "final_answer_mismatch",
+            "confidence": 0.9,
+            "explanation": "Final response did not match the reference answer.",
+            "evidence": {
+              "case_id": "val_percent_fail",
+              "failed_metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "score": 0.0,
+                  "threshold": 1.0,
+                  "eval_status": "FAILED",
+                  "reason": null
+                }
+              ],
+              "expected": "答案：18 人",
+              "actual": "答案：20 人",
+              "failure_reason": "final_response_avg_score failed."
+            }
+          }
+        }
+      ]
+    },
+    "prompts": {
+      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+    }
+  },
+  "delta": {
+    "summary": {
+      "overall_change_type": "unchanged",
+      "train": {
+        "split": "train",
+        "baseline_score": 0.666667,
+        "candidate_score": 0.666667,
+        "score_delta": 0.0,
+        "baseline_pass_rate": 0.666667,
+        "candidate_pass_rate": 0.666667,
+        "pass_rate_delta": 0.0,
+        "case_count": 3,
+        "new_pass_count": 0,
+        "new_fail_count": 0,
+        "regression_count": 0,
+        "improvement_count": 0,
+        "missing_candidate_case_ids": [],
+        "extra_candidate_case_ids": []
+      },
+      "val": {
+        "split": "val",
+        "baseline_score": 0.333333,
+        "candidate_score": 0.333333,
+        "score_delta": 0.0,
+        "baseline_pass_rate": 0.333333,
+        "candidate_pass_rate": 0.333333,
+        "pass_rate_delta": 0.0,
+        "case_count": 3,
+        "new_pass_count": 0,
+        "new_fail_count": 0,
+        "regression_count": 0,
+        "improvement_count": 0,
+        "missing_candidate_case_ids": [],
+        "extra_candidate_case_ids": []
+      },
+      "regression_count": 0,
+      "improvement_count": 0,
+      "new_pass_count": 0,
+      "new_fail_count": 0,
+      "missing_candidate_case_ids": [],
+      "extra_candidate_case_ids": []
+    },
+    "train": {
+      "split": "train",
+      "baseline_score": 0.666667,
+      "candidate_score": 0.666667,
+      "score_delta": 0.0,
+      "baseline_pass_rate": 0.666667,
+      "candidate_pass_rate": 0.666667,
+      "pass_rate_delta": 0.0,
+      "case_deltas": [
+        {
+          "id": "train_addition_pass",
+          "split": "train",
+          "change_type": "unchanged",
+          "baseline": {
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 0.0003851220244541764,
+            "cost": 0.0
+          },
+          "candidate": {
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 0.0006882919697090983,
+            "cost": 0.0
+          },
+          "score_delta": 0.0,
+          "metric_deltas": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_score": 1.0,
+              "candidate_score": 1.0,
+              "score_delta": 0.0,
+              "baseline_passed": true,
+              "candidate_passed": true,
+              "status_transition": "passed_to_passed"
+            }
+          ],
+          "latency_delta": 0.000303,
+          "cost_delta": 0.0,
+          "regression": false,
+          "improvement": false,
+          "notes": []
+        },
+        {
+          "id": "train_discount_fail",
+          "split": "train",
+          "change_type": "unchanged",
+          "baseline": {
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 0.0002015280188061297,
+            "cost": 0.0
+          },
+          "candidate": {
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 0.0005271550035104156,
+            "cost": 0.0
+          },
+          "score_delta": 0.0,
+          "metric_deltas": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_score": 0.0,
+              "candidate_score": 0.0,
+              "score_delta": 0.0,
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "status_transition": "failed_to_failed"
+            }
+          ],
+          "latency_delta": 0.000326,
+          "cost_delta": 0.0,
+          "regression": false,
+          "improvement": false,
+          "notes": []
+        },
+        {
+          "id": "train_percent_pass",
+          "split": "train",
+          "change_type": "unchanged",
+          "baseline": {
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 0.00017735798610374331,
+            "cost": 0.0
+          },
+          "candidate": {
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 0.0004119730438105762,
+            "cost": 0.0
+          },
+          "score_delta": 0.0,
+          "metric_deltas": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_score": 1.0,
+              "candidate_score": 1.0,
+              "score_delta": 0.0,
+              "baseline_passed": true,
+              "candidate_passed": true,
+              "status_transition": "passed_to_passed"
+            }
+          ],
+          "latency_delta": 0.000235,
+          "cost_delta": 0.0,
+          "regression": false,
+          "improvement": false,
+          "notes": []
+        }
+      ],
+      "missing_candidate_case_ids": [],
+      "extra_candidate_case_ids": []
+    },
+    "val": {
+      "split": "val",
+      "baseline_score": 0.333333,
+      "candidate_score": 0.333333,
+      "score_delta": 0.0,
+      "baseline_pass_rate": 0.333333,
+      "candidate_pass_rate": 0.333333,
+      "pass_rate_delta": 0.0,
+      "case_deltas": [
+        {
+          "id": "val_multiply_pass",
+          "split": "val",
+          "change_type": "unchanged",
+          "baseline": {
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 0.00013485999079421163,
+            "cost": 0.0
+          },
+          "candidate": {
+            "passed": true,
+            "metric_score": 1.0,
+            "failure_category": null,
+            "latency": 0.0001963640097528696,
+            "cost": 0.0
+          },
+          "score_delta": 0.0,
+          "metric_deltas": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_score": 1.0,
+              "candidate_score": 1.0,
+              "score_delta": 0.0,
+              "baseline_passed": true,
+              "candidate_passed": true,
+              "status_transition": "passed_to_passed"
+            }
+          ],
+          "latency_delta": 6.2e-05,
+          "cost_delta": 0.0,
+          "regression": false,
+          "improvement": false,
+          "notes": []
+        },
+        {
+          "id": "val_percent_fail",
+          "split": "val",
+          "change_type": "unchanged",
+          "baseline": {
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 0.0001270869979634881,
+            "cost": 0.0
+          },
+          "candidate": {
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 0.00017802900401875377,
+            "cost": 0.0
+          },
+          "score_delta": 0.0,
+          "metric_deltas": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_score": 0.0,
+              "candidate_score": 0.0,
+              "score_delta": 0.0,
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "status_transition": "failed_to_failed"
+            }
+          ],
+          "latency_delta": 5.1e-05,
+          "cost_delta": 0.0,
+          "regression": false,
+          "improvement": false,
+          "notes": []
+        },
+        {
+          "id": "val_water_fail",
+          "split": "val",
+          "change_type": "unchanged",
+          "baseline": {
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 0.00013199500972405076,
+            "cost": 0.0
+          },
+          "candidate": {
+            "passed": false,
+            "metric_score": 0.0,
+            "failure_category": "final_answer_mismatch",
+            "latency": 0.0001838289899751544,
+            "cost": 0.0
+          },
+          "score_delta": 0.0,
+          "metric_deltas": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_score": 0.0,
+              "candidate_score": 0.0,
+              "score_delta": 0.0,
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "status_transition": "failed_to_failed"
+            }
+          ],
+          "latency_delta": 5.2e-05,
+          "cost_delta": 0.0,
+          "regression": false,
+          "improvement": false,
+          "notes": []
+        }
+      ],
+      "missing_candidate_case_ids": [],
+      "extra_candidate_case_ids": []
+    }
+  },
+  "gate_decision": {
+    "decision": "reject",
+    "accepted": false,
+    "reason": "Validation score gain is below the minimum threshold.",
+    "rule_results": [
+      {
+        "rule_name": "validation_score_gain",
+        "passed": false,
+        "severity": "required",
+        "message": "Validation score gain is below the minimum threshold.",
+        "evidence": {
+          "score_delta": 0.0,
+          "min_val_score_gain": 0.05,
+          "baseline_val_score": 0.333333,
+          "candidate_val_score": 0.333333
+        }
+      },
+      {
+        "rule_name": "validation_pass_rate_gain",
+        "passed": true,
+        "severity": "required",
+        "message": "Validation pass-rate gain satisfies the minimum threshold.",
+        "evidence": {
+          "pass_rate_delta": 0.0,
+          "min_val_pass_rate_gain": 0.0,
+          "baseline_val_pass_rate": 0.333333,
+          "candidate_val_pass_rate": 0.333333
+        }
+      },
+      {
+        "rule_name": "new_failures",
+        "passed": true,
+        "severity": "required",
+        "message": "No new validation failures were introduced.",
+        "evidence": {
+          "allow_new_failures": false,
+          "new_fail_case_ids": []
+        }
+      },
+      {
+        "rule_name": "validation_regressions",
+        "passed": true,
+        "severity": "required",
+        "message": "No validation regressions were detected.",
+        "evidence": {
+          "allow_regressions": false,
+          "regression_case_ids": []
+        }
+      },
+      {
+        "rule_name": "critical_case_regressions",
+        "passed": true,
+        "severity": "required",
+        "message": "No critical validation cases regressed.",
+        "evidence": {
+          "critical_case_ids": [
+            "val_multiply_pass"
+          ],
+          "critical_regression_case_ids": []
+        }
+      },
+      {
+        "rule_name": "cost_budget",
+        "passed": true,
+        "severity": "required",
+        "message": "Candidate cost is within the configured budget.",
+        "evidence": {
+          "baseline_cost": 0.0,
+          "candidate_cost": 0.0,
+          "cost_delta": 0.0,
+          "cost_ratio": null,
+          "max_cost_delta": 0.0,
+          "max_cost_ratio": 1.2
+        }
+      },
+      {
+        "rule_name": "overfit_detection",
+        "passed": true,
+        "severity": "required",
+        "message": "No train-only overfit pattern was detected.",
+        "evidence": {
+          "enabled": true,
+          "train_score_delta": 0.0,
+          "val_score_delta": 0.0,
+          "train_gain_min": 0.05,
+          "val_drop_tolerance": 0.0
+        }
+      }
+    ],
+    "summary": {
+      "baseline_val_score": 0.333333,
+      "candidate_val_score": 0.333333,
+      "val_score_delta": 0.0,
+      "val_pass_rate_delta": 0.0,
+      "train_score_delta": 0.0,
+      "new_fail_count": 0,
+      "regression_count": 0,
+      "critical_regression_count": 0,
+      "overfit_detected": false,
+      "baseline_cost": 0.0,
+      "candidate_cost": 0.0,
+      "cost_delta": 0.0,
+      "cost_ratio": null,
+      "total_optimization_cost": 0.0
+    },
+    "config": {
+      "min_val_score_gain": 0.05,
+      "min_val_pass_rate_gain": 0.0,
+      "allow_new_failures": false,
+      "allow_regressions": false,
+      "critical_case_ids": [
+        "val_multiply_pass"
+      ],
+      "max_cost_delta": 0.0,
+      "max_cost_ratio": 1.2,
+      "require_validation_improvement": true,
+      "overfit_policy": {
+        "enabled": true,
+        "train_gain_min": 0.05,
+        "val_drop_tolerance": 0.0
+      }
+    },
+    "recommended_action": "keep_baseline_prompts",
+    "generated_at": "2026-07-29T07:47:25.010467+00:00"
+  },
+  "optimization": {
+    "target_prompt_names": [
+      "system_prompt",
+      "skill"
+    ],
+    "baseline_prompts": {
+      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+    },
+    "best_prompts": {
+      "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+      "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+    },
+    "rounds": [
+      {
+        "round": 1,
+        "optimized_field_names": [
+          "system_prompt"
+        ],
+        "before": {
+          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+        },
+        "after": {
+          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+        },
+        "reason": "no candidate produced this round",
+        "accepted": false,
+        "validation_pass_rate": 0.0,
+        "duration_seconds": 19.865978,
+        "cost": 0.0
+      },
+      {
+        "round": 2,
+        "optimized_field_names": [
+          "skill"
+        ],
+        "before": {
+          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+        },
+        "after": {
+          "system_prompt": "You are a concise math assistant. Return the final answer in the form \"答案：<value> <unit>\".\n",
+          "skill": "For word problems, compute the numeric result first, then preserve the expected unit.\n"
+        },
+        "reason": "no candidate produced this round",
+        "accepted": false,
+        "validation_pass_rate": 0.0,
+        "duration_seconds": 10.44344,
+        "cost": 0.0
+      }
+    ],
+    "total_rounds": 2,
+    "total_cost": 0.0,
+    "duration_seconds": 30.389949,
+    "seed": 42,
+    "reason": "Optimizer finished with status=SUCCEEDED, finish_reason=no_improvement, improvement=0.0.",
+    "artifacts": {
+      "mode": "real",
+      "source_prompts_updated": false,
+      "optimizer_artifact_dir": "output/optimizer_artifacts",
+      "train_call_agent_evalset_path": "output/optimizer_inputs/train.call_agent.evalset.json",
+      "val_call_agent_evalset_path": "output/optimizer_inputs/val.call_agent.evalset.json"
+    }
+  },
+  "metadata": {
+    "example_root": ".",
+    "reproduction_command": "python run_pipeline.py --mode real",
+    "output_dir": "output",
+    "output_paths": {
+      "json": "output/optimization_report.json",
+      "markdown": "output/optimization_report.md"
+    }
+  }
+}

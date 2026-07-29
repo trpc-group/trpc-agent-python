@@ -1,0 +1,97 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "Eval optimize loop train set",
+  "description": "Trace-mode training cases for evaluation and prompt optimization.",
+  "eval_cases": [
+    {
+      "eval_id": "train_addition_pass",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "train-actual-1",
+          "user_content": {
+            "parts": [{"text": "小明有 4 个苹果，又买了 7 个，现在一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：11 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "train-expected-1",
+          "user_content": {
+            "parts": [{"text": "小明有 4 个苹果，又买了 7 个，现在一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：11 个"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_discount_fail",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "train-actual-2",
+          "user_content": {
+            "parts": [{"text": "一件衣服原价 200 元，打 8 折后多少钱？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：180 元"}],
+            "role": "model"
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "train-expected-2",
+          "user_content": {
+            "parts": [{"text": "一件衣服原价 200 元，打 8 折后多少钱？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：160 元"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_percent_pass",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "train-actual-3",
+          "user_content": {
+            "parts": [{"text": "40 名学生中 25% 戴眼镜，戴眼镜的有多少人？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "计算 40 的 25%，答案：10 人"}],
+            "role": "model"
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "train-expected-3",
+          "user_content": {
+            "parts": [{"text": "40 名学生中 25% 戴眼镜，戴眼镜的有多少人？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：10 人"}],
+            "role": "model"
+          }
+        }
+      ]
+    }
+  ]
+}

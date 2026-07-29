@@ -1,0 +1,15 @@
+{
+  "min_val_score_gain": 0.05,
+  "min_val_pass_rate_gain": 0.0,
+  "allow_new_failures": false,
+  "allow_regressions": false,
+  "critical_case_ids": ["val_multiply_pass"],
+  "max_cost_delta": 0.0,
+  "max_cost_ratio": 1.2,
+  "require_validation_improvement": true,
+  "overfit_policy": {
+    "enabled": true,
+    "train_gain_min": 0.05,
+    "val_drop_tolerance": 0.0
+  }
+}

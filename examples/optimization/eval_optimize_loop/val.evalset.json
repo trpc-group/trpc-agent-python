@@ -1,0 +1,97 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "Eval optimize loop validation set",
+  "description": "Trace-mode validation cases for candidate regression checks.",
+  "eval_cases": [
+    {
+      "eval_id": "val_multiply_pass",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "val-actual-1",
+          "user_content": {
+            "parts": [{"text": "教室里有 5 排座位，每排 8 个，一共有多少个座位？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：40 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "val-expected-1",
+          "user_content": {
+            "parts": [{"text": "教室里有 5 排座位，每排 8 个，一共有多少个座位？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：40 个"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_water_fail",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "val-actual-2",
+          "user_content": {
+            "parts": [{"text": "1 升水重 1 千克，3.5 升水重多少千克？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：4 千克"}],
+            "role": "model"
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "val-expected-2",
+          "user_content": {
+            "parts": [{"text": "1 升水重 1 千克，3.5 升水重多少千克？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：3.5 千克"}],
+            "role": "model"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_percent_fail",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "val-actual-3",
+          "user_content": {
+            "parts": [{"text": "班里 30 人，其中 60% 是女生，有多少名女生？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：20 人"}],
+            "role": "model"
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "val-expected-3",
+          "user_content": {
+            "parts": [{"text": "班里 30 人，其中 60% 是女生，有多少名女生？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：18 人"}],
+            "role": "model"
+          }
+        }
+      ]
+    }
+  ]
+}
