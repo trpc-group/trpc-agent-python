@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -25,7 +25,7 @@ from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
 from trpc_agent_sdk.tools.safety import write_audit_event
 
 EXAMPLE_DIR = REPO_ROOT / "examples" / "tool_safety"
-DEFAULT_MANIFEST = EXAMPLE_DIR / "samples" / "manifest.yaml"
+DEFAULT_MANIFEST = REPO_ROOT / "tests" / "tools" / "safety" / "samples" / "manifest.yaml"
 DEFAULT_POLICY = EXAMPLE_DIR / "tool_safety_policy.yaml"
 DEFAULT_OUTPUT = EXAMPLE_DIR / "all_reports.json"
 FIXED_TIMESTAMP = "1970-01-01T00:00:00+00:00"

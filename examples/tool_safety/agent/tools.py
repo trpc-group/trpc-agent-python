@@ -24,8 +24,7 @@ from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
 
 DEMO_DIR = Path(__file__).resolve().parents[1]
-TOOL_SAFETY_DIR = DEMO_DIR.parent
-POLICY_PATH = TOOL_SAFETY_DIR / "tool_safety_policy.yaml"
+POLICY_PATH = DEMO_DIR / "tool_safety_policy.yaml"
 AUDIT_LOG_PATH = DEMO_DIR / "real_agent_safety_audit.jsonl"
 SKILL_ROOT = DEMO_DIR / "skills"
 MCP_SERVER_PATH = DEMO_DIR / "mcp_server.py"

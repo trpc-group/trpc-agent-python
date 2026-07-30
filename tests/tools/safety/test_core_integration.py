@@ -22,7 +22,8 @@ from trpc_agent_sdk.types import Outcome
 
 
 @pytest.mark.asyncio
-async def test_bash_tool_blocks_denied_command_before_execution(tmp_path):
+@patch("trpc_agent_sdk.tools.file_tools._bash_tool.asyncio.create_subprocess_shell")
+async def test_bash_tool_blocks_denied_command_before_execution(mock_create_subprocess_shell, tmp_path):
     audit_path = tmp_path / "audit.jsonl"
     tool = BashTool(cwd=str(tmp_path), safety_audit_log_path=str(audit_path), enable_safety_guard=True)
 
@@ -35,6 +36,7 @@ async def test_bash_tool_blocks_denied_command_before_execution(tmp_path):
     assert result["return_code"] == -1
     assert result["safety_report"]["decision"] == "deny"
     assert result["safety_report"]["blocked"] is True
+    mock_create_subprocess_shell.assert_not_called()
 
     audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
     assert audit_event["tool_name"] == "Bash"

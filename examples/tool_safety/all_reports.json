@@ -57,7 +57,7 @@
         "NETWORK_NON_WHITELIST_DOMAIN"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/aiohttp_non_whitelist.py",
+      "sample": "tests/tools/safety/samples/aiohttp_non_whitelist.py",
       "sanitized": false,
       "scan_id": "manifest:001:aiohttp_non_whitelist.py",
       "summary": "Decision deny with high risk from rules: NETWORK_DYNAMIC_URL_REVIEW, NETWORK_NON_WHITELIST_DOMAIN, NETWORK_NON_WHITELIST_DOMAIN.",
@@ -101,7 +101,7 @@
         "DEPENDENCY_INSTALL"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/apt_install.sh",
+      "sample": "tests/tools/safety/samples/apt_install.sh",
       "sanitized": false,
       "scan_id": "manifest:002:apt_install.sh",
       "summary": "Decision deny with high risk from rules: DEPENDENCY_INSTALL.",
@@ -145,7 +145,7 @@
         "BASH_SHELL_FEATURE_REVIEW"
       ],
       "risk_level": "low",
-      "sample": "examples/tool_safety/samples/background_process.sh",
+      "sample": "tests/tools/safety/samples/background_process.sh",
       "sanitized": false,
       "scan_id": "manifest:003:background_process.sh",
       "summary": "Decision needs_human_review with low risk from rules: BASH_SHELL_FEATURE_REVIEW.",
@@ -201,7 +201,7 @@
         "BASH_BASE64_EXEC_REVIEW"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/base64_exec_review.sh",
+      "sample": "tests/tools/safety/samples/base64_exec_review.sh",
       "sanitized": false,
       "scan_id": "manifest:004:base64_exec_review.sh",
       "summary": "Decision needs_human_review with high risk from rules: BASH_BASE64_EXEC_REVIEW, BASH_SHELL_FEATURE_REVIEW.",
@@ -276,7 +276,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/bash_inline_command.sh",
+      "sample": "tests/tools/safety/samples/bash_inline_command.sh",
       "sanitized": false,
       "scan_id": "manifest:005:bash_inline_command.sh",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, BASH_INLINE_INTERPRETER_REVIEW, BASH_COMMAND_REVIEW.",
@@ -351,7 +351,7 @@
         "NETWORK_NON_WHITELIST_DOMAIN"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/bash_pipe.sh",
+      "sample": "tests/tools/safety/samples/bash_pipe.sh",
       "sanitized": false,
       "scan_id": "manifest:006:bash_pipe.sh",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, NETWORK_NON_WHITELIST_DOMAIN, BASH_SHELL_FEATURE_REVIEW.",
@@ -395,7 +395,7 @@
         "BASH_SHELL_FEATURE_REVIEW"
       ],
       "risk_level": "low",
-      "sample": "examples/tool_safety/samples/command_substitution.sh",
+      "sample": "tests/tools/safety/samples/command_substitution.sh",
       "sanitized": false,
       "scan_id": "manifest:007:command_substitution.sh",
       "summary": "Decision needs_human_review with low risk from rules: BASH_SHELL_FEATURE_REVIEW.",
@@ -441,7 +441,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/credential_file_key.py",
+      "sample": "tests/tools/safety/samples/credential_file_key.py",
       "sanitized": false,
       "scan_id": "manifest:008:credential_file_key.py",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS.",
@@ -518,7 +518,7 @@
         "NETWORK_NON_WHITELIST_DOMAIN"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/curl_env_upload.sh",
+      "sample": "tests/tools/safety/samples/curl_env_upload.sh",
       "sanitized": false,
       "scan_id": "manifest:009:curl_env_upload.sh",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, NETWORK_NON_WHITELIST_DOMAIN, BASH_COMMAND_REVIEW.",
@@ -562,7 +562,7 @@
         "BASH_RECURSIVE_DELETE"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/danger_delete.sh",
+      "sample": "tests/tools/safety/samples/danger_delete.sh",
       "sanitized": false,
       "scan_id": "manifest:010:danger_delete.sh",
       "summary": "Decision deny with critical risk from rules: BASH_RECURSIVE_DELETE.",
@@ -606,7 +606,7 @@
         "DEPENDENCY_INSTALL"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/dependency_install.sh",
+      "sample": "tests/tools/safety/samples/dependency_install.sh",
       "sanitized": false,
       "scan_id": "manifest:011:dependency_install.sh",
       "summary": "Decision deny with high risk from rules: DEPENDENCY_INSTALL.",
@@ -666,7 +666,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/dynamic_secret_path.py",
+      "sample": "tests/tools/safety/samples/dynamic_secret_path.py",
       "sanitized": false,
       "scan_id": "manifest:012:dynamic_secret_path.py",
       "summary": "Decision deny with critical risk from rules: FILE_DYNAMIC_SECRET_PATH_REVIEW, FILE_SECRET_PATH_ACCESS.",
@@ -710,7 +710,7 @@
         "NETWORK_DYNAMIC_URL_REVIEW"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/dynamic_url_join.py",
+      "sample": "tests/tools/safety/samples/dynamic_url_join.py",
       "sanitized": false,
       "scan_id": "manifest:013:dynamic_url_join.py",
       "summary": "Decision needs_human_review with medium risk from rules: NETWORK_DYNAMIC_URL_REVIEW.",
@@ -754,7 +754,7 @@
         "BASH_FIND_DELETE_REVIEW"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/find_delete_review.sh",
+      "sample": "tests/tools/safety/samples/find_delete_review.sh",
       "sanitized": false,
       "scan_id": "manifest:014:find_delete_review.sh",
       "summary": "Decision needs_human_review with high risk from rules: BASH_FIND_DELETE_REVIEW.",
@@ -810,7 +810,7 @@
         "BASH_FORK_BOMB"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/fork_bomb.sh",
+      "sample": "tests/tools/safety/samples/fork_bomb.sh",
       "sanitized": false,
       "scan_id": "manifest:015:fork_bomb.sh",
       "summary": "Decision deny with critical risk from rules: BASH_FORK_BOMB, BASH_SHELL_FEATURE_REVIEW.",
@@ -854,7 +854,7 @@
         "PY_DYNAMIC_CODE_EXECUTION"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/human_review.py",
+      "sample": "tests/tools/safety/samples/human_review.py",
       "sanitized": false,
       "scan_id": "manifest:016:human_review.py",
       "summary": "Decision needs_human_review with medium risk from rules: PY_DYNAMIC_CODE_EXECUTION.",
@@ -898,7 +898,7 @@
         "PY_INFINITE_LOOP"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/infinite_loop.py",
+      "sample": "tests/tools/safety/samples/infinite_loop.py",
       "sanitized": false,
       "scan_id": "manifest:017:infinite_loop.py",
       "summary": "Decision needs_human_review with medium risk from rules: PY_INFINITE_LOOP.",
@@ -942,7 +942,7 @@
         "BASH_LONG_SLEEP"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/long_sleep.sh",
+      "sample": "tests/tools/safety/samples/long_sleep.sh",
       "sanitized": false,
       "scan_id": "manifest:018:long_sleep.sh",
       "summary": "Decision needs_human_review with medium risk from rules: BASH_LONG_SLEEP.",
@@ -1002,7 +1002,7 @@
         "NETWORK_NON_WHITELIST_DOMAIN"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/network_non_whitelist.py",
+      "sample": "tests/tools/safety/samples/network_non_whitelist.py",
       "sanitized": false,
       "scan_id": "manifest:019:network_non_whitelist.py",
       "summary": "Decision deny with high risk from rules: NETWORK_NON_WHITELIST_DOMAIN, NETWORK_NON_WHITELIST_DOMAIN.",
@@ -1031,7 +1031,7 @@
       "language": "python",
       "required_rule_ids": [],
       "risk_level": "none",
-      "sample": "examples/tool_safety/samples/network_whitelist.py",
+      "sample": "tests/tools/safety/samples/network_whitelist.py",
       "sanitized": false,
       "scan_id": "manifest:020:network_whitelist.py",
       "summary": "No safety rules matched; execution is allowed by the current static policy.",
@@ -1075,7 +1075,7 @@
         "DEPENDENCY_INSTALL"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/npm_install.sh",
+      "sample": "tests/tools/safety/samples/npm_install.sh",
       "sanitized": false,
       "scan_id": "manifest:021:npm_install.sh",
       "summary": "Decision deny with high risk from rules: DEPENDENCY_INSTALL.",
@@ -1163,7 +1163,7 @@
         "NETWORK_NON_WHITELIST_DOMAIN"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/os_getenv_token_exfiltration.py",
+      "sample": "tests/tools/safety/samples/os_getenv_token_exfiltration.py",
       "sanitized": true,
       "scan_id": "manifest:022:os_getenv_token_exfiltration.py",
       "summary": "Decision deny with high risk from rules: SENSITIVE_ENV_READ_REVIEW, NETWORK_NON_WHITELIST_DOMAIN, NETWORK_NON_WHITELIST_DOMAIN, SENSITIVE_OUTPUT.",
@@ -1207,7 +1207,7 @@
         "PY_PROCESS_EXECUTION_REVIEW"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/os_system.py",
+      "sample": "tests/tools/safety/samples/os_system.py",
       "sanitized": false,
       "scan_id": "manifest:023:os_system.py",
       "summary": "Decision needs_human_review with medium risk from rules: PY_PROCESS_EXECUTION_REVIEW.",
@@ -1289,7 +1289,7 @@
         "DEPENDENCY_INSTALL"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/pip_module_install.py",
+      "sample": "tests/tools/safety/samples/pip_module_install.py",
       "sanitized": false,
       "scan_id": "manifest:024:pip_module_install.py",
       "summary": "Decision deny with high risk from rules: DEPENDENCY_INSTALL, BASH_COMMAND_REVIEW, PY_PROCESS_EXECUTION_REVIEW, DEPENDENCY_INSTALL.",
@@ -1357,7 +1357,7 @@
         "SENSITIVE_PRIVATE_KEY_LITERAL"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/private_key_literal.py",
+      "sample": "tests/tools/safety/samples/private_key_literal.py",
       "sanitized": true,
       "scan_id": "manifest:025:private_key_literal.py",
       "summary": "Decision deny with critical risk from rules: SENSITIVE_PRIVATE_KEY_LITERAL, SENSITIVE_OUTPUT, SENSITIVE_PRIVATE_KEY_LITERAL.",
@@ -1416,7 +1416,7 @@
         "BASH_PRIVILEGE_ESCALATION"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/privilege_escalation.sh",
+      "sample": "tests/tools/safety/samples/privilege_escalation.sh",
       "sanitized": false,
       "scan_id": "manifest:026:privilege_escalation.sh",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, BASH_PRIVILEGE_ESCALATION.",
@@ -1503,7 +1503,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/python_inline_command.sh",
+      "sample": "tests/tools/safety/samples/python_inline_command.sh",
       "sanitized": false,
       "scan_id": "manifest:027:python_inline_command.sh",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, BASH_INLINE_INTERPRETER_REVIEW, BASH_SHELL_FEATURE_REVIEW, BASH_COMMAND_REVIEW.",
@@ -1549,7 +1549,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/read_env.py",
+      "sample": "tests/tools/safety/samples/read_env.py",
       "sanitized": false,
       "scan_id": "manifest:028:read_env.py",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS.",
@@ -1596,7 +1596,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/read_secret.py",
+      "sample": "tests/tools/safety/samples/read_secret.py",
       "sanitized": false,
       "scan_id": "manifest:029:read_secret.py",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS.",
@@ -1625,7 +1625,7 @@
       "language": "bash",
       "required_rule_ids": [],
       "risk_level": "none",
-      "sample": "examples/tool_safety/samples/safe_bash.sh",
+      "sample": "tests/tools/safety/samples/safe_bash.sh",
       "sanitized": false,
       "scan_id": "manifest:030:safe_bash.sh",
       "summary": "No safety rules matched; execution is allowed by the current static policy.",
@@ -1654,7 +1654,7 @@
       "language": "python",
       "required_rule_ids": [],
       "risk_level": "none",
-      "sample": "examples/tool_safety/samples/safe_file_read.py",
+      "sample": "tests/tools/safety/samples/safe_file_read.py",
       "sanitized": false,
       "scan_id": "manifest:031:safe_file_read.py",
       "summary": "No safety rules matched; execution is allowed by the current static policy.",
@@ -1683,7 +1683,7 @@
       "language": "python",
       "required_rule_ids": [],
       "risk_level": "none",
-      "sample": "examples/tool_safety/samples/safe_python.py",
+      "sample": "tests/tools/safety/samples/safe_python.py",
       "sanitized": false,
       "scan_id": "manifest:032:safe_python.py",
       "summary": "No safety rules matched; execution is allowed by the current static policy.",
@@ -1727,7 +1727,7 @@
         "SENSITIVE_OUTPUT"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/sensitive_output.py",
+      "sample": "tests/tools/safety/samples/sensitive_output.py",
       "sanitized": false,
       "scan_id": "manifest:033:sensitive_output.py",
       "summary": "Decision deny with high risk from rules: SENSITIVE_OUTPUT.",
@@ -1783,7 +1783,7 @@
         "PY_SHELL_INJECTION_RISK"
       ],
       "risk_level": "high",
-      "sample": "examples/tool_safety/samples/shell_injection.py",
+      "sample": "tests/tools/safety/samples/shell_injection.py",
       "sanitized": false,
       "scan_id": "manifest:034:shell_injection.py",
       "summary": "Decision needs_human_review with high risk from rules: PY_SHELL_INJECTION_RISK, PY_PROCESS_EXECUTION_REVIEW.",
@@ -1827,7 +1827,7 @@
         "PY_SOCKET_NETWORK_ACCESS"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/socket_access.py",
+      "sample": "tests/tools/safety/samples/socket_access.py",
       "sanitized": false,
       "scan_id": "manifest:035:socket_access.py",
       "summary": "Decision needs_human_review with medium risk from rules: PY_SOCKET_NETWORK_ACCESS.",
@@ -1871,7 +1871,7 @@
         "PY_PROCESS_EXECUTION_REVIEW"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/subprocess_call.py",
+      "sample": "tests/tools/safety/samples/subprocess_call.py",
       "sanitized": false,
       "scan_id": "manifest:036:subprocess_call.py",
       "summary": "Decision needs_human_review with medium risk from rules: PY_PROCESS_EXECUTION_REVIEW.",
@@ -1927,7 +1927,7 @@
         "BASH_RECURSIVE_DELETE"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/subprocess_danger_delete.py",
+      "sample": "tests/tools/safety/samples/subprocess_danger_delete.py",
       "sanitized": false,
       "scan_id": "manifest:037:subprocess_danger_delete.py",
       "summary": "Decision deny with critical risk from rules: BASH_RECURSIVE_DELETE, PY_PROCESS_EXECUTION_REVIEW.",
@@ -1986,7 +1986,7 @@
         "FILE_SECRET_PATH_ACCESS"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/system_overwrite.sh",
+      "sample": "tests/tools/safety/samples/system_overwrite.sh",
       "sanitized": false,
       "scan_id": "manifest:038:system_overwrite.sh",
       "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, BASH_SHELL_FEATURE_REVIEW.",
@@ -2030,7 +2030,7 @@
         "NETWORK_DYNAMIC_URL_REVIEW"
       ],
       "risk_level": "medium",
-      "sample": "examples/tool_safety/samples/unknown_network_dynamic.py",
+      "sample": "tests/tools/safety/samples/unknown_network_dynamic.py",
       "sanitized": false,
       "scan_id": "manifest:039:unknown_network_dynamic.py",
       "summary": "Decision needs_human_review with medium risk from rules: NETWORK_DYNAMIC_URL_REVIEW.",
@@ -2099,7 +2099,7 @@
         "BASH_RECURSIVE_DELETE"
       ],
       "risk_level": "critical",
-      "sample": "examples/tool_safety/samples/xargs_rm_review.sh",
+      "sample": "tests/tools/safety/samples/xargs_rm_review.sh",
       "sanitized": false,
       "scan_id": "manifest:040:xargs_rm_review.sh",
       "summary": "Decision deny with critical risk from rules: BASH_RECURSIVE_DELETE, BASH_XARGS_RM_REVIEW, BASH_SHELL_FEATURE_REVIEW.",

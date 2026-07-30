@@ -10,6 +10,19 @@ Tool is the core mechanism for extending Agent capabilities in trpc_agent. With 
 - **MCP protocol**: STDIO, SSE, and Streamable HTTP transports
 - **Session management**: Automatic session health checks and reconnection for MCP toolsets
 
+### Tool Safety Checks
+
+Tools that execute shell commands, Python code, file operations, or network requests can
+enable the Tool Script Safety Guard before execution. It statically scans scripts and
+commands, returns `allow`, `needs_human_review`, or `deny`, and can emit audit logs and
+structured safety reports. `deny` is blocked before the execution boundary; review
+decisions can also be blocked through configuration.
+
+See the complete usage example in
+[examples/tool_safety/README.md](../../../examples/tool_safety/README.md), and the request
+flow and risk decision model in
+[examples/tool_safety/DESIGN.md](../../../examples/tool_safety/DESIGN.md).
+
 ## How Agents Use Tools
 
 Agents dynamically use tools through the following steps:
