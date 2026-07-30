@@ -18,8 +18,7 @@ from trpc_agent_sdk.log import logger
 from ._models import SafetyAuditEvent
 from ._models import SafetyReport
 
-_JSONL_LOCKS: dict[Path, Lock] = {}
-_JSONL_LOCKS_GUARD = Lock()
+_JSONL_LOCK_STRIPES = tuple(Lock() for _ in range(64))
 
 
 class AuditSink(Protocol):
@@ -46,8 +45,7 @@ class JsonlAuditSink:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         lock_key = self.path.resolve(strict=False)
-        with _JSONL_LOCKS_GUARD:
-            self._lock = _JSONL_LOCKS.setdefault(lock_key, Lock())
+        self._lock = _JSONL_LOCK_STRIPES[hash(lock_key) % len(_JSONL_LOCK_STRIPES)]
 
     def emit(self, event: SafetyAuditEvent) -> None:
         line = event.model_dump_json() + "\n"

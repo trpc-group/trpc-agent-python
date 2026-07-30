@@ -7,14 +7,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
 from unittest.mock import MagicMock
 from unittest.mock import patch
+
+import pytest
 
 from trpc_agent_sdk.tools.safety import JsonlAuditSink
 from trpc_agent_sdk.tools.safety import LoggerAuditSink
 from trpc_agent_sdk.tools.safety import SafetyAuditEvent
 from trpc_agent_sdk.tools.safety import SafetyDecision
+from trpc_agent_sdk.tools.safety import SafetyGuard
 from trpc_agent_sdk.tools.safety import SafetyScanRequest
 from trpc_agent_sdk.tools.safety import SafetyScanner
 from trpc_agent_sdk.tools.safety import ScriptLanguage
@@ -52,6 +57,48 @@ def test_jsonl_sink_writes_one_parseable_line(tmp_path):
     data = json.loads(lines[0])
     assert data["decision"] == "allow"
     assert data["rule_id"] == "ALLOW-000"
+
+
+@pytest.mark.asyncio
+async def test_async_guard_offloads_audit_from_event_loop():
+    thread_ids: list[int] = []
+
+    class ThreadRecordingSink:
+
+        def emit(self, event: SafetyAuditEvent) -> None:
+            del event
+            thread_ids.append(threading.get_ident())
+
+    event_loop_thread = threading.get_ident()
+    guard = SafetyGuard(SafetyScanner(), ThreadRecordingSink())
+
+    report = await guard.check_async(
+        SafetyScanRequest(
+            content='print("ok")',
+            language=ScriptLanguage.PYTHON,
+            tool_name="SafeTool",
+        ), )
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert thread_ids
+    assert thread_ids[0] != event_loop_thread
+
+
+@pytest.mark.asyncio
+async def test_jsonl_sink_keeps_concurrent_async_audits_parseable(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    guard = SafetyGuard(SafetyScanner(), JsonlAuditSink(path))
+    request = SafetyScanRequest(
+        content='print("ok")',
+        language=ScriptLanguage.PYTHON,
+        tool_name="SafeTool",
+    )
+
+    await asyncio.gather(*(guard.check_async(request) for _ in range(50)))
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 50
+    assert all(json.loads(line)["decision"] == "allow" for line in lines)
 
 
 def test_default_logger_sink_emits_structured_event():

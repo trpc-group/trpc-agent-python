@@ -48,6 +48,17 @@ _BLOCKED_EXIT_CODE = 126
 _TIMED_OUT_EXIT_CODE = 124
 
 
+def _consume_late_execution(task: asyncio.Future[Any]) -> None:
+    """Retrieve a late result after cooperative cancellation."""
+
+    try:
+        task.exception()
+    except asyncio.CancelledError:
+        pass
+    except Exception as ex:  # pylint: disable=broad-except
+        logger.error("cancelled guarded execution failed late: %s", type(ex).__name__)
+
+
 def _truncate_text(value: str, max_bytes: int) -> tuple[str, bool]:
     raw = value.encode("utf-8")
     if len(raw) <= max_bytes:
@@ -72,6 +83,16 @@ class SafetyGuard:
 
         return self.check_invocation([request], tool_name=tool_name)
 
+    async def check_async(
+        self,
+        request: SafetyScanRequest,
+        *,
+        tool_name: str | None = None,
+    ) -> SafetyReport:
+        """Scan synchronously and emit audit IO without blocking the event loop."""
+
+        return await self.check_invocation_async([request], tool_name=tool_name)
+
     def check_invocation(
         self,
         requests: list[SafetyScanRequest],
@@ -82,6 +103,27 @@ class SafetyGuard:
         unsupported_blocks: list[tuple[int, str, str]] | None = None,
     ) -> SafetyReport:
         """Scan all blocks and emit one aggregate audit and telemetry record."""
+
+        resolved_name, report = self._scan_invocation(
+            requests,
+            tool_name=tool_name,
+            invocation_id=invocation_id,
+            block_indices=block_indices,
+            unsupported_blocks=unsupported_blocks,
+        )
+        self._record(resolved_name, report)
+        return report
+
+    def _scan_invocation(
+        self,
+        requests: list[SafetyScanRequest],
+        *,
+        tool_name: str | None = None,
+        invocation_id: str | None = None,
+        block_indices: list[int] | None = None,
+        unsupported_blocks: list[tuple[int, str, str]] | None = None,
+    ) -> tuple[str, SafetyReport]:
+        """Build one aggregate report without emitting its audit event."""
 
         unsupported_blocks = unsupported_blocks or []
         block_indices = list(range(len(requests))) if block_indices is None else block_indices
@@ -94,7 +136,11 @@ class SafetyGuard:
             resolved_name = (tool_name or "").strip()
             if not resolved_name:
                 raise ValueError("tool_name is required when a safety guard is attached to execution")
-            return self.invalid_request("empty invocation", tool_name=resolved_name)
+            return resolved_name, self._single_status_report(
+                rule_id="POLICY-INPUT-001",
+                evidence="tool arguments do not match the safety input contract",
+                status=AnalysisStatus.UNSUPPORTED,
+            )
         started = time.perf_counter()
         invocation_id = invocation_id or uuid.uuid4().hex
         resolved_name = (tool_name or (requests[0].tool_name if requests else None) or "").strip()
@@ -143,7 +189,27 @@ class SafetyGuard:
             invocation_id=invocation_id,
             blocks_scanned=len(requests) + len(unsupported_blocks),
         )
-        self._record(resolved_name, report)
+        return resolved_name, report
+
+    async def check_invocation_async(
+        self,
+        requests: list[SafetyScanRequest],
+        *,
+        tool_name: str | None = None,
+        invocation_id: str | None = None,
+        block_indices: list[int] | None = None,
+        unsupported_blocks: list[tuple[int, str, str]] | None = None,
+    ) -> SafetyReport:
+        """Scan an invocation and emit audit IO without blocking the event loop."""
+
+        resolved_name, report = self._scan_invocation(
+            requests,
+            tool_name=tool_name,
+            invocation_id=invocation_id,
+            block_indices=block_indices,
+            unsupported_blocks=unsupported_blocks,
+        )
+        await self._record_async(resolved_name, report)
         return report
 
     @staticmethod
@@ -178,7 +244,6 @@ class SafetyGuard:
     def _single_status_report(
         self,
         *,
-        tool_name: str,
         rule_id: str,
         evidence: str,
         status: AnalysisStatus,
@@ -194,30 +259,43 @@ class SafetyGuard:
             analysis_status=status,
             invocation_id=uuid.uuid4().hex,
         )
-        self._record(tool_name, report)
         return report
 
     def unsupported_language(self, content: str, language: str, *, tool_name: str) -> SafetyReport:
         """Fail closed and audit a code block outside the supported languages."""
 
         del content, language
-        return self._single_status_report(
-            tool_name=tool_name,
+        report = self._single_status_report(
             rule_id="PARSE-001",
             evidence="unsupported code language",
             status=AnalysisStatus.UNSUPPORTED,
         )
+        self._record(tool_name, report)
+        return report
 
     def invalid_request(self, reason: str, *, tool_name: str) -> SafetyReport:
         """Return and audit a fail-closed report for an invalid adapter input."""
 
         del reason
-        return self._single_status_report(
-            tool_name=tool_name,
+        report = self._single_status_report(
             rule_id="POLICY-INPUT-001",
             evidence="tool arguments do not match the safety input contract",
             status=AnalysisStatus.UNSUPPORTED,
         )
+        self._record(tool_name, report)
+        return report
+
+    async def invalid_request_async(self, reason: str, *, tool_name: str) -> SafetyReport:
+        """Audit an invalid asynchronous adapter request off the event loop."""
+
+        del reason
+        report = self._single_status_report(
+            rule_id="POLICY-INPUT-001",
+            evidence="tool arguments do not match the safety input contract",
+            status=AnalysisStatus.UNSUPPORTED,
+        )
+        await self._record_async(tool_name, report)
+        return report
 
     def _record(self, tool_name: str, report: SafetyReport) -> None:
         event = SafetyAuditEvent.from_report(tool_name, report)
@@ -226,6 +304,15 @@ class SafetyGuard:
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("failed to emit tool safety audit event: %s", type(ex).__name__)
         record_safety_telemetry(report)
+
+    async def _record_async(self, tool_name: str, report: SafetyReport) -> None:
+        event = SafetyAuditEvent.from_report(tool_name, report)
+        try:
+            await asyncio.to_thread(self.audit_sink.emit, event)
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error("failed to emit tool safety audit event: %s", type(ex).__name__)
+        finally:
+            record_safety_telemetry(report)
 
 
 class GuardedProgramRunner(BaseProgramRunner):
@@ -278,12 +365,12 @@ class GuardedProgramRunner(BaseProgramRunner):
                 metadata=metadata,
             )
         except (TypeError, ValueError):
-            report = self._guard.invalid_request(
+            report = await self._guard.invalid_request_async(
                 "invalid program runner request",
                 tool_name=self._tool_name,
             )
         else:
-            report = self._guard.check(request)
+            report = await self._guard.check_async(request)
         if report.decision != SafetyDecision.ALLOW:
             return WorkspaceRunResult(
                 stderr=report.model_dump_json(),
@@ -298,9 +385,11 @@ class GuardedProgramRunner(BaseProgramRunner):
             )
         except asyncio.CancelledError:
             task.cancel()
+            task.add_done_callback(_consume_late_execution)
             raise
         if task not in done:
             task.cancel()
+            task.add_done_callback(_consume_late_execution)
             return WorkspaceRunResult(
                 stderr=("program execution exceeded the tool safety policy timeout; "
                         "cancellation was requested, but only the runtime or sandbox "
@@ -425,14 +514,14 @@ class GuardedCodeExecutor(BaseCodeExecutor):
                     ))
                 block_indices.append(block_index)
 
-            report = self.guard.check_invocation(
+            report = await self.guard.check_invocation_async(
                 requests,
                 tool_name=self.tool_name,
                 block_indices=block_indices,
                 unsupported_blocks=unsupported_blocks,
             )
         except (TypeError, ValueError):
-            report = self.guard.invalid_request(
+            report = await self.guard.invalid_request_async(
                 "invalid code executor request",
                 tool_name=self.tool_name,
             )
@@ -453,10 +542,11 @@ class GuardedCodeExecutor(BaseCodeExecutor):
             )
         except asyncio.CancelledError:
             task.cancel()
+            task.add_done_callback(_consume_late_execution)
             raise
         if task not in done:
             task.cancel()
-            task.add_done_callback(self._consume_late_execution)
+            task.add_done_callback(_consume_late_execution)
             return CodeExecutionResult(
                 outcome=Outcome.OUTCOME_FAILED,
                 output=("Code execution exceeded the tool safety policy timeout "
@@ -470,17 +560,6 @@ class GuardedCodeExecutor(BaseCodeExecutor):
         if output == result.output:
             return result
         return result.model_copy(update={"output": output})
-
-    @staticmethod
-    def _consume_late_execution(task: asyncio.Task[CodeExecutionResult]) -> None:
-        """Retrieve a late task result after cooperative cancellation."""
-
-        try:
-            task.exception()
-        except asyncio.CancelledError:
-            pass
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("cancelled code executor failed late: %s", type(ex).__name__)
 
     @staticmethod
     def _language(value: str) -> ScriptLanguage | None:

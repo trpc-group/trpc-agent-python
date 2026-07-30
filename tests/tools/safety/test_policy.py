@@ -266,3 +266,18 @@ def test_lowering_deny_rule_to_review_is_reported_as_policy_relaxation(tmp_path)
 
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert report.policy_relaxed is True
+
+
+def test_unmatched_relaxed_override_does_not_mark_report_as_relaxed(tmp_path):
+    report = _scanner_from_yaml(
+        tmp_path,
+        "rule_overrides:\n"
+        "  FILE-001:\n"
+        "    action: needs_human_review\n",
+    ).scan(SafetyScanRequest(
+        content="echo hello",
+        language=ScriptLanguage.BASH,
+    ))
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert report.policy_relaxed is False

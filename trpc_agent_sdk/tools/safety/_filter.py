@@ -174,7 +174,7 @@ class ToolSafetyFilter(BaseFilter):
             if timeout is not None and not isinstance(timeout, (int, float)):
                 raise ValueError("The configured timeout field must be numeric.")
 
-            report = self._guard.check(
+            report = await self._guard.check_async(
                 SafetyScanRequest(
                     content=content,
                     language=self._language,
@@ -189,10 +189,13 @@ class ToolSafetyFilter(BaseFilter):
                     metadata={"filter": self.name},
                 ))
         except (TypeError, ValueError) as ex:
-            report = self._guard.invalid_request(str(ex), tool_name=str(tool_name))
+            report = await self._guard.invalid_request_async(str(ex), tool_name=str(tool_name))
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("tool safety filter failed: %s", type(ex).__name__)
-            report = self._guard.invalid_request("internal adapter failure", tool_name=str(tool_name))
+            report = await self._guard.invalid_request_async(
+                "internal adapter failure",
+                tool_name=str(tool_name),
+            )
         if (report.decision == SafetyDecision.ALLOW and apply_default_timeout and isinstance(req, dict)
                 and self._timeout_field is not None):
             req[self._timeout_field] = timeout

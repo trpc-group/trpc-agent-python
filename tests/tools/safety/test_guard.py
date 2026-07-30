@@ -80,6 +80,19 @@ class SlowProgramRunner(FakeProgramRunner):
         return self.result
 
 
+class LateFailingProgramRunner(FakeProgramRunner):
+
+    @override
+    async def run_program(self, ws, spec, ctx=None):
+        del ws, spec, ctx
+        self.calls += 1
+        try:
+            await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0)
+            raise RuntimeError("late runner failure")
+
+
 class FakeCodeExecutor(BaseCodeExecutor):
     calls: int = 0
     last_input: CodeExecutionInput | None = None
@@ -236,6 +249,37 @@ async def test_program_runner_enforces_policy_timeout_on_delegate():
     assert "only the runtime or sandbox can guarantee process termination" in result.stderr
     assert delegate.calls == 1
     assert len(sink.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_program_runner_consumes_late_failure_after_timeout():
+    delegate = LateFailingProgramRunner()
+    policy = SafetyPolicy.model_validate({
+        "limits": {
+            "max_timeout_seconds": 0.01,
+        },
+    })
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(policy), RecordingAuditSink()),
+        tool_name="SkillRun",
+    )
+    loop = asyncio.get_running_loop()
+    unhandled: list[dict] = []
+    previous_handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+    try:
+        result = await runner.run_program(
+            WorkspaceInfo(id="ws", path="/tmp/work"),
+            WorkspaceRunProgramSpec(cmd="echo", args=["hello"], cwd="/tmp/work"),
+        )
+        await asyncio.sleep(0.01)
+    finally:
+        loop.set_exception_handler(previous_handler)
+
+    assert result.exit_code == 124
+    assert delegate.calls == 1
+    assert unhandled == []
 
 
 @pytest.mark.asyncio
