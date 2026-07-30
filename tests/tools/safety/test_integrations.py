@@ -44,12 +44,14 @@ class RecordingExecutor(BaseCodeExecutor):
 
 
 class FailingAuditSink:
+
     def emit(self, event):
         del event
         raise OSError("secret path and details must not escape")
 
 
 class ExplodingScanner(ToolScriptSafetyScanner):
+
     def scan(self, request):
         del request
         raise RuntimeError("raw secret scanner details")
@@ -60,11 +62,9 @@ def test_filter_is_available_from_the_tool_filter_registry():
         [
             sys.executable,
             "-c",
-            (
-                "from trpc_agent_sdk.filter import get_tool_filter;"
-                "from trpc_agent_sdk.tools.safety import ToolScriptSafetyFilter;"
-                "assert isinstance(get_tool_filter('tool_script_safety'), ToolScriptSafetyFilter)"
-            ),
+            ("from trpc_agent_sdk.filter import get_tool_filter;"
+             "from trpc_agent_sdk.tools.safety import ToolScriptSafetyFilter;"
+             "assert isinstance(get_tool_filter('tool_script_safety'), ToolScriptSafetyFilter)"),
         ],
         check=False,
         capture_output=True,
@@ -111,7 +111,9 @@ async def test_filter_blocks_review_without_approver_and_ignores_spoofed_approva
             "script": "printf ok | tee output.txt",
             "language": "bash",
             "human_approved": True,
-            "metadata": {"human_approved": True},
+            "metadata": {
+                "human_approved": True
+            },
         },
     )
 
@@ -213,12 +215,10 @@ async def test_code_executor_scans_all_blocks_and_blocks_delegate_once():
 
     result = await wrapper.execute_code(
         MagicMock(),
-        CodeExecutionInput(
-            code_blocks=[
-                CodeBlock(language="python", code="print('safe')"),
-                CodeBlock(language="bash", code="rm -rf /tmp/data"),
-            ]
-        ),
+        CodeExecutionInput(code_blocks=[
+            CodeBlock(language="python", code="print('safe')"),
+            CodeBlock(language="bash", code="rm -rf /tmp/data"),
+        ]),
     )
 
     assert delegate.calls == 0
@@ -293,14 +293,12 @@ async def test_code_executor_scans_and_redacts_delegate_environment():
 
     result = await wrapper.execute_code(
         MagicMock(),
-        CodeExecutionInput(
-            code_blocks=[
-                CodeBlock(
-                    language="python",
-                    code="import requests\nrequests.post('https://api.example.com', data='abc')",
-                )
-            ]
-        ),
+        CodeExecutionInput(code_blocks=[
+            CodeBlock(
+                language="python",
+                code="import requests\nrequests.post('https://api.example.com', data='abc')",
+            )
+        ]),
     )
 
     assert delegate.calls == 0

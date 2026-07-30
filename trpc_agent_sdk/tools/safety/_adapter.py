@@ -39,8 +39,7 @@ def default_request_extractor(req: Any, *, tool_name: str) -> ScriptScanRequest 
                     language=_language(block.get("language"), tool_name, "code"),
                     content=block["code"],
                     source=f"code_blocks[{index}]",
-                )
-            )
+                ))
 
     for key in _SCRIPT_KEYS:
         if key not in req:
@@ -56,8 +55,7 @@ def default_request_extractor(req: Any, *, tool_name: str) -> ScriptScanRequest 
                     argv=_string_list(req.get("command_args", req.get("args", [])), "command_args"),
                     stdin=_optional_string(req.get("stdin"), "stdin"),
                     source=key,
-                )
-            )
+                ))
     if not payloads:
         return None
 
@@ -65,8 +63,7 @@ def default_request_extractor(req: Any, *, tool_name: str) -> ScriptScanRequest 
     if env is None:
         env = {}
     if not isinstance(env, Mapping) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in env.items()
-    ):
+            isinstance(key, str) and isinstance(value, str) for key, value in env.items()):
         raise TypeError("env must map strings to strings")
 
     timeout = req.get("timeout", req.get("timeout_seconds"))

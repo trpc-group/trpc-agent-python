@@ -236,23 +236,19 @@ def test_policy_changes_domain_path_and_command_decisions():
     )
     scanner = ToolScriptSafetyScanner(policy)
 
-    assert (
-        scanner.scan(_request("curl https://internal.example/data", ScriptLanguage.BASH)).decision
-        == SafetyDecision.NEEDS_HUMAN_REVIEW
-    )
+    assert (scanner.scan(_request("curl https://internal.example/data",
+                                  ScriptLanguage.BASH)).decision == SafetyDecision.NEEDS_HUMAN_REVIEW)
     assert scanner.scan(_request("cat /classified/data", ScriptLanguage.BASH)).decision == SafetyDecision.DENY
     assert scanner.scan(_request("custom-tool status", ScriptLanguage.BASH)).decision == SafetyDecision.ALLOW
 
 
 def test_context_limits_and_forbidden_arguments_fail_closed():
     request = ScriptScanRequest(
-        payloads=[
-            ScriptPayload(
-                language=ScriptLanguage.BASH,
-                content="echo ok",
-                argv=["~/.ssh/id_rsa"],
-            )
-        ],
+        payloads=[ScriptPayload(
+            language=ScriptLanguage.BASH,
+            content="echo ok",
+            argv=["~/.ssh/id_rsa"],
+        )],
         metadata=ToolMetadata(name="bash"),
         requested_timeout=301,
         max_output_bytes=2_000_000,
@@ -285,8 +281,7 @@ def test_allowed_url_with_token_word_is_not_mistaken_for_secret_value():
     scanner = ToolScriptSafetyScanner(ToolSafetyPolicy(allowed_domains=["api.example.com"], allowed_commands=["curl"]))
 
     python_report = scanner.scan(
-        _request("import requests\nrequests.get('https://api.example.com/token/status')", ScriptLanguage.PYTHON)
-    )
+        _request("import requests\nrequests.get('https://api.example.com/token/status')", ScriptLanguage.PYTHON))
     bash_report = scanner.scan(_request("curl https://api.example.com/token/status", ScriptLanguage.BASH))
 
     assert python_report.decision == SafetyDecision.ALLOW
@@ -321,7 +316,8 @@ def test_allowed_url_with_token_word_is_not_mistaken_for_secret_value():
             "SENSITIVE_EXFILTRATION",
         ),
         (
-            "import os\na = os.environ['API_KEY']\nb = {'value': a}\n" "open('out.txt', 'w').write(f\"{b['value']}\")",
+            "import os\na = os.environ['API_KEY']\nb = {'value': a}\n"
+            "open('out.txt', 'w').write(f\"{b['value']}\")",
             ScriptLanguage.PYTHON,
             "SENSITIVE_FILE_WRITE",
         ),
@@ -372,6 +368,52 @@ def test_non_positive_requested_timeout_is_denied():
 
     assert report.decision == SafetyDecision.DENY
     assert "RESOURCE_TIMEOUT_REQUIRED" in report.rule_ids
+
+
+@pytest.mark.parametrize(
+    ("content", "language"),
+    [
+        ("print(open('/rootdir/file.txt').read())", ScriptLanguage.PYTHON),
+        ("print(open('/etcetera/config').read())", ScriptLanguage.PYTHON),
+        ("cat /rootdir/file.txt", ScriptLanguage.BASH),
+        ("echo owned > /usr/bin-tool", ScriptLanguage.BASH),
+    ],
+)
+def test_path_prefixes_do_not_match_protected_path_segments(content, language):
+    report = ToolScriptSafetyScanner().scan(_request(content, language))
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert "FILE_SENSITIVE_PATH" not in report.rule_ids
+    assert "FILE_SYSTEM_WRITE" not in report.rule_ids
+
+
+def test_pipeline_is_detected_even_when_script_also_contains_boolean_or():
+    report = ToolScriptSafetyScanner().scan(_request("echo ok | grep ok || echo fallback", ScriptLanguage.BASH))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "PROCESS_PIPELINE" in report.rule_ids
+
+
+def test_boolean_or_without_pipeline_is_not_mistaken_for_pipeline():
+    report = ToolScriptSafetyScanner().scan(_request("echo ok || echo fallback", ScriptLanguage.BASH))
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert "PROCESS_PIPELINE" not in report.rule_ids
+
+
+@pytest.mark.parametrize("content", ["    sudo echo ok", "command sudo echo ok"])
+def test_sudo_is_detected_as_a_shell_token(content):
+    report = ToolScriptSafetyScanner().scan(_request(content, ScriptLanguage.BASH))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "PROCESS_PRIVILEGE_ESCALATION" in report.rule_ids
+
+
+def test_unparseable_bash_requires_review_with_an_explicit_rule():
+    report = ToolScriptSafetyScanner().scan(_request("echo 'unterminated", ScriptLanguage.BASH))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "BASH_PARSE_UNCERTAIN" in report.rule_ids
 
 
 @pytest.mark.parametrize(

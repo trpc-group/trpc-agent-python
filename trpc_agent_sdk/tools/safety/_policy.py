@@ -48,8 +48,7 @@ class ToolSafetyPolicy(BaseModel):
     version: str = "1"
     allowed_domains: list[str] = Field(default_factory=list)
     allowed_commands: list[str] = Field(
-        default_factory=lambda: ["echo", "printf", "pwd", "ls", "cat", "head", "tail", "grep", "sort", "wc"]
-    )
+        default_factory=lambda: ["echo", "printf", "pwd", "ls", "cat", "head", "tail", "grep", "sort", "wc"])
     forbidden_paths: list[str] = Field(default_factory=lambda: list(DEFAULT_FORBIDDEN_PATHS))
     protected_write_paths: list[str] = Field(default_factory=lambda: list(DEFAULT_PROTECTED_WRITE_PATHS))
     max_timeout_seconds: float = Field(default=300, gt=0)

@@ -71,8 +71,7 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
                     language=_code_language(block.language),
                     content=block.code,
                     source=f"code_blocks[{index}]",
-                )
-                for index, block in enumerate(blocks)
+                ) for index, block in enumerate(blocks)
             ]
             timeout = _delegate_timeout(self.delegate)
             request = ScriptScanRequest(
@@ -130,8 +129,7 @@ def _delegate_environment(delegate: BaseCodeExecutor) -> dict[str, str]:
     if environment is None:
         return {}
     if not isinstance(environment, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in environment.items()
-    ):
+            isinstance(key, str) and isinstance(value, str) for key, value in environment.items()):
         raise TypeError("delegate environment must map strings to strings")
     return dict(environment)
 
@@ -145,6 +143,6 @@ def _truncate_result(result: CodeExecutionResult, max_bytes: int) -> CodeExecuti
     if max_bytes <= len(marker_bytes):
         result.output = marker_bytes[:max_bytes].decode("utf-8", errors="ignore")
         return result
-    prefix = encoded[: max(0, max_bytes - len(marker_bytes))].decode("utf-8", errors="ignore")
+    prefix = encoded[:max(0, max_bytes - len(marker_bytes))].decode("utf-8", errors="ignore")
     result.output = f"{prefix}{marker}"
     return result

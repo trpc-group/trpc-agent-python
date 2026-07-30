@@ -151,8 +151,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         index,
                         secrets,
-                    )
-                )
+                    ))
             if payload.language == ScriptLanguage.PYTHON:
                 payload_findings = self._scan_python(payload, index, secrets, sensitive_values)
             else:
@@ -225,8 +224,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     0,
                     secrets,
-                )
-            )
+                ))
         if request.requested_timeout is not None and request.requested_timeout > self.policy.max_timeout_seconds:
             findings.append(
                 self._finding(
@@ -238,8 +236,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     0,
                     secrets,
-                )
-            )
+                ))
         if request.requested_timeout is not None and request.requested_timeout <= 0:
             findings.append(
                 self._finding(
@@ -251,8 +248,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     0,
                     secrets,
-                )
-            )
+                ))
         if request.max_output_bytes is not None and request.max_output_bytes > self.policy.max_output_bytes:
             findings.append(
                 self._finding(
@@ -264,8 +260,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     0,
                     secrets,
-                )
-            )
+                ))
         for payload_index, payload in enumerate(request.payloads):
             for argument in payload.argv:
                 if self._is_forbidden_path(argument):
@@ -279,8 +274,7 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.DENY,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
         return findings
 
     def _scan_python(
@@ -349,8 +343,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
             if not isinstance(node, ast.Call):
                 continue
             name = _resolve_alias(_call_name(node.func), aliases)
@@ -358,8 +351,8 @@ class ToolScriptSafetyScanner:
 
             file_method = node.func.attr if isinstance(node.func, ast.Attribute) else ""
             if name in {"shutil.rmtree", "os.remove", "os.unlink", "Path.unlink", "Path.rmdir"} or file_method in {
-                "unlink",
-                "rmdir",
+                    "unlink",
+                    "rmdir",
             }:
                 findings.append(
                     self._finding(
@@ -371,26 +364,21 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
 
             if name == "open" or file_method in {
-                "open",
-                "read_text",
-                "read_bytes",
-                "write",
-                "write_text",
-                "write_bytes",
+                    "open",
+                    "read_text",
+                    "read_bytes",
+                    "write",
+                    "write_text",
+                    "write_bytes",
             }:
                 if name == "open":
-                    path_node = (
-                        node.args[0]
-                        if node.args
-                        else next(
-                            (keyword.value for keyword in node.keywords if keyword.arg in {"file", "path"}),
-                            None,
-                        )
-                    )
+                    path_node = (node.args[0] if node.args else next(
+                        (keyword.value for keyword in node.keywords if keyword.arg in {"file", "path"}),
+                        None,
+                    ))
                 elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Call):
                     path_node = node.func.value.args[0] if node.func.value.args else None
                 else:
@@ -404,40 +392,25 @@ class ToolScriptSafetyScanner:
                             "FILE_SENSITIVE_PATH" if path else "FILE_DYNAMIC_PATH",
                             evidence,
                             "Use a verified workspace-relative path.",
-                            (
-                                SafetyDecision.DENY
-                                if path and self._is_forbidden_path(path)
-                                else SafetyDecision.NEEDS_HUMAN_REVIEW
-                            ),
+                            (SafetyDecision.DENY
+                             if path and self._is_forbidden_path(path) else SafetyDecision.NEEDS_HUMAN_REVIEW),
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
                 mode_node: ast.AST | None = None
                 if name == "open":
-                    mode_node = (
-                        node.args[1]
-                        if len(node.args) > 1
-                        else next(
-                            (keyword.value for keyword in node.keywords if keyword.arg == "mode"),
-                            None,
-                        )
-                    )
+                    mode_node = (node.args[1] if len(node.args) > 1 else next(
+                        (keyword.value for keyword in node.keywords if keyword.arg == "mode"),
+                        None,
+                    ))
                 elif file_method == "open":
-                    mode_node = (
-                        node.args[0]
-                        if node.args
-                        else next(
-                            (keyword.value for keyword in node.keywords if keyword.arg == "mode"),
-                            None,
-                        )
-                    )
+                    mode_node = (node.args[0] if node.args else next(
+                        (keyword.value for keyword in node.keywords if keyword.arg == "mode"),
+                        None,
+                    ))
                 mode = _literal_string(mode_node) or "r"
-                writes_file = (
-                    file_method in {"write", "write_text", "write_bytes"}
-                    or (file_method == "open" or name == "open")
-                    and any(flag in mode for flag in "wax+")
-                )
+                writes_file = (file_method in {"write", "write_text", "write_bytes"}
+                               or (file_method == "open" or name == "open") and any(flag in mode for flag in "wax+"))
                 if writes_file and path and self._is_protected_write_path(path):
                     findings.append(
                         self._finding(
@@ -449,14 +422,11 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.DENY,
                             payload_index,
                             secrets,
-                        )
-                    )
-                data_node = (
-                    node.args[0] if file_method in {"write", "write_text", "write_bytes"} and node.args else None
-                )
-                if data_node is not None and self._contains_sensitive_reference(
-                    data_node, tainted_names, sensitive_values
-                ):
+                        ))
+                data_node = (node.args[0]
+                             if file_method in {"write", "write_text", "write_bytes"} and node.args else None)
+                if data_node is not None and self._contains_sensitive_reference(data_node, tainted_names,
+                                                                                sensitive_values):
                     findings.append(
                         self._finding(
                             RiskCategory.SENSITIVE_DATA,
@@ -467,8 +437,7 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.DENY,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
                 static_size = _static_value_size(data_node)
                 if static_size is not None and static_size > self.policy.max_file_write_bytes:
                     findings.append(
@@ -481,8 +450,7 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.DENY,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
 
             if self._is_network_call(name):
                 keyword_target = next(
@@ -506,15 +474,13 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.DENY,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
 
             if name.startswith("subprocess.") or name in {"os.system", "os.popen"}:
                 command = _literal_string(node.args[0]) if node.args else None
                 shell_enabled = name in {"os.system", "os.popen"} or any(
                     keyword.arg == "shell" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
-                    for keyword in node.keywords
-                )
+                    for keyword in node.keywords)
                 if command and _DEPENDENCY_RE.search(command):
                     findings.append(
                         self._finding(
@@ -526,8 +492,7 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.NEEDS_HUMAN_REVIEW,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
                 if command:
                     findings.extend(
                         self._scan_bash(
@@ -535,8 +500,7 @@ class ToolScriptSafetyScanner:
                             payload_index,
                             secrets,
                             sensitive_values,
-                        )
-                    )
+                        ))
                 findings.append(
                     self._finding(
                         RiskCategory.PROCESS_EXECUTION,
@@ -547,8 +511,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY if shell_enabled else SafetyDecision.NEEDS_HUMAN_REVIEW,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
 
             if name in {"eval", "exec", "builtins.eval", "builtins.exec"}:
                 findings.append(
@@ -561,8 +524,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
 
             if name in {"os.fork", "os.forkpty"}:
                 findings.append(
@@ -575,8 +537,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
             elif name.startswith("multiprocessing.") or name in {"asyncio.create_task", "asyncio.gather"}:
                 findings.append(
                     self._finding(
@@ -588,8 +549,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.NEEDS_HUMAN_REVIEW,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
 
             if name in {"time.sleep", "asyncio.sleep"} and node.args:
                 duration = node.args[0].value if isinstance(node.args[0], ast.Constant) else None
@@ -604,17 +564,16 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.NEEDS_HUMAN_REVIEW,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
 
             if name in {
-                "print",
-                "logging.info",
-                "logging.warning",
-                "logging.error",
-                "logger.info",
-                "logger.warning",
-                "logger.error",
+                    "print",
+                    "logging.info",
+                    "logging.warning",
+                    "logging.error",
+                    "logger.info",
+                    "logger.warning",
+                    "logger.error",
             } and self._contains_sensitive_reference(node, tainted_names, sensitive_values):
                 findings.append(
                     self._finding(
@@ -626,8 +585,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
         return findings
 
     def _scan_bash(
@@ -655,8 +613,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if re.search(r"\b(?:while\s+true|while\s+:|for\s*\(\s*;\s*;\s*\))\b", executable_script):
             findings.append(
                 self._finding(
@@ -668,8 +625,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if any(self._path_appears(executable_script, path) for path in self.policy.forbidden_paths):
             findings.append(
                 self._finding(
@@ -681,15 +637,12 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         writes_data = bool(
             re.search(r"(?:^|[^<])(?:>>?|[0-9]+>>?)\s*\S+", executable_script)
-            or re.search(r"\b(?:tee|cp|mv|install|dd|truncate|fallocate)\b", executable_script)
-        )
+            or re.search(r"\b(?:tee|cp|mv|install|dd|truncate|fallocate)\b", executable_script))
         if writes_data and any(
-            self._path_appears(executable_script, path) for path in self.policy.protected_write_paths
-        ):
+                self._path_appears(executable_script, path) for path in self.policy.protected_write_paths):
             findings.append(
                 self._finding(
                     RiskCategory.FILE_OPERATION,
@@ -700,15 +653,13 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         sensitive_reference = any(
-            _SENSITIVE_NAME_RE.search(match.group(1)) for match in _SHELL_VARIABLE_RE.finditer(executable_script)
-        ) or any(secret in executable_script for secret in secret_values)
-        network_command = any(
-            command in {"curl", "wget", "nc", "ncat", "telnet"}
-            for command, _ in self._shell_commands(executable_script)
-        )
+            _SENSITIVE_NAME_RE.search(match.group(1))
+            for match in _SHELL_VARIABLE_RE.finditer(executable_script)) or any(secret in executable_script
+                                                                                for secret in secret_values)
+        network_command = any(command in {"curl", "wget", "nc", "ncat", "telnet"}
+                              for command, _ in self._shell_commands(executable_script))
         if network_command and sensitive_reference:
             findings.append(
                 self._finding(
@@ -720,8 +671,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if writes_data and sensitive_reference:
             findings.append(
                 self._finding(
@@ -733,8 +683,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         write_size = self._bash_write_size(executable_script)
         if write_size is not None and write_size > self.policy.max_file_write_bytes:
             findings.append(
@@ -747,9 +696,8 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
-        if re.search(r"(?:^|[;&|\n]\s*)sudo\b", executable_script):
+                ))
+        if re.search(r"(?:^|[\s;&|])sudo\b", executable_script):
             findings.append(
                 self._finding(
                     RiskCategory.PROCESS_EXECUTION,
@@ -760,8 +708,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if _SHELL_BYPASS_RE.search(executable_script):
             findings.append(
                 self._finding(
@@ -773,8 +720,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if _DEPENDENCY_RE.search(executable_script):
             findings.append(
                 self._finding(
@@ -786,9 +732,8 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.NEEDS_HUMAN_REVIEW,
                     payload_index,
                     secrets,
-                )
-            )
-        if "|" in executable_script and "||" not in executable_script:
+                ))
+        if re.search(r"(?<!\|)\|(?!\|)", executable_script):
             findings.append(
                 self._finding(
                     RiskCategory.PROCESS_EXECUTION,
@@ -799,8 +744,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.NEEDS_HUMAN_REVIEW,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if re.search(r"(?:^|[^&])&(?:\s|$)", executable_script):
             findings.append(
                 self._finding(
@@ -812,12 +756,11 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.NEEDS_HUMAN_REVIEW,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
         if re.search(
-            r"\b(?:echo|printf)\b[^\n]*(?:\$(?:\{)?(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD))",
-            executable_script,
-            re.IGNORECASE,
+                r"\b(?:echo|printf)\b[^\n]*(?:\$(?:\{)?(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD))",
+                executable_script,
+                re.IGNORECASE,
         ):
             findings.append(
                 self._finding(
@@ -829,8 +772,7 @@ class ToolScriptSafetyScanner:
                     SafetyDecision.DENY,
                     payload_index,
                     secrets,
-                )
-            )
+                ))
 
         for match in _URL_RE.finditer(executable_script):
             findings.extend(self._network_findings(match.group(0), match.group(0), payload_index, secrets))
@@ -853,10 +795,22 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.NEEDS_HUMAN_REVIEW,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
 
         for command, arguments in self._shell_commands(executable_script):
+            if command == "<unparsed>":
+                findings.append(
+                    self._finding(
+                        RiskCategory.POLICY,
+                        RiskLevel.MEDIUM,
+                        "BASH_PARSE_UNCERTAIN",
+                        script,
+                        "Require human review for shell code that cannot be parsed reliably.",
+                        SafetyDecision.NEEDS_HUMAN_REVIEW,
+                        payload_index,
+                        secrets,
+                    ))
+                continue
             if command == "rm":
                 flags = "".join(argument[1:] for argument in arguments if argument.startswith("-"))
                 if "r" in flags and "f" in flags:
@@ -870,8 +824,7 @@ class ToolScriptSafetyScanner:
                             SafetyDecision.DENY,
                             payload_index,
                             secrets,
-                        )
-                    )
+                        ))
             if command == "find" and "-delete" in arguments:
                 findings.append(
                     self._finding(
@@ -883,11 +836,9 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
-            if command in {"mkfs", "fdisk"} or (
-                command == "dd" and any(argument.startswith("of=/dev/") for argument in arguments)
-            ):
+                    ))
+            if command in {"mkfs", "fdisk"} or (command == "dd"
+                                                and any(argument.startswith("of=/dev/") for argument in arguments)):
                 findings.append(
                     self._finding(
                         RiskCategory.FILE_OPERATION,
@@ -898,8 +849,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.DENY,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
             if command in {"nc", "ncat", "telnet"}:
                 host = next((arg for arg in arguments if not arg.startswith("-") and not arg.isdigit()), None)
                 findings.extend(
@@ -908,8 +858,7 @@ class ToolScriptSafetyScanner:
                         " ".join([command, *arguments]),
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
             if command not in self.policy.allowed_commands:
                 findings.append(
                     self._finding(
@@ -921,8 +870,7 @@ class ToolScriptSafetyScanner:
                         SafetyDecision.NEEDS_HUMAN_REVIEW,
                         payload_index,
                         secrets,
-                    )
-                )
+                    ))
         return findings
 
     def _network_findings(
@@ -946,9 +894,8 @@ class ToolScriptSafetyScanner:
                 )
             ]
         hostname = (urlparse(target).hostname or "").lower().rstrip(".")
-        if hostname and any(
-            hostname == allowed or hostname.endswith(f".{allowed}") for allowed in self.policy.allowed_domains
-        ):
+        if hostname and any(hostname == allowed or hostname.endswith(f".{allowed}")
+                            for allowed in self.policy.allowed_domains):
             return []
         return [
             self._finding(
@@ -1006,23 +953,21 @@ class ToolScriptSafetyScanner:
             candidates.add(normalized_path[2:])
         if PurePath(normalized_path).name.startswith(".env"):
             return bool(re.search(r"(?:^|[/\s\"'])\.env(?:\.[\w-]+)?(?:$|[/\s\"'])", normalized_value))
-        return any(candidate and candidate in normalized_value for candidate in candidates)
+        return any(candidate and re.search(
+            rf"(?<![A-Za-z0-9_.~-]){re.escape(candidate)}(?=$|[/\s\"';&|<>()])",
+            normalized_value,
+        ) for candidate in candidates)
 
     @staticmethod
     def _is_network_call(name: str) -> bool:
-        return (
-            name in {"urllib.request.urlopen", "socket.create_connection"}
-            or name.startswith("requests.")
-            or name.startswith("aiohttp.")
-            or name.startswith("httpx.")
-            or name.startswith("socket.")
-        )
+        return (name in {"urllib.request.urlopen", "socket.create_connection"} or name.startswith("requests.")
+                or name.startswith("aiohttp.") or name.startswith("httpx.") or name.startswith("socket."))
 
     @staticmethod
     def _contains_sensitive_reference(
-        node: ast.AST,
-        tainted_names: Iterable[str] = (),
-        sensitive_values: Iterable[str] = (),
+            node: ast.AST,
+            tainted_names: Iterable[str] = (),
+            sensitive_values: Iterable[str] = (),
     ) -> bool:
         tainted = set(tainted_names)
         explicit_values = [value for value in sensitive_values if value]

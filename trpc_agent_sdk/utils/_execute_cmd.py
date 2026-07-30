@@ -143,7 +143,8 @@ async def async_execute_command(
             await _stop_process_tree(process)
         return CommandExecResult(
             stdout="",
-            stderr=f"command execution error (cwd={work_dir}, " f"cmd={' '.join(cmd_args)}): {str(ex)}",
+            stderr=f"command execution error (cwd={work_dir}, "
+            f"cmd={' '.join(cmd_args)}): {str(ex)}",
             exit_code=-1,
             is_timeout=False,
         )

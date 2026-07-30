@@ -66,11 +66,8 @@ class ToolScriptSafetyFilter(BaseFilter):
 def _blocked_response(report) -> dict[str, Any]:
     review_required = report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     error = "TOOL_SAFETY_REVIEW_REQUIRED" if review_required else "TOOL_SAFETY_BLOCKED"
-    message = (
-        "Tool execution requires trusted human approval."
-        if review_required
-        else "Tool execution was denied by the safety policy."
-    )
+    message = ("Tool execution requires trusted human approval."
+               if review_required else "Tool execution was denied by the safety policy.")
     return BlockedSafetyResponse(
         error=error,
         message=message,

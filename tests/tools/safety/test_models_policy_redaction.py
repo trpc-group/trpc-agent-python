@@ -60,7 +60,11 @@ def test_policy_rejects_unknown_and_duplicate_fields(tmp_path: Path):
 def test_policy_normalizes_domains_and_changes_from_yaml(tmp_path: Path):
     path = tmp_path / "policy.yaml"
     path.write_text(
-        "allowed_domains:\n" "  - API.EXAMPLE.COM.\n" "forbidden_paths:\n" "  - /private\n" "max_timeout_seconds: 12\n",
+        "allowed_domains:\n"
+        "  - API.EXAMPLE.COM.\n"
+        "forbidden_paths:\n"
+        "  - /private\n"
+        "max_timeout_seconds: 12\n",
         encoding="utf-8",
     )
 

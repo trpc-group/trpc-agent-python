@@ -13,6 +13,7 @@ from trpc_agent_sdk.tools.safety._telemetry import record_safety_attributes
 
 
 class RecordingSpan:
+
     def __init__(self):
         self.attributes = {}
 
@@ -48,7 +49,9 @@ def test_active_span_receives_stable_safety_attributes(monkeypatch):
 
 
 def test_telemetry_failure_does_not_change_or_raise_from_decision(monkeypatch):
+
     class BrokenSpan(RecordingSpan):
+
         def set_attribute(self, key, value):
             del key, value
             raise RuntimeError("telemetry unavailable")

@@ -44,8 +44,7 @@ def test_public_manifest_decisions_and_acceptance_rates():
             ScriptScanRequest(
                 payloads=[ScriptPayload(language=_language(path), content=path.read_text(encoding="utf-8"))],
                 metadata=ToolMetadata(name=path.name),
-            )
-        )
+            ))
         assert report.decision.value == sample["decision"]
         if sample["rule_id"]:
             assert sample["rule_id"] in report.rule_ids
@@ -103,8 +102,7 @@ def test_checked_in_report_and_audit_examples_match_current_scanner():
             ScriptScanRequest(
                 payloads=[ScriptPayload(language=_language(path), content=path.read_text(encoding="utf-8"))],
                 metadata=ToolMetadata(name=path.name),
-            )
-        )
+            ))
         expected_data = expected.model_dump(mode="json")
         actual_data = actual.model_dump(mode="json")
         expected_data.pop("duration_ms")

@@ -103,12 +103,10 @@ class TestAsyncExecuteCommand:
     async def test_timeout_terminates_descendants_and_reaps_leader(self, tmp_path):
         pid_file = tmp_path / "child.pid"
         child_code = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
-        parent_code = (
-            "import subprocess,sys,time\n"
-            f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
-            f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
-            "time.sleep(60)\n"
-        )
+        parent_code = ("import subprocess,sys,time\n"
+                       f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+                       f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
+                       "time.sleep(60)\n")
 
         result = await async_execute_command(tmp_path, [sys.executable, "-c", parent_code], timeout=0.2)
 
@@ -120,12 +118,10 @@ class TestAsyncExecuteCommand:
     async def test_cancellation_terminates_descendants_and_reaps_leader(self, tmp_path):
         pid_file = tmp_path / "child.pid"
         child_code = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
-        parent_code = (
-            "import subprocess,sys,time\n"
-            f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
-            f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
-            "time.sleep(60)\n"
-        )
+        parent_code = ("import subprocess,sys,time\n"
+                       f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+                       f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
+                       "time.sleep(60)\n")
         task = asyncio.create_task(async_execute_command(tmp_path, [sys.executable, "-c", parent_code]))
 
         for _ in range(40):
@@ -169,7 +165,10 @@ class TestAsyncExecuteCommand:
             result = await async_execute_command(
                 Path(tmpdir),
                 ["sh", "-c", "echo $MY_TEST_VAR"],
-                env={"MY_TEST_VAR": "test_value", "PATH": "/usr/bin:/bin"},
+                env={
+                    "MY_TEST_VAR": "test_value",
+                    "PATH": "/usr/bin:/bin"
+                },
             )
             assert result.exit_code == 0
             assert "test_value" in result.stdout
