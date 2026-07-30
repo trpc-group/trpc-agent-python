@@ -26,10 +26,12 @@ from examples.skills_code_review_agent.agent.native_agent import code_review_too
 from examples.skills_code_review_agent.agent.native_agent import create_code_review_skill_tool_set  # noqa: E402
 from examples.skills_code_review_agent.agent.native_filter import create_review_filter  # noqa: E402
 from examples.skills_code_review_agent.agent.pipeline import build_workspace_sandbox_runner  # noqa: E402
+from examples.skills_code_review_agent.agent.pipeline import _normalize_scanner_file  # noqa: E402
 from examples.skills_code_review_agent.agent.pipeline import query_task  # noqa: E402
 from examples.skills_code_review_agent.agent.pipeline import run_review  # noqa: E402
 from examples.skills_code_review_agent.agent.pipeline import SKILL_DIR  # noqa: E402
 from examples.skills_code_review_agent.agent.redaction import contains_unredacted_secret  # noqa: E402
+from examples.skills_code_review_agent.agent.redaction import redact_text  # noqa: E402
 from examples.skills_code_review_agent.agent.rule_engine import RuleEngine  # noqa: E402
 from examples.skills_code_review_agent.agent.skill_smoke import run_code_review_skill_smoke  # noqa: E402
 from examples.skills_code_review_agent.agent.storage import ReviewStore  # noqa: E402
@@ -2049,6 +2051,30 @@ async def test_entropy_secret_is_redacted_and_reported(tmp_path: Path) -> None:
     report_text = (tmp_path / "out" / "review_report.json").read_text(encoding="utf-8")
     assert "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe" not in report_text
     assert any(item.rule_id == "security.secret.material" for item in report.findings)
+
+
+def test_high_entropy_redaction_preserves_common_code_identifiers() -> None:
+    text = """
+TRACE_ID = "123e4567-e89b-12d3-a456-426614174000"
+COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567"
+FIXTURE_BLOB = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo12345"
+SESSION_SIGNING_KEY = "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe"
+"""
+
+    redacted = redact_text(text)
+
+    assert "123e4567-e89b-12d3-a456-426614174000" in redacted.text
+    assert "0123456789abcdef0123456789abcdef01234567" in redacted.text
+    assert "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo12345" in redacted.text
+    assert "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe" not in redacted.text
+    assert redacted.count == 1
+
+
+def test_scanner_file_normalization_only_strips_scan_work_root() -> None:
+    assert _normalize_scanner_file("work/cr-scan-abcd/pkg/cr-scan-tool/main.py") == "pkg/cr-scan-tool/main.py"
+    assert _normalize_scanner_file("/tmp/review/work/cr-scan-abcd/pkg/cr-scan-tool/main.py") == (
+        "pkg/cr-scan-tool/main.py")
+    assert _normalize_scanner_file("pkg/cr-scan-tool/main.py") == "pkg/cr-scan-tool/main.py"
 
 
 async def test_external_scanner_findings_are_merged_into_report_and_database(tmp_path: Path) -> None:

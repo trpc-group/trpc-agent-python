@@ -43,6 +43,13 @@ SECRET_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)\b(passwd|pwd)\s*[:=]\s*['\"]?[^'\"\s,;]{6,}['\"]?"), r"\1=[REDACTED]"),
 ]
 
+UUID_PATTERN = re.compile(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+HEX_IDENTIFIER_PATTERN = re.compile(r"(?i)^[0-9a-f]{32,64}$")
+BASE64_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9+/]{32,64}={0,2}$")
+SENSITIVE_LITERAL_CONTEXT_PATTERN = re.compile(
+    r"(?i)(api[_-]?key|access[_-]?key(?:[_-]?id)?|key[_-]?id|secret|token|password|passwd|pwd|"
+    r"private[_-]?key|signing[_-]?key|session[_-]?key)")
+
 
 def redact_text(text: str | None) -> RedactionResult:
     if not text:
@@ -79,23 +86,43 @@ def contains_unredacted_secret(text: str | None) -> bool:
 
 def _redact_high_entropy_literals(text: str) -> tuple[str, int]:
     pattern = re.compile(r"(['\"])(?P<value>[A-Za-z0-9_+/=-]{28,})\1")
+    redaction_count = 0
 
     def replace(match: re.Match[str]) -> str:
+        nonlocal redaction_count
         value = match.group("value")
-        if _looks_like_high_entropy_secret(value):
+        context = text[max(0, match.start() - 80):match.start()]
+        if _looks_like_high_entropy_secret(value, context=context):
+            redaction_count += 1
             return f"{match.group(1)}[REDACTED]{match.group(1)}"
         return match.group(0)
 
-    return pattern.subn(replace, text)
+    return pattern.sub(replace, text), redaction_count
 
 
-def _looks_like_high_entropy_secret(value: str) -> bool:
+def _looks_like_high_entropy_secret(value: str, *, context: str = "") -> bool:
     if len(value) < 28:
         return False
-    if value.lower().startswith(("http", "pytest", "example")):
+    sensitive_context = bool(SENSITIVE_LITERAL_CONTEXT_PATTERN.search(context))
+    if value.lower().startswith(("http", "pytest", "example")) and not sensitive_context:
+        return False
+    if _looks_like_allowed_identifier(value) and not sensitive_context:
         return False
     alphabet = set(value)
     if len(alphabet) < 12:
         return False
     entropy = -sum((value.count(ch) / len(value)) * math.log2(value.count(ch) / len(value)) for ch in alphabet)
-    return entropy >= 4.2
+    if sensitive_context:
+        return entropy >= 4.0
+    return entropy >= 4.6
+
+
+def _looks_like_allowed_identifier(value: str) -> bool:
+    """Keep common non-secret identifiers readable in review evidence."""
+    if UUID_PATTERN.fullmatch(value):
+        return True
+    if HEX_IDENTIFIER_PATTERN.fullmatch(value):
+        return True
+    if BASE64_IDENTIFIER_PATTERN.fullmatch(value) and not value.rstrip("=").startswith(("sk", "rk", "xox", "AIza")):
+        return True
+    return False

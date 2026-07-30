@@ -390,14 +390,6 @@ def _local_env(request_env: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def _local_env_for_diff(request_env: dict[str, str], diff: DiffInput) -> dict[str, str]:
-    env = _local_env(request_env)
-    repo_path = _repo_source_path(diff)
-    if repo_path is not None:
-        env["CR_REPO_PATH"] = str(repo_path)
-    return env
-
-
 def _local_env_for_request(
     request: SandboxRequest,
     diff: DiffInput,
