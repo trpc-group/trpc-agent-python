@@ -331,6 +331,52 @@ def test_bash_line_continuation_cannot_hide_recursive_root_delete():
 
 
 @pytest.mark.parametrize(
+    "option",
+    [
+        "--dir",
+        "--preserve-root",
+        "--verbose",
+    ],
+)
+def test_rm_long_options_are_not_mistaken_for_recursive_delete(option):
+    report = _scan(f"rm {option} output.txt", ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert "FILE-002" not in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "-R",
+        "-Rv",
+        "-fr",
+        "-rf",
+        "--recursive",
+    ],
+)
+def test_rm_recursive_options_require_review(option):
+    report = _scan(f"rm {option} output", ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "FILE-002" in {finding.rule_id for finding in report.findings}
+
+
+def test_find_nested_rm_long_option_is_not_mistaken_for_recursive_delete():
+    report = _scan("find . -exec rm --verbose output.txt \\;", ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert "FILE-002" not in {finding.rule_id for finding in report.findings}
+
+
+def test_rm_double_dash_stops_recursive_option_parsing():
+    report = _scan("rm -- -rf", ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert "FILE-002" not in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
     ("content", "language"),
     [
         ("echo ok > /dev/null", ScriptLanguage.BASH),
@@ -1510,6 +1556,93 @@ def test_nested_interpreter_propagates_incomplete_analysis():
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert report.analysis_complete is False
     assert report.analysis_status.value == "unsupported"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "python -c",
+        "python3 -I -c",
+    ],
+)
+def test_python_interpreter_without_inline_script_fails_closed_explicitly(content):
+    policy = SafetyPolicy.model_validate({"commands": {
+        "allowed": ["python", "python3"],
+    }})
+    report = SafetyScanner(policy).scan(SafetyScanRequest(
+        content=content,
+        language=ScriptLanguage.BASH,
+    ))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert report.analysis_status.value == "parse_error"
+    assert {finding.rule_id for finding in report.findings} == {"PARSE-001"}
+    assert "requires a script argument" in report.findings[0].evidence
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["python", "-c"],
+        ["python3", "-B", "-c"],
+    ],
+)
+def test_subprocess_python_without_inline_script_fails_closed_explicitly(command):
+    policy = SafetyPolicy.model_validate({"commands": {
+        "allowed": ["python", "python3"],
+    }})
+    report = SafetyScanner(policy).scan(
+        SafetyScanRequest(
+            content=f"import subprocess\nsubprocess.run({command!r})",
+            language=ScriptLanguage.PYTHON,
+        ))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert report.analysis_status.value == "parse_error"
+    assert {finding.rule_id for finding in report.findings} == {"PARSE-001"}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "python -B -c 'import shutil; shutil.rmtree(\"/\")'",
+        "python3 -W ignore -c 'import shutil; shutil.rmtree(\"/\")'",
+        "python -X dev -c 'import shutil; shutil.rmtree(\"/\")'",
+    ],
+)
+def test_python_interpreter_options_cannot_hide_inline_payloads(content):
+    policy = SafetyPolicy.model_validate({"commands": {
+        "allowed": ["python", "python3"],
+    }})
+    report = SafetyScanner(policy).scan(SafetyScanRequest(
+        content=content,
+        language=ScriptLanguage.BASH,
+    ))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "python -- -c 'import shutil; shutil.rmtree(\"/\")'",
+        "python -m plugin -c 'import shutil; shutil.rmtree(\"/\")'",
+        "python plugin.py -c 'import shutil; shutil.rmtree(\"/\")'",
+    ],
+)
+def test_python_script_arguments_are_not_mistaken_for_inline_payloads(content):
+    policy = SafetyPolicy.model_validate({"commands": {
+        "allowed": ["python"],
+    }})
+    report = SafetyScanner(policy).scan(SafetyScanRequest(
+        content=content,
+        language=ScriptLanguage.BASH,
+    ))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "FILE-001" not in {finding.rule_id for finding in report.findings}
+    assert "PROC-UNKNOWN-001" in {finding.rule_id for finding in report.findings}
 
 
 @pytest.mark.parametrize(

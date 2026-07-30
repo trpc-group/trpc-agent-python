@@ -1707,7 +1707,7 @@ class SafetyScanner:
             ]
             if any(self._is_dynamic_shell_value(target) for target in targets):
                 self._append(findings, "PROC-003", evidence)
-            recursive = any(token.startswith("-") and ("r" in token or "R" in token) for token in segment[1:])
+            recursive = self._rm_is_recursive(segment[1:])
             for target in targets:
                 if self._is_protected_delete(target, request.cwd):
                     self._append(findings, "FILE-001", evidence)
@@ -1725,8 +1725,7 @@ class SafetyScanner:
                 if nested:
                     self._check_bash_segment(findings, nested, request, nested_statuses)
                     nested_command = Path(nested[0]).name
-                    if (nested_command == "rm"
-                            and any(token.startswith("-") and ("r" in token or "R" in token) for token in nested[1:])
+                    if (nested_command == "rm" and self._rm_is_recursive(nested[1:])
                             and any(self._is_protected_delete(root, request.cwd) for root in find_roots)):
                         self._append(findings, "FILE-001", evidence)
                 if not nested or not terminated:
@@ -1939,7 +1938,6 @@ class SafetyScanner:
                 self._append(findings, "RES-002", evidence)
         if self._bash_static_write_exceeds(segment):
             self._append(findings, "RES-003", evidence)
-        self._check_bash_redirections(findings, original_segment, request)
         nested_status = self._scan_interpreter_parts(findings, segment, request)
         if nested_status is not None and nested_statuses is not None:
             nested_statuses.append(nested_status)
@@ -1947,22 +1945,6 @@ class SafetyScanner:
             self._append(findings, "PROC-UNKNOWN-001", evidence)
             if nested_statuses is not None:
                 nested_statuses.append(AnalysisStatus.UNSUPPORTED)
-
-    def _check_bash_redirections(
-        self,
-        findings: list[SafetyFinding],
-        tokens: list[str],
-        request: SafetyScanRequest,
-    ) -> None:
-        for index, token in enumerate(tokens[:-1]):
-            if token not in {">", ">>", ">|"}:
-                continue
-            target = tokens[index + 1]
-            if self._is_sensitive_path(target, request.cwd) or self._is_protected_write_path(target, request.cwd):
-                self._append(findings, "FILE-004", f"{token} {target}")
-            previous = tokens[index - 1] if index > 0 else ""
-            if previous == "yes":
-                self._append(findings, "RES-003", f"yes {token} {target}")
 
     def _report(
         self,
@@ -2148,7 +2130,7 @@ class SafetyScanner:
         parts: list[str],
         request: SafetyScanRequest,
     ) -> AnalysisStatus | None:
-        if len(parts) < 3:
+        if not parts:
             return None
         command = Path(parts[0]).name
         if command in {"bash", "sh", "zsh"}:
@@ -2168,10 +2150,17 @@ class SafetyScanner:
                 },
             }, )
             result = self._scan_bash(nested_request)
-        elif command in {"python", "python3"} and parts[1] == "-c":
+        elif command in {"python", "python3"}:
+            command_index = self._python_inline_command_index(parts[1:])
+            if command_index is None:
+                return None
+            content_index = command_index + 2
+            if content_index >= len(parts):
+                findings.append(self._analysis_failure("python -c requires a script argument"))
+                return AnalysisStatus.PARSE_ERROR
             nested_request = request.model_copy(update={
-                "content": parts[2],
-                "argv": parts[3:],
+                "content": parts[content_index],
+                "argv": parts[content_index + 1:],
             }, )
             result = self._scan_python(nested_request)
         else:
@@ -2191,6 +2180,43 @@ class SafetyScanner:
             AnalysisStatus.INTERNAL_ERROR: 4,
         }
         return max(statuses, key=priority.__getitem__, default=AnalysisStatus.INTERNAL_ERROR)
+
+    @staticmethod
+    def _python_inline_command_index(args: list[str]) -> int | None:
+        """Return the index of an interpreter-level ``-c`` option."""
+
+        options_with_value = {
+            "-W",
+            "-X",
+            "--check-hash-based-pycs",
+        }
+        index = 0
+        while index < len(args):
+            token = args[index]
+            if token == "-c":
+                return index
+            if token in {"-", "--", "-m"} or not token.startswith("-"):
+                return None
+            if token in options_with_value:
+                index += 2
+            else:
+                index += 1
+        return None
+
+    @staticmethod
+    def _rm_is_recursive(tokens: list[str]) -> bool:
+        """Recognize recursive rm options without matching long-option text."""
+
+        for token in tokens:
+            if token == "--":
+                break
+            if token == "--recursive":
+                return True
+            if token.startswith("--"):
+                continue
+            if token.startswith("-") and any(flag in token[1:] for flag in ("r", "R")):
+                return True
+        return False
 
     @staticmethod
     def _is_shell_assignment(token: str) -> bool:
