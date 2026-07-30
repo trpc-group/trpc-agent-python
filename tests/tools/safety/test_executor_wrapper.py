@@ -93,3 +93,40 @@ async def test_blocked_block_writes_audit(tmp_path: Path) -> None:
     event = json.loads(audit_file.read_text(encoding="utf-8").strip().splitlines()[0])
     assert event["decision"] == "deny"
     assert event["blocked"] is True
+
+
+async def test_review_block_respects_block_on_review_flag() -> None:
+    """A review verdict blocks only when ``block_on_review`` is True."""
+    blocking = SafeCodeExecutor(inner=_FakeInnerExecutor(), block_on_review=True)
+    result = await blocking.execute_code(None, _blocks(("bash", "pip install requests")))
+    assert blocking.inner.ran is False
+    assert "SAFETY_BLOCKED" in result.output
+
+    passing_inner = _FakeInnerExecutor()
+    passing = SafeCodeExecutor(inner=passing_inner, block_on_review=False)
+    await passing.execute_code(None, _blocks(("bash", "pip install requests")))
+    assert passing_inner.ran is True
+
+
+async def test_raw_safe_code_field_delegates_to_inner() -> None:
+    """A benign raw ``code`` field is scanned and then forwarded."""
+    inner = _FakeInnerExecutor()
+    safe = SafeCodeExecutor(inner=inner)
+    result = await safe.execute_code(None, CodeExecutionInput(code="print('hi')"))
+    assert inner.ran is True
+    assert "inner ran" in result.output
+
+
+async def test_empty_code_block_is_skipped() -> None:
+    """A blank code block is skipped and the remaining benign block runs."""
+    inner = _FakeInnerExecutor()
+    safe = SafeCodeExecutor(inner=inner)
+    await safe.execute_code(None, _blocks(("python", "   "), ("python", "print('hi')")))
+    assert inner.ran is True
+
+
+def test_audit_logger_path_property(tmp_path: Path) -> None:
+    """The ``path`` property reflects the configured destination (or None)."""
+    assert SafetyAuditLogger().path is None
+    target = tmp_path / "audit.jsonl"
+    assert SafetyAuditLogger(target).path == target

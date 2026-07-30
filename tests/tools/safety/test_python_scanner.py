@@ -98,3 +98,42 @@ def test_unparseable_script_yields_ast000() -> None:
     assert len(hits) == 1
     assert hits[0].rule_id == "AST000"
     assert hits[0].risk_level.value == "medium"
+
+
+def test_recursive_directory_removal_detected() -> None:
+    """``shutil.rmtree`` is flagged as a high-risk destructive file op."""
+    assert "AST006" in _ids("import shutil\nshutil.rmtree('/data')\n")
+
+
+def test_open_without_arguments_is_ignored() -> None:
+    """``open()`` with no arguments cannot match a forbidden path."""
+    assert "AST003" not in _ids("open()\n")
+
+
+def test_deeply_nested_attribute_call_resolves() -> None:
+    """A 3+ level dotted call is walked without error and stays benign."""
+    assert _ids("import os\nos.path.join('a', 'b')\n") == set()
+
+
+def test_process_call_without_args_is_not_dynamic() -> None:
+    """A process spawn with no arguments is flagged but not review-level."""
+    ids = _ids("import subprocess\nsubprocess.run()\n")
+    assert "AST001" in ids
+    assert "AST008" not in ids
+
+
+def test_getattr_with_single_arg_is_not_obfuscation() -> None:
+    """``getattr`` with fewer than two arguments is not treated as obfuscation."""
+    assert "AST007" not in _ids("getattr(obj)\n")
+
+
+def test_infinite_loop_with_only_nested_loop_still_flagged() -> None:
+    """A ``break`` inside a *nested* loop does not terminate the outer ``while``."""
+    script = "while True:\n    if cond:\n        for i in x:\n            pass\n"
+    assert "AST005" in _ids(script)
+
+
+def test_infinite_loop_with_deeply_nested_break_not_flagged() -> None:
+    """A ``break`` nested two levels deep still terminates the ``while``."""
+    script = "while True:\n    if a:\n        if b:\n            break\n"
+    assert "AST005" not in _ids(script)

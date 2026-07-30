@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import time
 
+from trpc_agent_sdk.tools.safety import RiskCategory
+from trpc_agent_sdk.tools.safety import RiskLevel
+from trpc_agent_sdk.tools.safety import RuleHit
 from trpc_agent_sdk.tools.safety import SafetyDecision
 from trpc_agent_sdk.tools.safety import SafetyScanner
 from trpc_agent_sdk.tools.safety import ScanInput
@@ -158,3 +161,47 @@ def test_report_serialises_to_json() -> None:
     first = data["hits"][0]
     for key in ("rule_id", "evidence", "recommendation", "risk_level"):
         assert key in first
+
+
+# -- dedupe / fusion edge cases ---------------------------------------------
+def test_duplicate_ast_hit_on_same_line_is_deduped() -> None:
+    """Two identical findings on one line collapse to a single hit."""
+    report = _scan("eval(a); eval(b)\n", ScriptLanguage.PYTHON)
+    ast002 = [hit for hit in report.hits if hit.rule_id == "AST002"]
+    assert len(ast002) == 1
+
+
+def test_fuse_allows_low_severity_only_findings() -> None:
+    """Findings that never exceed 'low' are advisory and do not block."""
+    low_hit = RuleHit(
+        rule_id="LOW1",
+        category=RiskCategory.RESOURCE_ABUSE,
+        risk_level=RiskLevel.LOW,
+        title="advisory",
+        evidence="x",
+        line=1,
+        recommendation="",
+        layer="regex",
+    )
+    decision, peak = SafetyScanner._fuse([low_hit])
+    assert decision is SafetyDecision.ALLOW
+    assert peak is RiskLevel.LOW
+
+
+def test_python_shebang_autodetected() -> None:
+    """A ``python`` shebang makes the scanner treat the script as Python."""
+    report = _scan("#!/usr/bin/env python3\nimport os\n")
+    assert report.language is ScriptLanguage.PYTHON
+
+
+def test_unparseable_non_bash_defaults_to_bash() -> None:
+    """Content that is neither valid Python nor shell-hinted falls back to Bash."""
+    report = _scan("@@@ not valid @@@\n")
+    assert report.language is ScriptLanguage.BASH
+
+
+def test_script_language_from_str_defaults_to_unknown() -> None:
+    """Empty or unrecognised language strings normalise to UNKNOWN."""
+    assert ScriptLanguage.from_str(None) is ScriptLanguage.UNKNOWN
+    assert ScriptLanguage.from_str("") is ScriptLanguage.UNKNOWN
+    assert ScriptLanguage.from_str("ruby") is ScriptLanguage.UNKNOWN

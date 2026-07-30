@@ -140,3 +140,27 @@ def test_custom_policy_changes_behaviour_without_code(tmp_path: Path) -> None:
     assert report.decision is SafetyDecision.DENY
     assert "CUSTOM_MINE" in report.rule_ids()
     assert report.risk_level is RiskLevel.CRITICAL
+
+
+def test_unparseable_yaml_raises_value_error(tmp_path: Path) -> None:
+    """Syntactically invalid YAML is surfaced as a clear ValueError."""
+    bad = tmp_path / "broken.yaml"
+    bad.write_text("rules: [1, 2, 3\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_policy(bad)
+
+
+def test_invalid_schema_via_file_raises_value_error(tmp_path: Path) -> None:
+    """A well-formed YAML mapping that violates the schema fails on load."""
+    bad = tmp_path / "schema.yaml"
+    bad.write_text(
+        "rules:\n"
+        "  - rule_id: BAD\n"
+        "    category: resource_abuse\n"
+        "    risk_level: low\n"
+        "    title: bad\n"
+        "    pattern: '([unclosed'\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):
+        load_policy(bad)

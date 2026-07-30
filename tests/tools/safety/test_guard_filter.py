@@ -12,6 +12,7 @@ from pathlib import Path
 
 from trpc_agent_sdk.filter import FilterResult
 from trpc_agent_sdk.tools.safety import SafetyAuditLogger
+from trpc_agent_sdk.tools.safety import SafetyScanner
 from trpc_agent_sdk.tools.safety import ToolSafetyGuardFilter
 
 
@@ -99,3 +100,40 @@ async def test_block_writes_audit_event(tmp_path: Path) -> None:
     assert event["blocked"] is True
     assert "FS001" in event["rule_ids"]
     assert "duration_ms" in event
+
+
+async def test_scanner_property_exposes_underlying_scanner() -> None:
+    """The ``scanner`` property returns the scanner the filter was built with."""
+    scanner = SafetyScanner()
+    guard = ToolSafetyGuardFilter(scanner=scanner)
+    assert guard.scanner is scanner
+
+
+async def test_non_dict_request_passes_through() -> None:
+    """A non-dict request carries no arguments to inspect and is not blocked."""
+    guard = ToolSafetyGuardFilter()
+    handle = _Recorder()
+
+    await guard.run(None, "not-a-dict", handle)
+
+    assert handle.called is True
+
+
+async def test_declared_language_is_respected() -> None:
+    """An explicit ``language`` argument drives language selection."""
+    guard = ToolSafetyGuardFilter()
+    handle = _Recorder()
+
+    await guard.run(None, {"code": "print('hi')", "language": "python"}, handle)
+
+    assert handle.called is True
+
+
+async def test_script_arg_without_shell_hint_defaults_to_unknown() -> None:
+    """A non-shell ``script`` argument with no language hint is left UNKNOWN."""
+    guard = ToolSafetyGuardFilter()
+    handle = _Recorder()
+
+    await guard.run(None, {"script": "print('hi')"}, handle)
+
+    assert handle.called is True
