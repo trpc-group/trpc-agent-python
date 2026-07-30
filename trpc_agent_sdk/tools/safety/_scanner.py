@@ -265,6 +265,7 @@ _PURE_MODULE_PREFIXES = (
     "random.",
     "statistics.",
 )
+_SAFE_LITERAL_DYNAMIC_IMPORTS = {prefix.removesuffix(".") for prefix in _PURE_MODULE_PREFIXES}
 _DEPENDENCY_COMMANDS = {"pip", "pip3", "npm", "yarn", "pnpm", "apt", "apt-get", "brew"}
 _EXECUTION_ENV_KEYS = {
     "BASH_ENV",
@@ -673,8 +674,10 @@ class SafetyScanner:
                 unknowns.append(f"line={getattr(node, 'lineno', 0)}: reflective callable lookup")
             if call_name in {"__import__", "importlib.import_module"}:
                 module_node = node.args[0] if node.args else None
-                if _literal_string(module_node, stable_constants) is None:
-                    unknowns.append(f"line={getattr(node, 'lineno', 0)}: dynamic import")
+                module = _literal_string(module_node, stable_constants)
+                if not self._safe_literal_dynamic_import(module):
+                    unknowns.append(f"line={getattr(node, 'lineno', 0)}: "
+                                    "unmodeled dynamic import")
             if call_name not in functions:
                 self._check_python_file(
                     findings,
@@ -1124,10 +1127,11 @@ class SafetyScanner:
             known_client = (has_import_or_alias_provenance and call_name.startswith(
                 ("aiohttp.", "httpx.", "requests.")))
             is_network = known_client
-        is_socket_connect = (has_import_or_alias_provenance and call_name.endswith(".connect") and bool(node.args)
-                             and isinstance(node.args[0], (ast.Tuple, ast.List)))
+        socket_method = call_name.rsplit(".", 1)[-1]
+        is_socket_operation = (has_import_or_alias_provenance and call_name.startswith("socket.socket.")
+                               and socket_method in {"connect", "connect_ex", "sendto"})
         if (has_import_or_alias_provenance
-                and call_name in {"socket.socket", "socket.create_connection"}) or is_socket_connect:
+                and call_name in {"socket.socket", "socket.create_connection"}) or is_socket_operation:
             is_network = True
         if not is_network:
             return False
@@ -1156,10 +1160,13 @@ class SafetyScanner:
         url_node = node.args[0] if node.args else _keyword(node, "url")
         if call_name.endswith(".request"):
             url_node = node.args[1] if len(node.args) > 1 else _keyword(node, "url")
-        if (call_name == "socket.create_connection" or is_socket_connect) and node.args:
-            target = node.args[0]
+        if (call_name == "socket.create_connection" or is_socket_operation) and node.args:
+            target_index = 1 if socket_method == "sendto" else 0
+            target = node.args[target_index] if len(node.args) > target_index else None
             if isinstance(target, (ast.Tuple, ast.List)) and target.elts:
                 url_node = target.elts[0]
+            else:
+                url_node = target
         target = self._resolve_python_string(url_node, constants, request)
         if target is None:
             self._append_node(findings, "NET-002", node, request.content)
@@ -1212,7 +1219,7 @@ class SafetyScanner:
             return
         if call_name in {"__import__", "importlib.import_module"}:
             module = _literal_string(node.args[0], constants) if node.args else None
-            if module is None:
+            if not self._safe_literal_dynamic_import(module):
                 self._append_node(findings, "PROC-UNKNOWN-001", node, request.content)
             return
         if call_name.startswith(("__import__.", "importlib.import_module.")) or self._uses_dynamic_callable(node.func):
@@ -1271,9 +1278,10 @@ class SafetyScanner:
             elif timeout_value > self.policy.limits.max_timeout_seconds:
                 self._append_node(findings, "POLICY-001", node, request.content)
         shell_node = _keyword(node, "shell")
-        if isinstance(shell_node, ast.Constant) and shell_node.value is True:
-            self._append_node(findings, "PROC-001", node, request.content)
-        elif shell_node is not None and not (isinstance(shell_node, ast.Constant) and shell_node.value is False):
+        if isinstance(shell_node, ast.Constant):
+            if bool(shell_node.value):
+                self._append_node(findings, "PROC-001", node, request.content)
+        elif shell_node is not None:
             self._append_node(findings, "PROC-003", node, request.content)
         command_node = node.args[0] if node.args else _keyword(node, "args")
         parts = _command_parts(command_node, constants)
@@ -1552,7 +1560,8 @@ class SafetyScanner:
             return True
         if call_name in {"socket.socket", "socket.create_connection"} and bound_capability:
             return True
-        if call_name == "socket.socket.connect" and bound_capability:
+        if (bound_capability and call_name.startswith("socket.socket.")
+                and call_name.rsplit(".", 1)[-1] in {"connect", "connect_ex", "sendto"}):
             return True
         return False
 
@@ -1695,19 +1704,13 @@ class SafetyScanner:
                     self._append(findings, "FILE-002", evidence)
         if command == "find":
             delete_action = "-delete" in segment
-            find_roots = [
-                self._resolve_shell_value(token, request.env) for token in segment[1:]
-                if not token.startswith("-") and token not in {";", "\\;", "+", "{}"}
-            ]
-            for action in {"-exec", "-execdir", "-ok", "-okdir"}:
-                if action not in segment:
-                    continue
-                start = segment.index(action) + 1
-                nested = []
-                for token in segment[start:]:
-                    if token in {";", "\\;", "+"}:
-                        break
-                    nested.append(token)
+            expression_start = next(
+                (index for index, token in enumerate(segment[1:], start=1)
+                 if token.startswith("-") or token in {"!", "(", ")"}),
+                len(segment),
+            )
+            find_roots = [self._resolve_shell_value(token, request.env) for token in segment[1:expression_start]]
+            for nested, terminated in self._find_nested_commands(segment):
                 if nested:
                     self._check_bash_segment(findings, nested, request, nested_statuses)
                     nested_command = Path(nested[0]).name
@@ -1715,7 +1718,7 @@ class SafetyScanner:
                             and any(token.startswith("-") and ("r" in token or "R" in token) for token in nested[1:])
                             and any(self._is_protected_delete(root, request.cwd) for root in find_roots)):
                         self._append(findings, "FILE-001", evidence)
-                else:
+                if not nested or not terminated:
                     self._append(findings, "PROC-003", evidence)
             if delete_action:
                 roots = find_roots
@@ -1783,12 +1786,18 @@ class SafetyScanner:
                     for token in targets):
                 self._append(findings, "FILE-004", evidence)
         if command == "dd":
+            sources = [
+                self._resolve_shell_value(token.split("=", 1)[1], request.env) for token in segment[1:]
+                if token.startswith("if=")
+            ]
             targets = [
                 self._resolve_shell_value(token.split("=", 1)[1], request.env) for token in segment[1:]
                 if token.startswith("of=")
             ]
-            if any(self._is_dynamic_shell_value(target) for target in targets):
+            if any(self._is_dynamic_shell_value(path) for path in [*sources, *targets]):
                 self._append(findings, "PROC-003", evidence)
+            if any(self._is_sensitive_path(source, request.cwd) for source in sources):
+                self._append(findings, "FILE-003", evidence)
             if any(
                     self._is_sensitive_path(token, request.cwd) or self._is_protected_write_path(token, request.cwd)
                     for token in targets):
@@ -1887,6 +1896,10 @@ class SafetyScanner:
                         resolved_path, request.cwd):
                     self._append(findings, "FILE-004", evidence)
         if command in {"nc", "netcat", "telnet"}:
+            if command in {"nc", "netcat"} and any(
+                    token in {"-c", "-e", "--exec", "--sh-exec"} or token.startswith(("--exec=", "--sh-exec="))
+                    for token in segment[1:]):
+                self._append(findings, "PROC-001", evidence)
             hosts = [token for token in segment[1:] if not token.startswith("-")]
             if not hosts:
                 self._append(findings, "NET-002", evidence)
@@ -2608,7 +2621,20 @@ class SafetyScanner:
             index = 1
             while index < len(segment):
                 token = segment[index]
-                if token in find_options_with_value:
+                if token in {"-exec", "-execdir", "-ok", "-okdir"}:
+                    index += 1
+                    while index < len(segment) and segment[index] not in {
+                            ";",
+                            "\\;",
+                            "+",
+                    }:
+                        index += 1
+                    if index >= len(segment):
+                        unknown.append(token)
+                        break
+                    index += 1
+                    continue
+                elif token in find_options_with_value:
                     index += 2
                     continue
                 if token.startswith("-") and token not in find_flags:
@@ -2625,6 +2651,8 @@ class SafetyScanner:
             if option in value_options.get(command, set()):
                 if "=" not in token:
                     index += 1
+            elif token[:2] in value_options.get(command, set()):
+                pass
             elif token.startswith("--"):
                 if token not in long_flags.get(command, set()):
                     unknown.append(token)
@@ -2645,7 +2673,34 @@ class SafetyScanner:
             for option in options:
                 if token.startswith(option + "="):
                     values.append(token.split("=", 1)[1])
+                elif (len(option) == 2 and option.startswith("-") and not option.startswith("--")
+                      and token.startswith(option) and len(token) > len(option)):
+                    value = token[len(option):]
+                    values.append(value.removeprefix("="))
         return values
+
+    @staticmethod
+    def _find_nested_commands(segment: list[str], ) -> list[tuple[list[str], bool]]:
+        """Return every command invoked by a find action and its terminator state."""
+
+        actions = {"-exec", "-execdir", "-ok", "-okdir"}
+        terminators = {";", "\\;", "+"}
+        nested_commands: list[tuple[list[str], bool]] = []
+        index = 1
+        while index < len(segment):
+            if segment[index] not in actions:
+                index += 1
+                continue
+            index += 1
+            nested: list[str] = []
+            while index < len(segment) and segment[index] not in terminators:
+                nested.append(segment[index])
+                index += 1
+            terminated = index < len(segment)
+            nested_commands.append((nested, terminated))
+            if terminated:
+                index += 1
+        return nested_commands
 
     def _network_file_inputs(
         self,
@@ -3384,10 +3439,9 @@ class SafetyScanner:
                 return True
         for denied in self.policy.paths.denied:
             denied_expanded = Path(os.path.expanduser(denied))
-            if denied == ".env":
-                if path.name == ".env":
-                    return True
-                continue
+            if (not denied_expanded.is_absolute() and len(denied_expanded.parts) == 1
+                    and path.name == denied_expanded.name):
+                return True
             denied_path = (denied_expanded.resolve(
                 strict=False) if denied_expanded.is_absolute() else self._normalize_path(denied, cwd))
             if path == denied_path or denied_path in path.parents:
@@ -3407,7 +3461,9 @@ class SafetyScanner:
         home = Path.home().resolve(strict=False)
         if path in {Path("/"), home} or self._is_system_path(value, cwd) or self._is_sensitive_path(value, cwd):
             return True
-        if self.policy.paths.workspace_only_delete and cwd:
+        if self.policy.paths.workspace_only_delete and cwd is None:
+            return True
+        if self.policy.paths.workspace_only_delete:
             workspace = Path(os.path.expanduser(cwd)).resolve(strict=False)
             return path != workspace and workspace not in path.parents
         return False
@@ -3524,10 +3580,11 @@ class SafetyScanner:
         command = Path(segment[0]).name
         limit = self.policy.limits.max_static_write_size_bytes
         if command in {"truncate", "fallocate"}:
-            for index, token in enumerate(segment[:-1]):
-                if token in {"-s", "--size", "-l", "--length"}:
-                    size = self._parse_size(segment[index + 1])
-                    return size is not None and size > limit
+            sizes = self._option_values(
+                segment,
+                {"-l", "-s", "--length", "--size"},
+            )
+            return any(size is not None and size > limit for size in (self._parse_size(value) for value in sizes))
         if command == "dd":
             values = {
                 key: self._parse_size(value)
@@ -3537,6 +3594,12 @@ class SafetyScanner:
             if values.get("bs") is not None and values.get("count") is not None:
                 return values["bs"] * values["count"] > limit  # type: ignore[operator]
         return command == "yes" and any(token in {">", ">>"} for token in segment)
+
+    @staticmethod
+    def _safe_literal_dynamic_import(module: str | None) -> bool:
+        if module is None:
+            return False
+        return any(module == allowed or module.startswith(allowed + ".") for allowed in _SAFE_LITERAL_DYNAMIC_IMPORTS)
 
     @staticmethod
     def _parse_size(value: str) -> int | None:

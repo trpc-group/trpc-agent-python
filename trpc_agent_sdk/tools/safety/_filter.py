@@ -148,6 +148,7 @@ class ToolSafetyFilter(BaseFilter):
         del ctx
         tool = get_tool_var()
         tool_name = self._tool_name or getattr(tool, "name", None)
+        apply_default_timeout = False
         if not tool_name:
             tool_name = "unknown_tool"
         try:
@@ -163,7 +164,7 @@ class ToolSafetyFilter(BaseFilter):
             if timeout is None:
                 timeout = self._default_timeout_seconds
                 if self._timeout_field is not None and timeout is not None:
-                    req[self._timeout_field] = timeout
+                    apply_default_timeout = True
             env = self._field(req, self._env_field) or {}
             argv = self._field(req, self._argv_field) or []
             if not isinstance(env, dict):
@@ -192,6 +193,9 @@ class ToolSafetyFilter(BaseFilter):
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("tool safety filter failed: %s", type(ex).__name__)
             report = self._guard.invalid_request("internal adapter failure", tool_name=str(tool_name))
+        if (report.decision == SafetyDecision.ALLOW and apply_default_timeout and isinstance(req, dict)
+                and self._timeout_field is not None):
+            req[self._timeout_field] = timeout
         if report.decision != SafetyDecision.ALLOW:
             try:
                 rsp.rsp = self._block_response_adapter.blocked(report)

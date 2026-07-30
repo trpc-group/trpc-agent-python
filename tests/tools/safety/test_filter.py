@@ -202,6 +202,26 @@ async def test_default_timeout_is_scanned_and_passed_to_handler(tool_context):
     assert tool.last_args == {"command": "echo ok", "timeout": 10}
 
 
+@pytest.mark.asyncio
+async def test_default_timeout_does_not_mutate_blocked_request(tool_context):
+    tool = CountingTool()
+    tool.add_one_filter(
+        ToolSafetyFilter(
+            SafetyScanner(),
+            language="bash",
+            content_field="command",
+            timeout_field="timeout",
+            default_timeout_seconds=10,
+        ))
+    args = {"command": "rm -rf /"}
+
+    result = await tool.run_async(tool_context=tool_context, args=args)
+
+    assert result["decision"] == "deny"
+    assert args == {"command": "rm -rf /"}
+    assert tool.calls == 0
+
+
 def test_output_limiter_handles_bytes_and_utf8_boundaries():
     limiter = FieldOutputLimiter()
 
