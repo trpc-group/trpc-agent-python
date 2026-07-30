@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Any
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -30,7 +29,6 @@ from ._models import ScriptType
 from ._rules import Rule
 from ._rules import ScanContext
 from ._rules import global_rule_registry
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -104,31 +102,54 @@ _DELETE_CALLS = {
 # Calls that access file paths (used by PyDangerousFileOpsRule).
 _PATH_ACCESS_CALLS = {
     ("pathlib", "Path"),
-    ("os", "listdir"), ("os", "scandir"), ("os", "walk"),
-    ("os", "stat"), ("os", "lstat"),
-    ("os.path", "exists"), ("os.path", "isfile"), ("os.path", "isdir"),
-    ("os.path", "getsize"), ("os.path", "getatime"),
+    ("os", "listdir"),
+    ("os", "scandir"),
+    ("os", "walk"),
+    ("os", "stat"),
+    ("os", "lstat"),
+    ("os.path", "exists"),
+    ("os.path", "isfile"),
+    ("os.path", "isdir"),
+    ("os.path", "getsize"),
+    ("os.path", "getatime"),
 }
 
 # Dependency-install command prefixes.
-_INSTALL_PREFIXES = ("pip install", "pip3 install", "python -m pip install",
-                     "npm install", "npm i ", "yarn add", "apt install",
-                     "apt-get install", "brew install", "conda install",
-                     "pip uninstall", "npm uninstall")
+_INSTALL_PREFIXES = (
+    "pip install",
+    "pip3 install",
+    "python -m pip install",
+    "npm install",
+    "npm i ",
+    "yarn add",
+    "apt install",
+    "apt-get install",
+    "brew install",
+    "conda install",
+    "pip uninstall",
+    "npm uninstall",
+)
 
 # --- Taint tracking: variables that may hold secrets ---
 
 # Variable names that look like they hold secrets.
-_SECRET_NAME_RE = re.compile(
-    r"(?i)(?:api[_-]?key|secret|token|password|passwd|credential|"
-    r"private[_-]?key|access[_-]?key|auth)"
-)
+_SECRET_NAME_RE = re.compile(r"(?i)(?:api[_-]?key|secret|token|password|passwd|credential|"
+                             r"private[_-]?key|access[_-]?key|auth)")
 
 # Method names that write or transmit data (potential secret-leak sinks).
 _OUTPUT_METHODS = frozenset({
-    "write", "write_text", "write_bytes",
-    "send", "sendall",
-    "debug", "info", "warning", "error", "critical", "exception", "log",
+    "write",
+    "write_text",
+    "write_bytes",
+    "send",
+    "sendall",
+    "debug",
+    "info",
+    "warning",
+    "error",
+    "critical",
+    "exception",
+    "log",
 })
 
 
@@ -245,6 +266,7 @@ def _get_source_segment(source: str, node: ast.AST) -> str:
 # Taint-tracking helpers
 # ---------------------------------------------------------------------------
 
+
 def _str_value(node: ast.AST) -> Optional[str]:
     """Extract a string literal from an arbitrary AST node."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -288,27 +310,20 @@ def _expr_is_sensitive(
             key = _get_str_arg(node, 0)
             if key and _SECRET_NAME_RE.search(key):
                 return True
-        if (isinstance(node.func, ast.Name) and node.func.id == "getenv"
-                and node.args):
+        if isinstance(node.func, ast.Name) and node.func.id == "getenv" and node.args:
             key = _get_str_arg(node, 0)
             if key and _SECRET_NAME_RE.search(key):
                 return True
     if isinstance(node, ast.Subscript):
         target = node.value
-        is_environ = (
-            (isinstance(target, ast.Attribute)
-             and isinstance(target.value, ast.Name)
-             and target.value.id == "os" and target.attr == "environ")
-            or (isinstance(target, ast.Name) and target.id == "environ")
-        )
+        is_environ = (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                      and target.value.id == "os" and target.attr == "environ") or (isinstance(target, ast.Name)
+                                                                                    and target.id == "environ")
         if is_environ:
             key = _str_value(node.slice)
             if key and _SECRET_NAME_RE.search(key):
                 return True
-    return any(
-        _expr_is_sensitive(child, tainted, patterns)
-        for child in ast.iter_child_nodes(node)
-    )
+    return any(_expr_is_sensitive(child, tainted, patterns) for child in ast.iter_child_nodes(node))
 
 
 def _collect_tainted_names(
@@ -321,10 +336,7 @@ def _collect_tainted_names(
     (``a = b = os.getenv('API_KEY')``) propagate correctly.
     """
     tainted: set[str] = set()
-    assignments = [
-        n for n in ast.walk(tree)
-        if isinstance(n, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
-    ]
+    assignments = [n for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign, ast.NamedExpr))]
     for _ in range(2):
         for node in assignments:
             if not _expr_is_sensitive(node.value, tainted, patterns):
@@ -361,6 +373,7 @@ def _is_output_call(node: ast.Call) -> bool:
 # Python rules
 # ===========================================================================
 
+
 class PyDangerousFileOpsRule(Rule):
     """Detect dangerous file operations: recursive delete, credential reads."""
 
@@ -369,7 +382,7 @@ class PyDangerousFileOpsRule(Rule):
     category = RiskCategory.DANGEROUS_FILE_OPS
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.PYTHON,)
+    applies_to = (ScriptType.PYTHON, )
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -388,48 +401,50 @@ class PyDangerousFileOpsRule(Rule):
                 path_arg = _get_str_arg(node, 0) or ""
                 if ctx.policy.is_system_dir(path_arg) or not path_arg:
                     seg = _get_source_segment(ctx.script, node)
-                    findings.append(self._make_finding(
-                        seg or f"shutil.rmtree({path_arg!r})",
-                        line_no,
-                        "Avoid recursive deletion of system directories; "
-                        "restrict to explicitly scoped project paths.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            seg or f"shutil.rmtree({path_arg!r})",
+                            line_no,
+                            "Avoid recursive deletion of system directories; "
+                            "restrict to explicitly scoped project paths.",
+                        ))
                 elif path_arg.startswith(("/", "~", "C:\\")):
                     seg = _get_source_segment(ctx.script, node)
-                    findings.append(self._make_finding(
-                        seg or f"shutil.rmtree({path_arg!r})",
-                        line_no,
-                        "Recursive deletion of absolute paths is dangerous; "
-                        "use a sandboxed, relative path.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            seg or f"shutil.rmtree({path_arg!r})",
+                            line_no,
+                            "Recursive deletion of absolute paths is dangerous; "
+                            "use a sandboxed, relative path.",
+                        ))
 
             # os.remove / os.unlink / os.rmdir on protected paths
             if dotted in (("os", "remove"), ("os", "unlink"), ("os", "rmdir"), ("os", "removedirs")):
                 path_arg = _get_str_arg(node, 0) or ""
                 if ctx.policy.is_system_dir(path_arg) or ctx.policy.is_path_forbidden(path_arg):
                     seg = _get_source_segment(ctx.script, node)
-                    findings.append(self._make_finding(
-                        seg or f"{dotted[0]}.{dotted[1]}({path_arg!r})",
-                        line_no,
-                        "Do not delete protected system files or credential files.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            seg or f"{dotted[0]}.{dotted[1]}({path_arg!r})",
+                            line_no,
+                            "Do not delete protected system files or credential files.",
+                        ))
 
             # open() / pathlib.Path() on forbidden paths (.env, ~/.ssh, …)
             # Also check os.listdir / os.scandir / os.walk / os.stat etc.
             # Note: open() is a bare call (dotted is None), so we must
             # check it *before* the "dotted is None" guard below.
-            is_open_call = (
-                isinstance(node.func, ast.Name) and node.func.id == "open"
-            )
+            is_open_call = isinstance(node.func, ast.Name) and node.func.id == "open"
             if dotted in _PATH_ACCESS_CALLS or is_open_call:
                 path_arg = _get_str_arg(node, 0) or ""
                 if ctx.policy.is_path_forbidden(path_arg):
                     seg = _get_source_segment(ctx.script, node)
-                    findings.append(self._make_finding(
-                        seg or f"open({path_arg!r})",
-                        line_no,
-                        "Reading credential files (.env, ~/.ssh, etc.) is forbidden.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            seg or f"open({path_arg!r})",
+                            line_no,
+                            "Reading credential files (.env, ~/.ssh, etc.) is forbidden.",
+                        ))
 
             if dotted is None:
                 continue
@@ -444,7 +459,7 @@ class PyNetworkEgressRule(Rule):
     category = RiskCategory.NETWORK_EGRESS
     default_risk_level = RiskLevel.MEDIUM
     default_decision = Decision.NEEDS_HUMAN_REVIEW
-    applies_to = (ScriptType.PYTHON,)
+    applies_to = (ScriptType.PYTHON, )
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -465,25 +480,27 @@ class PyNetworkEgressRule(Rule):
             domain = _extract_domain(url)
             if domain and not ctx.policy.is_domain_allowed(domain):
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    seg or f"{dotted[0]}.{dotted[1]}({url!r})",
-                    line_no,
-                    f"Domain '{domain}' is not in the whitelist. "
-                    "Add it to allowed_domains in the policy file.",
-                    risk_level=RiskLevel.HIGH,
-                    decision=Decision.DENY,
-                ))
+                findings.append(
+                    self._make_finding(
+                        seg or f"{dotted[0]}.{dotted[1]}({url!r})",
+                        line_no,
+                        f"Domain '{domain}' is not in the whitelist. "
+                        "Add it to allowed_domains in the policy file.",
+                        risk_level=RiskLevel.HIGH,
+                        decision=Decision.DENY,
+                    ))
             elif not domain:
                 # Network call with a non-literal URL — flag for review.
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    seg or f"{dotted[0]}.{dotted[1]}(...)",
-                    line_no,
-                    "Network call with a dynamic/non-literal URL cannot be "
-                    "verified against the whitelist; requires human review.",
-                    risk_level=RiskLevel.LOW,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                ))
+                findings.append(
+                    self._make_finding(
+                        seg or f"{dotted[0]}.{dotted[1]}(...)",
+                        line_no,
+                        "Network call with a dynamic/non-literal URL cannot be "
+                        "verified against the whitelist; requires human review.",
+                        risk_level=RiskLevel.LOW,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                    ))
         return findings
 
 
@@ -497,8 +514,14 @@ _ALWAYS_SHELL_CALLS = {
 
 # Calls that replace the current process — always dangerous in agent context.
 _EXEC_CALLS = {
-    ("os", "execv"), ("os", "execve"), ("os", "execvp"), ("os", "execvpe"),
-    ("os", "execl"), ("os", "execle"), ("os", "execlp"), ("os", "execlpe"),
+    ("os", "execv"),
+    ("os", "execve"),
+    ("os", "execvp"),
+    ("os", "execvpe"),
+    ("os", "execl"),
+    ("os", "execle"),
+    ("os", "execlp"),
+    ("os", "execlpe"),
 }
 
 
@@ -521,7 +544,7 @@ class PyProcessSystemRule(Rule):
     category = RiskCategory.PROCESS_SYSTEM
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.PYTHON,)
+    applies_to = (ScriptType.PYTHON, )
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -544,65 +567,70 @@ class PyProcessSystemRule(Rule):
             # 1. Privilege escalation — always CRITICAL deny
             if any(kw in combined for kw in ("sudo", "su -", "su root")):
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    seg or f"{dotted[0]}.{dotted[1]}({combined!r})",
-                    line_no,
-                    "Privilege escalation (sudo/su) in subprocess call is forbidden.",
-                    risk_level=RiskLevel.CRITICAL,
-                ))
+                findings.append(
+                    self._make_finding(
+                        seg or f"{dotted[0]}.{dotted[1]}({combined!r})",
+                        line_no,
+                        "Privilege escalation (sudo/su) in subprocess call is forbidden.",
+                        risk_level=RiskLevel.CRITICAL,
+                    ))
                 continue
 
             # 2. shell=True — always HIGH deny (shell injection risk)
             if dotted[0] == "subprocess" and self._has_shell_true(node):
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    seg or f"{dotted[0]}.{dotted[1]}(..., shell=True)",
-                    line_no,
-                    "shell=True with a string command is vulnerable to shell "
-                    "injection; pass a list of arguments instead.",
-                    risk_level=RiskLevel.HIGH,
-                ))
+                findings.append(
+                    self._make_finding(
+                        seg or f"{dotted[0]}.{dotted[1]}(..., shell=True)",
+                        line_no,
+                        "shell=True with a string command is vulnerable to shell "
+                        "injection; pass a list of arguments instead.",
+                        risk_level=RiskLevel.HIGH,
+                    ))
                 continue
 
             # 3. os.system / os.popen / subprocess.getoutput — always use
             #    a shell internally, so they can never be made safe.
             if dotted in _ALWAYS_SHELL_CALLS or dotted in _EXEC_CALLS:
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    seg or f"{dotted[0]}.{dotted[1]}(...)",
-                    line_no,
-                    f"{dotted[0]}.{dotted[1]}() always invokes a shell or "
-                    "replaces the process; use subprocess.run with a list "
-                    "argument instead.",
-                    risk_level=RiskLevel.HIGH,
-                ))
+                findings.append(
+                    self._make_finding(
+                        seg or f"{dotted[0]}.{dotted[1]}(...)",
+                        line_no,
+                        f"{dotted[0]}.{dotted[1]}() always invokes a shell or "
+                        "replaces the process; use subprocess.run with a list "
+                        "argument instead.",
+                        risk_level=RiskLevel.HIGH,
+                    ))
                 continue
 
             # 4. subprocess.* with a LIST argument — no shell injection
             #    possible.  Downgrade to needs_human_review.
             if node.args and isinstance(node.args[0], ast.List):
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    seg or f"{dotted[0]}.{dotted[1]}([...])",
-                    line_no,
-                    "Subprocess call with a list argument is safer (no shell "
-                    "injection), but still requires human review to confirm "
-                    "the command is safe.",
-                    risk_level=RiskLevel.MEDIUM,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                ))
+                findings.append(
+                    self._make_finding(
+                        seg or f"{dotted[0]}.{dotted[1]}([...])",
+                        line_no,
+                        "Subprocess call with a list argument is safer (no shell "
+                        "injection), but still requires human review to confirm "
+                        "the command is safe.",
+                        risk_level=RiskLevel.MEDIUM,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                    ))
                 continue
 
             # 5. subprocess.* with a string argument (no shell=True) —
             #    still deny because string form may enable injection.
             seg = _get_source_segment(ctx.script, node)
-            findings.append(self._make_finding(
-                seg or f"{dotted[0]}.{dotted[1]}(...)",
-                line_no,
-                "Subprocess call with a string argument is vulnerable to "
-                "injection; pass a list of arguments instead.",
-                risk_level=RiskLevel.HIGH,
-            ))
+            findings.append(
+                self._make_finding(
+                    seg or f"{dotted[0]}.{dotted[1]}(...)",
+                    line_no,
+                    "Subprocess call with a string argument is vulnerable to "
+                    "injection; pass a list of arguments instead.",
+                    risk_level=RiskLevel.HIGH,
+                ))
         return findings
 
     @staticmethod
@@ -621,7 +649,7 @@ class PyDependencyInstallRule(Rule):
     category = RiskCategory.DEPENDENCY_INSTALL
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.PYTHON,)
+    applies_to = (ScriptType.PYTHON, )
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -641,13 +669,14 @@ class PyDependencyInstallRule(Rule):
             for prefix in _INSTALL_PREFIXES:
                 if prefix in combined:
                     seg = _get_source_segment(ctx.script, node)
-                    findings.append(self._make_finding(
-                        seg or combined[:120],
-                        line_no,
-                        "Dependency installation at runtime changes the "
-                        "execution environment; declare dependencies in the "
-                        "project manifest instead.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            seg or combined[:120],
+                            line_no,
+                            "Dependency installation at runtime changes the "
+                            "execution environment; declare dependencies in the "
+                            "project manifest instead.",
+                        ))
                     break
         return findings
 
@@ -660,7 +689,7 @@ class PyResourceAbuseRule(Rule):
     category = RiskCategory.RESOURCE_ABUSE
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.PYTHON,)
+    applies_to = (ScriptType.PYTHON, )
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -677,37 +706,40 @@ class PyResourceAbuseRule(Rule):
                     has_break = any(isinstance(n, ast.Break) for n in ast.walk(node))
                     if not has_break:
                         seg = _get_source_segment(ctx.script, node)
-                        findings.append(self._make_finding(
-                            seg or "while True: ...",
-                            line_no,
-                            "Infinite loop without a break statement will "
-                            "consume CPU indefinitely; add a termination condition.",
-                        ))
+                        findings.append(
+                            self._make_finding(
+                                seg or "while True: ...",
+                                line_no,
+                                "Infinite loop without a break statement will "
+                                "consume CPU indefinitely; add a termination condition.",
+                            ))
 
             # os.fork()
             if isinstance(node, ast.Call):
                 dotted = _dotted_call(node)
                 if dotted == ("os", "fork"):
                     seg = _get_source_segment(ctx.script, node)
-                    findings.append(self._make_finding(
-                        seg or "os.fork()",
-                        line_no,
-                        "os.fork() can be used to create fork bombs; avoid "
-                        "in agent-generated scripts.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            seg or "os.fork()",
+                            line_no,
+                            "os.fork() can be used to create fork bombs; avoid "
+                            "in agent-generated scripts.",
+                        ))
                 # Large sleep values
                 if dotted == ("time", "sleep"):
                     val = _get_int_arg(node, 0)
                     if val is not None and val > ctx.policy.max_sleep_seconds:
                         seg = _get_source_segment(ctx.script, node)
-                        findings.append(self._make_finding(
-                            seg or f"time.sleep({val})",
-                            line_no,
-                            "Excessively long sleep blocks the event loop; "
-                            "use a shorter timeout with retry logic.",
-                            risk_level=RiskLevel.LOW,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                        ))
+                        findings.append(
+                            self._make_finding(
+                                seg or f"time.sleep({val})",
+                                line_no,
+                                "Excessively long sleep blocks the event loop; "
+                                "use a shorter timeout with retry logic.",
+                                risk_level=RiskLevel.LOW,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                            ))
 
             # Huge range in a loop that writes data
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
@@ -715,13 +747,14 @@ class PyResourceAbuseRule(Rule):
                 for a in args:
                     if isinstance(a.value, int) and a.value > ctx.policy.max_range_size:
                         seg = _get_source_segment(ctx.script, node)
-                        findings.append(self._make_finding(
-                            seg or f"range({a.value})",
-                            line_no,
-                            "Very large iteration count may exhaust memory/CPU.",
-                            risk_level=RiskLevel.LOW,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                        ))
+                        findings.append(
+                            self._make_finding(
+                                seg or f"range({a.value})",
+                                line_no,
+                                "Very large iteration count may exhaust memory/CPU.",
+                                risk_level=RiskLevel.LOW,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                            ))
         return findings
 
 
@@ -733,7 +766,7 @@ class PySecretLeakRule(Rule):
     category = RiskCategory.SECRET_LEAK
     default_risk_level = RiskLevel.CRITICAL
     default_decision = Decision.DENY
-    applies_to = (ScriptType.PYTHON,)
+    applies_to = (ScriptType.PYTHON, )
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -751,12 +784,13 @@ class PySecretLeakRule(Rule):
                 if pattern.search(line):
                     if idx not in seen_lines:
                         seen_lines.add(idx)
-                        findings.append(self._make_finding(
-                            self._redact(line.strip()[:200]),
-                            idx,
-                            "Hardcoded secret detected; load secrets from "
-                            "environment variables or a secret manager instead.",
-                        ))
+                        findings.append(
+                            self._make_finding(
+                                self._redact(line.strip()[:200]),
+                                idx,
+                                "Hardcoded secret detected; load secrets from "
+                                "environment variables or a secret manager instead.",
+                            ))
                     break
 
         # Second: walk the AST for string constants (catches secrets in
@@ -775,12 +809,13 @@ class PySecretLeakRule(Rule):
                     if match:
                         seen_lines.add(line_no)
                         evidence = self._redact(node.value[:120])
-                        findings.append(self._make_finding(
-                            evidence,
-                            line_no,
-                            "Hardcoded secret detected; load secrets from "
-                            "environment variables or a secret manager instead.",
-                        ))
+                        findings.append(
+                            self._make_finding(
+                                evidence,
+                                line_no,
+                                "Hardcoded secret detected; load secrets from "
+                                "environment variables or a secret manager instead.",
+                            ))
                         break
 
         # Third: taint tracking — detect secrets propagated through
@@ -801,15 +836,15 @@ class PySecretLeakRule(Rule):
                     continue
                 seen_lines.add(line_no)
                 seg = _get_source_segment(ctx.script, node)
-                findings.append(self._make_finding(
-                    self._redact(seg) if seg else
-                    f"[REDACTED sensitive value passed to output at line {line_no}]",
-                    line_no,
-                    "Sensitive value may be written or transmitted; "
-                    "pass credentials through a scoped secret provider "
-                    "instead of logging or sending them directly.",
-                    risk_level=RiskLevel.HIGH,
-                ))
+                findings.append(
+                    self._make_finding(
+                        self._redact(seg) if seg else f"[REDACTED sensitive value passed to output at line {line_no}]",
+                        line_no,
+                        "Sensitive value may be written or transmitted; "
+                        "pass credentials through a scoped secret provider "
+                        "instead of logging or sending them directly.",
+                        risk_level=RiskLevel.HIGH,
+                    ))
         return findings
 
     @staticmethod
@@ -824,15 +859,16 @@ class PySecretLeakRule(Rule):
 # Register all built-in Python rules
 # ---------------------------------------------------------------------------
 
+
 def _register_python_rules() -> None:
     """Register the built-in Python rules with the global registry."""
     for rule_cls in (
-        PyDangerousFileOpsRule,
-        PyNetworkEgressRule,
-        PyProcessSystemRule,
-        PyDependencyInstallRule,
-        PyResourceAbuseRule,
-        PySecretLeakRule,
+            PyDangerousFileOpsRule,
+            PyNetworkEgressRule,
+            PyProcessSystemRule,
+            PyDependencyInstallRule,
+            PyResourceAbuseRule,
+            PySecretLeakRule,
     ):
         instance = rule_cls()
         global_rule_registry.register(instance)

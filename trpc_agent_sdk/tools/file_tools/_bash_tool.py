@@ -30,7 +30,9 @@ class BashTool(BaseTool):
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
-    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None,
+    def __init__(self,
+                 cwd: Optional[str] = None,
+                 whitelist_commands: Optional[list[str]] = None,
                  filters: Optional[list[BaseFilter]] = None):
         super().__init__(
             name="Bash",

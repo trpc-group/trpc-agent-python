@@ -46,12 +46,10 @@ from ._models import RiskLevel
 from ._models import SafetyReport
 from ._models import ScriptType
 from ._policy import SafetyPolicy
-from ._rules import Rule
 from ._rules import RuleRegistry
 from ._rules import ScanContext
 from ._rules import global_rule_registry
 from ._telemetry import report_to_span
-
 
 # ---------------------------------------------------------------------------
 # Script-type detection
@@ -117,6 +115,7 @@ def detect_script_type(script: str, hint: Optional[str] = None) -> ScriptType:
     # Python, and Python code always does.
     try:
         import ast as _ast
+
         _ast.parse(script)
         # Confirm it has at least one Python-ish construct to avoid
         # treating empty / trivial strings as Python.
@@ -154,6 +153,7 @@ def detect_script_type(script: str, hint: Optional[str] = None) -> ScriptType:
 # Decision aggregation
 # ---------------------------------------------------------------------------
 
+
 def _aggregate_decision(findings: list[Finding]) -> tuple[Decision, RiskLevel]:
     """Compute the overall decision and risk level from a list of findings.
 
@@ -179,15 +179,14 @@ def _aggregate_decision(findings: list[Finding]) -> tuple[Decision, RiskLevel]:
     return decision, risk_level
 
 
-def _build_summary(decision: Decision, risk_level: RiskLevel,
-                   findings: list[Finding], script_type: ScriptType) -> str:
+def _build_summary(decision: Decision, risk_level: RiskLevel, findings: list[Finding], script_type: ScriptType) -> str:
     """Build a short human-readable summary for the report."""
     if not findings:
         return f"No risks detected in {script_type.value} script; execution allowed."
     parts = [
         f"Decision: {decision.value} (risk: {risk_level.value}).",
-        f"Detected {len(findings)} finding(s): "
-        + ", ".join(sorted({f.category for f in findings})),
+        f"Detected {len(findings)} finding(s): " + ", ".join(sorted({f.category
+                                                                     for f in findings})),
     ]
     return " ".join(parts)
 
@@ -195,6 +194,7 @@ def _build_summary(decision: Decision, risk_level: RiskLevel,
 # ---------------------------------------------------------------------------
 # SafetyGuard
 # ---------------------------------------------------------------------------
+
 
 class SafetyGuard:
     """Orchestrates script safety scanning.
@@ -222,8 +222,7 @@ class SafetyGuard:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_yaml(cls, path: Union[str, os.PathLike],
-                  audit_logger: Optional[AuditLogger] = None) -> "SafetyGuard":
+    def from_yaml(cls, path: Union[str, os.PathLike], audit_logger: Optional[AuditLogger] = None) -> "SafetyGuard":
         """Build a guard from a YAML policy file."""
         return cls(policy=SafetyPolicy.from_yaml(path), audit_logger=audit_logger)
 
@@ -296,28 +295,30 @@ class SafetyGuard:
         findings: list[Finding] = []
         line_count = script.count("\n") + 1
         if line_count > self.policy.max_script_lines:
-            findings.append(Finding(
-                rule_id="GUARD-SCRIPT-TOO-LONG",
-                category="resource_abuse",
-                risk_level=RiskLevel.MEDIUM,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                description=f"Script exceeds maximum line count "
-                            f"({line_count} > {self.policy.max_script_lines})",
-                evidence=f"{line_count} lines",
-                recommendation="Split the script or increase max_script_lines in policy.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id="GUARD-SCRIPT-TOO-LONG",
+                    category="resource_abuse",
+                    risk_level=RiskLevel.MEDIUM,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    description=f"Script exceeds maximum line count "
+                    f"({line_count} > {self.policy.max_script_lines})",
+                    evidence=f"{line_count} lines",
+                    recommendation="Split the script or increase max_script_lines in policy.",
+                ))
 
         # Large-script review threshold
         if line_count > self.policy.large_script_threshold and line_count <= self.policy.max_script_lines:
-            findings.append(Finding(
-                rule_id="GUARD-LARGE-SCRIPT",
-                category="resource_abuse",
-                risk_level=RiskLevel.LOW,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                description=f"Script is large ({line_count} lines); review recommended.",
-                evidence=f"{line_count} lines (threshold: {self.policy.large_script_threshold})",
-                recommendation="Large scripts are harder to audit; consider splitting.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id="GUARD-LARGE-SCRIPT",
+                    category="resource_abuse",
+                    risk_level=RiskLevel.LOW,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    description=f"Script is large ({line_count} lines); review recommended.",
+                    evidence=f"{line_count} lines (threshold: {self.policy.large_script_threshold})",
+                    recommendation="Large scripts are harder to audit; consider splitting.",
+                ))
 
         # Run all applicable rules
         if script_type != ScriptType.UNKNOWN:
@@ -333,22 +334,21 @@ class SafetyGuard:
                     findings.extend(rule_findings)
                 except Exception as ex:  # pylint: disable=broad-except
                     # A buggy rule must never crash the guard.
-                    findings.append(Finding(
-                        rule_id=f"GUARD-RULE-ERROR-{rule.rule_id}",
-                        category="process_system",
-                        risk_level=RiskLevel.LOW,
-                        decision=Decision.NEEDS_HUMAN_REVIEW,
-                        description=f"Rule {rule.rule_id} raised an error: {ex}",
-                        evidence=str(ex)[:200],
-                        recommendation="Fix or disable the failing rule in the policy.",
-                    ))
+                    findings.append(
+                        Finding(
+                            rule_id=f"GUARD-RULE-ERROR-{rule.rule_id}",
+                            category="process_system",
+                            risk_level=RiskLevel.LOW,
+                            decision=Decision.NEEDS_HUMAN_REVIEW,
+                            description=f"Rule {rule.rule_id} raised an error: {ex}",
+                            evidence=str(ex)[:200],
+                            recommendation="Fix or disable the failing rule in the policy.",
+                        ))
 
         # Aggregate
         decision, risk_level = _aggregate_decision(findings)
         duration_ms = (time.perf_counter() - start) * 1000.0
-        sanitized = self.policy.redact_secrets_in_evidence and any(
-            f.category == "secret_leak" for f in findings
-        )
+        sanitized = self.policy.redact_secrets_in_evidence and any(f.category == "secret_leak" for f in findings)
 
         # Sort findings by risk level (highest first)
         risk_order = {

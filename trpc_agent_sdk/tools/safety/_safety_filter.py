@@ -46,9 +46,7 @@ from trpc_agent_sdk.tools import get_tool_var
 
 from ._audit import AuditLogger
 from ._models import Decision
-from ._models import SafetyReport
 from ._safety_guard import SafetyGuard
-
 
 # Fields in tool args that typically contain a script or command.
 _SCRIPT_FIELDS = ("command", "script", "code", "cmd", "shell_command", "expr")
@@ -131,9 +129,7 @@ class ToolSafetyFilter(BaseFilter):
 
         if should_block:
             # Build a structured error response that the agent can see.
-            findings_summary = "; ".join(
-                f"[{f.rule_id}] {f.description}" for f in report.findings
-            )
+            findings_summary = "; ".join(f"[{f.rule_id}] {f.description}" for f in report.findings)
             rsp.rsp = {
                 "success": False,
                 "error": "SAFETY_GUARD_BLOCKED",

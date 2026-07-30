@@ -77,9 +77,21 @@ class SafetyPolicy:
 
     # System directories that must never be recursively deleted
     protected_system_dirs: list[str] = field(default_factory=lambda: [
-        "/", "/etc", "/usr", "/bin", "/sbin", "/var", "/boot",
-        "/sys", "/proc", "/dev", "/root", "/home",
-        "C:\\", "C:\\Windows", "C:\\Program Files",
+        "/",
+        "/etc",
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/var",
+        "/boot",
+        "/sys",
+        "/proc",
+        "/dev",
+        "/root",
+        "/home",
+        "C:\\",
+        "C:\\Windows",
+        "C:\\Program Files",
     ])
 
     # Resource limits
@@ -128,8 +140,21 @@ class SafetyPolicy:
     # Commands that are treated as "reading file content" (used by
     # BashDangerousFileOpsRule to detect credential file access).
     credential_read_commands: list[str] = field(default_factory=lambda: [
-        "cat", "less", "more", "head", "tail", "cp", "mv", "scp", "rsync",
-        "base64", "xargs", "awk", "sed", "grep", "type",
+        "cat",
+        "less",
+        "more",
+        "head",
+        "tail",
+        "cp",
+        "mv",
+        "scp",
+        "rsync",
+        "base64",
+        "xargs",
+        "awk",
+        "sed",
+        "grep",
+        "type",
     ])
 
     # Optional Bash command allow-list.  When non-empty, any Bash command
@@ -154,10 +179,8 @@ class SafetyPolicy:
             """Extract a list field with type validation."""
             if key in data:
                 if not isinstance(data[key], list):
-                    raise ValueError(
-                        f"Policy field '{key}' must be a list, "
-                        f"got {type(data[key]).__name__}"
-                    )
+                    raise ValueError(f"Policy field '{key}' must be a list, "
+                                     f"got {type(data[key]).__name__}")
                 return list(data[key])
             return None
 
@@ -194,9 +217,7 @@ class SafetyPolicy:
             for rule_id, cfg in rules_data.items():
                 if not isinstance(cfg, dict):
                     continue
-                override = RuleOverride(
-                    enabled=cfg.get("enabled", True),
-                )
+                override = RuleOverride(enabled=cfg.get("enabled", True), )
                 if "risk_level" in cfg:
                     try:
                         override.risk_level = RiskLevel(cfg["risk_level"])
@@ -259,8 +280,8 @@ class SafetyPolicy:
         path_lower = path.lower().strip().replace("\\", "/")
         for forbidden in self.forbidden_paths:
             for candidate in (
-                forbidden.lower(),
-                os.path.expanduser(forbidden.lower()),
+                    forbidden.lower(),
+                    os.path.expanduser(forbidden.lower()),
             ):
                 candidate = candidate.replace("\\", "/")
                 if not candidate:

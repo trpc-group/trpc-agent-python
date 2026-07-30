@@ -23,10 +23,9 @@ silently no-ops — the guard never crashes because telemetry is missing.
 
 from __future__ import annotations
 
-from typing import Optional
-
 try:
     from opentelemetry import trace as _otel_trace
+
     _HAS_OTEL = True
 except ImportError:  # pragma: no cover
     _HAS_OTEL = False
@@ -59,9 +58,7 @@ def report_to_span(report: SafetyReport, blocked: bool = False) -> None:
     try:
         span.set_attribute("tool.safety.decision", report.decision.value)
         span.set_attribute("tool.safety.risk_level", report.risk_level.value)
-        span.set_attribute("tool.safety.rule_ids", ",".join(
-            f.rule_id for f in report.findings
-        ))
+        span.set_attribute("tool.safety.rule_ids", ",".join(f.rule_id for f in report.findings))
         span.set_attribute("tool.safety.scan_duration_ms", round(report.scan_duration_ms, 3))
         span.set_attribute("tool.safety.sanitized", report.sanitized)
         span.set_attribute("tool.safety.blocked", blocked)

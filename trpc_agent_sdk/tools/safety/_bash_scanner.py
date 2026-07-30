@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import re
 import shlex
-from typing import Optional
 from urllib.parse import urlparse
 
 from ._models import Decision
@@ -33,10 +32,10 @@ from ._rules import Rule
 from ._rules import ScanContext
 from ._rules import global_rule_registry
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_urls(text: str) -> list[str]:
     """Extract URL strings from *text*."""
@@ -65,6 +64,7 @@ def _redact(text: str) -> str:
 # Bash rules
 # ===========================================================================
 
+
 class BashDangerousFileOpsRule(Rule):
     """Detect dangerous file operations in bash commands."""
 
@@ -73,7 +73,7 @@ class BashDangerousFileOpsRule(Rule):
     category = RiskCategory.DANGEROUS_FILE_OPS
     default_risk_level = RiskLevel.CRITICAL
     default_decision = Decision.DENY
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
     # Match rm -rf with any target; specific system dirs are checked
     # dynamically against ctx.policy.protected_system_dirs in check().
@@ -95,11 +95,8 @@ class BashDangerousFileOpsRule(Rule):
         lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
 
         # Compile credential-read command pattern once per scan.
-        read_cmds_pattern = re.compile(
-            r"\b(" + "|".join(
-                re.escape(c) for c in ctx.policy.credential_read_commands
-            ) + r")\b"
-        )
+        read_cmds_pattern = re.compile(r"\b(" + "|".join(re.escape(c)
+                                                         for c in ctx.policy.credential_read_commands) + r")\b")
 
         for idx, line in enumerate(lines, start=1):
             stripped = line.strip()
@@ -111,12 +108,13 @@ class BashDangerousFileOpsRule(Rule):
             if match:
                 target = match.group("target")
                 if self._RM_RF_ALWAYS_DANGEROUS.match(target) or ctx.policy.is_system_dir(target):
-                    findings.append(self._make_finding(
-                        stripped[:200],
-                        idx,
-                        "Recursive deletion of system directories or home is "
-                        "forbidden; restrict rm to scoped project paths.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            stripped[:200],
+                            idx,
+                            "Recursive deletion of system directories or home is "
+                            "forbidden; restrict rm to scoped project paths.",
+                        ))
                     continue
 
             # Accessing credential files — check if any path token is forbidden.
@@ -126,20 +124,22 @@ class BashDangerousFileOpsRule(Rule):
                     if "=" in token:
                         token = token.split("=", 1)[1]
                     if ctx.policy.is_path_forbidden(token):
-                        findings.append(self._make_finding(
-                            stripped[:200],
-                            idx,
-                            "Access to credential/forbidden file is not allowed.",
-                        ))
+                        findings.append(
+                            self._make_finding(
+                                stripped[:200],
+                                idx,
+                                "Access to credential/forbidden file is not allowed.",
+                            ))
                         break
 
             # dd to a block device
             if re.search(r"\bdd\b.*\bof=/dev/", stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Writing to a block device with dd can destroy disk data.",
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Writing to a block device with dd can destroy disk data.",
+                    ))
         return findings
 
 
@@ -151,11 +151,9 @@ class BashNetworkEgressRule(Rule):
     category = RiskCategory.NETWORK_EGRESS
     default_risk_level = RiskLevel.MEDIUM
     default_decision = Decision.NEEDS_HUMAN_REVIEW
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
-    _NET_CMDS = re.compile(
-        r"\b(curl|wget|nc|netcat|socat|telnet|ssh|scp|rsync)\b", re.IGNORECASE
-    )
+    _NET_CMDS = re.compile(r"\b(curl|wget|nc|netcat|socat|telnet|ssh|scp|rsync)\b", re.IGNORECASE)
 
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -170,26 +168,28 @@ class BashNetworkEgressRule(Rule):
             urls = _extract_urls(stripped)
             if not urls:
                 # Network command without an explicit URL — flag for review.
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Network command with a non-literal target cannot be "
-                    "verified against the whitelist; requires human review.",
-                    risk_level=RiskLevel.LOW,
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Network command with a non-literal target cannot be "
+                        "verified against the whitelist; requires human review.",
+                        risk_level=RiskLevel.LOW,
+                    ))
                 continue
 
             for url in urls:
                 domain = _extract_domain(url)
                 if domain and not ctx.policy.is_domain_allowed(domain):
-                    findings.append(self._make_finding(
-                        stripped[:200],
-                        idx,
-                        f"Domain '{domain}' is not in the whitelist. "
-                        "Add it to allowed_domains in the policy file.",
-                        risk_level=RiskLevel.HIGH,
-                        decision=Decision.DENY,
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            stripped[:200],
+                            idx,
+                            f"Domain '{domain}' is not in the whitelist. "
+                            "Add it to allowed_domains in the policy file.",
+                            risk_level=RiskLevel.HIGH,
+                            decision=Decision.DENY,
+                        ))
         return findings
 
 
@@ -201,7 +201,7 @@ class BashProcessSystemRule(Rule):
     category = RiskCategory.PROCESS_SYSTEM
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
     _SUDO = re.compile(r"\b(sudo|su\s+-|su\s+root|pkexec|doas)\b", re.IGNORECASE)
     _EVAL = re.compile(r"\b(eval|exec|source|\.)\s+", re.IGNORECASE)
@@ -216,44 +216,48 @@ class BashProcessSystemRule(Rule):
                 continue
 
             if self._SUDO.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Privilege escalation (sudo/su) is forbidden in "
-                    "agent-generated scripts.",
-                    risk_level=RiskLevel.CRITICAL,
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Privilege escalation (sudo/su) is forbidden in "
+                        "agent-generated scripts.",
+                        risk_level=RiskLevel.CRITICAL,
+                    ))
                 continue
 
             if self._PIPE_TO_SH.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Piping output into a shell interpreter is a classic "
-                    "shell-injection vector and is forbidden.",
-                    risk_level=RiskLevel.CRITICAL,
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Piping output into a shell interpreter is a classic "
+                        "shell-injection vector and is forbidden.",
+                        risk_level=RiskLevel.CRITICAL,
+                    ))
                 continue
 
             if self._EVAL.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "eval/exec/source can execute arbitrary dynamically-built "
-                    "commands; avoid in agent scripts.",
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "eval/exec/source can execute arbitrary dynamically-built "
+                        "commands; avoid in agent scripts.",
+                    ))
                 continue
 
             # Trailing single & (background) — distinguish from &&
             if re.search(r"[^&]&\s*$", stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Background process (&) may outlive the tool call and "
-                    "leak resources; use explicit process management.",
-                    risk_level=RiskLevel.LOW,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Background process (&) may outlive the tool call and "
+                        "leak resources; use explicit process management.",
+                        risk_level=RiskLevel.LOW,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                    ))
         return findings
 
 
@@ -265,7 +269,7 @@ class BashDependencyInstallRule(Rule):
     category = RiskCategory.DEPENDENCY_INSTALL
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
     _INSTALL = re.compile(
         r"\b(pip3?\s+install|python\d*\s+-m\s+pip\s+install|npm\s+(install|i)\s|"
@@ -282,12 +286,13 @@ class BashDependencyInstallRule(Rule):
             if not stripped or stripped.startswith("#"):
                 continue
             if self._INSTALL.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Dependency installation at runtime changes the execution "
-                    "environment; declare dependencies in the project manifest.",
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Dependency installation at runtime changes the execution "
+                        "environment; declare dependencies in the project manifest.",
+                    ))
         return findings
 
 
@@ -299,7 +304,7 @@ class BashResourceAbuseRule(Rule):
     category = RiskCategory.RESOURCE_ABUSE
     default_risk_level = RiskLevel.HIGH
     default_decision = Decision.DENY
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
     # Classic fork bomb:  :(){ :|:& };:
     _FORK_BOMB = re.compile(r":\s*\(\s*\)\s*\{.*:.*:.*&.*\}\s*;\s*:", re.IGNORECASE)
@@ -316,12 +321,13 @@ class BashResourceAbuseRule(Rule):
                 continue
 
             if self._FORK_BOMB.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Fork bomb detected; this will exhaust process slots.",
-                    risk_level=RiskLevel.CRITICAL,
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Fork bomb detected; this will exhaust process slots.",
+                        risk_level=RiskLevel.CRITICAL,
+                    ))
                 continue
 
             if self._WHILE_TRUE.search(stripped):
@@ -335,35 +341,38 @@ class BashResourceAbuseRule(Rule):
                     if re.search(r"\bdone\b", lines[j]):
                         break
                 if not has_break:
-                    findings.append(self._make_finding(
-                        stripped[:200],
-                        idx,
-                        "Infinite loop without break will consume CPU; "
-                        "add a termination condition.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            stripped[:200],
+                            idx,
+                            "Infinite loop without break will consume CPU; "
+                            "add a termination condition.",
+                        ))
 
             if self._YES.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "'yes' command outputs indefinitely and can fill disk/memory.",
-                    risk_level=RiskLevel.LOW,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "'yes' command outputs indefinitely and can fill disk/memory.",
+                        risk_level=RiskLevel.LOW,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                    ))
 
             sleep_match = self._SLEEP.search(stripped)
             if sleep_match:
                 seconds = int(sleep_match.group(1))
                 if seconds > ctx.policy.max_sleep_seconds:
-                    findings.append(self._make_finding(
-                        stripped[:200],
-                        idx,
-                        f"sleep {seconds} exceeds the "
-                        f"{ctx.policy.max_sleep_seconds}s limit; "
-                        "use a shorter timeout with retry logic.",
-                        risk_level=RiskLevel.LOW,
-                        decision=Decision.NEEDS_HUMAN_REVIEW,
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            stripped[:200],
+                            idx,
+                            f"sleep {seconds} exceeds the "
+                            f"{ctx.policy.max_sleep_seconds}s limit; "
+                            "use a shorter timeout with retry logic.",
+                            risk_level=RiskLevel.LOW,
+                            decision=Decision.NEEDS_HUMAN_REVIEW,
+                        ))
         return findings
 
 
@@ -375,11 +384,9 @@ class BashSecretLeakRule(Rule):
     category = RiskCategory.SECRET_LEAK
     default_risk_level = RiskLevel.CRITICAL
     default_decision = Decision.DENY
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
-    _OUTPUT_CMDS = re.compile(
-        r"\b(echo|printf|cat|tee|curl|wget)\b", re.IGNORECASE
-    )
+    _OUTPUT_CMDS = re.compile(r"\b(echo|printf|cat|tee|curl|wget)\b", re.IGNORECASE)
 
     # Environment variable names that strongly suggest a secret when echoed.
     _SECRET_ENV_VARS = re.compile(
@@ -404,24 +411,26 @@ class BashSecretLeakRule(Rule):
             # Check for hardcoded secrets via regex patterns
             for pattern in compiled:
                 if pattern.search(stripped):
-                    findings.append(self._make_finding(
-                        _redact(stripped[:200]),
-                        idx,
-                        "Hardcoded secret detected in command output; "
-                        "load secrets from environment variables instead.",
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            _redact(stripped[:200]),
+                            idx,
+                            "Hardcoded secret detected in command output; "
+                            "load secrets from environment variables instead.",
+                        ))
                     break
             else:
                 # Also flag echoing of secret-looking env vars (e.g. %API_KEY%, $SECRET)
                 if self._SECRET_ENV_VARS.search(stripped):
-                    findings.append(self._make_finding(
-                        _redact(stripped[:200]),
-                        idx,
-                        "Echoing environment variable that looks like a secret "
-                        "(API key, token, password); redact before output.",
-                        risk_level=RiskLevel.HIGH,
-                        decision=Decision.DENY,
-                    ))
+                    findings.append(
+                        self._make_finding(
+                            _redact(stripped[:200]),
+                            idx,
+                            "Echoing environment variable that looks like a secret "
+                            "(API key, token, password); redact before output.",
+                            risk_level=RiskLevel.HIGH,
+                            decision=Decision.DENY,
+                        ))
         return findings
 
 
@@ -433,7 +442,7 @@ class BashShellInjectionRule(Rule):
     category = RiskCategory.PROCESS_SYSTEM
     default_risk_level = RiskLevel.MEDIUM
     default_decision = Decision.NEEDS_HUMAN_REVIEW
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
     _CMD_SUBST = re.compile(r"\$\(.+\)|`.+`")
 
@@ -445,12 +454,13 @@ class BashShellInjectionRule(Rule):
             if not stripped or stripped.startswith("#"):
                 continue
             if self._CMD_SUBST.search(stripped):
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Command substitution ($(...) or backticks) can execute "
-                    "arbitrary code built from untrusted input; sanitise inputs.",
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Command substitution ($(...) or backticks) can execute "
+                        "arbitrary code built from untrusted input; sanitise inputs.",
+                    ))
         return findings
 
 
@@ -469,13 +479,30 @@ class BashAllowedCommandRule(Rule):
     category = RiskCategory.PROCESS_SYSTEM
     default_risk_level = RiskLevel.LOW
     default_decision = Decision.NEEDS_HUMAN_REVIEW
-    applies_to = (ScriptType.BASH,)
+    applies_to = (ScriptType.BASH, )
 
     # Shell keywords / control structures that are never "commands".
     _KEYWORDS = frozenset({
-        "if", "then", "else", "elif", "fi", "for", "in", "do", "done",
-        "while", "until", "case", "esac", "function", "select",
-        "{", "}", "!", "[", "[[",
+        "if",
+        "then",
+        "else",
+        "elif",
+        "fi",
+        "for",
+        "in",
+        "do",
+        "done",
+        "while",
+        "until",
+        "case",
+        "esac",
+        "function",
+        "select",
+        "{",
+        "}",
+        "!",
+        "[",
+        "[[",
     })
 
     def check(self, ctx: ScanContext) -> list[Finding]:
@@ -511,13 +538,14 @@ class BashAllowedCommandRule(Rule):
             # Strip directory prefix: /usr/bin/curl -> curl
             cmd_name = cmd.rsplit("/", 1)[-1].lower()
             if cmd_name not in allowed_lower:
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    f"Command '{cmd}' is not in the allowed_commands "
-                    "allow-list; add it to the policy file or use a "
-                    "whitelisted alternative.",
-                ))
+                findings.append(
+                    self._make_finding(
+                        stripped[:200],
+                        idx,
+                        f"Command '{cmd}' is not in the allowed_commands "
+                        "allow-list; add it to the policy file or use a "
+                        "whitelisted alternative.",
+                    ))
         return findings
 
 
@@ -525,17 +553,18 @@ class BashAllowedCommandRule(Rule):
 # Register all built-in Bash rules
 # ---------------------------------------------------------------------------
 
+
 def _register_bash_rules() -> None:
     """Register the built-in Bash rules with the global registry."""
     for rule_cls in (
-        BashDangerousFileOpsRule,
-        BashNetworkEgressRule,
-        BashProcessSystemRule,
-        BashDependencyInstallRule,
-        BashResourceAbuseRule,
-        BashSecretLeakRule,
-        BashShellInjectionRule,
-        BashAllowedCommandRule,
+            BashDangerousFileOpsRule,
+            BashNetworkEgressRule,
+            BashProcessSystemRule,
+            BashDependencyInstallRule,
+            BashResourceAbuseRule,
+            BashSecretLeakRule,
+            BashShellInjectionRule,
+            BashAllowedCommandRule,
     ):
         instance = rule_cls()
         global_rule_registry.register(instance)

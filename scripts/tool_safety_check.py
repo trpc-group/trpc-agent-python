@@ -54,13 +54,15 @@ def main() -> int:
         help="Script file to scan, or '-' to read from stdin.",
     )
     parser.add_argument(
-        "--type", "-t",
+        "--type",
+        "-t",
         choices=["python", "bash", "auto"],
         default="auto",
         help="Script type (default: auto-detect).",
     )
     parser.add_argument(
-        "--policy", "-p",
+        "--policy",
+        "-p",
         help="Path to a YAML policy file. Uses built-in defaults if omitted.",
     )
     parser.add_argument(
@@ -69,7 +71,8 @@ def main() -> int:
         help="Name of the tool that would execute the script (default: cli_check).",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Write the JSON report to this file (default: stdout).",
     )
     parser.add_argument(
@@ -82,7 +85,8 @@ def main() -> int:
         help="Exit with code 2 (deny) for needs_human_review results too.",
     )
     parser.add_argument(
-        "--quiet", "-q",
+        "--quiet",
+        "-q",
         action="store_true",
         help="Only output the decision, no details.",
     )

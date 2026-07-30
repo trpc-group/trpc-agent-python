@@ -24,9 +24,6 @@ telemetry and the ToolSafetyFilter integration.
 """
 
 import json
-import os
-import tempfile
-from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -45,10 +42,10 @@ from trpc_agent_sdk.tools.safety import ScriptType
 from trpc_agent_sdk.tools.safety import ToolSafetyFilter
 from trpc_agent_sdk.tools.safety import detect_script_type
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def guard():
@@ -67,6 +64,7 @@ def guard_with_audit(tmp_path):
 # ---------------------------------------------------------------------------
 # 1. Safe Python script
 # ---------------------------------------------------------------------------
+
 
 class TestSafePython:
     """Safe Python scripts should be allowed with no findings."""
@@ -95,6 +93,7 @@ class TestSafePython:
 # ---------------------------------------------------------------------------
 # 2. Dangerous recursive deletion
 # ---------------------------------------------------------------------------
+
 
 class TestDangerousDeletion:
     """Dangerous deletion patterns must be denied."""
@@ -129,6 +128,7 @@ class TestDangerousDeletion:
 # ---------------------------------------------------------------------------
 # 3. Reading credential files
 # ---------------------------------------------------------------------------
+
 
 class TestCredentialRead:
     """Credential file access must be denied (100% detection required)."""
@@ -168,6 +168,7 @@ class TestCredentialRead:
 # 4. Network egress to non-whitelisted domain
 # ---------------------------------------------------------------------------
 
+
 class TestNetworkEgress:
     """Network calls to non-whitelisted domains must be flagged."""
 
@@ -194,6 +195,7 @@ class TestNetworkEgress:
 # 5. Whitelisted network request
 # ---------------------------------------------------------------------------
 
+
 class TestWhitelistedNetwork:
     """Whitelisted network requests should be allowed."""
 
@@ -213,6 +215,7 @@ class TestWhitelistedNetwork:
 # ---------------------------------------------------------------------------
 # 6. Subprocess call
 # ---------------------------------------------------------------------------
+
 
 class TestSubprocessCall:
     """Subprocess calls must be flagged with the appropriate severity."""
@@ -261,6 +264,7 @@ class TestSubprocessCall:
 # 7. Shell injection
 # ---------------------------------------------------------------------------
 
+
 class TestShellInjection:
     """Shell injection patterns must be denied or flagged."""
 
@@ -284,6 +288,7 @@ class TestShellInjection:
 # ---------------------------------------------------------------------------
 # 8. Dependency installation
 # ---------------------------------------------------------------------------
+
 
 class TestDependencyInstall:
     """Dependency installation must be denied."""
@@ -316,6 +321,7 @@ class TestDependencyInstall:
 # ---------------------------------------------------------------------------
 # 9. Infinite loop
 # ---------------------------------------------------------------------------
+
 
 class TestInfiniteLoop:
     """Infinite loop patterns must be denied."""
@@ -364,6 +370,7 @@ class TestInfiniteLoop:
 # 10. Sensitive information leakage
 # ---------------------------------------------------------------------------
 
+
 class TestSecretLeak:
     """Hardcoded secrets must be denied."""
 
@@ -409,6 +416,7 @@ class TestSecretLeak:
 # 11. Bash pipe chain
 # ---------------------------------------------------------------------------
 
+
 class TestBashPipe:
     """Bash pipe chains should be handled correctly."""
 
@@ -433,6 +441,7 @@ class TestBashPipe:
 # ---------------------------------------------------------------------------
 # 12. Needs-human-review scenario
 # ---------------------------------------------------------------------------
+
 
 class TestNeedsHumanReview:
     """Uncertain patterns should result in needs_human_review."""
@@ -468,6 +477,7 @@ class TestNeedsHumanReview:
 # ---------------------------------------------------------------------------
 # Allowed commands (BASH-COMMAND-WHITELIST)
 # ---------------------------------------------------------------------------
+
 
 class TestAllowedCommands:
     """The optional Bash command allow-list (disabled by default)."""
@@ -517,6 +527,7 @@ class TestAllowedCommands:
 # Report structure
 # ---------------------------------------------------------------------------
 
+
 class TestReportStructure:
     """Reports must contain all required fields."""
 
@@ -554,6 +565,7 @@ class TestReportStructure:
 # ---------------------------------------------------------------------------
 # Policy loading
 # ---------------------------------------------------------------------------
+
 
 class TestPolicyLoading:
     """Policy YAML loading and configuration."""
@@ -633,6 +645,7 @@ rules:
 # Audit logging
 # ---------------------------------------------------------------------------
 
+
 class TestAuditLogging:
     """Audit logging should produce structured JSONL events."""
 
@@ -681,6 +694,7 @@ class TestAuditLogging:
 # Script type detection
 # ---------------------------------------------------------------------------
 
+
 class TestScriptTypeDetection:
     """Script type detection should correctly identify Python vs Bash."""
 
@@ -713,6 +727,7 @@ class TestScriptTypeDetection:
 # Performance
 # ---------------------------------------------------------------------------
 
+
 class TestPerformance:
     """Scanning a 500-line script should take ≤ 1 second."""
 
@@ -741,6 +756,7 @@ class TestPerformance:
 # ---------------------------------------------------------------------------
 # ToolSafetyFilter integration
 # ---------------------------------------------------------------------------
+
 
 class TestToolSafetyFilter:
     """ToolSafetyFilter should block dangerous scripts in the tool pipeline."""
@@ -801,15 +817,14 @@ class TestToolSafetyFilter:
 # Telemetry (OpenTelemetry span attributes)
 # ---------------------------------------------------------------------------
 
+
 class TestTelemetry:
     """OpenTelemetry span attributes should be set correctly."""
 
     @pytest.fixture
     def sample_report(self, guard):
         """Generate a real SafetyReport for telemetry tests."""
-        return guard.scan(
-            "import os\nos.system('rm -rf /')\n", tool_name="test_tool"
-        )
+        return guard.scan("import os\nos.system('rm -rf /')\n", tool_name="test_tool")
 
     def test_report_to_span_sets_all_attributes(self, sample_report):
         """report_to_span should set all 8 safety attributes on the span."""
@@ -818,17 +833,11 @@ class TestTelemetry:
         with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
             _telemetry.report_to_span(sample_report, blocked=True)
 
-        calls = {
-            c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list
-        }
+        calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
         assert calls["tool.safety.decision"] == sample_report.decision.value
         assert calls["tool.safety.risk_level"] == sample_report.risk_level.value
-        assert calls["tool.safety.rule_ids"] == ",".join(
-            f.rule_id for f in sample_report.findings
-        )
-        assert calls["tool.safety.scan_duration_ms"] == round(
-            sample_report.scan_duration_ms, 3
-        )
+        assert calls["tool.safety.rule_ids"] == ",".join(f.rule_id for f in sample_report.findings)
+        assert calls["tool.safety.scan_duration_ms"] == round(sample_report.scan_duration_ms, 3)
         assert calls["tool.safety.sanitized"] == sample_report.sanitized
         assert calls["tool.safety.blocked"] is True
         assert calls["tool.safety.script_type"] == sample_report.script_type.value
@@ -841,9 +850,7 @@ class TestTelemetry:
         with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
             _telemetry.report_to_span(sample_report, blocked=False)
 
-        calls = {
-            c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list
-        }
+        calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
         assert calls["tool.safety.blocked"] is False
 
     def test_report_to_span_no_span_is_noop(self, sample_report):
@@ -879,9 +886,7 @@ class TestTelemetry:
         with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
             _telemetry.report_audit_to_span(event)
 
-        calls = {
-            c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list
-        }
+        calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
         assert calls["tool.safety.decision"] == "deny"
         assert calls["tool.safety.risk_level"] == "critical"
         assert calls["tool.safety.rule_ids"] == "FILE-001,NET-001"
@@ -928,6 +933,7 @@ class TestTelemetry:
 # ---------------------------------------------------------------------------
 # RuleRegistry edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestRuleRegistry:
     """Edge cases for RuleRegistry and Rule base class."""
@@ -1004,6 +1010,7 @@ class TestRuleRegistry:
 
     def test_override_sets_enabled(self):
         """Setting _override directly should control is_enabled."""
+
         class TestRule(Rule):
             rule_id = "TEST-OVERRIDE"
 
@@ -1021,6 +1028,7 @@ class TestRuleRegistry:
 
     def test_is_enabled_without_override_returns_true(self):
         """is_enabled should default to True when _override is not set."""
+
         class TestRule(Rule):
             rule_id = "TEST-ENABLED"
 
@@ -1055,6 +1063,7 @@ class TestRuleRegistry:
 # ---------------------------------------------------------------------------
 # SafetyPolicy edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestPolicyEdgeCases:
     """Edge cases for SafetyPolicy.from_dict and related methods."""
@@ -1170,6 +1179,7 @@ class TestPolicyEdgeCases:
 # AuditLogger edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestAuditLoggerEdgeCases:
     """Edge cases for AuditLogger buffer and path handling."""
 
@@ -1177,12 +1187,13 @@ class TestAuditLoggerEdgeCases:
         """When buffer is full, the oldest event should be dropped."""
         logger = AuditLogger(max_buffer=3)
         for i in range(5):
-            logger.log(AuditEvent(
-                timestamp=f"2026-07-26T12:00:0{i}Z",
-                tool_name=f"tool_{i}",
-                decision="allow",
-                risk_level="none",
-            ))
+            logger.log(
+                AuditEvent(
+                    timestamp=f"2026-07-26T12:00:0{i}Z",
+                    tool_name=f"tool_{i}",
+                    decision="allow",
+                    risk_level="none",
+                ))
         events = logger.get_events()
         assert len(events) == 3
         assert events[0]["tool_name"] == "tool_2"
@@ -1190,12 +1201,13 @@ class TestAuditLoggerEdgeCases:
     def test_clear_buffer(self):
         """clear_buffer should remove all buffered events."""
         logger = AuditLogger()
-        logger.log(AuditEvent(
-            timestamp="2026-07-26T12:00:00Z",
-            tool_name="test_tool",
-            decision="allow",
-            risk_level="none",
-        ))
+        logger.log(
+            AuditEvent(
+                timestamp="2026-07-26T12:00:00Z",
+                tool_name="test_tool",
+                decision="allow",
+                risk_level="none",
+            ))
         assert len(logger.get_events()) == 1
         logger.clear_buffer()
         assert len(logger.get_events()) == 0
@@ -1215,6 +1227,7 @@ class TestAuditLoggerEdgeCases:
 # ---------------------------------------------------------------------------
 # ToolSafetyFilter edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestSafetyFilterEdgeCases:
     """Edge cases for ToolSafetyFilter script extraction and blocking."""
@@ -1305,123 +1318,101 @@ class TestSafetyFilterEdgeCases:
 # Taint tracking — integration tests through SafetyGuard
 # ---------------------------------------------------------------------------
 
+
 class TestTaintTracking:
     """Secrets propagated through variables must be caught at output sinks."""
 
     def test_getenv_then_print(self, guard):
         """os.getenv secret printed directly must be denied."""
-        script = (
-            "import os\n"
-            "api_key = os.getenv('API_KEY')\n"
-            "print(api_key)\n"
-        )
+        script = ("import os\n"
+                  "api_key = os.getenv('API_KEY')\n"
+                  "print(api_key)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_environ_get_then_print(self, guard):
         """os.environ.get secret printed must be denied."""
-        script = (
-            "import os\n"
-            "key = os.environ.get('SECRET_TOKEN')\n"
-            "print(key)\n"
-        )
+        script = ("import os\n"
+                  "key = os.environ.get('SECRET_TOKEN')\n"
+                  "print(key)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_environ_subscript_then_print(self, guard):
         """os.environ[...] secret printed must be denied."""
-        script = (
-            "import os\n"
-            "token = os.environ['API_KEY']\n"
-            "print(token)\n"
-        )
+        script = ("import os\n"
+                  "token = os.environ['API_KEY']\n"
+                  "print(token)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_chained_assignment_propagation(self, guard):
         """Taint must propagate through chained assignments."""
-        script = (
-            "import os\n"
-            "a = os.getenv('API_KEY')\n"
-            "b = a\n"
-            "print(b)\n"
-        )
+        script = ("import os\n"
+                  "a = os.getenv('API_KEY')\n"
+                  "b = a\n"
+                  "print(b)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_write_to_file(self, guard):
         """Secret written via .write() must be denied."""
-        script = (
-            "import os\n"
-            "key = os.getenv('API_KEY')\n"
-            "f = open('out.txt', 'w')\n"
-            "f.write(key)\n"
-        )
+        script = ("import os\n"
+                  "key = os.getenv('API_KEY')\n"
+                  "f = open('out.txt', 'w')\n"
+                  "f.write(key)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_fstring_interpolation(self, guard):
         """Secret inside an f-string argument must be denied."""
-        script = (
-            "import os\n"
-            "key = os.getenv('API_KEY')\n"
-            "print(f'key={key}')\n"
-        )
+        script = ("import os\n"
+                  "key = os.getenv('API_KEY')\n"
+                  "print(f'key={key}')\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_logging_info_leak(self, guard):
         """Secret passed to logging.info must be denied."""
-        script = (
-            "import os\n"
-            "import logging\n"
-            "key = os.getenv('API_KEY')\n"
-            "logging.info(key)\n"
-        )
+        script = ("import os\n"
+                  "import logging\n"
+                  "key = os.getenv('API_KEY')\n"
+                  "logging.info(key)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_bare_getenv_call(self, guard):
         """Bare getenv (from os import getenv) must be tracked."""
-        script = (
-            "from os import getenv\n"
-            "key = getenv('API_KEY')\n"
-            "print(key)\n"
-        )
+        script = ("from os import getenv\n"
+                  "key = getenv('API_KEY')\n"
+                  "print(key)\n")
         report = guard.scan(script, tool_name="test")
         assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_non_secret_env_not_flagged(self, guard):
         """os.getenv('USER') is not a secret and must not be flagged."""
-        script = (
-            "import os\n"
-            "user = os.getenv('USER')\n"
-            "print(user)\n"
-        )
+        script = ("import os\n"
+                  "user = os.getenv('USER')\n"
+                  "print(user)\n")
         report = guard.scan(script, tool_name="test")
         assert not any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_non_output_call_not_flagged(self, guard):
         """len(key) is not an output sink and must not be flagged."""
-        script = (
-            "import os\n"
-            "key = os.getenv('API_KEY')\n"
-            "n = len(key)\n"
-        )
+        script = ("import os\n"
+                  "key = os.getenv('API_KEY')\n"
+                  "n = len(key)\n")
         report = guard.scan(script, tool_name="test")
         assert not any("SECRET-LEAK" in f.rule_id for f in report.findings)
 
     def test_taint_finding_is_high_risk(self, guard):
         """Taint-tracked findings should be HIGH risk (not CRITICAL)."""
-        script = (
-            "import os\n"
-            "key = os.getenv('API_KEY')\n"
-            "print(key)\n"
-        )
+        script = ("import os\n"
+                  "key = os.getenv('API_KEY')\n"
+                  "print(key)\n")
         report = guard.scan(script, tool_name="test")
         taint_findings = [
-            f for f in report.findings
-            if "SECRET-LEAK" in f.rule_id and "written or transmitted" in f.recommendation
+            f for f in report.findings if "SECRET-LEAK" in f.rule_id and "written or transmitted" in f.recommendation
         ]
         assert taint_findings
         assert all(f.risk_level == RiskLevel.HIGH for f in taint_findings)
@@ -1430,6 +1421,7 @@ class TestTaintTracking:
 # ---------------------------------------------------------------------------
 # Taint tracking — unit tests for helper functions
 # ---------------------------------------------------------------------------
+
 
 class TestTaintTrackingHelpers:
     """Unit tests for the taint-tracking helper functions."""
@@ -1502,11 +1494,9 @@ class TestTaintTrackingHelpers:
 
     def test_collect_tainted_names_chained(self):
         from trpc_agent_sdk.tools.safety._python_scanner import _collect_tainted_names
-        tree = self._parse(
-            "import os\n"
-            "a = os.getenv('API_KEY')\n"
-            "b = a\n"
-        )
+        tree = self._parse("import os\n"
+                           "a = os.getenv('API_KEY')\n"
+                           "b = a\n")
         tainted = _collect_tainted_names(tree, [])
         assert "a" in tainted
         assert "b" in tainted
