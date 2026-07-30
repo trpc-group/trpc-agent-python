@@ -63,8 +63,7 @@ async def test_first_dangerous_block_short_circuits() -> None:
     inner = _FakeInnerExecutor()
     safe = SafeCodeExecutor(inner=inner)
 
-    result = await safe.execute_code(
-        None, _blocks(("python", "print('ok')"), ("bash", "cat ~/.ssh/id_rsa")))
+    result = await safe.execute_code(None, _blocks(("python", "print('ok')"), ("bash", "cat ~/.ssh/id_rsa")))
 
     assert inner.ran is False
     assert "SAFETY_BLOCKED" in result.output
@@ -130,6 +129,24 @@ def test_audit_logger_path_property(tmp_path: Path) -> None:
     assert SafetyAuditLogger().path is None
     target = tmp_path / "audit.jsonl"
     assert SafetyAuditLogger(target).path == target
+
+
+async def test_arecord_persists_without_blocking(tmp_path: Path) -> None:
+    """The async ``arecord`` offloads the write yet still persists the event."""
+    from trpc_agent_sdk.tools.safety import SafetyScanner
+    from trpc_agent_sdk.tools.safety import ScanInput
+    from trpc_agent_sdk.tools.safety import ScriptLanguage
+
+    audit_file = tmp_path / "audit.jsonl"
+    logger = SafetyAuditLogger(audit_file)
+    report = SafetyScanner().scan(ScanInput(script="rm -rf /\n", language=ScriptLanguage.BASH))
+
+    event = await logger.arecord(report, blocked=True)
+
+    assert event["decision"] == "deny"
+    persisted = json.loads(audit_file.read_text(encoding="utf-8").strip().splitlines()[0])
+    assert persisted["decision"] == "deny"
+    assert persisted["blocked"] is True
 
 
 def test_concurrent_audit_appends_never_corrupt_lines(tmp_path: Path) -> None:

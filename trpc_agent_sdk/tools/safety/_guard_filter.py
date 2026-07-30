@@ -82,7 +82,7 @@ class ToolSafetyGuardFilter(BaseFilter):
 
         report = self._scanner.scan(scan_input)
         blocked = self._is_blocking(report.decision)
-        self._audit.record(report, blocked=blocked)
+        await self._audit.arecord(report, blocked=blocked)
 
         if blocked:
             return FilterResult(rsp=self._deny_response(report), is_continue=False)

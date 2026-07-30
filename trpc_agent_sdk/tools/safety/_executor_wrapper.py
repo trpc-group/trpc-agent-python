@@ -65,7 +65,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
         for scan_input in self._iter_scan_inputs(code_execution_input):
             report = self.scanner.scan(scan_input)
             blocked = self._is_blocking(report.decision)
-            self.audit_logger.record(report, blocked=blocked)
+            await self.audit_logger.arecord(report, blocked=blocked)
             if blocked:
                 return create_code_execution_result(stderr=self._deny_message(report))
 

@@ -13,7 +13,7 @@ pure pattern matching (the weakness the Hermes community flagged):
 - ``getattr(os, "sys" + "tem")`` style indirection
 - ``eval`` / ``exec`` on dynamic input
 - ``open("~/.ssh/id_rsa")`` against policy ``forbidden_paths``
-- ``while True:`` with no ``break`` — a resource-abuse loop
+- ``while True:`` with no ``break``/``return``/``raise`` — a resource-abuse loop
 
 Each finding carries a stable ``AST*`` rule id and the ``layer="ast"`` marker so
 reports can distinguish it from regex hits.
@@ -178,7 +178,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
     def visit_While(self, node: ast.While) -> None:  # noqa: N802
         is_true = (isinstance(node.test, ast.Constant) and bool(node.test.value)) or (isinstance(
             node.test, ast.NameConstant) if hasattr(ast, "NameConstant") else False)
-        if is_true and not _contains_break(node):
+        if is_true and not _loop_can_terminate(node):
             self._add(
                 "AST005",
                 RiskCategory.RESOURCE_ABUSE,
@@ -292,25 +292,36 @@ def _is_static_literal(node: ast.AST) -> bool:
     return False
 
 
-def _contains_break(node: ast.While) -> bool:
-    """Whether the while body contains a ``break`` not nested in an inner loop."""
-    for child in node.body:
-        if _stmt_has_break(child):
-            return True
-    return False
+def _loop_can_terminate(node: ast.While) -> bool:
+    """Whether the ``while`` body has a statement that can end the loop.
+
+    A bare ``while True`` is only an infinite loop when none of these escape
+    hatches reach the loop:
+
+    - a ``break`` in the body (but not one owned by a *nested* loop, which
+      only ends that inner loop),
+    - a ``return`` or ``raise`` anywhere in the body, since both unwind past
+      the loop even from inside a nested loop.
+
+    ``return``/``raise`` inside a nested *callable* (def/lambda/class) belong
+    to that callable, so we never descend into those.
+    """
+    return any(_stmt_can_terminate(child, in_nested_loop=False) for child in node.body)
 
 
-def _stmt_has_break(node: ast.AST) -> bool:
-    """Recursively search for a ``break`` while skipping nested loops."""
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, ast.Break):
-            return True
-        if isinstance(child, (ast.For, ast.While)):
-            # A break inside a nested loop does not terminate the outer loop.
-            continue
-        if _stmt_has_break(child):
-            return True
-    return False
+def _stmt_can_terminate(node: ast.AST, *, in_nested_loop: bool) -> bool:
+    """Whether this statement (or something it contains) can end the loop."""
+    if isinstance(node, (ast.Return, ast.Raise)):
+        return True
+    if isinstance(node, ast.Break):
+        # A ``break`` only ends the innermost loop, so it counts for the outer
+        # ``while`` only when we have not descended into a nested loop.
+        return not in_nested_loop
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+        # A return/raise here belongs to the nested callable, not the loop.
+        return False
+    nested = in_nested_loop or isinstance(node, (ast.For, ast.While))
+    return any(_stmt_can_terminate(child, in_nested_loop=nested) for child in ast.iter_child_nodes(node))
 
 
 def scan_python(script: str, policy: SafetyPolicy) -> list[RuleHit]:

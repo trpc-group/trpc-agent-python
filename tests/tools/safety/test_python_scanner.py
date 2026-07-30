@@ -97,12 +97,10 @@ def test_literal_argv_list_is_not_flagged_dynamic() -> None:
 
 def test_safe_script_has_no_hits() -> None:
     """A benign data-processing script yields no findings (no false positive)."""
-    script = (
-        "import math\n"
-        "def area(r):\n"
-        "    return math.pi * r * r\n"
-        "print(area(2))\n"
-    )
+    script = ("import math\n"
+              "def area(r):\n"
+              "    return math.pi * r * r\n"
+              "print(area(2))\n")
     assert scan_python(script, default_policy()) == []
 
 
@@ -151,6 +149,30 @@ def test_infinite_loop_with_deeply_nested_break_not_flagged() -> None:
     """A ``break`` nested two levels deep still terminates the ``while``."""
     script = "while True:\n    if a:\n        if b:\n            break\n"
     assert "AST005" not in _ids(script)
+
+
+def test_infinite_loop_with_return_not_flagged() -> None:
+    """A ``while True`` that can ``return`` is not an infinite loop."""
+    script = "def f():\n    while True:\n        return 1\n"
+    assert "AST005" not in _ids(script)
+
+
+def test_infinite_loop_with_raise_not_flagged() -> None:
+    """A ``while True`` that can ``raise`` is not an infinite loop."""
+    script = "while True:\n    raise SystemExit\n"
+    assert "AST005" not in _ids(script)
+
+
+def test_infinite_loop_with_return_in_nested_loop_not_flagged() -> None:
+    """A ``return`` inside a nested loop still unwinds past the outer ``while``."""
+    script = "def f():\n    while True:\n        for i in x:\n            return i\n"
+    assert "AST005" not in _ids(script)
+
+
+def test_infinite_loop_with_return_in_nested_function_still_flagged() -> None:
+    """A ``return`` owned by a nested function does not terminate the loop."""
+    script = "while True:\n    def helper():\n        return 1\n"
+    assert "AST005" in _ids(script)
 
 
 def test_dynamic_network_destination_adds_ast009() -> None:

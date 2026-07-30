@@ -201,9 +201,10 @@ __all__ = [
 _LAZY_REEXPORTS = {
     "DynamicSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "DynamicSubAgentTool"),
     "SpawnSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "SpawnSubAgentTool"),
-    # Tool Script Safety Guard entry points. Lazily re-exported so the tools
-    # package stays free of the guard's optional dependency (opentelemetry) at
-    # import time; access resolves them on first use.
+    # Tool Script Safety Guard entry points. Lazily re-exported to avoid a
+    # circular import (the guard imports back from this package) and to keep
+    # the top-level ``tools`` import lightweight; access resolves them on first
+    # use. (opentelemetry-sdk is a core project dependency, not optional.)
     "SafetyScanner": ("trpc_agent_sdk.tools.safety", "SafetyScanner"),
     "ToolSafetyGuardFilter": ("trpc_agent_sdk.tools.safety", "ToolSafetyGuardFilter"),
     "SafeCodeExecutor": ("trpc_agent_sdk.tools.safety", "SafeCodeExecutor"),

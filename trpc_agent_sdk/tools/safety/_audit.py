@@ -18,6 +18,7 @@ not break the tool it protects.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from datetime import datetime
 from datetime import timezone
@@ -117,6 +118,27 @@ class SafetyAuditLogger:
         event = self.build_event(report, blocked=blocked)
         if self._path is not None:
             self._append(event)
+        return event
+
+    async def arecord(self, report: ScanReport, *, blocked: bool) -> dict[str, Any]:
+        """Async variant of :meth:`record` for use on the event loop.
+
+        Setting span attributes and building the event are cheap in-memory
+        operations and run inline. Only the blocking disk append is offloaded
+        to a worker thread via :func:`asyncio.to_thread`, so persisting the
+        audit line never stalls the event loop under concurrent tool calls.
+
+        Args:
+            report: The scan report to record.
+            blocked: Whether execution was actually prevented.
+
+        Returns:
+            The audit event that was recorded.
+        """
+        set_span_attributes(report)
+        event = self.build_event(report, blocked=blocked)
+        if self._path is not None:
+            await asyncio.to_thread(self._append, event)
         return event
 
     def _append(self, event: dict[str, Any]) -> None:
