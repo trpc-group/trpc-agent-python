@@ -45,7 +45,8 @@ SECRET_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 
 UUID_PATTERN = re.compile(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 HEX_IDENTIFIER_PATTERN = re.compile(r"(?i)^[0-9a-f]{32,64}$")
-BASE64_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9+/]{32,64}={0,2}$")
+BASE64_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9+/_-]{32,64}={0,2}$")
+HYPHENATED_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9]{4,}(?:-[A-Za-z0-9]{4,}){2,}$")
 SENSITIVE_LITERAL_CONTEXT_PATTERN = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key(?:[_-]?id)?|key[_-]?id|secret|token|password|passwd|pwd|"
     r"private[_-]?key|signing[_-]?key|session[_-]?key)")
@@ -124,5 +125,7 @@ def _looks_like_allowed_identifier(value: str) -> bool:
     if HEX_IDENTIFIER_PATTERN.fullmatch(value):
         return True
     if BASE64_IDENTIFIER_PATTERN.fullmatch(value) and not value.rstrip("=").startswith(("sk", "rk", "xox", "AIza")):
+        return True
+    if 28 <= len(value) <= 80 and HYPHENATED_IDENTIFIER_PATTERN.fullmatch(value):
         return True
     return False

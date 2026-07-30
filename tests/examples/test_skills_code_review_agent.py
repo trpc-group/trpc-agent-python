@@ -2057,16 +2057,20 @@ async def test_entropy_secret_is_redacted_and_reported(tmp_path: Path) -> None:
 def test_high_entropy_redaction_preserves_common_code_identifiers() -> None:
     text = """
 TRACE_ID = "123e4567-e89b-12d3-a456-426614174000"
+REQUEST_ID = "abCDef12-ghIJ34kl-MNop56qr-STuv78wx"
 COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567"
 FIXTURE_BLOB = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo12345"
+URLSAFE_TRACE_ID = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ABCDefghij"
 SESSION_SIGNING_KEY = "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe"
 """
 
     redacted = redact_text(text)
 
     assert "123e4567-e89b-12d3-a456-426614174000" in redacted.text
+    assert "abCDef12-ghIJ34kl-MNop56qr-STuv78wx" in redacted.text
     assert "0123456789abcdef0123456789abcdef01234567" in redacted.text
     assert "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo12345" in redacted.text
+    assert "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ABCDefghij" in redacted.text
     assert "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe" not in redacted.text
     assert redacted.count == 1
 
