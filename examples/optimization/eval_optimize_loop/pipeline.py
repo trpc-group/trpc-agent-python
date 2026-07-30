@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import json
 import os
+import shlex
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -102,7 +103,8 @@ def _build_repro_cmd(args: argparse.Namespace) -> str:
             continue
         flag = f"--{key.replace('_', '-')}"
         argv.append(flag if value is True else f"{flag}={value}")
-    return " ".join(argv)
+    # 路径可能含空格等特殊字符，引用后保证复现命令可直接粘贴执行。
+    return " ".join(shlex.quote(arg) for arg in argv)
 
 
 def _content_text(content: dict[str, Any]) -> str:

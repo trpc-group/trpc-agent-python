@@ -275,10 +275,15 @@ async def _run_evaluator(
         )
         try:
             await executer.evaluate()
-        except AssertionError:
+        except AssertionError as exc:
             # Case failures are represented as AssertionError by the public facade;
-            # the structured result remains available from the executer.
-            pass
+            # the structured result remains available from the executer.  Any other
+            # assertion (config/contract errors, SDK bugs) aborts before a result
+            # exists and must not be masked as an empty NOT_EVALUATED outcome.
+            if executer.get_result() is None:
+                raise RuntimeError(
+                    f"Evaluator aborted before producing results ({type(exc).__name__}): {exc}"
+                ) from exc
         result = executer.get_result()
     finally:
         os.chdir(previous_cwd)
