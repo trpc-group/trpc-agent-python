@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from trpc_agent_sdk.evaluation import (
+    AgentEvaluator,
     AgentOptimizer,
     EvalConfig,
     EvalSet,
@@ -42,7 +43,7 @@ CallAgent = Callable[[str], Awaitable[str]]
 _DEFAULT_APP_NAME = "test_app"
 
 
-async def _evaluate_with_service(
+async def _evaluate_with_sdk(
     eval_set: EvalSet,
     eval_config: EvalConfig,
     *,
@@ -50,7 +51,7 @@ async def _evaluate_with_service(
     runtime_dir: str,
     evaluator_registry: Optional[EvaluatorRegistry] = None,
 ) -> EvaluateResult:
-    """Compose public eval services and preserve the SDK aggregate contract."""
+    """Use AgentEvaluator by default and services only for a run-local registry."""
 
     dataset = deepcopy(eval_set)
     config = deepcopy(eval_config)
@@ -61,6 +62,25 @@ async def _evaluate_with_service(
         raise ValueError("evaluation num_runs must be at least one")
 
     app_name = dataset.app_name or _DEFAULT_APP_NAME
+    if evaluator_registry is None:
+        _, _, _, results_by_case = await AgentEvaluator.evaluate_eval_set(
+            dataset,
+            call_agent=call_agent,
+            eval_config=config,
+            num_runs=config.num_runs,
+            print_detailed_results=False,
+        )
+        return EvaluateResult(
+            results_by_eval_set_id={
+                dataset.eval_set_id:
+                EvalSetAggregateResult(
+                    eval_results_by_eval_id=results_by_case,
+                    num_runs=config.num_runs,
+                )
+            })
+
+    # AgentEvaluator has no per-call registry hook. Keep custom offline judges
+    # scoped to this run by composing the exported services directly.
     manager = InMemoryEvalSetsManager()
     manager.create_eval_set(app_name=app_name, eval_set_id=dataset.eval_set_id)
     for eval_case in dataset.eval_cases:
@@ -121,7 +141,7 @@ async def _evaluate_offline(
     """Evaluate using a run-local deterministic replacement registry."""
 
     offline_config, registry = prepare_offline_evaluation(eval_config)
-    return await _evaluate_with_service(
+    return await _evaluate_with_sdk(
         eval_set,
         offline_config,
         call_agent=call_agent,
@@ -270,7 +290,7 @@ class LiveEvaluationBackend:
         audit_dir: str,
     ) -> EvaluateResult:
         del prompts, split, phase
-        return await _evaluate_with_service(
+        return await _evaluate_with_sdk(
             eval_set,
             eval_config,
             call_agent=self._call_agent,

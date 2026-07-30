@@ -230,10 +230,37 @@ class FailureAttribution(StrictModel):
         return self
 
 
+class AttributionStatistics(StrictModel):
+    total_failures: int = Field(default=0, ge=0)
+    primary_category_counts: dict[FailureCategory, int] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def consistent_totals(self) -> "AttributionStatistics":
+        if any(count < 1 for count in self.primary_category_counts.values()):
+            raise ValueError("attribution category counts must be positive")
+        if self.total_failures != sum(self.primary_category_counts.values()):
+            raise ValueError("attribution total must equal primary category counts")
+        return self
+
+
 class AttributionSnapshot(StrictModel):
     split: Split
     phase: Phase
     failures: tuple[FailureAttribution, ...]
+    statistics: AttributionStatistics = Field(default_factory=AttributionStatistics)
+
+    @model_validator(mode="after")
+    def statistics_match_failures(self) -> "AttributionSnapshot":
+        expected = {
+            category: sum(failure.primary == category for failure in self.failures)
+            for category in FailureCategory
+        }
+        expected = {category: count for category, count in expected.items() if count}
+        if self.statistics.total_failures != len(self.failures):
+            raise ValueError("attribution statistics total does not match failures")
+        if self.statistics.primary_category_counts != expected:
+            raise ValueError("attribution category statistics do not match failures")
+        return self
 
 
 class InnerSplit(StrictModel):

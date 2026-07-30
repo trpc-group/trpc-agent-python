@@ -56,4 +56,6 @@ cancellation is cooperative. A production deployment that requires a hard
 deadline must run the live optimizer in a supervised worker process or container
 and terminate that worker at the platform boundary.
 
-See [DESIGN.md](DESIGN.md) for stage contracts and failure semantics.
+See [SOLUTION.md](SOLUTION.md) for the concise Chinese issue proposal and
+[DESIGN.md](DESIGN.md) for detailed stage contracts and failure semantics. A
+versioned example report is available under [sample_output](sample_output/).

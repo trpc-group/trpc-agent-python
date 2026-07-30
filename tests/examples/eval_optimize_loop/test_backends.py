@@ -81,11 +81,15 @@ async def test_fake_backend_uses_public_services_and_does_not_mutate_inputs(tmp_
     config = _config()
     before_set = eval_set.model_dump(mode="json")
     before_config = config.model_dump(mode="json")
-    monkeypatch.setattr(
-        AgentEvaluator,
-        "get_executer",
-        lambda *args, **kwargs: pytest.fail("backend must compose public EvalService APIs directly"),
-    )
+    calls = 0
+    original = AgentEvaluator.evaluate_eval_set
+
+    async def recording_evaluate_eval_set(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(AgentEvaluator, "evaluate_eval_set", recording_evaluate_eval_set)
     raw = await backend.evaluate(
         eval_set=eval_set,
         eval_config=config,
@@ -102,6 +106,7 @@ async def test_fake_backend_uses_public_services_and_does_not_mutate_inputs(tmp_
         phase=Phase.BASELINE,
     )
     assert snapshot.pass_rate == 1
+    assert calls == 1
     assert eval_set.model_dump(mode="json") == before_set
     assert config.model_dump(mode="json") == before_config
 
@@ -114,8 +119,8 @@ async def test_fake_llm_metric_uses_deterministic_offline_substitute(tmp_path, m
 
     monkeypatch.setattr(
         AgentEvaluator,
-        "get_executer",
-        lambda *args, **kwargs: pytest.fail("backend must not depend on AgentEvaluator file orchestration"),
+        "evaluate_eval_set",
+        lambda *args, **kwargs: pytest.fail("custom registry must remain run-local"),
     )
     monkeypatch.setattr(
         "trpc_agent_sdk.evaluation._llm_judge.LLMJudge.__init__",
@@ -554,6 +559,40 @@ async def test_trace_backend_replays_fixture_without_agent(tmp_path) -> None:
 def test_live_backend_requires_async_callback() -> None:
     with pytest.raises(TypeError, match="async"):
         LiveEvaluationBackend(lambda query: query)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_live_backend_uses_agent_evaluator_entrypoint(tmp_path, monkeypatch) -> None:
+    calls = 0
+    original = AgentEvaluator.evaluate_eval_set
+
+    async def recording_evaluate_eval_set(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return await original(*args, **kwargs)
+
+    async def call_agent(query: str) -> str:
+        del query
+        return "OK"
+
+    monkeypatch.setattr(AgentEvaluator, "evaluate_eval_set", recording_evaluate_eval_set)
+    raw = await LiveEvaluationBackend(call_agent).evaluate(
+        eval_set=_eval_set(),
+        eval_config=_config(),
+        prompts={"system": "baseline"},
+        split=Split.VALIDATION,
+        phase=Phase.BASELINE,
+        audit_dir=str(tmp_path),
+    )
+    snapshot = normalize_result(
+        raw,
+        _eval_set(),
+        _config(),
+        split=Split.VALIDATION,
+        phase=Phase.BASELINE,
+    )
+    assert snapshot.pass_rate == 1
+    assert calls == 1
 
 
 @pytest.mark.asyncio

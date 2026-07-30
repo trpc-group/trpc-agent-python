@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
-from examples.optimization.eval_optimize_loop.pipeline.attribution import attribute_failures
+from examples.optimization.eval_optimize_loop.pipeline.attribution import (
+    attribute_failures,
+    select_attribution,
+)
 from examples.optimization.eval_optimize_loop.pipeline.configuration import (
     AttributionConfig,
     GateConfig,
@@ -21,6 +25,8 @@ from examples.optimization.eval_optimize_loop.pipeline.models import (
     CostSummary,
     Decision,
     EvaluationSnapshot,
+    AttributionSnapshot,
+    AttributionStatistics,
     FailureCategory,
     MetricDelta,
     MetricRun,
@@ -149,6 +155,34 @@ def test_attribution_taxonomy(snapshot, config, expected) -> None:
     assert result.failures[0].primary == expected
     assert result.failures[0].reasons
     assert result.failures[0].evidence
+    assert result.statistics.total_failures == 1
+    assert result.statistics.primary_category_counts == {expected: 1}
+
+
+def test_attribution_statistics_cannot_diverge_from_failure_facts() -> None:
+    result = attribute_failures(
+        _failed_snapshot("final_response_avg_score"),
+        AttributionConfig(),
+        max_text_chars=200,
+    )
+    with pytest.raises(ValidationError, match="statistics total"):
+        AttributionSnapshot(
+            split=result.split,
+            phase=result.phase,
+            failures=result.failures,
+            statistics=AttributionStatistics(),
+        )
+
+
+def test_select_attribution_recalculates_statistics() -> None:
+    result = attribute_failures(
+        _failed_snapshot("final_response_avg_score"),
+        AttributionConfig(),
+        max_text_chars=200,
+    )
+    selected = select_attribution(result, set())
+    assert selected.failures == ()
+    assert selected.statistics == AttributionStatistics()
 
 
 def test_attribution_policy_matrix_matches_every_expected_category() -> None:

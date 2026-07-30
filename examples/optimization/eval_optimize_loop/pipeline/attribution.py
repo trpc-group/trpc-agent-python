@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from trpc_agent_sdk.evaluation import Invocation, get_all_tool_calls
@@ -10,6 +11,7 @@ from .configuration import AttributionConfig
 from .models import (
     AttributionPair,
     AttributionSnapshot,
+    AttributionStatistics,
     EvaluationSnapshot,
     FailureAttribution,
     FailureCategory,
@@ -27,6 +29,14 @@ _KNOWN_METRICS = {
     "final_response_avg_score": FailureCategory.FINAL_RESPONSE_MISMATCH,
     "response_match_score": FailureCategory.FINAL_RESPONSE_MISMATCH,
 }
+
+
+def _statistics(failures: tuple[FailureAttribution, ...]) -> AttributionStatistics:
+    counts = Counter(failure.primary for failure in failures)
+    return AttributionStatistics(
+        total_failures=len(failures),
+        primary_category_counts=dict(counts),
+    )
 
 
 def _safe_text(value: Any, max_chars: int) -> str:
@@ -169,7 +179,13 @@ def attribute_failures(
                 evidence=tuple(dict.fromkeys(evidence or ["No structured evidence was available."])),
                 confidence=confidence,
             ))
-    return AttributionSnapshot(split=snapshot.split, phase=snapshot.phase, failures=tuple(failures))
+    attributed = tuple(failures)
+    return AttributionSnapshot(
+        split=snapshot.split,
+        phase=snapshot.phase,
+        failures=attributed,
+        statistics=_statistics(attributed),
+    )
 
 
 def attribute_pair(
@@ -202,8 +218,10 @@ def select_attribution(
 ) -> AttributionSnapshot:
     """Restrict attribution facts to the cases visible to a downstream stage."""
 
+    selected = tuple(failure for failure in snapshot.failures if failure.case_id in case_ids)
     return AttributionSnapshot(
         split=snapshot.split,
         phase=snapshot.phase,
-        failures=tuple(failure for failure in snapshot.failures if failure.case_id in case_ids),
+        failures=selected,
+        statistics=_statistics(selected),
     )

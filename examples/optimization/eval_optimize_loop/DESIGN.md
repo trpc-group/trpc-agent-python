@@ -34,11 +34,14 @@ Only `EvaluationBackend` and `CandidateGenerator` are protocols because each has
 real fake, trace, and live substitutions. Attribution, comparison, normalization,
 and gate logic are ordinary pure functions.
 
-The example does not extend or patch the SDK. `backends.py` composes the exported
-`LocalEvalService`, `RemoteEvalService`, and `InMemoryEvalSetsManager` APIs and
-rebuilds the exported `EvaluateResult` aggregate at the example boundary. A
-run-local `EvaluatorRegistry` lets fake and trace modes replace LLM judges without
-mutating global registry state. The SDK remains the owner of remote metric
+The example does not extend or patch the SDK. Standard fake, trace, and live
+evaluation calls `AgentEvaluator.evaluate_eval_set` with validated in-memory
+`EvalSet` and `EvalConfig` objects. Only deterministic offline LLM metrics need a
+run-local `EvaluatorRegistry`, which `AgentEvaluator` cannot receive per call; for
+that narrow path `backends.py` composes the exported `LocalEvalService`,
+`RemoteEvalService`, and `InMemoryEvalSetsManager` APIs and rebuilds the exported
+`EvaluateResult` aggregate at the example boundary. The registry never mutates
+global state. The SDK remains the owner of remote metric
 compatibility: black-box evaluation rejects trajectory and knowledge-recall
 metrics because callback results do not expose their required intermediate data.
 
