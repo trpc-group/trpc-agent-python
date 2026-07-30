@@ -80,6 +80,37 @@ def test_policy_rejects_url_in_domain_allowlist():
         ToolSafetyPolicy(allowed_domains=["https://example.com/path"])
 
 
+def test_policy_rejects_commands_with_whitespace():
+    with pytest.raises(ValidationError, match="individual command names"):
+        ToolSafetyPolicy(allowed_commands=["echo", "sudo rm"])
+
+
+def test_policy_rejects_invalid_yaml(tmp_path: Path):
+    path = tmp_path / "invalid.yaml"
+    path.write_text("allowed_commands: [echo\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid tool safety policy YAML"):
+        load_policy(path)
+
+
+def test_empty_policy_file_uses_secure_defaults(tmp_path: Path):
+    path = tmp_path / "empty.yaml"
+    path.write_text("", encoding="utf-8")
+
+    policy = load_policy(path)
+
+    assert "/etc" in policy.forbidden_paths
+    assert "/usr/bin" in policy.protected_write_paths
+
+
+def test_policy_requires_top_level_mapping(tmp_path: Path):
+    path = tmp_path / "list.yaml"
+    path.write_text("- echo\n- pwd\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="mapping at the top level"):
+        load_policy(path)
+
+
 def test_redaction_removes_known_env_values_and_shaped_credentials():
     text = "token=plain-secret short=abc AKIAABCDEFGHIJKLMNOP and sk-abcdefghijklmnop"
 

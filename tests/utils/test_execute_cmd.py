@@ -22,6 +22,7 @@ import pytest
 
 from trpc_agent_sdk.utils import CommandExecResult
 from trpc_agent_sdk.utils import async_execute_command
+from trpc_agent_sdk.utils import _execute_cmd as execute_cmd_module
 
 
 async def _assert_process_stopped(pid: int, failure_message: str) -> None:
@@ -199,3 +200,83 @@ class TestAsyncExecuteCommand:
             result = await async_execute_command(Path(tmpdir), ["cat"], input=b"data", timeout=5.0)
             assert result.exit_code == 0
             assert "data" in result.stdout
+
+    async def test_started_process_is_reaped_when_communication_fails(self, monkeypatch, tmp_path):
+
+        class FinishedProcess:
+            pid = 12345
+            returncode = 0
+
+            async def communicate(self, input=None):
+                del input
+                raise RuntimeError("communication failed")
+
+        process = FinishedProcess()
+
+        async def create_process(*args, **kwargs):
+            del args, kwargs
+            return process
+
+        def missing_process_group(pid, sig):
+            del pid, sig
+            raise ProcessLookupError
+
+        monkeypatch.setattr(execute_cmd_module.asyncio, "create_subprocess_exec", create_process)
+        monkeypatch.setattr(execute_cmd_module.os, "killpg", missing_process_group)
+
+        result = await async_execute_command(tmp_path, ["echo", "hello"])
+
+        assert result.exit_code == -1
+        assert "communication failed" in result.stderr
+
+    async def test_process_cleanup_falls_back_and_escalates_when_group_signals_fail(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+
+        class RunningProcess:
+            pid = 12345
+            returncode = None
+
+            def __init__(self):
+                self.terminated = False
+                self.killed = False
+                self.wait_calls = 0
+
+            async def communicate(self, input=None):
+                del input
+                raise RuntimeError("communication failed")
+
+            def terminate(self):
+                self.terminated = True
+
+            def kill(self):
+                self.killed = True
+
+            async def wait(self):
+                self.wait_calls += 1
+                if self.wait_calls == 1:
+                    raise asyncio.TimeoutError
+                self.returncode = -signal.SIGKILL
+                return self.returncode
+
+        process = RunningProcess()
+
+        async def create_process(*args, **kwargs):
+            del args, kwargs
+            return process
+
+        def unavailable_process_group(pid, sig):
+            del pid, sig
+            raise OSError("process groups unavailable")
+
+        monkeypatch.setattr(execute_cmd_module.asyncio, "create_subprocess_exec", create_process)
+        monkeypatch.setattr(execute_cmd_module.os, "killpg", unavailable_process_group)
+
+        result = await async_execute_command(tmp_path, ["echo", "hello"])
+
+        assert result.exit_code == -1
+        assert process.terminated is True
+        assert process.killed is True
+        assert process.wait_calls == 2

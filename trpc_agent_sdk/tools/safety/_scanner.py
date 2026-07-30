@@ -757,11 +757,9 @@ class ToolScriptSafetyScanner:
                     payload_index,
                     secrets,
                 ))
-        if re.search(
-                r"\b(?:echo|printf)\b[^\n]*(?:\$(?:\{)?(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD))",
-                executable_script,
-                re.IGNORECASE,
-        ):
+        if any(
+                _SENSITIVE_NAME_RE.search(variable.group(1)) for line in executable_script.splitlines()
+                if re.search(r"\b(?:echo|printf)\b", line) for variable in _SHELL_VARIABLE_RE.finditer(line)):
             findings.append(
                 self._finding(
                     RiskCategory.SENSITIVE_DATA,

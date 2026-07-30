@@ -9,6 +9,7 @@
 import json
 import subprocess
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -98,6 +99,16 @@ async def test_filter_allows_safe_script_and_writes_one_audit_event():
     assert len(audit.events) == 1
     assert audit.events[0].decision == SafetyDecision.ALLOW
     assert audit.events[0].execution_blocked is False
+
+
+@pytest.mark.asyncio
+async def test_filter_ignores_non_script_tool_calls():
+    filter_ = ToolScriptSafetyFilter()
+
+    result, calls = await _run_filter(filter_, {"query": "hello"})
+
+    assert calls == 1
+    assert result.rsp == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -225,6 +236,92 @@ async def test_code_executor_scans_all_blocks_and_blocks_delegate_once():
     assert result.outcome.name == "OUTCOME_FAILED"
     assert "TOOL_SAFETY_BLOCKED" in result.output
     assert len(audit.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_code_executor_scans_legacy_code_and_preserves_small_output():
+    delegate = RecordingExecutor(output="short output")
+    wrapper = SafetyGuardedCodeExecutor(
+        delegate=delegate,
+        guard=ToolSafetyGuard(audit_sink=MemoryAuditSink()),
+    )
+
+    result = await wrapper.execute_code(
+        MagicMock(),
+        CodeExecutionInput(code="print('safe')"),
+    )
+
+    assert delegate.calls == 1
+    assert "short output" in result.output
+    assert "truncated" not in result.output
+
+
+@pytest.mark.asyncio
+async def test_code_executor_delegates_inputs_without_executable_code():
+    delegate = RecordingExecutor()
+    wrapper = SafetyGuardedCodeExecutor(
+        delegate=delegate,
+        guard=ToolSafetyGuard(audit_sink=MemoryAuditSink()),
+    )
+
+    result = await wrapper.execute_code(MagicMock(), CodeExecutionInput())
+
+    assert delegate.calls == 1
+    assert "delegate output" in result.output
+
+
+@pytest.mark.asyncio
+async def test_code_executor_uses_nested_runtime_timeout():
+    delegate = RecordingExecutor(timeout=0)
+    object.__setattr__(delegate, "_cfg", SimpleNamespace(execute_timeout=25))
+    wrapper = SafetyGuardedCodeExecutor(
+        delegate=delegate,
+        guard=ToolSafetyGuard(audit_sink=MemoryAuditSink()),
+    )
+
+    result = await wrapper.execute_code(
+        MagicMock(),
+        CodeExecutionInput(code_blocks=[CodeBlock(language="python", code="print('safe')")]),
+    )
+
+    assert delegate.calls == 1
+    assert result.outcome.name == "OUTCOME_OK"
+
+
+@pytest.mark.asyncio
+async def test_code_executor_accepts_delegate_without_environment():
+    delegate = RecordingExecutor()
+    object.__setattr__(delegate, "environment", None)
+    wrapper = SafetyGuardedCodeExecutor(
+        delegate=delegate,
+        guard=ToolSafetyGuard(audit_sink=MemoryAuditSink()),
+    )
+
+    result = await wrapper.execute_code(
+        MagicMock(),
+        CodeExecutionInput(code_blocks=[CodeBlock(language="python", code="print('safe')")]),
+    )
+
+    assert delegate.calls == 1
+    assert result.outcome.name == "OUTCOME_OK"
+
+
+@pytest.mark.asyncio
+async def test_code_executor_rejects_invalid_delegate_environment():
+    delegate = RecordingExecutor()
+    object.__setattr__(delegate, "environment", {"TOKEN": 7})
+    wrapper = SafetyGuardedCodeExecutor(
+        delegate=delegate,
+        guard=ToolSafetyGuard(audit_sink=MemoryAuditSink()),
+    )
+
+    result = await wrapper.execute_code(
+        MagicMock(),
+        CodeExecutionInput(code_blocks=[CodeBlock(language="python", code="print('safe')")]),
+    )
+
+    assert delegate.calls == 0
+    assert "SCAN_INPUT_ERROR" in result.output
 
 
 @pytest.mark.asyncio

