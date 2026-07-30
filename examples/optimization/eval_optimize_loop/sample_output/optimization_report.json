@@ -1,0 +1,2309 @@
+{
+  "artifacts": [
+    {
+      "byteSize": 101,
+      "path": "baseline_prompts/system.md",
+      "sha256": "aacc5210d0fe4482263f69f5f83241cdf9252e44be22a70de08107daec05e639"
+    },
+    {
+      "byteSize": 13921,
+      "path": "baseline_train/snapshot.json",
+      "sha256": "e3e4fa35e990241618df6d6151a1e8fc6e24ed1c98f5d19c349980964a489caf"
+    },
+    {
+      "byteSize": 13955,
+      "path": "baseline_validation/snapshot.json",
+      "sha256": "6c22f2743db51fe0b604389cb3585ef8850f96c5ac40311a48a2198f77a4abfd"
+    },
+    {
+      "byteSize": 1230,
+      "path": "candidate.json",
+      "sha256": "09d48df58df5b954757a9963665f61b36d981cda9c7a555b270e2d4e69dfdf53"
+    },
+    {
+      "byteSize": 132,
+      "path": "candidate_prompts/system.md",
+      "sha256": "ed2dfc103a7763a126f690e536572c5d06d20e2119ef7ef707c0a72deb162be2"
+    },
+    {
+      "byteSize": 13857,
+      "path": "candidate_train/snapshot.json",
+      "sha256": "81619a1694caffa8e5661b53a6838c2347e7fc5bd4947f9c0dc17ba1fe894812"
+    },
+    {
+      "byteSize": 13956,
+      "path": "candidate_validation/snapshot.json",
+      "sha256": "ba0ec006116176cd6396212950b90d66f0c1b913775f0a9fb3451b845c5e40c7"
+    },
+    {
+      "byteSize": 5994,
+      "path": "comparison.json",
+      "sha256": "5ad875415c7ffad80abb3428be37d34e54d0ec69d09352f97375ab89ca821d89"
+    },
+    {
+      "byteSize": 2769,
+      "path": "config.json",
+      "sha256": "480c323b930dcece647f3db77038b12cd333457e8abb0983417f73c1aa5a8bde"
+    },
+    {
+      "byteSize": 2163,
+      "path": "inner_selection.evalset.json",
+      "sha256": "af935deba41f9e95db01dcb4b8db86c17619a2f205d6dddd0addad2415896715"
+    },
+    {
+      "byteSize": 647,
+      "path": "inner_train.attribution.json",
+      "sha256": "c6de4971edada2345c566bfe8a39258f3585bc716c6a0294b8d5d8288af0f46b"
+    },
+    {
+      "byteSize": 4108,
+      "path": "inner_train.evalset.json",
+      "sha256": "b7146ee360286979afab3f62bbace6255b13293037a27757639d294a3fc7bdff"
+    },
+    {
+      "byteSize": 6045,
+      "path": "train.evalset.json",
+      "sha256": "bb66729048d0076e1f6f08b4367641bb28c0c2026ca6278d304e93360a39a945"
+    },
+    {
+      "byteSize": 6061,
+      "path": "val.evalset.json",
+      "sha256": "11df6126e19a1e3cc8126ba6575aa6c69ed8c014d2c0b13484ade19be3d21afb"
+    }
+  ],
+  "baseline": {
+    "train": {
+      "caseIds": [
+        "train_improve_alpha",
+        "train_improve_beta",
+        "train_stable"
+      ],
+      "cases": [
+        {
+          "caseId": "train_improve_alpha",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": false,
+              "score": 0.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": false,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": false,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 0.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": false,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1023717,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "INCORRECT",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 0.0
+        },
+        {
+          "caseId": "train_improve_beta",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": false,
+              "score": 0.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": false,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": false,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 0.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": false,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1013703,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "INCORRECT",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 0.0
+        },
+        {
+          "caseId": "train_stable",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1013703,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        }
+      ],
+      "datasetScore": 0.3333333333333333,
+      "metricScores": {
+        "final_response_avg_score": 0.3333333333333333
+      },
+      "passRate": 0.3333333333333333,
+      "phase": "baseline",
+      "split": "train"
+    },
+    "validation": {
+      "caseIds": [
+        "validation_improve",
+        "validation_regress",
+        "validation_stable"
+      ],
+      "cases": [
+        {
+          "caseId": "validation_improve",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": false,
+              "score": 0.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": false,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": false,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 0.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": false,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1065273,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "INCORRECT",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 0.0
+        },
+        {
+          "caseId": "validation_regress",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1065273,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:regress; ANSWER:DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:regress; ANSWER:DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        },
+        {
+          "caseId": "validation_stable",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1065273,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        }
+      ],
+      "datasetScore": 0.6666666666666666,
+      "metricScores": {
+        "final_response_avg_score": 0.6666666666666666
+      },
+      "passRate": 0.6666666666666666,
+      "phase": "baseline",
+      "split": "validation"
+    }
+  },
+  "candidate": {
+    "train": {
+      "caseIds": [
+        "train_improve_alpha",
+        "train_improve_beta",
+        "train_stable"
+      ],
+      "cases": [
+        {
+          "caseId": "train_improve_alpha",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.120922,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:ALPHA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        },
+        {
+          "caseId": "train_improve_beta",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.119919,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:BETA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        },
+        {
+          "caseId": "train_stable",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.119919,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "train-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:ELEVEN",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        }
+      ],
+      "datasetScore": 1.0,
+      "metricScores": {
+        "final_response_avg_score": 1.0
+      },
+      "passRate": 1.0,
+      "phase": "candidate",
+      "split": "train"
+    },
+    "validation": {
+      "caseIds": [
+        "validation_improve",
+        "validation_regress",
+        "validation_stable"
+      ],
+      "cases": [
+        {
+          "caseId": "validation_improve",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1244266,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-1",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:improve; ANSWER:GAMMA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        },
+        {
+          "caseId": "validation_regress",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": false,
+              "score": 0.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": false,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": false,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 0.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": false,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1244266,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "INCORRECT",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:regress; ANSWER:DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-2",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:regress; ANSWER:DELTA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 0.0
+        },
+        {
+          "caseId": "validation_stable",
+          "error": null,
+          "metrics": [
+            {
+              "metricName": "final_response_avg_score",
+              "passed": true,
+              "score": 1.0,
+              "threshold": 1.0
+            }
+          ],
+          "passed": true,
+          "runs": [
+            {
+              "error": null,
+              "metrics": [
+                {
+                  "metricName": "final_response_avg_score",
+                  "passed": true,
+                  "reason": null,
+                  "rubrics": [],
+                  "score": 1.0,
+                  "threshold": 1.0
+                }
+              ],
+              "passed": true,
+              "runId": 1,
+              "trace": [
+                {
+                  "actual": {
+                    "creationTimestamp": 1785423818.1244266,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": null
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  },
+                  "expected": {
+                    "creationTimestamp": 0.0,
+                    "finalResponse": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "intermediateData": null,
+                    "invocationId": "validation-input-3",
+                    "userContent": {
+                      "parts": [
+                        {
+                          "audioTranscription": null,
+                          "codeExecutionResult": null,
+                          "executableCode": null,
+                          "fileData": null,
+                          "functionCall": null,
+                          "functionResponse": null,
+                          "inlineData": null,
+                          "mediaResolution": null,
+                          "partMetadata": null,
+                          "text": "BEHAVIOR:stable; ANSWER:OMEGA",
+                          "thought": null,
+                          "thoughtSignature": null,
+                          "toolCall": null,
+                          "toolResponse": null,
+                          "videoMetadata": null
+                        }
+                      ],
+                      "role": "user"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "score": 1.0
+        }
+      ],
+      "datasetScore": 0.6666666666666666,
+      "metricScores": {
+        "final_response_avg_score": 0.6666666666666666
+      },
+      "passRate": 0.6666666666666666,
+      "phase": "candidate",
+      "split": "validation"
+    }
+  },
+  "candidateFailureAttribution": {
+    "train": {
+      "failures": [],
+      "phase": "candidate",
+      "split": "train",
+      "statistics": {
+        "primaryCategoryCounts": {},
+        "totalFailures": 0
+      }
+    },
+    "validation": {
+      "failures": [
+        {
+          "caseId": "validation_regress",
+          "confidence": "medium",
+          "evidence": [
+            "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+          ],
+          "primary": "FINAL_RESPONSE_MISMATCH",
+          "reasons": [
+            "Metric final_response_avg_score scored 0 below threshold 1."
+          ],
+          "secondary": [],
+          "triggerMetrics": [
+            "final_response_avg_score"
+          ],
+          "triggerRubrics": []
+        }
+      ],
+      "phase": "candidate",
+      "split": "validation",
+      "statistics": {
+        "primaryCategoryCounts": {
+          "FINAL_RESPONSE_MISMATCH": 1
+        },
+        "totalFailures": 1
+      }
+    }
+  },
+  "cost": {
+    "sources": [
+      {
+        "costUsd": 0.0,
+        "metricCalls": 3,
+        "modelCalls": 3,
+        "name": "baseline_train",
+        "tokenUsage": {}
+      },
+      {
+        "costUsd": 0.0,
+        "metricCalls": 3,
+        "modelCalls": 3,
+        "name": "baseline_validation",
+        "tokenUsage": {}
+      },
+      {
+        "costUsd": 0.0,
+        "metricCalls": 0,
+        "modelCalls": 0,
+        "name": "candidate_generation.deterministic",
+        "tokenUsage": {}
+      },
+      {
+        "costUsd": 0.0,
+        "metricCalls": 3,
+        "modelCalls": 3,
+        "name": "candidate_train",
+        "tokenUsage": {}
+      },
+      {
+        "costUsd": 0.0,
+        "metricCalls": 3,
+        "modelCalls": 3,
+        "name": "candidate_validation",
+        "tokenUsage": {}
+      }
+    ],
+    "totalCostUsd": 0.0
+  },
+  "delta": {
+    "train": {
+      "cases": [
+        {
+          "baselineAttribution": {
+            "caseId": "train_improve_alpha",
+            "confidence": "medium",
+            "evidence": [
+              "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+            ],
+            "primary": "FINAL_RESPONSE_MISMATCH",
+            "reasons": [
+              "Metric final_response_avg_score scored 0 below threshold 1."
+            ],
+            "secondary": [],
+            "triggerMetrics": [
+              "final_response_avg_score"
+            ],
+            "triggerRubrics": []
+          },
+          "baselinePassed": false,
+          "baselineScore": 0.0,
+          "candidateAttribution": null,
+          "candidatePassed": true,
+          "candidateScore": 1.0,
+          "caseId": "train_improve_alpha",
+          "critical": false,
+          "delta": 1.0,
+          "hard": false,
+          "metrics": [
+            {
+              "baseline": 0.0,
+              "candidate": 1.0,
+              "delta": 1.0,
+              "metricName": "final_response_avg_score"
+            }
+          ],
+          "newHardFailure": false,
+          "transition": "NEW_PASS"
+        },
+        {
+          "baselineAttribution": {
+            "caseId": "train_improve_beta",
+            "confidence": "medium",
+            "evidence": [
+              "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+            ],
+            "primary": "FINAL_RESPONSE_MISMATCH",
+            "reasons": [
+              "Metric final_response_avg_score scored 0 below threshold 1."
+            ],
+            "secondary": [],
+            "triggerMetrics": [
+              "final_response_avg_score"
+            ],
+            "triggerRubrics": []
+          },
+          "baselinePassed": false,
+          "baselineScore": 0.0,
+          "candidateAttribution": null,
+          "candidatePassed": true,
+          "candidateScore": 1.0,
+          "caseId": "train_improve_beta",
+          "critical": false,
+          "delta": 1.0,
+          "hard": false,
+          "metrics": [
+            {
+              "baseline": 0.0,
+              "candidate": 1.0,
+              "delta": 1.0,
+              "metricName": "final_response_avg_score"
+            }
+          ],
+          "newHardFailure": false,
+          "transition": "NEW_PASS"
+        },
+        {
+          "baselineAttribution": null,
+          "baselinePassed": true,
+          "baselineScore": 1.0,
+          "candidateAttribution": null,
+          "candidatePassed": true,
+          "candidateScore": 1.0,
+          "caseId": "train_stable",
+          "critical": false,
+          "delta": 0.0,
+          "hard": false,
+          "metrics": [
+            {
+              "baseline": 1.0,
+              "candidate": 1.0,
+              "delta": 0.0,
+              "metricName": "final_response_avg_score"
+            }
+          ],
+          "newHardFailure": false,
+          "transition": "UNCHANGED"
+        }
+      ],
+      "metricDeltas": {
+        "final_response_avg_score": 0.6666666666666667
+      },
+      "passRateDelta": 0.6666666666666667,
+      "scoreDelta": 0.6666666666666667,
+      "split": "train"
+    },
+    "validation": {
+      "cases": [
+        {
+          "baselineAttribution": {
+            "caseId": "validation_improve",
+            "confidence": "medium",
+            "evidence": [
+              "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+            ],
+            "primary": "FINAL_RESPONSE_MISMATCH",
+            "reasons": [
+              "Metric final_response_avg_score scored 0 below threshold 1."
+            ],
+            "secondary": [],
+            "triggerMetrics": [
+              "final_response_avg_score"
+            ],
+            "triggerRubrics": []
+          },
+          "baselinePassed": false,
+          "baselineScore": 0.0,
+          "candidateAttribution": null,
+          "candidatePassed": true,
+          "candidateScore": 1.0,
+          "caseId": "validation_improve",
+          "critical": false,
+          "delta": 1.0,
+          "hard": false,
+          "metrics": [
+            {
+              "baseline": 0.0,
+              "candidate": 1.0,
+              "delta": 1.0,
+              "metricName": "final_response_avg_score"
+            }
+          ],
+          "newHardFailure": false,
+          "transition": "NEW_PASS"
+        },
+        {
+          "baselineAttribution": null,
+          "baselinePassed": true,
+          "baselineScore": 1.0,
+          "candidateAttribution": {
+            "caseId": "validation_regress",
+            "confidence": "medium",
+            "evidence": [
+              "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+            ],
+            "primary": "FINAL_RESPONSE_MISMATCH",
+            "reasons": [
+              "Metric final_response_avg_score scored 0 below threshold 1."
+            ],
+            "secondary": [],
+            "triggerMetrics": [
+              "final_response_avg_score"
+            ],
+            "triggerRubrics": []
+          },
+          "candidatePassed": false,
+          "candidateScore": 0.0,
+          "caseId": "validation_regress",
+          "critical": false,
+          "delta": -1.0,
+          "hard": true,
+          "metrics": [
+            {
+              "baseline": 1.0,
+              "candidate": 0.0,
+              "delta": -1.0,
+              "metricName": "final_response_avg_score"
+            }
+          ],
+          "newHardFailure": true,
+          "transition": "NEW_FAIL"
+        },
+        {
+          "baselineAttribution": null,
+          "baselinePassed": true,
+          "baselineScore": 1.0,
+          "candidateAttribution": null,
+          "candidatePassed": true,
+          "candidateScore": 1.0,
+          "caseId": "validation_stable",
+          "critical": true,
+          "delta": 0.0,
+          "hard": false,
+          "metrics": [
+            {
+              "baseline": 1.0,
+              "candidate": 1.0,
+              "delta": 0.0,
+              "metricName": "final_response_avg_score"
+            }
+          ],
+          "newHardFailure": false,
+          "transition": "UNCHANGED"
+        }
+      ],
+      "metricDeltas": {
+        "final_response_avg_score": 0.0
+      },
+      "passRateDelta": 0.0,
+      "scoreDelta": 0.0,
+      "split": "validation"
+    }
+  },
+  "durationSeconds": 0.2190000000045984,
+  "errors": [],
+  "failureAttribution": {
+    "train": {
+      "failures": [
+        {
+          "caseId": "train_improve_alpha",
+          "confidence": "medium",
+          "evidence": [
+            "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+          ],
+          "primary": "FINAL_RESPONSE_MISMATCH",
+          "reasons": [
+            "Metric final_response_avg_score scored 0 below threshold 1."
+          ],
+          "secondary": [],
+          "triggerMetrics": [
+            "final_response_avg_score"
+          ],
+          "triggerRubrics": []
+        },
+        {
+          "caseId": "train_improve_beta",
+          "confidence": "medium",
+          "evidence": [
+            "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+          ],
+          "primary": "FINAL_RESPONSE_MISMATCH",
+          "reasons": [
+            "Metric final_response_avg_score scored 0 below threshold 1."
+          ],
+          "secondary": [],
+          "triggerMetrics": [
+            "final_response_avg_score"
+          ],
+          "triggerRubrics": []
+        }
+      ],
+      "phase": "baseline",
+      "split": "train",
+      "statistics": {
+        "primaryCategoryCounts": {
+          "FINAL_RESPONSE_MISMATCH": 2
+        },
+        "totalFailures": 2
+      }
+    },
+    "validation": {
+      "failures": [
+        {
+          "caseId": "validation_improve",
+          "confidence": "medium",
+          "evidence": [
+            "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
+          ],
+          "primary": "FINAL_RESPONSE_MISMATCH",
+          "reasons": [
+            "Metric final_response_avg_score scored 0 below threshold 1."
+          ],
+          "secondary": [],
+          "triggerMetrics": [
+            "final_response_avg_score"
+          ],
+          "triggerRubrics": []
+        }
+      ],
+      "phase": "baseline",
+      "split": "validation",
+      "statistics": {
+        "primaryCategoryCounts": {
+          "FINAL_RESPONSE_MISMATCH": 1
+        },
+        "totalFailures": 1
+      }
+    }
+  },
+  "finishedAt": "2026-07-30T15:03:38.207789+00:00",
+  "gateDecision": {
+    "accepted": false,
+    "checks": [
+      {
+        "code": "REPORT_COMPLETE",
+        "message": "All required regression snapshots and report inputs are present.",
+        "observed": true,
+        "passed": true,
+        "threshold": true
+      },
+      {
+        "code": "CANDIDATE_CHANGED",
+        "message": "Candidate prompt hashes differ from baseline.",
+        "observed": true,
+        "passed": true,
+        "threshold": true
+      },
+      {
+        "code": "VALIDATION_SCORE_DELTA",
+        "message": "Held-out validation score delta meets the configured minimum.",
+        "observed": 0.0,
+        "passed": false,
+        "threshold": 0.05
+      },
+      {
+        "code": "VALIDATION_PASS_RATE_DELTA",
+        "message": "Held-out validation pass-rate delta meets the configured minimum.",
+        "observed": 0.0,
+        "passed": true,
+        "threshold": 0.0
+      },
+      {
+        "code": "NO_NEW_HARD_FAIL",
+        "message": "New held-out hard failures stay within budget.",
+        "observed": 1,
+        "passed": false,
+        "threshold": 0
+      },
+      {
+        "code": "CRITICAL_CASE_NON_REGRESSION",
+        "message": "Critical held-out cases do not regress.",
+        "observed": [],
+        "passed": true,
+        "threshold": 0.0
+      },
+      {
+        "code": "METRIC_NON_REGRESSION",
+        "message": "Configured validation metrics stay within regression limits.",
+        "observed": {},
+        "passed": true,
+        "threshold": {
+          "final_response_avg_score": 0.0
+        }
+      },
+      {
+        "code": "COST_BUDGET",
+        "message": "Known enabled costs stay within budget.",
+        "observed": 0.0,
+        "passed": true,
+        "threshold": null
+      },
+      {
+        "code": "DURATION_BUDGET",
+        "message": "Gate-observed duration stays within budget.",
+        "observed": 0.14100000000325963,
+        "passed": true,
+        "threshold": 180.0
+      },
+      {
+        "code": "OVERFIT_GUARD",
+        "message": "Train-only improvement is rejected as overfitting.",
+        "observed": {
+          "trainScoreDelta": 0.6666666666666667,
+          "validationScoreDelta": 0.0
+        },
+        "passed": false,
+        "threshold": "train improvement requires held-out validation thresholds"
+      }
+    ],
+    "decision": "REJECT",
+    "reasons": [
+      "VALIDATION_SCORE_DELTA_BELOW_MINIMUM",
+      "NEW_HARD_FAIL_BUDGET_EXCEEDED",
+      "OVERFIT_TRAIN_UP_VALIDATION_DOWN"
+    ]
+  },
+  "inputs": {
+    "adapterIdentity": "{\"backend\":\"default:fake:evaluation:v1\",\"callback\":null,\"candidateGenerator\":\"default:fake:candidate-generator:v1\",\"mode\":\"fake\"}",
+    "environment": {
+      "platform": "Windows-11-10.0.22631-SP0",
+      "python": "3.12.7",
+      "sdk": "1.1.14"
+    },
+    "hashes": {
+      "config": "4f1210691dcdd12c1d97a9c73e30920a39dc27c4704ec345c94717728c78637c",
+      "effectiveConfig": "c4525545639ffa945a68c8b601b54cd3328f70d435b2dc147807f380f70f03b0",
+      "train": "db8df56423d916afa929a2fc1a6f7245d8a1f719e87ac292f88f346d1cb81789",
+      "validation": "499d3bde9cdc70cc4871d425d0dfee83ed30a67d35da15a4eb87cc9549583f84"
+    },
+    "paths": {
+      "config": "optimizer.json",
+      "train": "train.evalset.json",
+      "validation": "val.evalset.json"
+    },
+    "seed": 42
+  },
+  "mode": "fake",
+  "optimization": {
+    "innerSplit": {
+      "selectionCaseIds": [
+        "train_improve_beta"
+      ],
+      "selectionHash": "ec02d7b1c9840580943cbed756a0d3bc8e0185adf2b2fc7009ad70d61aaca92a",
+      "selectionPath": "inner_selection.evalset.json",
+      "trainCaseIds": [
+        "train_improve_alpha",
+        "train_stable"
+      ],
+      "trainHash": "70f85fca6ab8ece3ad0e3a3b1c3a6635eab921bf29efa4ed224b22513e9d9cd2",
+      "trainPath": "inner_train.evalset.json"
+    },
+    "proposal": {
+      "algorithm": "deterministic_failure_rewrite",
+      "baselinePrompts": {
+        "system": "You are a deterministic response agent.\n\nReturn the requested answer exactly. Do not add commentary.\n"
+      },
+      "changed": true,
+      "costSources": [
+        {
+          "costUsd": 0.0,
+          "metricCalls": 0,
+          "modelCalls": 0,
+          "name": "deterministic",
+          "tokenUsage": {}
+        }
+      ],
+      "durationSeconds": 0.0,
+      "prompts": {
+        "system": "You are a deterministic response agent.\n\nReturn the requested answer exactly. Do not add commentary.\n\nBEHAVIOR_PROFILE=precision-v2\n"
+      },
+      "rounds": [
+        {
+          "acceptanceReason": "deterministic failure-attribution rewrite",
+          "accepted": true,
+          "candidatePrompts": {
+            "system": "You are a deterministic response agent.\n\nReturn the requested answer exactly. Do not add commentary.\n\nBEHAVIOR_PROFILE=precision-v2\n"
+          },
+          "costUsd": 0.0,
+          "durationSeconds": 0.0,
+          "errorMessage": null,
+          "kind": "deterministic",
+          "metricScores": {},
+          "optimizedFields": [
+            "system"
+          ],
+          "round": 1,
+          "score": 1.0,
+          "skipReason": null,
+          "tokenUsage": {}
+        }
+      ],
+      "status": "SUCCEEDED",
+      "stopReason": "completed"
+    }
+  },
+  "prompts": {
+    "baseline": {
+      "system": "You are a deterministic response agent.\n\nReturn the requested answer exactly. Do not add commentary.\n"
+    },
+    "baselineHashes": {
+      "system": "aacc5210d0fe4482263f69f5f83241cdf9252e44be22a70de08107daec05e639"
+    },
+    "candidate": {
+      "system": "You are a deterministic response agent.\n\nReturn the requested answer exactly. Do not add commentary.\n\nBEHAVIOR_PROFILE=precision-v2\n"
+    },
+    "candidateHashes": {
+      "system": "ed2dfc103a7763a126f690e536572c5d06d20e2119ef7ef707c0a72deb162be2"
+    }
+  },
+  "reproducibility": {
+    "command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --config examples/optimization/eval_optimize_loop/optimizer.json --train examples/optimization/eval_optimize_loop/train.evalset.json --validation examples/optimization/eval_optimize_loop/val.evalset.json --run-id sample-output-v1-replay --no-apply-candidate",
+    "gitCommit": "ceb6ff81a7a499689ddef85f0d0c997d2e54a505",
+    "gitDirty": false,
+    "reason": null,
+    "reproducible": true
+  },
+  "runId": "sample-output-v1",
+  "schemaVersion": "v2",
+  "sourceApplication": {
+    "applied": false,
+    "baselineHashes": {
+      "system": "aacc5210d0fe4482263f69f5f83241cdf9252e44be22a70de08107daec05e639"
+    },
+    "finalHashes": {
+      "system": "aacc5210d0fe4482263f69f5f83241cdf9252e44be22a70de08107daec05e639"
+    },
+    "requested": false
+  },
+  "stage": "complete",
+  "startedAt": "2026-07-30T15:03:37.984886+00:00",
+  "status": "REJECT"
+}
