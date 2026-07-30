@@ -1,0 +1,443 @@
+"""SDK-backed fake, trace and live adapters plus candidate generators."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import inspect
+from copy import deepcopy
+from pathlib import Path
+from typing import Awaitable, Callable, Optional
+
+from trpc_agent_sdk.evaluation import (
+    AgentOptimizer,
+    EvalConfig,
+    EvalSet,
+    EvalSetAggregateResult,
+    EvaluatorRegistry,
+    EvaluateConfig,
+    EvaluateRequest,
+    EvaluateResult,
+    InMemoryEvalSetsManager,
+    InferenceConfig,
+    InferenceRequest,
+    LocalEvalService,
+    RemoteEvalService,
+    TargetPrompt,
+)
+
+from .contracts import CandidateGenerator, EvaluationBackend
+from .models import (
+    AttributionSnapshot,
+    CandidateProposal,
+    CandidateRound,
+    CostSource,
+    Phase,
+    Split,
+)
+from .offline_evaluation import prepare_offline_evaluation
+from .schema import add_exception_note, parse_strict_json
+
+CallAgent = Callable[[str], Awaitable[str]]
+_DEFAULT_APP_NAME = "test_app"
+
+
+async def _evaluate_with_service(
+    eval_set: EvalSet,
+    eval_config: EvalConfig,
+    *,
+    call_agent: Optional[CallAgent],
+    runtime_dir: str,
+    evaluator_registry: Optional[EvaluatorRegistry] = None,
+) -> EvaluateResult:
+    """Compose public eval services and preserve the SDK aggregate contract."""
+
+    dataset = deepcopy(eval_set)
+    config = deepcopy(eval_config)
+    runtime_root = Path(runtime_dir)
+    if not runtime_root.is_dir():
+        raise FileNotFoundError(f"backend audit directory does not exist: {runtime_root}")
+    if config.num_runs < 1:
+        raise ValueError("evaluation num_runs must be at least one")
+
+    app_name = dataset.app_name or _DEFAULT_APP_NAME
+    manager = InMemoryEvalSetsManager()
+    manager.create_eval_set(app_name=app_name, eval_set_id=dataset.eval_set_id)
+    for eval_case in dataset.eval_cases:
+        manager.add_eval_case(
+            app_name=app_name,
+            eval_set_id=dataset.eval_set_id,
+            eval_case=eval_case,
+        )
+
+    if call_agent is None:
+        service = LocalEvalService(
+            root_agent=None,
+            eval_sets_manager=manager,
+            evaluator_registry=evaluator_registry,
+        )
+    else:
+        service = RemoteEvalService(
+            call_agent=call_agent,
+            eval_sets_manager=manager,
+            evaluator_registry=evaluator_registry,
+        )
+
+    inference_results = []
+    inference_request = InferenceRequest(
+        app_name=app_name,
+        eval_set_id=dataset.eval_set_id,
+        inference_config=InferenceConfig(),
+    )
+    for run_id in range(1, config.num_runs + 1):
+        async for inference_result in service.perform_inference(inference_request):
+            inference_result.run_id = run_id
+            inference_results.append(inference_result)
+
+    results_by_case = {}
+    evaluate_request = EvaluateRequest(
+        inference_results=inference_results,
+        evaluate_config=EvaluateConfig(eval_metrics=config.get_eval_metrics()),
+    )
+    async for case_result in service.evaluate(evaluate_request):
+        results_by_case.setdefault(case_result.eval_id, []).append(case_result)
+
+    return EvaluateResult(
+        results_by_eval_set_id={
+            dataset.eval_set_id: EvalSetAggregateResult(
+                eval_results_by_eval_id=results_by_case,
+                num_runs=config.num_runs,
+            )
+        })
+
+
+async def _evaluate_offline(
+    eval_set: EvalSet,
+    eval_config: EvalConfig,
+    *,
+    call_agent: Optional[CallAgent],
+    runtime_dir: str,
+) -> EvaluateResult:
+    """Evaluate using a run-local deterministic replacement registry."""
+
+    offline_config, registry = prepare_offline_evaluation(eval_config)
+    return await _evaluate_with_service(
+        eval_set,
+        offline_config,
+        call_agent=call_agent,
+        runtime_dir=runtime_dir,
+        evaluator_registry=registry,
+    )
+
+
+def _prompt_profile(prompts: dict[str, str]) -> bool:
+    return any("BEHAVIOR_PROFILE=precision-v2" in text for text in prompts.values())
+
+
+def deterministic_fake_response(query: str, prompts: dict[str, str]) -> str:
+    """Offline agent used by the public example; behavior is data-driven, not ID-driven."""
+
+    fields: dict[str, str] = {}
+    for component in query.split(";"):
+        if ":" in component:
+            key, value = component.split(":", 1)
+            fields[key.strip().upper()] = value.strip()
+    behavior = fields.get("BEHAVIOR")
+    answer = fields.get("ANSWER")
+    if behavior not in {"improve", "regress", "stable"} or answer is None:
+        return "INVALID_REQUEST"
+    candidate = _prompt_profile(prompts)
+    if behavior == "improve":
+        return answer if candidate else "INCORRECT"
+    if behavior == "regress":
+        return "INCORRECT" if candidate else answer
+    return answer
+
+
+class FakeEvaluationBackend:
+    """Deterministic evaluator that never reads API credentials or uses the network."""
+
+    async def evaluate(
+        self,
+        *,
+        eval_set: EvalSet,
+        eval_config: EvalConfig,
+        prompts: dict[str, str],
+        split: Split,
+        phase: Phase,
+        audit_dir: str,
+    ) -> EvaluateResult:
+        del split, phase
+        prompt_copy = deepcopy(prompts)
+
+        async def call_agent(query: str) -> str:
+            return deterministic_fake_response(query, prompt_copy)
+
+        return await _evaluate_offline(
+            eval_set,
+            eval_config,
+            call_agent=call_agent,
+            runtime_dir=audit_dir,
+        )
+
+
+class TraceEvaluationBackend:
+    """Replay actual conversations from a hash-pinned fixture through LocalEvalService."""
+
+    def __init__(
+        self,
+        fixture_path: str,
+        dataset_hashes: dict[str, str],
+        fixture_hash: Optional[str] = None,
+    ) -> None:
+        self._fixture_path = Path(fixture_path)
+        self._dataset_hashes = dict(dataset_hashes)
+        if not self._fixture_path.is_file():
+            raise FileNotFoundError(f"trace fixture does not exist: {self._fixture_path}")
+        content = self._fixture_path.read_bytes()
+        actual_hash = hashlib.sha256(content).hexdigest()
+        if fixture_hash is not None and actual_hash != fixture_hash:
+            raise ValueError("trace fixture changed after preflight")
+        self._fixture_hash = actual_hash
+        self._payload = parse_strict_json(content.decode("utf-8"))
+
+    def validate_fixture(self, train: EvalSet, validation: EvalSet) -> None:
+        """Fail before run creation when any pinned trace input has drifted."""
+
+        for phase in Phase:
+            self._trace_eval_set(train, Split.TRAIN, phase)
+            self._trace_eval_set(validation, Split.VALIDATION, phase)
+
+    def _trace_eval_set(self, eval_set: EvalSet, split: Split, phase: Phase) -> EvalSet:
+        payload = self._payload
+        if payload.get("schemaVersion") != "v1":
+            raise ValueError("unsupported trace fixture schemaVersion")
+        recorded_hashes = payload.get("datasetHashes")
+        if recorded_hashes != self._dataset_hashes:
+            raise ValueError("trace fixture dataset hashes do not match validated inputs")
+        try:
+            cases = payload["phases"][phase.value][split.value]
+        except (KeyError, TypeError) as error:
+            raise ValueError(f"trace fixture is missing {phase.value}/{split.value}") from error
+        expected_ids = [case.eval_id for case in eval_set.eval_cases]
+        if not isinstance(cases, dict) or set(cases) != set(expected_ids):
+            raise ValueError("trace fixture case IDs do not match the dataset")
+        raw = eval_set.model_dump(mode="json", by_alias=True, exclude_none=True)
+        for case in raw["evalCases"]:
+            conversation = deepcopy(cases[case["evalId"]])
+            if not isinstance(conversation, list) or not conversation:
+                raise ValueError("each trace fixture conversation must be non-empty")
+            case["evalMode"] = "trace"
+            case["actualConversation"] = conversation
+        return EvalSet.model_validate(raw)
+
+    async def evaluate(
+        self,
+        *,
+        eval_set: EvalSet,
+        eval_config: EvalConfig,
+        prompts: dict[str, str],
+        split: Split,
+        phase: Phase,
+        audit_dir: str,
+    ) -> EvaluateResult:
+        del prompts
+        traced = self._trace_eval_set(deepcopy(eval_set), split, phase)
+        return await _evaluate_offline(
+            traced,
+            eval_config,
+            call_agent=None,
+            runtime_dir=audit_dir,
+        )
+
+
+class LiveEvaluationBackend:
+    """Run an injected async business callback through RemoteEvalService."""
+
+    def __init__(self, call_agent: CallAgent) -> None:
+        if not inspect.iscoroutinefunction(call_agent):
+            raise TypeError("live call_agent must be an async function")
+        self._call_agent = call_agent
+
+    async def evaluate(
+        self,
+        *,
+        eval_set: EvalSet,
+        eval_config: EvalConfig,
+        prompts: dict[str, str],
+        split: Split,
+        phase: Phase,
+        audit_dir: str,
+    ) -> EvaluateResult:
+        del prompts, split, phase
+        return await _evaluate_with_service(
+            eval_set,
+            eval_config,
+            call_agent=self._call_agent,
+            runtime_dir=audit_dir,
+        )
+
+
+class DeterministicCandidateGenerator:
+    """Generate one auditable candidate solely from inner-train failure facts."""
+
+    async def generate(
+        self,
+        *,
+        target_prompt: TargetPrompt,
+        baseline_prompts: dict[str, str],
+        train_attribution: AttributionSnapshot,
+        inner_train_path: str,
+        inner_selection_path: str,
+        config_path: str,
+        output_dir: str,
+    ) -> CandidateProposal:
+        del inner_train_path, inner_selection_path, config_path, output_dir
+        if set(target_prompt.names()) != set(baseline_prompts):
+            raise ValueError("candidate target fields do not match baseline prompts")
+        changed = bool(train_attribution.failures)
+        prompts = dict(baseline_prompts)
+        rounds: tuple[CandidateRound, ...] = ()
+        if changed:
+            for name in prompts:
+                prompts[name] = prompts[name].rstrip() + "\n\nBEHAVIOR_PROFILE=precision-v2\n"
+            rounds = (CandidateRound(
+                round=1,
+                candidate_prompts=prompts,
+                accepted=True,
+                score=1.0,
+                kind="deterministic",
+                optimized_fields=tuple(prompts),
+                acceptance_reason="deterministic failure-attribution rewrite",
+                cost_usd=0,
+            ), )
+        proposal = CandidateProposal(
+            algorithm="deterministic_failure_rewrite",
+            baseline_prompts=dict(baseline_prompts),
+            prompts=prompts,
+            changed=changed,
+            stop_reason="completed",
+            rounds=rounds,
+            cost_sources=(CostSource(name="deterministic", cost_usd=0, model_calls=0, metric_calls=0), ),
+            duration_seconds=0,
+        )
+        return CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
+
+
+class LiveCandidateGenerator:
+    """Adapt AgentOptimizer output into the strict candidate-only contract."""
+
+    def __init__(self, call_agent: CallAgent, *, verbose: int = 0) -> None:
+        if not inspect.iscoroutinefunction(call_agent):
+            raise TypeError("live call_agent must be an async function")
+        self._call_agent = call_agent
+        self._verbose = verbose
+
+    async def generate(
+        self,
+        *,
+        target_prompt: TargetPrompt,
+        baseline_prompts: dict[str, str],
+        train_attribution: AttributionSnapshot,
+        inner_train_path: str,
+        inner_selection_path: str,
+        config_path: str,
+        output_dir: str,
+    ) -> CandidateProposal:
+        del train_attribution
+        optimize_task = asyncio.create_task(
+            AgentOptimizer.optimize(
+                config_path=config_path,
+                call_agent=self._call_agent,
+                target_prompt=target_prompt,
+                train_dataset_path=inner_train_path,
+                validation_dataset_path=inner_selection_path,
+                output_dir=output_dir,
+                update_source=False,
+                verbose=self._verbose,
+            ))
+        try:
+            result = await asyncio.shield(optimize_task)
+        except asyncio.CancelledError as cancellation:
+            stop_path = Path(output_dir) / "optimize.stop"
+            try:
+                stop_path.parent.mkdir(parents=True, exist_ok=True)
+                stop_path.write_text("cancel requested\n", encoding="utf-8")
+            except OSError as stop_error:
+                add_exception_note(
+                    cancellation,
+                    f"could not request optimizer stop: {stop_error}",
+                )
+            try:
+                await optimize_task
+            except BaseException as shutdown_error:
+                add_exception_note(
+                    cancellation,
+                    f"optimizer shutdown completed with {type(shutdown_error).__name__}: "
+                    f"{shutdown_error}",
+                )
+            raise
+        if result.status == "CANCELED":
+            raise asyncio.CancelledError(result.error_message or "AgentOptimizer canceled")
+        if result.status != "SUCCEEDED":
+            raise RuntimeError(f"AgentOptimizer candidate generation failed: {result.error_message}")
+        rounds = tuple(
+            CandidateRound(
+                round=round_.round,
+                candidate_prompts=dict(round_.candidate_prompts),
+                accepted=round_.accepted,
+                score=(round_.validation_pass_rate if round_.candidate_prompts and not getattr(
+                    round_, "skip_reason", None) and not getattr(round_, "error_message", None) else None),
+                kind=getattr(round_, "kind", "reflective"),
+                optimized_fields=tuple(getattr(round_, "optimized_field_names", ())),
+                metric_scores=dict(getattr(round_, "metric_breakdown", {})),
+                acceptance_reason=getattr(round_, "acceptance_reason", None) or None,
+                skip_reason=getattr(round_, "skip_reason", None),
+                error_message=getattr(round_, "error_message", None),
+                cost_usd=round_.round_llm_cost,
+                token_usage=dict(round_.round_token_usage),
+                duration_seconds=round_.duration_seconds,
+            ) for round_ in result.rounds)
+        proposal = CandidateProposal(
+            algorithm=result.algorithm,
+            baseline_prompts=dict(result.baseline_prompts),
+            prompts=dict(result.best_prompts),
+            changed=result.best_prompts != baseline_prompts,
+            stop_reason=result.stop_reason,
+            rounds=rounds,
+            cost_sources=(
+                CostSource(
+                    name="optimizer_reported",
+                    cost_usd=result.total_llm_cost,
+                    model_calls=result.total_reflection_lm_calls,
+                    token_usage=dict(result.total_token_usage),
+                ),
+                CostSource(name="judge_unreported", cost_usd=None, model_calls=None),
+            ),
+            duration_seconds=result.duration_seconds,
+        )
+        return CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
+
+
+def create_backends(
+    mode: str,
+    *,
+    call_agent: Optional[CallAgent] = None,
+    trace_fixture_path: Optional[str] = None,
+    trace_fixture_hash: Optional[str] = None,
+    dataset_hashes: Optional[dict[str, str]] = None,
+) -> tuple[EvaluationBackend, CandidateGenerator]:
+    if mode == "fake":
+        return FakeEvaluationBackend(), DeterministicCandidateGenerator()
+    if mode == "trace":
+        if not trace_fixture_path or dataset_hashes is None:
+            raise ValueError("trace mode requires a fixture path and dataset hashes")
+        return (
+            TraceEvaluationBackend(trace_fixture_path, dataset_hashes, trace_fixture_hash),
+            DeterministicCandidateGenerator(),
+        )
+    if mode == "live":
+        if call_agent is None:
+            raise ValueError("live mode requires call_agent")
+        return LiveEvaluationBackend(call_agent), LiveCandidateGenerator(call_agent)
+    raise ValueError(f"unsupported mode: {mode!r}")

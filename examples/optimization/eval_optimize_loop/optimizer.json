@@ -1,0 +1,82 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metricName": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "finalResponse": {
+            "text": {
+              "match": "exact",
+              "caseInsensitive": false
+            }
+          }
+        }
+      }
+    ],
+    "numRuns": 1
+  },
+  "optimize": {
+    "evalCaseParallelism": 1,
+    "stop": {
+      "requiredMetrics": "all"
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 42,
+      "reflectionLm": {
+        "modelName": "${TRPC_AGENT_MODEL_NAME}",
+        "baseUrl": "${TRPC_AGENT_BASE_URL}",
+        "apiKey": "${TRPC_AGENT_API_KEY}",
+        "generationConfig": {
+          "maxTokens": 1024,
+          "temperature": 0.2
+        }
+      },
+      "reflectionMinibatchSize": 2,
+      "skipPerfectScore": false,
+      "maxMetricCalls": 12
+    }
+  },
+  "pipeline": {
+    "mode": "fake",
+    "seed": 42,
+    "innerSelectionRatio": 0.34,
+    "applyCandidate": false,
+    "artifactRoot": "artifacts",
+    "traceFixture": "traces/trace_cases.json",
+    "maxImportFiles": 256,
+    "maxImportFileBytes": 5242880,
+    "maxImportTotalBytes": 26214400,
+    "promptPaths": {
+      "system": "prompts/system.md"
+    },
+    "criticalCaseIds": [
+      "validation_stable"
+    ],
+    "hardCaseIds": [
+      "validation_regress"
+    ],
+    "metricWeights": {
+      "final_response_avg_score": 1.0
+    },
+    "attribution": {
+      "metricCategories": {
+        "final_response_avg_score": "FINAL_RESPONSE_MISMATCH"
+      }
+    },
+    "gate": {
+      "minValidationScoreDelta": 0.05,
+      "minValidationPassRateDelta": 0.0,
+      "maxNewHardFailures": 0,
+      "criticalCaseMinDelta": 0.0,
+      "metricMaxRegression": {
+        "final_response_avg_score": 0.0
+      },
+      "maxCostUsd": null,
+      "maxDurationSeconds": 180.0,
+      "epsilon": 1e-09,
+      "overfitGuard": true
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "evalSetId": "eval_optimize_loop_validation",
+  "name": "Held-out deterministic regression cases",
+  "evalCases": [
+    {
+      "evalId": "validation_improve",
+      "conversation": [
+        {
+          "invocationId": "validation-input-1",
+          "userContent": {
+            "role": "user",
+            "parts": [{"text": "BEHAVIOR:improve; ANSWER:GAMMA"}]
+          },
+          "finalResponse": {
+            "role": "model",
+            "parts": [{"text": "GAMMA"}]
+          }
+        }
+      ],
+      "sessionInput": {"appName": "eval_optimize_loop", "userId": "example", "state": {}}
+    },
+    {
+      "evalId": "validation_regress",
+      "conversation": [
+        {
+          "invocationId": "validation-input-2",
+          "userContent": {
+            "role": "user",
+            "parts": [{"text": "BEHAVIOR:regress; ANSWER:DELTA"}]
+          },
+          "finalResponse": {
+            "role": "model",
+            "parts": [{"text": "DELTA"}]
+          }
+        }
+      ],
+      "sessionInput": {"appName": "eval_optimize_loop", "userId": "example", "state": {}}
+    },
+    {
+      "evalId": "validation_stable",
+      "conversation": [
+        {
+          "invocationId": "validation-input-3",
+          "userContent": {
+            "role": "user",
+            "parts": [{"text": "BEHAVIOR:stable; ANSWER:OMEGA"}]
+          },
+          "finalResponse": {
+            "role": "model",
+            "parts": [{"text": "OMEGA"}]
+          }
+        }
+      ],
+      "sessionInput": {"appName": "eval_optimize_loop", "userId": "example", "state": {}}
+    }
+  ]
+}

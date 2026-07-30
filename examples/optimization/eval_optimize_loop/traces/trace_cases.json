@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "v1",
+  "datasetHashes": {
+    "train": "db8df56423d916afa929a2fc1a6f7245d8a1f719e87ac292f88f346d1cb81789",
+    "validation": "499d3bde9cdc70cc4871d425d0dfee83ed30a67d35da15a4eb87cc9549583f84"
+  },
+  "phases": {
+    "baseline": {
+      "train": {
+        "train_improve_alpha": [
+          {
+            "invocationId": "trace-baseline-train-1",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:improve; ANSWER:ALPHA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "INCORRECT"}]}
+          }
+        ],
+        "train_improve_beta": [
+          {
+            "invocationId": "trace-baseline-train-2",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:improve; ANSWER:BETA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "INCORRECT"}]}
+          }
+        ],
+        "train_stable": [
+          {
+            "invocationId": "trace-baseline-train-3",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:stable; ANSWER:ELEVEN"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "ELEVEN"}]}
+          }
+        ]
+      },
+      "validation": {
+        "validation_improve": [
+          {
+            "invocationId": "trace-baseline-validation-1",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:improve; ANSWER:GAMMA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "INCORRECT"}]}
+          }
+        ],
+        "validation_regress": [
+          {
+            "invocationId": "trace-baseline-validation-2",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:regress; ANSWER:DELTA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "DELTA"}]}
+          }
+        ],
+        "validation_stable": [
+          {
+            "invocationId": "trace-baseline-validation-3",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:stable; ANSWER:OMEGA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "OMEGA"}]}
+          }
+        ]
+      }
+    },
+    "candidate": {
+      "train": {
+        "train_improve_alpha": [
+          {
+            "invocationId": "trace-candidate-train-1",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:improve; ANSWER:ALPHA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "ALPHA"}]}
+          }
+        ],
+        "train_improve_beta": [
+          {
+            "invocationId": "trace-candidate-train-2",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:improve; ANSWER:BETA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "BETA"}]}
+          }
+        ],
+        "train_stable": [
+          {
+            "invocationId": "trace-candidate-train-3",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:stable; ANSWER:ELEVEN"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "ELEVEN"}]}
+          }
+        ]
+      },
+      "validation": {
+        "validation_improve": [
+          {
+            "invocationId": "trace-candidate-validation-1",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:improve; ANSWER:GAMMA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "GAMMA"}]}
+          }
+        ],
+        "validation_regress": [
+          {
+            "invocationId": "trace-candidate-validation-2",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:regress; ANSWER:DELTA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "INCORRECT"}]}
+          }
+        ],
+        "validation_stable": [
+          {
+            "invocationId": "trace-candidate-validation-3",
+            "userContent": {"role": "user", "parts": [{"text": "BEHAVIOR:stable; ANSWER:OMEGA"}]},
+            "finalResponse": {"role": "model", "parts": [{"text": "OMEGA"}]}
+          }
+        ]
+      }
+    }
+  }
+}

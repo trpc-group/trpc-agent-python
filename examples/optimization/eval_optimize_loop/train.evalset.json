@@ -1,0 +1,57 @@
+{
+  "evalSetId": "eval_optimize_loop_train",
+  "name": "Deterministic inner optimization training cases",
+  "evalCases": [
+    {
+      "evalId": "train_improve_alpha",
+      "conversation": [
+        {
+          "invocationId": "train-input-1",
+          "userContent": {
+            "role": "user",
+            "parts": [{"text": "BEHAVIOR:improve; ANSWER:ALPHA"}]
+          },
+          "finalResponse": {
+            "role": "model",
+            "parts": [{"text": "ALPHA"}]
+          }
+        }
+      ],
+      "sessionInput": {"appName": "eval_optimize_loop", "userId": "example", "state": {}}
+    },
+    {
+      "evalId": "train_improve_beta",
+      "conversation": [
+        {
+          "invocationId": "train-input-2",
+          "userContent": {
+            "role": "user",
+            "parts": [{"text": "BEHAVIOR:improve; ANSWER:BETA"}]
+          },
+          "finalResponse": {
+            "role": "model",
+            "parts": [{"text": "BETA"}]
+          }
+        }
+      ],
+      "sessionInput": {"appName": "eval_optimize_loop", "userId": "example", "state": {}}
+    },
+    {
+      "evalId": "train_stable",
+      "conversation": [
+        {
+          "invocationId": "train-input-3",
+          "userContent": {
+            "role": "user",
+            "parts": [{"text": "BEHAVIOR:stable; ANSWER:ELEVEN"}]
+          },
+          "finalResponse": {
+            "role": "model",
+            "parts": [{"text": "ELEVEN"}]
+          }
+        }
+      ],
+      "sessionInput": {"appName": "eval_optimize_loop", "userId": "example", "state": {}}
+    }
+  ]
+}
