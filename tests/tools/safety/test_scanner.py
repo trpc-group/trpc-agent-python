@@ -300,6 +300,18 @@ def test_socket_connection_to_allowlisted_raw_hostname_is_allowed():
     assert "NETWORK_DOMAIN_NOT_ALLOWED" not in report.rule_ids
 
 
+def test_socket_connection_with_malformed_target_fails_closed():
+    scanner = ToolScriptSafetyScanner(ToolSafetyPolicy(allowed_domains=["api.example.com"]))
+
+    report = scanner.scan(_request(
+        "import socket\nsocket.connect(('[invalid', 443))",
+        ScriptLanguage.PYTHON,
+    ))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "NETWORK_DOMAIN_NOT_ALLOWED" in report.rule_ids
+
+
 @pytest.mark.parametrize(
     ("content", "language", "rule_id"),
     [
