@@ -173,6 +173,55 @@ async def test_program_runner_allows_safe_command():
 
 
 @pytest.mark.asyncio
+async def test_program_runner_models_bash_positional_zero_separately_from_argv():
+    delegate = FakeProgramRunner()
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(), RecordingAuditSink()),
+    )
+
+    result = await runner.run_program(
+        WorkspaceInfo(id="ws", path="/tmp/work"),
+        WorkspaceRunProgramSpec(
+            cmd="bash",
+            args=[
+                "-c",
+                'cat "$1"',
+                "/etc/shadow",
+                "/tmp/safe-one",
+            ],
+            cwd="/tmp/work",
+        ),
+    )
+
+    assert result.exit_code == 0
+    assert delegate.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_program_runner_blocks_sensitive_bash_positional_zero_when_used():
+    delegate = FakeProgramRunner()
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(), RecordingAuditSink()),
+    )
+
+    result = await runner.run_program(
+        WorkspaceInfo(id="ws", path="/tmp/work"),
+        WorkspaceRunProgramSpec(
+            cmd="bash",
+            args=["-c", 'echo "$0"', "--api-key=super-secret-value"],
+            cwd="/tmp/work",
+        ),
+    )
+
+    assert result.exit_code == 126
+    assert '"rule_id":"SECRET-001"' in result.stderr
+    assert "super-secret-value" not in result.stderr
+    assert delegate.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_program_runner_scans_provider_environment_before_delegate():
     sink = RecordingAuditSink()
     delegate = FakeProgramRunner(
@@ -559,6 +608,7 @@ async def test_code_executor_enforces_policy_timeout_on_delegate():
 
     assert result.outcome == Outcome.OUTCOME_FAILED
     assert "exceeded the tool safety policy timeout" in result.output
+    assert "only the runtime or sandbox can guarantee process termination" in result.output
     assert delegate.calls == 1
     assert len(sink.events) == 1
 

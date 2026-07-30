@@ -85,7 +85,9 @@ _SYSTEM_PATHS = (
     Path("/lib"),
     Path("/Library"),
     Path("/private/etc"),
+    Path("/proc"),
     Path("/sbin"),
+    Path("/sys"),
     Path("/System"),
     Path("/usr"),
     Path("/var"),
@@ -93,6 +95,7 @@ _SYSTEM_PATHS = (
 _SAFE_SYSTEM_WRITE_PATHS = {
     Path("/dev/null"),
 }
+_LOCAL_BINDING_PREFIX = "__local__."
 _NETWORK_FUNCTIONS = {
     "requests.get",
     "requests.post",
@@ -587,7 +590,13 @@ class SafetyScanner:
         ambiguous_names = self._ambiguous_bindings(tree, parent)
         conditional_names = self._conditional_bindings(tree, parent)
         stable_constants = {name: value for name, value in constants.items() if name not in ambiguous_names}
-        sensitive_names = self._sensitive_assignments(tree, aliases)
+        initial_sensitive_names = ({_SENSITIVE_ARGV_SENTINEL} if any(
+            self._argument_contains_secret(value) for value in request.argv) else set())
+        sensitive_names = self._sensitive_assignments(
+            tree,
+            aliases,
+            initial_sensitive_names,
+        )
         sensitive_network_clients = self._sensitive_network_clients(
             tree,
             aliases,
@@ -602,8 +611,6 @@ class SafetyScanner:
             aliases,
             set(functions),
         )
-        if any(self._argument_contains_secret(value) for value in request.argv):
-            sensitive_names.add(_SENSITIVE_ARGV_SENTINEL)
         findings: list[SafetyFinding] = []
         unknowns: list[str] = []
         nested_statuses: list[AnalysisStatus] = []
@@ -653,6 +660,7 @@ class SafetyScanner:
             if called_name in conditional_names:
                 node_aliases.pop(called_name, None)
             call_name = _call_name(node.func, node_aliases)
+            has_import_or_alias_provenance = called_name is None or called_name in node_aliases
             if called_name in conditional_names or self._argument_names(node) & ambiguous_names:
                 self._append_node(findings, "PROC-003", node, request.content)
             if self._has_unknown_callable_lookup(node.func):
@@ -677,6 +685,7 @@ class SafetyScanner:
                 call_name,
                 request,
                 stable_constants,
+                has_import_or_alias_provenance,
             )
             self._check_python_process(
                 findings,
@@ -810,7 +819,15 @@ class SafetyScanner:
             child_aliases = call_aliases.get(id(child), aliases)
             child_name = _call_name(child.func, child_aliases)
             self._check_python_file(findings, child, child_name, request, resolved)
-            self._check_python_network(findings, child, child_name, request, resolved)
+            child_root = self._root_name(child.func)
+            self._check_python_network(
+                findings,
+                child,
+                child_name,
+                request,
+                resolved,
+                child_root is None or child_root in child_aliases,
+            )
             self._check_python_process(
                 findings,
                 child,
@@ -883,6 +900,9 @@ class SafetyScanner:
             str(index)
             for index, value in enumerate(request.argv, start=1) if self._argument_contains_secret(value)
         }
+        positional_zero = request.metadata.get("bash_positional_zero")
+        if positional_zero is not None and self._argument_contains_secret(positional_zero):
+            sensitive_env_names.add("0")
         sensitive_env_names.update(sensitive_argv)
         if sensitive_argv:
             sensitive_env_names.update({"*", "@"})
@@ -896,6 +916,8 @@ class SafetyScanner:
 
         resolved_env = dict(request.env)
         resolved_env.update(analysis.assignments)
+        if positional_zero is not None:
+            resolved_env["0"] = positional_zero
         resolved_env.update({str(index): value for index, value in enumerate(request.argv, start=1)})
         resolved_request = request.model_copy(update={"env": resolved_env})
         nested_statuses: list[AnalysisStatus] = []
@@ -903,7 +925,7 @@ class SafetyScanner:
             tokens = list(command.tokens)
             if len(tokens) == 1 and re.fullmatch(r"\d+", tokens[0]):
                 continue
-            if index == 0 and request.argv:
+            if (index == 0 and request.argv and request.metadata.get("bash_positional_arguments") != "true"):
                 tokens.extend(request.argv)
             if command.has_indirect_expansion:
                 self._append(
@@ -1076,6 +1098,7 @@ class SafetyScanner:
         call_name: str,
         request: SafetyScanRequest,
         constants: dict[str, str],
+        has_import_or_alias_provenance: bool,
     ) -> bool:
         network_methods = {
             "delete",
@@ -1088,14 +1111,16 @@ class SafetyScanner:
             "request",
         }
         method = call_name.rsplit(".", 1)[-1]
-        is_network = (call_name in _NETWORK_FUNCTIONS or call_name.startswith(
+        is_network = has_import_or_alias_provenance and (call_name in _NETWORK_FUNCTIONS or call_name.startswith(
             ("aiohttp.", "httpx.", "requests.")) and method in network_methods)
         if not is_network and isinstance(node.func, ast.Attribute) and node.func.attr in network_methods:
-            known_client = call_name.startswith(("aiohttp.", "httpx.", "requests."))
+            known_client = (has_import_or_alias_provenance and call_name.startswith(
+                ("aiohttp.", "httpx.", "requests.")))
             is_network = known_client
-        is_socket_connect = (call_name.endswith(".connect") and bool(node.args)
+        is_socket_connect = (has_import_or_alias_provenance and call_name.endswith(".connect") and bool(node.args)
                              and isinstance(node.args[0], (ast.Tuple, ast.List)))
-        if call_name in {"socket.socket", "socket.create_connection"} or is_socket_connect:
+        if (has_import_or_alias_provenance
+                and call_name in {"socket.socket", "socket.create_connection"}) or is_socket_connect:
             is_network = True
         if not is_network:
             return False
@@ -2815,6 +2840,19 @@ class SafetyScanner:
             scope = cls._lexical_scope(node, parent, module)
             aliases: dict[str, str] = {}
             for binding_scope in cls._scope_chain(node, parent, module):
+                if isinstance(binding_scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                    arguments = binding_scope.args
+                    parameters = [
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    ]
+                    if arguments.vararg is not None:
+                        parameters.append(arguments.vararg)
+                    if arguments.kwarg is not None:
+                        parameters.append(arguments.kwarg)
+                    for parameter in parameters:
+                        aliases[parameter.arg] = f"{_LOCAL_BINDING_PREFIX}{parameter.arg}"
                 aliases.update(imports_by_scope.get(id(binding_scope), {}))
                 assignments = sorted(
                     assignments_by_scope.get(id(binding_scope), []),
@@ -2964,10 +3002,15 @@ class SafetyScanner:
             if resolved and resolved != name:
                 aliases[name] = resolved
             else:
-                aliases.pop(name, None)
+                aliases[name] = f"{_LOCAL_BINDING_PREFIX}{name}"
 
-    def _sensitive_assignments(self, tree: ast.AST, aliases: dict[str, str]) -> set[str]:
-        result: set[str] = set()
+    def _sensitive_assignments(
+        self,
+        tree: ast.AST,
+        aliases: dict[str, str],
+        initial: set[str] | None = None,
+    ) -> set[str]:
+        result = set(initial or ())
         for node in ast.walk(tree):
             if not isinstance(node, (ast.Assign, ast.AnnAssign)):
                 continue
@@ -3201,6 +3244,10 @@ class SafetyScanner:
     ) -> bool:
         if node is None:
             return False
+        if (isinstance(node, ast.Call) and _call_name(node.func, aliases) == "len" and len(node.args) == 1
+                and not node.keywords):
+            return False
+        parent = {child: owner for owner in ast.walk(node) for child in ast.iter_child_nodes(owner)}
         for child in ast.walk(node):
             if isinstance(child, ast.Dict):
                 for key, value in zip(child.keys, child.values):
@@ -3214,6 +3261,15 @@ class SafetyScanner:
                     return True
             if isinstance(child, ast.Name) and child.id in sensitive_names:
                 return True
+            if isinstance(child, (ast.Name, ast.Attribute)):
+                name = _call_name(child, aliases)
+                owner = parent.get(child)
+                is_subscript_owner = isinstance(owner, ast.Subscript) and owner.value is child
+                is_get_owner = (isinstance(owner, ast.Attribute) and owner.value is child and owner.attr == "get")
+                if name in {"os.environ", "environ"} and not is_subscript_owner and not is_get_owner:
+                    return True
+                if (name == "sys.argv" and _SENSITIVE_ARGV_SENTINEL in sensitive_names and not is_subscript_owner):
+                    return True
             if isinstance(child, ast.Subscript):
                 name = _call_name(child.value, aliases)
                 key = _literal_string(child.slice)
@@ -3334,6 +3390,8 @@ class SafetyScanner:
 
     def _is_sensitive_path(self, value: str, cwd: str | None) -> bool:
         path = self._normalize_path(value, cwd)
+        if len(path.parts) >= 3 and path.parts[1] == "proc" and path.name == "environ":
+            return True
         for denied in self.policy.paths.denied:
             denied_expanded = Path(os.path.expanduser(denied))
             if denied == ".env":

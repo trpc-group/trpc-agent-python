@@ -1207,7 +1207,7 @@ def test_no_findings_uses_none_risk_level():
         ),
         (
             ScriptLanguage.BASH,
-            "\n".join(f"value_{index}={index}" for index in range(500)),
+            "\n".join(f"echo value_{index}" for index in range(500)),
         ),
     ],
 )
@@ -1227,10 +1227,10 @@ def test_bash_language_lifetime_survives_fresh_process_scans():
     probe = ("from trpc_agent_sdk.tools.safety import SafetyScanRequest, "
              "SafetyScanner, ScriptLanguage; "
              "report = SafetyScanner().scan(SafetyScanRequest("
-             "content='echo ok\\\\n' * 500, language=ScriptLanguage.BASH)); "
+             "content='echo ok\\n' * 500, language=ScriptLanguage.BASH)); "
              "raise SystemExit(0 if report.decision.value == 'allow' else 1)")
 
-    for _ in range(3):
+    for _ in range(10):
         completed = subprocess.run(
             [sys.executable, "-c", probe],
             check=False,
@@ -2089,3 +2089,142 @@ def test_local_get_method_is_not_mistaken_for_an_http_client():
 
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert "NET-001" not in {finding.rule_id for finding in report.findings}
+
+
+def test_local_class_named_requests_is_not_mistaken_for_imported_module():
+    report = _scan(
+        "class requests:\n"
+        "    @staticmethod\n"
+        "    def get(value):\n"
+        "        return value\n"
+        'print(requests.get("hello"))',
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert not {"NET-001", "NET-002"} & {finding.rule_id for finding in report.findings}
+
+
+def test_function_parameter_shadows_imported_network_module():
+    report = _scan(
+        "import requests\n"
+        "class Safe:\n"
+        "    def get(self, value):\n"
+        "        return value\n"
+        "def render(requests):\n"
+        "    return requests.get('hello')\n"
+        "print(render(Safe()))",
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert not {"NET-001", "NET-002"} & {finding.rule_id for finding in report.findings}
+
+
+def test_function_parameter_shadows_imported_process_module():
+    report = _scan(
+        "import os\n"
+        "class Safe:\n"
+        "    def system(self, value):\n"
+        "        return value\n"
+        "def render(os):\n"
+        "    return os.system('hello')\n"
+        "print(render(Safe()))",
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "PROC-001" not in {finding.rule_id for finding in report.findings}
+
+
+def test_local_connect_method_is_not_mistaken_for_a_socket():
+    report = _scan(
+        "class Client:\n"
+        "    def connect(self, target):\n"
+        "        return target\n"
+        "print(Client().connect(('evil.example', 443)))",
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "NET-001" not in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    ("content", "kwargs"),
+    [
+        ("import os\nprint(len(os.environ))", {}),
+        (
+            "import sys\nprint(len(sys.argv))",
+            {
+                "argv": ["--token=super-secret-value"]
+            },
+        ),
+    ],
+)
+def test_secret_container_length_does_not_leak_values(content, kwargs):
+    report = _scan(content, ScriptLanguage.PYTHON, **kwargs)
+
+    assert report.decision == SafetyDecision.ALLOW
+
+
+@pytest.mark.parametrize(
+    ("content", "kwargs"),
+    [
+        ("import os\nprint(os.environ)", {}),
+        (
+            "import sys\nprint(sys.argv)",
+            {
+                "argv": ["--api_key=super-secret-value"]
+            },
+        ),
+        (
+            "import os\nvalues = os.environ.copy()\nprint(values)",
+            {},
+        ),
+        (
+            "import sys\nvalues = sys.argv[:]\nprint(values)",
+            {
+                "argv": ["--token=super-secret-value"]
+            },
+        ),
+    ],
+)
+def test_whole_environment_or_argv_cannot_flow_to_output(content, kwargs):
+    report = _scan(content, ScriptLanguage.PYTHON, **kwargs)
+
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET-001" in {finding.rule_id for finding in report.findings}
+    assert "super-secret-value" not in report.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    ("content", "language", "rule_id"),
+    [
+        (
+            'print(open("/proc/self/environ").read())',
+            ScriptLanguage.PYTHON,
+            "FILE-003",
+        ),
+        (
+            "cat /proc/1/environ",
+            ScriptLanguage.BASH,
+            "FILE-003",
+        ),
+        (
+            'open("/proc/sys/kernel/core_pattern", "w").write("x")',
+            ScriptLanguage.PYTHON,
+            "FILE-004",
+        ),
+        (
+            'open("/sys/kernel/uevent_helper", "w").write("x")',
+            ScriptLanguage.PYTHON,
+            "FILE-004",
+        ),
+    ],
+)
+def test_procfs_secrets_and_kernel_control_paths_are_blocked(content, language, rule_id):
+    report = _scan(content, language)
+
+    assert report.decision == SafetyDecision.DENY
+    assert rule_id in {finding.rule_id for finding in report.findings}

@@ -23,7 +23,7 @@ google-genai>=1.24.0
 # Test Tools
 rapidfuzz>=3.0.0
 docker
-tree-sitter>=0.25,<0.27
+tree-sitter>=0.25,<0.26
 tree-sitter-bash>=0.25,<0.26
 
 # Test Cube/E2B code executor

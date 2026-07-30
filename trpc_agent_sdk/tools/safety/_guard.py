@@ -259,7 +259,11 @@ class GuardedProgramRunner(BaseProgramRunner):
         )
         if callable(apply_provider_env):
             effective_spec = apply_provider_env(effective_spec, ctx)
-        content, argv = self._program_content(effective_spec)
+        content, argv, positional_zero = self._program_content(effective_spec)
+        metadata = {"workspace_id": ws.id}
+        if positional_zero is not None:
+            metadata["bash_positional_zero"] = positional_zero
+            metadata["bash_positional_arguments"] = "true"
         try:
             request = SafetyScanRequest(
                 content=content,
@@ -269,7 +273,7 @@ class GuardedProgramRunner(BaseProgramRunner):
                 env=effective_spec.env,
                 timeout_seconds=effective_timeout,
                 tool_name=self._tool_name,
-                metadata={"workspace_id": ws.id},
+                metadata=metadata,
             )
         except (TypeError, ValueError):
             report = self._guard.invalid_request(
@@ -294,11 +298,12 @@ class GuardedProgramRunner(BaseProgramRunner):
         return result.model_copy(update={"stdout": stdout, "stderr": stderr})
 
     @staticmethod
-    def _program_content(spec: WorkspaceRunProgramSpec) -> tuple[str, list[str]]:
+    def _program_content(spec: WorkspaceRunProgramSpec) -> tuple[str, list[str], str | None]:
         command = spec.cmd.rsplit("/", 1)[-1]
         if command in {"bash", "sh", "zsh"} and len(spec.args) >= 2 and spec.args[0] in {"-c", "-lc"}:
-            return spec.args[1], spec.args[2:]
-        return shlex.quote(spec.cmd), spec.args
+            positional_zero = spec.args[2] if len(spec.args) >= 3 else command
+            return spec.args[1], spec.args[3:], positional_zero
+        return shlex.quote(spec.cmd), spec.args, None
 
 
 class GuardedCodeExecutor(BaseCodeExecutor):
@@ -430,7 +435,9 @@ class GuardedCodeExecutor(BaseCodeExecutor):
             return CodeExecutionResult(
                 outcome=Outcome.OUTCOME_FAILED,
                 output=("Code execution exceeded the tool safety policy timeout "
-                        f"of {self.guard.policy.limits.max_timeout_seconds:g}s"),
+                        f"of {self.guard.policy.limits.max_timeout_seconds:g}s; "
+                        "cancellation was requested, but only the runtime or sandbox "
+                        "can guarantee process termination"),
             )
         result = task.result()
         limit = self.guard.policy.limits.max_output_size_bytes

@@ -90,7 +90,8 @@ def analyze_bash(content: str) -> BashAnalysis:
     """Parse Bash and return only executable syntax, never comments or raw strings."""
 
     source = content.encode("utf-8")
-    root = _parser().parse(source).root_node
+    tree = _parser().parse(source)
+    root = tree.root_node
     commands: list[BashCommand] = []
     redirects: list[BashRedirect] = []
     assignments: list[tuple[str, str]] = []

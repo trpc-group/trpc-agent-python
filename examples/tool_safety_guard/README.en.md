@@ -180,6 +180,12 @@ indirect code. Use filesystem permissions, network isolation, process and memory
 limits, runtime timeouts, dependency controls, and a sandbox for untrusted
 execution.
 
+`GuardedCodeExecutor` requests cooperative cancellation when its policy
+timeout expires and returns a failed result. A delegate may suppress
+`CancelledError` or leave child processes running, so this request does not
+prove that execution terminated. Only the concrete runtime or sandbox can
+guarantee termination by stopping the process, container, or remote job.
+
 Tool Filters protect `BaseTool.run_async()` calls. CodeExecutor does not
 automatically pass through a Tool Filter, so it needs `GuardedCodeExecutor`.
 Skills execute through a program runner and need `GuardedProgramRunner`.

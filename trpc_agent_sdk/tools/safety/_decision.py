@@ -114,8 +114,10 @@ def aggregate_report(
         rule_id = "ALLOW-000"
         evidence = "analysis complete; no active policy finding"
         recommendation = "Execute with least privilege and runtime limits."
-    relaxed = any(not override.enabled or override.action == SafetyDecision.ALLOW
-                  for override in policy.rule_overrides.values())
+    relaxed = any(
+        not override.enabled or (override.action is not None and rule_id in RULE_SPECS
+                                 and _ACTION_ORDER[override.action] < _ACTION_ORDER[RULE_SPECS[rule_id].action])
+        for rule_id, override in policy.rule_overrides.items())
     return SafetyReport(
         decision=decision,
         risk_level=risk_level,
