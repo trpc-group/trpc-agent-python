@@ -158,9 +158,7 @@ class EvaluationOptimizationConfigFile(OptimizeConfigFile):
     )
 
 
-def load_evaluation_optimization_config(
-    path: str,
-) -> EvaluationOptimizationConfigFile:
+def load_evaluation_optimization_config(path: str, ) -> EvaluationOptimizationConfigFile:
     """Load and validate a pipeline optimizer JSON configuration."""
     with open(path, "r", encoding="utf-8") as file:
         return EvaluationOptimizationConfigFile.model_validate_json(file.read())

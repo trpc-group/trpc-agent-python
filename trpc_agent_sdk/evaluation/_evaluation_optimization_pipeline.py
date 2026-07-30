@@ -242,13 +242,10 @@ class EvaluationOptimizationPipeline:
         finally:
             await target_prompt.write_all(baseline_prompts)
 
-        evaluation_case_runs = (
-            baseline_train.case_run_count
-            + baseline_validation.case_run_count
-            + sum(train.case_run_count + validation.case_run_count for _, train, validation, _ in evaluated)
-        )
-        estimated_evaluation_cost = _rounded(
-            evaluation_case_runs * config.pipeline.evaluation_case_cost_usd)
+        evaluation_case_runs = (baseline_train.case_run_count + baseline_validation.case_run_count +
+                                sum(train.case_run_count + validation.case_run_count
+                                    for _, train, validation, _ in evaluated))
+        estimated_evaluation_cost = _rounded(evaluation_case_runs * config.pipeline.evaluation_case_cost_usd)
         total_cost = _rounded(optimize_result.total_llm_cost + estimated_evaluation_cost)
 
         rounds: list[CandidateRoundReport] = []
@@ -333,8 +330,7 @@ class EvaluationOptimizationPipeline:
                 source_updated=False,
                 inputs=inputs,
                 prompt_inputs=prompt_inputs,
-                config_snapshot=_redact(
-                    config.model_dump(mode="json", by_alias=True)),
+                config_snapshot=_redact(config.model_dump(mode="json", by_alias=True)),
             ),
         )
 
