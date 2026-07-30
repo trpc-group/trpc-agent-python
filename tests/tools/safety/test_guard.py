@@ -69,6 +69,17 @@ class FakeProgramRunner(BaseProgramRunner):
         return self.result
 
 
+class SlowProgramRunner(FakeProgramRunner):
+
+    @override
+    async def run_program(self, ws, spec, ctx=None):
+        del ws, ctx
+        self.calls += 1
+        self.specs.append(spec)
+        await asyncio.sleep(1)
+        return self.result
+
+
 class FakeCodeExecutor(BaseCodeExecutor):
     calls: int = 0
     last_input: CodeExecutionInput | None = None
@@ -134,6 +145,33 @@ async def test_program_runner_blocks_shell_payload_before_delegate():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-e", "-c", "rm -rf /"],
+        ["--norc", "-c", "rm -rf /"],
+        ["--rcfile", "/tmp/bashrc", "-c", "rm -rf /"],
+    ],
+)
+async def test_program_runner_scans_shell_payload_after_interpreter_options(args):
+    delegate = FakeProgramRunner()
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(), RecordingAuditSink()),
+        tool_name="SkillRun",
+    )
+
+    result = await runner.run_program(
+        WorkspaceInfo(id="ws", path="/tmp/work"),
+        WorkspaceRunProgramSpec(cmd="bash", args=args, cwd="/tmp/work"),
+    )
+
+    assert result.exit_code == 126
+    assert '"rule_id":"FILE-001"' in result.stderr
+    assert delegate.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_real_local_workspace_runner_is_blocked_before_process_creation(tmp_path):
     runtime = create_local_workspace_runtime(work_root=str(tmp_path))
     runner = GuardedProgramRunner(
@@ -170,6 +208,34 @@ async def test_program_runner_allows_safe_command():
     assert len(sink.events) == 1
     assert delegate.specs[0].timeout == 30
     assert spec.timeout == 0
+
+
+@pytest.mark.asyncio
+async def test_program_runner_enforces_policy_timeout_on_delegate():
+    sink = RecordingAuditSink()
+    delegate = SlowProgramRunner()
+    policy = SafetyPolicy.model_validate({
+        "limits": {
+            "max_timeout_seconds": 0.01,
+        },
+    })
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(policy), sink),
+        tool_name="SkillRun",
+    )
+
+    result = await runner.run_program(
+        WorkspaceInfo(id="ws", path="/tmp/work"),
+        WorkspaceRunProgramSpec(cmd="echo", args=["hello"], cwd="/tmp/work"),
+    )
+
+    assert result.exit_code == 124
+    assert result.timed_out is True
+    assert "exceeded the tool safety policy timeout" in result.stderr
+    assert "only the runtime or sandbox can guarantee process termination" in result.stderr
+    assert delegate.calls == 1
+    assert len(sink.events) == 1
 
 
 @pytest.mark.asyncio

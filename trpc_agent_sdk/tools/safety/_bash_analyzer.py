@@ -51,6 +51,57 @@ class BashAnalysis:
     has_parse_error: bool
 
 
+@dataclass(frozen=True)
+class ShellCommandInvocation:
+    """Inline shell payload and positional arguments extracted from argv."""
+
+    content: str
+    positional_zero: str
+    argv: tuple[str, ...]
+
+
+def extract_shell_command(
+    args: list[str],
+    *,
+    default_positional_zero: str = "bash",
+) -> ShellCommandInvocation | None:
+    """Find a Bash-compatible ``-c`` payload after interpreter options."""
+
+    options_with_value = {
+        "-O",
+        "+O",
+        "-o",
+        "+o",
+        "--init-file",
+        "--rcfile",
+    }
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--":
+            return None
+        if token in options_with_value:
+            index += 2
+            continue
+        if token.startswith(("--init-file=", "--rcfile=")):
+            index += 1
+            continue
+        if token == "-c" or (token.startswith("-") and not token.startswith("--") and "c" in token[1:]):
+            if index + 1 >= len(args):
+                return None
+            positional_zero = args[index + 2] if index + 2 < len(args) else default_positional_zero
+            return ShellCommandInvocation(
+                content=args[index + 1],
+                positional_zero=positional_zero,
+                argv=tuple(args[index + 3:]),
+            )
+        if token.startswith(("-", "+")):
+            index += 1
+            continue
+        return None
+    return None
+
+
 def _parser():
     """Build the parser lazily so importing the public package stays light."""
 
@@ -173,9 +224,24 @@ def analyze_bash(content: str) -> BashAnalysis:
             if header.replace(" ", "").startswith("for((;;))"):
                 unbounded_loop = True
         elif node.type == "function_definition":
-            compact = "".join(_text(source, node).split())
-            if ":(){:|:&}" in compact:
-                fork_bomb = True
+            name_node = node.child_by_field_name("name")
+            body_node = node.child_by_field_name("body")
+            if name_node is None or body_node is None:
+                continue
+            function_name = _text(source, name_node)
+            for child in _walk(body_node):
+                if child.type != "pipeline":
+                    continue
+                pipeline_commands = [item for item in child.named_children if item.type == "command"]
+                recursive_calls = 0
+                for command in pipeline_commands:
+                    command_name = command.child_by_field_name("name")
+                    if command_name is not None and _text(source, command_name) == function_name:
+                        recursive_calls += 1
+                background = child.next_sibling is not None and child.next_sibling.type == "&"
+                if recursive_calls >= 2 and background:
+                    fork_bomb = True
+                    break
 
     return BashAnalysis(
         commands=tuple(commands),

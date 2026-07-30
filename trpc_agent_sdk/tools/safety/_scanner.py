@@ -19,6 +19,7 @@ from typing import Iterable
 from urllib.parse import urlparse
 
 from ._bash_analyzer import analyze_bash
+from ._bash_analyzer import extract_shell_command
 from ._decision import aggregate_report
 from ._ir import AnalysisResult
 from ._models import AnalysisStatus
@@ -63,7 +64,8 @@ _SENSITIVE_OPTION_RE = re.compile(
     (?:"[^"]*"|'[^']*'|[^\s]+)
     """, )
 _SENSITIVE_HEADER_RE = re.compile(
-    r"(?i)\b(?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*"
+    r"(?i)(?:\b|-H)(?:authorization|proxy-authorization|cookie|set-cookie|"
+    r"x[-_]?api[-_]?key|x[-_]?auth)\s*:\s*"
     r"(?:[^\s]+(?:\s+[^\s]+)?)", )
 _SENSITIVE_ARGUMENT_RE = re.compile(
     r"""(?ix)
@@ -403,6 +405,10 @@ def _static_value_size(node: ast.AST | None) -> int | None:
 
     if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)):
         return len(node.value.encode("utf-8")) if isinstance(node.value, str) else len(node.value)
+    if isinstance(node, (ast.List, ast.Set, ast.Tuple)):
+        sizes = [_static_value_size(item) for item in node.elts]
+        if all(size is not None for size in sizes):
+            return sum(size for size in sizes if size is not None)
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
         left = _static_value_size(node.left)
         right = _static_value_size(node.right)
@@ -1000,6 +1006,7 @@ class SafetyScanner:
     ) -> None:
         delete_calls = {
             "os.remove",
+            "os.rmdir",
             "os.unlink",
             "shutil.rmtree",
             "pathlib.Path.unlink",
@@ -1232,6 +1239,12 @@ class SafetyScanner:
             return
         if call_name not in _SUBPROCESS_FUNCTIONS:
             return
+        if call_name in {
+                "subprocess.getoutput",
+                "subprocess.getstatusoutput",
+        }:
+            self._append_node(findings, "PROC-001", node, request.content)
+            return
         supported_keywords = {
             "args",
             "capture_output",
@@ -1405,6 +1418,7 @@ class SafetyScanner:
                 "pathlib.Path.unlink",
                 "pathlib.Path.rmdir",
                 "os.remove",
+                "os.rmdir",
                 "os.unlink",
                 "os.rename",
                 "os.replace",
@@ -1584,8 +1598,12 @@ class SafetyScanner:
             self._append_node(findings, "RES-002", node, source)
 
         write_value: ast.AST | None = None
-        if isinstance(node.func, ast.Attribute) and node.func.attr in {"write", "write_text", "write_bytes"
-                                                                       } and node.args:
+        if isinstance(node.func, ast.Attribute) and node.func.attr in {
+                "write",
+                "write_bytes",
+                "write_text",
+                "writelines",
+        } and node.args:
             write_value = node.args[0]
         size = _static_value_size(write_value)
         if size is not None and size > self.policy.limits.max_static_write_size_bytes:
@@ -1996,63 +2014,6 @@ class SafetyScanner:
         )
 
     @staticmethod
-    def _normalize_bash_source(content: str) -> tuple[str, str]:
-        """Remove shell continuations and mask inactive comments/single quotes."""
-
-        normalized: list[str] = []
-        active: list[str] = []
-        state = "unquoted"
-        index = 0
-        while index < len(content):
-            char = content[index]
-            following = content[index + 1] if index + 1 < len(content) else ""
-            if state != "single" and char == "\\" and following == "\n":
-                index += 2
-                continue
-            if state in {"unquoted", "double"} and char == "\\" and following:
-                normalized.extend((char, following))
-                active.extend((" ", " "))
-                index += 2
-                continue
-            if state == "comment":
-                normalized.append(char)
-                active.append("\n" if char == "\n" else " ")
-                if char == "\n":
-                    state = "unquoted"
-                index += 1
-                continue
-            if state == "single":
-                normalized.append(char)
-                active.append(" ")
-                if char == "'":
-                    state = "unquoted"
-                index += 1
-                continue
-            if char == "'" and state == "unquoted":
-                state = "single"
-                normalized.append(char)
-                active.append(" ")
-                index += 1
-                continue
-            if char == '"':
-                state = "unquoted" if state == "double" else "double"
-                normalized.append(char)
-                active.append(char)
-                index += 1
-                continue
-            if (char == "#" and state == "unquoted"
-                    and (not normalized or normalized[-1].isspace() or normalized[-1] in ";|&()")):
-                state = "comment"
-                normalized.append(char)
-                active.append(" ")
-                index += 1
-                continue
-            normalized.append(char)
-            active.append(char)
-            index += 1
-        return "".join(normalized), "".join(active)
-
-    @staticmethod
     def _constant_strings(tree: ast.AST) -> dict[str, str]:
         constants: dict[str, str] = {}
         assignments = [node for node in ast.walk(tree) if isinstance(node, (ast.Assign, ast.AnnAssign))]
@@ -2166,16 +2127,28 @@ class SafetyScanner:
         if len(parts) < 3:
             return None
         command = Path(parts[0]).name
-        option = parts[1]
-        if option not in {"-c", "-lc"}:
-            return None
-        nested_request = request.model_copy(update={
-            "content": parts[2],
-            "argv": parts[3:],
-        }, )
         if command in {"bash", "sh", "zsh"}:
+            invocation = extract_shell_command(
+                parts[1:],
+                default_positional_zero=command,
+            )
+            if invocation is None:
+                return None
+            nested_request = request.model_copy(update={
+                "content": invocation.content,
+                "argv": list(invocation.argv),
+                "metadata": {
+                    **request.metadata,
+                    "bash_positional_zero": invocation.positional_zero,
+                    "bash_positional_arguments": "true",
+                },
+            }, )
             result = self._scan_bash(nested_request)
-        elif command in {"python", "python3"} and option == "-c":
+        elif command in {"python", "python3"} and parts[1] == "-c":
+            nested_request = request.model_copy(update={
+                "content": parts[2],
+                "argv": parts[3:],
+            }, )
             result = self._scan_python(nested_request)
         else:
             return None
@@ -2784,6 +2757,9 @@ class SafetyScanner:
             elif token.startswith(("-b", "-u")) and len(token) > 2:
                 option = token[:2]
                 value = token[2:]
+            elif token.startswith("-H") and len(token) > 2:
+                option = "-H"
+                value = token[2:]
             if not value:
                 continue
             if option in credential_options:
@@ -3375,6 +3351,7 @@ class SafetyScanner:
             ".write",
             ".write_text",
             ".write_bytes",
+            ".writelines",
             ".send",
         )
         return (call_name == "print" or call_name.startswith("logging.") or call_name.endswith(suffixes)
@@ -3390,8 +3367,21 @@ class SafetyScanner:
 
     def _is_sensitive_path(self, value: str, cwd: str | None) -> bool:
         path = self._normalize_path(value, cwd)
-        if len(path.parts) >= 3 and path.parts[1] == "proc" and path.name == "environ":
-            return True
+        if len(path.parts) >= 4 and path.parts[1] == "proc":
+            process = path.parts[2]
+            sensitive_proc_entries = {
+                "cmdline",
+                "cwd",
+                "environ",
+                "fd",
+                "fdinfo",
+                "maps",
+                "mem",
+                "root",
+            }
+            if (process in {"self", "thread-self"} or process.isdigit()) and sensitive_proc_entries.intersection(
+                    path.parts[3:]):
+                return True
         for denied in self.policy.paths.denied:
             denied_expanded = Path(os.path.expanduser(denied))
             if denied == ".env":

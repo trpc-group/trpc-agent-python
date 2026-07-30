@@ -32,6 +32,7 @@ from trpc_agent_sdk.types import Outcome
 from ._audit import AuditSink
 from ._audit import LoggerAuditSink
 from ._audit import record_safety_telemetry
+from ._bash_analyzer import extract_shell_command
 from ._decision import aggregate_report
 from ._models import AnalysisStatus
 from ._models import SafetyAuditEvent
@@ -44,6 +45,7 @@ from ._scanner import SafetyScanner
 from ._rules import make_finding
 
 _BLOCKED_EXIT_CODE = 126
+_TIMED_OUT_EXIT_CODE = 124
 
 
 def _truncate_text(value: str, max_bytes: int) -> tuple[str, bool]:
@@ -288,7 +290,26 @@ class GuardedProgramRunner(BaseProgramRunner):
                 exit_code=_BLOCKED_EXIT_CODE,
                 duration=report.duration_ms / 1000,
             )
-        result = await self._runner.run_program(ws, effective_spec, ctx)
+        task = asyncio.create_task(self._runner.run_program(ws, effective_spec, ctx))
+        try:
+            done, _ = await asyncio.wait(
+                {task},
+                timeout=effective_timeout,
+            )
+        except asyncio.CancelledError:
+            task.cancel()
+            raise
+        if task not in done:
+            task.cancel()
+            return WorkspaceRunResult(
+                stderr=("program execution exceeded the tool safety policy timeout; "
+                        "cancellation was requested, but only the runtime or sandbox "
+                        "can guarantee process termination"),
+                exit_code=_TIMED_OUT_EXIT_CODE,
+                duration=effective_timeout,
+                timed_out=True,
+            )
+        result = task.result()
         limit = self._guard.policy.limits.max_output_size_bytes
         stdout, _ = _truncate_text(result.stdout, limit)
         remaining = max(0, limit - len(stdout.encode("utf-8")))
@@ -300,9 +321,13 @@ class GuardedProgramRunner(BaseProgramRunner):
     @staticmethod
     def _program_content(spec: WorkspaceRunProgramSpec) -> tuple[str, list[str], str | None]:
         command = spec.cmd.rsplit("/", 1)[-1]
-        if command in {"bash", "sh", "zsh"} and len(spec.args) >= 2 and spec.args[0] in {"-c", "-lc"}:
-            positional_zero = spec.args[2] if len(spec.args) >= 3 else command
-            return spec.args[1], spec.args[3:], positional_zero
+        if command in {"bash", "sh", "zsh"}:
+            invocation = extract_shell_command(
+                spec.args,
+                default_positional_zero=command,
+            )
+            if invocation is not None:
+                return invocation.content, list(invocation.argv), invocation.positional_zero
         return shlex.quote(spec.cmd), spec.args, None
 
 
