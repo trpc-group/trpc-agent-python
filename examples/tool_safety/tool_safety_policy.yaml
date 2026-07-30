@@ -1,0 +1,38 @@
+version: "1"
+allowed_domains:
+  - api.example.com
+allowed_commands:
+  - echo
+  - printf
+  - pwd
+  - ls
+  - cat
+  - head
+  - tail
+  - grep
+  - sort
+  - wc
+forbidden_paths:
+  - ~/.ssh
+  - ~/.aws
+  - ~/.config/gcloud
+  - .env
+  - .env.*
+  - /etc
+  - /root
+  - /var/run/docker.sock
+protected_write_paths:
+  - /bin
+  - /sbin
+  - /usr/bin
+  - /usr/sbin
+  - /System
+  - 'C:\Windows'
+  - 'C:\Program Files'
+max_timeout_seconds: 300
+max_output_bytes: 1048576
+max_file_write_bytes: 10485760
+max_sleep_seconds: 30
+max_script_lines: 2000
+evidence_max_chars: 240
+disabled_rules: []

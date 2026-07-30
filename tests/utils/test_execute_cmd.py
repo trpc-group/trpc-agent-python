@@ -10,14 +10,33 @@ Covers:
 - async_execute_command: success, failure, timeout, input, env, exception branches
 """
 
+import asyncio
+import os
+import signal
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from trpc_agent_sdk.utils import CommandExecResult
 from trpc_agent_sdk.utils import async_execute_command
+
+
+async def _assert_process_stopped(pid: int, failure_message: str) -> None:
+    for _ in range(20):
+        state = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if state.returncode != 0 or state.stdout.strip().startswith("Z"):
+            return
+        await asyncio.sleep(0.05)
+    os.kill(pid, signal.SIGKILL)
+    pytest.fail(failure_message)
 
 
 class TestCommandExecResult:
@@ -80,6 +99,51 @@ class TestAsyncExecuteCommand:
             assert result.exit_code == -1
             assert "timed out" in result.stderr.lower() or "timeout" in result.stderr.lower()
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+    async def test_timeout_terminates_descendants_and_reaps_leader(self, tmp_path):
+        pid_file = tmp_path / "child.pid"
+        child_code = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
+        parent_code = (
+            "import subprocess,sys,time\n"
+            f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+            f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
+            "time.sleep(60)\n"
+        )
+
+        result = await async_execute_command(tmp_path, [sys.executable, "-c", parent_code], timeout=0.2)
+
+        assert result.is_timeout is True
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+        await _assert_process_stopped(child_pid, "descendant process survived timeout cleanup")
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+    async def test_cancellation_terminates_descendants_and_reaps_leader(self, tmp_path):
+        pid_file = tmp_path / "child.pid"
+        child_code = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
+        parent_code = (
+            "import subprocess,sys,time\n"
+            f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+            f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
+            "time.sleep(60)\n"
+        )
+        task = asyncio.create_task(async_execute_command(tmp_path, [sys.executable, "-c", parent_code]))
+
+        for _ in range(40):
+            if pid_file.exists():
+                break
+            await asyncio.sleep(0.05)
+        else:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            pytest.fail("child process did not start before cancellation")
+
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await _assert_process_stopped(child_pid, "descendant process survived cancellation cleanup")
+
     async def test_empty_output(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = await async_execute_command(Path(tmpdir), ["true"])
@@ -89,18 +153,14 @@ class TestAsyncExecuteCommand:
 
     async def test_multiline_output(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await async_execute_command(
-                Path(tmpdir), ["sh", "-c", "echo -e 'line1\nline2\nline3'"]
-            )
+            result = await async_execute_command(Path(tmpdir), ["sh", "-c", "echo -e 'line1\nline2\nline3'"])
             assert result.exit_code == 0
             assert "line1" in result.stdout
             assert "line2" in result.stdout
 
     async def test_with_stdin_input(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await async_execute_command(
-                Path(tmpdir), ["cat"], input=b"hello from stdin"
-            )
+            result = await async_execute_command(Path(tmpdir), ["cat"], input=b"hello from stdin")
             assert result.exit_code == 0
             assert "hello from stdin" in result.stdout
 
@@ -117,34 +177,26 @@ class TestAsyncExecuteCommand:
     async def test_nonexistent_command_exception(self):
         """Trigger the generic except Exception branch (lines 78-79)."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await async_execute_command(
-                Path(tmpdir), ["__nonexistent_cmd_xyz__"]
-            )
+            result = await async_execute_command(Path(tmpdir), ["__nonexistent_cmd_xyz__"])
             assert result.exit_code == -1
             assert result.is_timeout is False
             assert "command execution error" in result.stderr
 
     async def test_invalid_workdir_exception(self):
         """Trigger exception with a non-existent working directory."""
-        result = await async_execute_command(
-            Path("/nonexistent/directory/xyz"), ["echo", "test"]
-        )
+        result = await async_execute_command(Path("/nonexistent/directory/xyz"), ["echo", "test"])
         assert result.exit_code == -1
         assert result.is_timeout is False
         assert "command execution error" in result.stderr
 
     async def test_failure_with_stderr_content(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await async_execute_command(
-                Path(tmpdir), ["sh", "-c", "echo err_msg >&2; exit 1"]
-            )
+            result = await async_execute_command(Path(tmpdir), ["sh", "-c", "echo err_msg >&2; exit 1"])
             assert result.exit_code != 0
             assert "err_msg" in result.stderr
 
     async def test_with_timeout_and_input(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await async_execute_command(
-                Path(tmpdir), ["cat"], input=b"data", timeout=5.0
-            )
+            result = await async_execute_command(Path(tmpdir), ["cat"], input=b"data", timeout=5.0)
             assert result.exit_code == 0
             assert "data" in result.stdout

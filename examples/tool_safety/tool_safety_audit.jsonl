@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-29T00:00:00Z","tool_name":"13_bash_delete.sh","decision":"deny","risk_level":"critical","rule_ids":["FILE_RECURSIVE_DELETE","PROCESS_COMMAND_NOT_ALLOWLISTED"],"duration_ms":0.2,"redacted":true,"execution_blocked":true,"policy_version":"1"}

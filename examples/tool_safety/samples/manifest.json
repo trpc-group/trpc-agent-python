@@ -1,0 +1,17 @@
+[
+  {"file": "01_safe_python.py", "kind": "safe", "decision": "allow", "rule_id": null},
+  {"file": "02_dangerous_delete.py", "kind": "dangerous", "decision": "deny", "rule_id": "FILE_DESTRUCTIVE_OPERATION"},
+  {"file": "03_read_ssh_key.py", "kind": "dangerous", "decision": "deny", "rule_id": "FILE_SENSITIVE_PATH"},
+  {"file": "04_external_network.py", "kind": "dangerous", "decision": "deny", "rule_id": "NETWORK_DOMAIN_NOT_ALLOWED"},
+  {"file": "05_allowed_network.py", "kind": "safe", "decision": "allow", "rule_id": null},
+  {"file": "06_subprocess.py", "kind": "review", "decision": "needs_human_review", "rule_id": "PROCESS_SUBPROCESS"},
+  {"file": "07_shell_injection.py", "kind": "dangerous", "decision": "deny", "rule_id": "PROCESS_SHELL_EXECUTION"},
+  {"file": "08_dependency_install.sh", "kind": "review", "decision": "needs_human_review", "rule_id": "DEPENDENCY_INSTALL"},
+  {"file": "09_infinite_loop.py", "kind": "dangerous", "decision": "deny", "rule_id": "RESOURCE_INFINITE_LOOP"},
+  {"file": "10_sensitive_output.py", "kind": "dangerous", "decision": "deny", "rule_id": "SENSITIVE_OUTPUT"},
+  {"file": "11_bash_pipeline.sh", "kind": "review", "decision": "needs_human_review", "rule_id": "PROCESS_PIPELINE"},
+  {"file": "12_dynamic_target.py", "kind": "review", "decision": "needs_human_review", "rule_id": "NETWORK_DYNAMIC_TARGET"},
+  {"file": "13_bash_delete.sh", "kind": "dangerous", "decision": "deny", "rule_id": "FILE_RECURSIVE_DELETE"},
+  {"file": "14_bash_read_key.sh", "kind": "dangerous", "decision": "deny", "rule_id": "FILE_SENSITIVE_PATH"},
+  {"file": "15_bash_network.sh", "kind": "dangerous", "decision": "deny", "rule_id": "NETWORK_DOMAIN_NOT_ALLOWED"}
+]

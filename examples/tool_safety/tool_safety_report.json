@@ -1,0 +1,40 @@
+{
+  "schema_version": "1",
+  "policy_version": "1",
+  "reports": [
+    {
+      "path": "examples/tool_safety/samples/13_bash_delete.sh",
+      "decision": "deny",
+      "risk_level": "critical",
+      "findings": [
+        {
+          "category": "file_operation",
+          "risk_level": "critical",
+          "rule_id": "FILE_RECURSIVE_DELETE",
+          "evidence": "rm -rf /tmp/agent-output",
+          "recommendation": "Remove recursive forced deletion from agent-executed commands.",
+          "decision": "deny",
+          "payload_index": 0
+        },
+        {
+          "category": "process_execution",
+          "risk_level": "medium",
+          "rule_id": "PROCESS_COMMAND_NOT_ALLOWLISTED",
+          "evidence": "rm",
+          "recommendation": "Add a reviewed command name to allowed_commands or require human approval.",
+          "decision": "needs_human_review",
+          "payload_index": 0
+        }
+      ],
+      "duration_ms": 0.2,
+      "redacted": true,
+      "summary": "deny: 2 finding(s)",
+      "policy_version": "1",
+      "review_required": false,
+      "rule_ids": [
+        "FILE_RECURSIVE_DELETE",
+        "PROCESS_COMMAND_NOT_ALLOWLISTED"
+      ]
+    }
+  ]
+}
