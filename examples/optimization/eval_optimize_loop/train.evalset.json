@@ -1,0 +1,94 @@
+{
+  "eval_set_id": "eval_optimize_train",
+  "name": "Evaluation optimization loop training cases",
+  "description": "Support-operations cases covering structured CRM output, billing routing, and a missing knowledge source.",
+  "eval_cases": [
+    {
+      "eval_id": "train_json_tier",
+      "conversation": [
+        {
+          "invocation_id": "train-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "The CRM snapshot in this request says Account A has customer tier gold. Return only a compact JSON object with the key tier."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"tier\":\"gold\"}"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_refund_router",
+      "conversation": [
+        {
+          "invocation_id": "train-2",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "A customer was charged twice for the same order and requests a refund. Return only the support queue in the form route=<queue>."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "route=refund"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_unknown_codename",
+      "conversation": [
+        {
+          "invocation_id": "train-3",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Using the internal launch knowledge base, return the unreleased project codename as a name only. No knowledge-base record is attached to this request."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Project Aurora"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "trainer",
+        "state": {}
+      }
+    }
+  ]
+}

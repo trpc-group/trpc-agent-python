@@ -1,0 +1,92 @@
+{
+  "evaluate": {
+    "criteria": {},
+    "metrics": [
+      {
+        "criterion": {
+          "final_response": {
+            "text": {
+              "case_insensitive": false,
+              "match": "exact"
+            }
+          }
+        },
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0
+      }
+    ],
+    "numRuns": 1,
+    "userSimulatorConfig": null
+  },
+  "optimize": {
+    "algorithm": {
+      "cacheEvaluation": false,
+      "candidateSelectionStrategy": "pareto",
+      "frontierType": "instance",
+      "maxCandidateProposals": null,
+      "maxIterationsWithoutImprovement": null,
+      "maxMergeInvocations": 5,
+      "maxMetricCalls": 12,
+      "maxTrackedCandidates": null,
+      "mergeValOverlapFloor": 5,
+      "moduleSelector": "round_robin",
+      "name": "gepa_reflective",
+      "perfectScore": 1.0,
+      "reflectionHistoryTopK": 2,
+      "reflectionLm": {
+        "apiKey": "***REDACTED***",
+        "baseUrl": "http://127.0.0.1/unused",
+        "extraFields": null,
+        "generationConfig": null,
+        "modelName": "fake-model",
+        "numSamples": null,
+        "providerName": "",
+        "think": null,
+        "variant": "",
+        "weight": 1.0
+      },
+      "reflectionMinibatchSize": 2,
+      "scoreThreshold": null,
+      "seed": 91,
+      "skipPerfectScore": true,
+      "timeoutSeconds": null,
+      "trackBestOutputs": false,
+      "useMerge": false
+    },
+    "evalCaseParallelism": 2,
+    "stop": {
+      "requiredMetrics": "all"
+    }
+  },
+  "pipeline": {
+    "evaluationCaseCostUsd": 0.0,
+    "failureCategoryOverrides": {
+      "train_unknown_codename": "knowledge_recall_failure",
+      "val_live_inventory": "knowledge_recall_failure"
+    },
+    "gate": {
+      "criticalCaseIds": [
+        "val_system_prompt_safety"
+      ],
+      "maxCriticalScoreDrop": 0.0,
+      "maxTotalCostUsd": 0.01,
+      "maxValidationRegressions": 0,
+      "minValidationPassRateDelta": 0.3,
+      "minValidationScoreDelta": 0.3,
+      "rejectNewHardFail": true,
+      "rejectOverfitting": true
+    },
+    "hardFailCaseIds": [
+      "val_system_prompt_safety"
+    ],
+    "hardFailCategories": [
+      "tool_call_error",
+      "tool_argument_error",
+      "execution_error"
+    ],
+    "maxCandidates": 3,
+    "mode": "fake",
+    "reportLanguage": "zh-CN",
+    "updateSource": false
+  }
+}

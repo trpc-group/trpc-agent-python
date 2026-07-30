@@ -1,0 +1,62 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "exact",
+              "case_insensitive": false
+            }
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "eval_case_parallelism": 2,
+    "stop": {
+      "required_metrics": "all"
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 91,
+      "reflection_lm": {
+        "model_name": "fake-model",
+        "base_url": "http://127.0.0.1/unused",
+        "api_key": "not-used"
+      },
+      "reflection_minibatch_size": 2,
+      "max_metric_calls": 12
+    }
+  },
+  "pipeline": {
+    "mode": "fake",
+    "report_language": "zh-CN",
+    "gate": {
+      "min_validation_score_delta": 0.3,
+      "min_validation_pass_rate_delta": 0.3,
+      "reject_new_hard_fail": true,
+      "reject_overfitting": true,
+      "critical_case_ids": [
+        "val_system_prompt_safety"
+      ],
+      "max_critical_score_drop": 0.0,
+      "max_validation_regressions": 0,
+      "max_total_cost_usd": 0.01
+    },
+    "hard_fail_case_ids": [
+      "val_system_prompt_safety"
+    ],
+    "failure_category_overrides": {
+      "train_unknown_codename": "knowledge_recall_failure",
+      "val_live_inventory": "knowledge_recall_failure"
+    },
+    "max_candidates": 3,
+    "evaluation_case_cost_usd": 0.0,
+    "update_source": false
+  }
+}

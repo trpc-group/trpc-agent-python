@@ -181,6 +181,11 @@ from ._user_simulator_base import UserSimulator
 from ._user_simulator_provider import UserSimulatorProvider
 from ._agent_optimizer import AgentOptimizer
 from ._base_optimizer import BaseOptimizer
+from ._evaluation_optimization_config import OptimizationGateConfig
+from ._evaluation_optimization_config import OptimizationPipelineConfig
+from ._evaluation_optimization_pipeline import EvaluationOptimizationPipeline
+from ._evaluation_optimization_pipeline import PromptOptimizerRunner
+from ._evaluation_optimization_result import OptimizationReport
 from ._optimize_config import FrameworkStopConfig
 from ._optimize_config import GepaReflectiveAlgo
 from ._optimize_config import OptimizeConfig
@@ -217,11 +222,16 @@ from . import _optimize_registrations  # noqa: F401  # triggers algorithm regist
 __all__ = [
     "AgentOptimizer",
     "BaseOptimizer",
+    "EvaluationOptimizationPipeline",
+    "OptimizationReport",
+    "PromptOptimizerRunner",
     "DEFAULT_OPTIMIZE_MAX_TOKENS",
     "DEFAULT_OPTIMIZE_TEMPERATURE",
     "EvaluationOutcome",
     "FinishReason",
     "FrameworkStopConfig",
+    "OptimizationGateConfig",
+    "OptimizationPipelineConfig",
     "GepaReflectiveAlgo",
     "GepaReflectiveOptimizer",
     "OPTIMIZER_REGISTRY",
