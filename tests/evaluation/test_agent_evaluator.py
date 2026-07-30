@@ -10,12 +10,18 @@ import pytest
 import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation import EvalStatus
+from trpc_agent_sdk.evaluation import EvalCase
 from trpc_agent_sdk.evaluation import EvalCaseResult
+from trpc_agent_sdk.evaluation import EvalConfig
 from trpc_agent_sdk.evaluation import EvalMetricResult
+from trpc_agent_sdk.evaluation import EvalSet
 from trpc_agent_sdk.evaluation import EvalSetAggregateResult
 from trpc_agent_sdk.evaluation import EvaluateResult
 from trpc_agent_sdk.evaluation import AgentEvaluator
+from trpc_agent_sdk.evaluation import Invocation
 from trpc_agent_sdk.evaluation import PassNC
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
 
 class TestPassNC:
@@ -97,3 +103,56 @@ class TestAgentEvaluatorParsePassNc:
     def test_pass_hat_k_delegates(self):
         """Test AgentEvaluator.pass_hat_k delegates to _eval_pass."""
         assert AgentEvaluator.pass_hat_k(10, 5, 2) == 0.25
+
+
+class TestLoadEvalSetFromFile:
+    """Test suite for AgentEvaluator._load_eval_set_from_file.
+
+    Covers the case-selector colon parsing, including absolute paths that
+    contain a drive-letter colon on Windows (e.g. "C:\\...\\set.json").
+    """
+
+    @staticmethod
+    def _write_eval_set(tmp_path, case_ids):
+        """Write a minimal eval set file and return its absolute path."""
+        cases = [
+            EvalCase(
+                eval_id=case_id,
+                conversation=[
+                    Invocation(
+                        invocation_id="i",
+                        user_content=Content(parts=[Part(text="hi")]),
+                    ),
+                ],
+            )
+            for case_id in case_ids
+        ]
+        eval_set = EvalSet(eval_set_id="set1", eval_cases=cases)
+        file_path = tmp_path / "set.evalset.json"
+        file_path.write_text(eval_set.model_dump_json(), encoding="utf-8")
+        return str(file_path)
+
+    def test_load_absolute_path_without_selector(self, tmp_path):
+        """An existing absolute path must load as-is, even if it contains ':'."""
+        file_path = self._write_eval_set(tmp_path, ["case_a", "case_b"])
+        eval_set = AgentEvaluator._load_eval_set_from_file(file_path, EvalConfig(criteria={}))
+        assert [c.eval_id for c in eval_set.eval_cases] == ["case_a", "case_b"]
+
+    def test_load_with_case_selector(self, tmp_path):
+        """"file.json:case_id" selects a single case from the set."""
+        file_path = self._write_eval_set(tmp_path, ["case_a", "case_b"])
+        eval_set = AgentEvaluator._load_eval_set_from_file(f"{file_path}:case_b", EvalConfig(criteria={}))
+        assert [c.eval_id for c in eval_set.eval_cases] == ["case_b"]
+        assert eval_set.eval_set_id == "set1_case_b"
+
+    def test_load_with_unknown_case_selector_raises(self, tmp_path):
+        """Selecting a case id that does not exist raises ValueError."""
+        file_path = self._write_eval_set(tmp_path, ["case_a"])
+        with pytest.raises(ValueError, match="not found"):
+            AgentEvaluator._load_eval_set_from_file(f"{file_path}:missing", EvalConfig(criteria={}))
+
+    def test_load_missing_file_raises(self, tmp_path):
+        """A non-existing path (with or without ':') raises FileNotFoundError."""
+        missing = str(tmp_path / "nope.evalset.json")
+        with pytest.raises(FileNotFoundError):
+            AgentEvaluator._load_eval_set_from_file(missing, EvalConfig(criteria={}))
