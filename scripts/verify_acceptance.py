@@ -439,10 +439,6 @@ def check_criterion_7(guard: SafetyGuard) -> Result:
         guard_with_audit = SafetyGuard.default(audit_logger=audit_logger)
         guard_with_audit.scan(dangerous, tool_name="bash_tool", script_type_hint="python")
 
-        # Flush if needed
-        if hasattr(audit_logger, "flush"):
-            audit_logger.flush()
-
         # Read audit log
         with open(audit_path, encoding="utf-8") as f:
             lines = f.readlines()

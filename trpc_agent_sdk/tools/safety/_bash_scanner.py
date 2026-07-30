@@ -77,9 +77,20 @@ class BashDangerousFileOpsRule(Rule):
 
     # Match rm -rf with any target; specific system dirs are checked
     # dynamically against ctx.policy.protected_system_dirs in check().
+    #
+    # Three variants to cover common flag styles:
+    #   1. rm -rf /         (joined short flags)
+    #   2. rm -r -f /       (split short flags)
+    #   3. rm --recursive --force /   (long flags)
     _RM_RF = re.compile(
-        r"\brm\s+(?:-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\s+"
-        r"(?P<target>\S+)",
+        r"\brm\s+(?:"
+        r"-[a-zA-Z]*r[a-zA-Z]*f"              # -rf, -rvf  (joined, r before f)
+        r"|-[a-zA-Z]*f[a-zA-Z]*r"             # -fr, -fvr  (joined, f before r)
+        r"|-[a-zA-Z]*r\s+-[a-zA-Z]*f"         # -r -f      (split short)
+        r"|-[a-zA-Z]*f\s+-[a-zA-Z]*r"         # -f -r      (split short reversed)
+        r"|--recursive\s+--force"             # long flags
+        r"|--force\s+--recursive"             # long flags reversed
+        r")\s+(?P<target>\S+)",
         re.IGNORECASE,
     )
 
@@ -120,8 +131,9 @@ class BashDangerousFileOpsRule(Rule):
             # Accessing credential files — check if any path token is forbidden.
             if read_cmds_pattern.search(stripped):
                 for token in stripped.split():
-                    # Handle --flag=value tokens
-                    if "=" in token:
+                    # Handle --flag=value tokens (only for option-like tokens;
+                    # plain tokens like "a=b.env" must be taken literally).
+                    if token.startswith("-") and "=" in token:
                         token = token.split("=", 1)[1]
                     if ctx.policy.is_path_forbidden(token):
                         findings.append(
@@ -332,14 +344,20 @@ class BashResourceAbuseRule(Rule):
 
             if self._WHILE_TRUE.search(stripped):
                 # Check if the loop body contains a break
-                # (simple heuristic: look at subsequent lines until 'done')
-                has_break = False
-                for j in range(idx, min(idx + 20, len(lines))):
-                    if re.search(r"\bbreak\b", lines[j]):
-                        has_break = True
-                        break
-                    if re.search(r"\bdone\b", lines[j]):
-                        break
+                # (simple heuristic: look at the current line first for
+                # inline break, then at subsequent lines until 'done')
+                has_break = bool(re.search(r"\bbreak\b", stripped))
+                if not has_break:
+                    # Scan subsequent lines for break/done.
+                    # idx is 1-based (from enumerate(start=1)); using it as
+                    # a 0-based index naturally skips the current line
+                    # (at lines[idx-1]) which was already checked above.
+                    for next_lineno in range(idx, min(idx + 20, len(lines))):
+                        if re.search(r"\bbreak\b", lines[next_lineno]):
+                            has_break = True
+                            break
+                        if re.search(r"\bdone\b", lines[next_lineno]):
+                            break
                 if not has_break:
                     findings.append(
                         self._make_finding(

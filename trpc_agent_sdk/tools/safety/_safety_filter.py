@@ -49,6 +49,10 @@ from ._models import Decision
 from ._safety_guard import SafetyGuard
 
 # Fields in tool args that typically contain a script or command.
+# NOTE: Custom tools with non-standard field names (e.g. "sql", "query")
+# are NOT scanned unless the field name is added to this tuple.  This is
+# a known limitation — extend this tuple (or submit a patch) when adding
+# support for new tool types.
 _SCRIPT_FIELDS = ("command", "script", "code", "cmd", "shell_command", "expr")
 
 
@@ -56,6 +60,12 @@ def _extract_script(args: dict[str, Any]) -> tuple[str, str]:
     """Extract (script_content, field_name) from tool args.
 
     Returns ``("", "")`` if no script-like field is found.
+
+    .. note::
+       Only the fields listed in :data:`_SCRIPT_FIELDS` are inspected.
+       Custom tool argument names (e.g. ``sql``, ``query``) are not
+       scanned automatically — add them to ``_SCRIPT_FIELDS`` or use
+       a naming convention that includes one of the recognised keys.
     """
     for field in _SCRIPT_FIELDS:
         val = args.get(field)
@@ -121,6 +131,7 @@ class ToolSafetyFilter(BaseFilter):
             tool_name=tool_name,
             args=req,
             cwd=req.get("cwd", ""),
+            env=req.get("env", {}),
         )
 
         should_block = report.decision == Decision.DENY

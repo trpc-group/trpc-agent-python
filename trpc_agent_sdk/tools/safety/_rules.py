@@ -13,6 +13,7 @@ Rules are *pluggable*: you can register custom rules at runtime via
 
 from __future__ import annotations
 
+import contextvars
 import re
 from abc import ABC
 from abc import abstractmethod
@@ -105,13 +106,22 @@ class Rule(ABC):
         risk_level: Optional[RiskLevel] = None,
         decision: Optional[Decision] = None,
     ) -> Finding:
-        """Build a :class:`Finding` honouring policy overrides."""
-        override = self.ctx.policy.get_rule_override(self.rule_id) if hasattr(self, "ctx") else None
-        if override is None:
-            override = self._override  # type: ignore[attr-defined]
+        """Build a :class:`Finding` honouring policy overrides.
 
-        effective_risk = risk_level or override.risk_level or self.default_risk_level
-        effective_decision = decision or override.decision or self.default_decision
+        The effective override is read from the thread/task-local
+        :data:`_current_override` context variable, set by
+        :meth:`SafetyGuard.scan() <trpc_agent_sdk.tools.safety._safety_guard.SafetyGuard.scan>`
+        before each ``rule.check(ctx)`` call.  This is **thread-safe**:
+        concurrent scans each have their own override, so there is no
+        data race on the singleton rule instance.
+        """
+        override = _current_override.get()
+        if override is not None:
+            effective_risk = risk_level or override.risk_level or self.default_risk_level
+            effective_decision = decision or override.decision or self.default_decision
+        else:
+            effective_risk = risk_level or self.default_risk_level
+            effective_decision = decision or self.default_decision
 
         return Finding(
             rule_id=self.rule_id,
@@ -126,11 +136,14 @@ class Rule(ABC):
 
     @property
     def is_enabled(self) -> bool:
-        """Whether this rule is enabled (checked against the cached override)."""
-        try:
-            return self._override.enabled  # type: ignore[attr-defined]
-        except AttributeError:
-            return True
+        """Whether this rule is enabled (checked against the current override).
+
+        The value comes from the thread/task-local :data:`_current_override`
+        context variable, which is ``None`` when no scan is active (returns
+        ``True`` in that case).
+        """
+        override = _current_override.get()
+        return override.enabled if override is not None else True
 
 
 class RuleRegistry:
@@ -178,3 +191,10 @@ class RuleRegistry:
 
 #: Global rule registry.  Import this to register or inspect rules.
 global_rule_registry = RuleRegistry()
+
+#: Thread-safe context variable that holds the current scan's rule override.
+#: Set by :meth:`SafetyGuard.scan() <trpc_agent_sdk.tools.safety._safety_guard.SafetyGuard.scan>`
+#: before each ``rule.check(ctx)`` call and read by :meth:`Rule._make_finding` /
+#: :attr:`Rule.is_enabled` so that policy overrides are resolved without
+#: mutable state on the singleton rule instance.
+_current_override: contextvars.ContextVar = contextvars.ContextVar("rule_override", default=None)

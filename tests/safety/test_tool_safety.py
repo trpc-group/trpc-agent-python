@@ -23,6 +23,7 @@ Plus additional edge-case tests for policy loading, audit logging,
 telemetry and the ToolSafetyFilter integration.
 """
 
+import asyncio
 import json
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -1009,7 +1010,7 @@ class TestRuleRegistry:
         assert len(registry.all_rules()) == 0
 
     def test_override_sets_enabled(self):
-        """Setting _override directly should control is_enabled."""
+        """Context var should control is_enabled."""
 
         class TestRule(Rule):
             rule_id = "TEST-OVERRIDE"
@@ -1017,14 +1018,18 @@ class TestRuleRegistry:
             def check(self, ctx):
                 return []
 
+        from trpc_agent_sdk.tools.safety._rules import _current_override
+
         rule = TestRule()
-        # Production code sets _override directly (not via _resolve_overrides)
-        rule._override = RuleOverride()
-        assert hasattr(rule, "_override")
+        # Production code sets the override via _current_override context var,
+        # not via mutable attribute on the singleton rule instance.
         assert rule.is_enabled is True
 
-        rule._override = RuleOverride(enabled=False)
-        assert rule.is_enabled is False
+        token = _current_override.set(RuleOverride(enabled=False))
+        try:
+            assert rule.is_enabled is False
+        finally:
+            _current_override.reset(token)
 
     def test_is_enabled_without_override_returns_true(self):
         """is_enabled should default to True when _override is not set."""
@@ -1038,9 +1043,10 @@ class TestRuleRegistry:
         rule = TestRule()
         assert rule.is_enabled is True
 
-    def test_make_finding_fallback_without_ctx(self):
-        """_make_finding should use _override when ctx attribute is missing."""
+    def test_make_finding_with_context_var(self):
+        """_make_finding should read override from context var."""
         from trpc_agent_sdk.tools.safety import RuleOverride
+        from trpc_agent_sdk.tools.safety._rules import _current_override
 
         class TestRule(Rule):
             rule_id = "TEST-FINDING"
@@ -1050,14 +1056,16 @@ class TestRuleRegistry:
                 return []
 
         rule = TestRule()
-        # Manually set _override without calling _resolve_overrides,
-        # which would also set self.ctx = ScanContext (the class, not an
-        # instance) and trigger the hasattr(self, "ctx") branch.
-        rule._override = RuleOverride()
-        finding = rule._make_finding("dangerous_code", line_number=42)
-        assert finding.rule_id == "TEST-FINDING"
-        assert finding.evidence == "dangerous_code"
-        assert finding.line_number == 42
+        # Override is now propagated via the thread-safe context var rather
+        # than via mutable instance attributes (rule._override / rule.ctx).
+        token = _current_override.set(RuleOverride())
+        try:
+            finding = rule._make_finding("dangerous_code", line_number=42)
+            assert finding.rule_id == "TEST-FINDING"
+            assert finding.evidence == "dangerous_code"
+            assert finding.line_number == 42
+        finally:
+            _current_override.reset(token)
 
 
 # ---------------------------------------------------------------------------
@@ -1536,3 +1544,229 @@ class TestTaintTrackingHelpers:
         tree = self._parse("len('x')")
         node = tree.body[0].value
         assert _is_output_call(node) is False
+
+
+# ---------------------------------------------------------------------------
+# Bash rm -rf boundary tests (split flags, long flags)
+# ---------------------------------------------------------------------------
+
+
+class TestBashRmRfBoundary:
+    """rm -rf with split / long-flag forms must be detected.
+
+    The ``rm -rf "/"`` pattern (joined flags) is covered by
+    :class:`TestDangerousDeletion` — these tests exercise the
+    split-flag (``rm -r -f /``) and long-flag (``rm --recursive --force /``)
+    variants that historically were missed by the regex.
+    """
+
+    def test_rm_split_short_flags(self, guard):
+        """rm -r -f / must be denied."""
+        report = guard.scan("rm -r -f /\n", tool_name="BashTool")
+        assert report.decision == Decision.DENY
+        assert report.risk_level == RiskLevel.CRITICAL
+        assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report.findings)
+
+    def test_rm_split_short_flags_reversed(self, guard):
+        """rm -f -r / must be denied."""
+        report = guard.scan("rm -f -r /\n", tool_name="BashTool")
+        assert report.decision == Decision.DENY
+        assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report.findings)
+
+    def test_rm_long_flags(self, guard):
+        """rm --recursive --force / must be denied."""
+        report = guard.scan("rm --recursive --force /\n", tool_name="BashTool")
+        assert report.decision == Decision.DENY
+        assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report.findings)
+
+    def test_rm_long_flags_reversed(self, guard):
+        """rm --force --recursive / must be denied."""
+        report = guard.scan("rm --force --recursive /\n", tool_name="BashTool")
+        assert report.decision == Decision.DENY
+        assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report.findings)
+
+    def test_rm_long_flags_home(self, guard):
+        """rm --recursive --force ~ must be denied."""
+        report = guard.scan("rm --recursive --force ~\n", tool_name="BashTool")
+        assert report.decision == Decision.DENY
+        assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report.findings)
+
+    def test_rm_long_flags_dollar_home(self, guard):
+        """rm --recursive --force $HOME must be denied."""
+        report = guard.scan("rm --recursive --force $HOME\n", tool_name="BashTool")
+        assert report.decision == Decision.DENY
+
+
+# ---------------------------------------------------------------------------
+# Bash while-true with inline break (single-line loop)
+# ---------------------------------------------------------------------------
+
+
+class TestBashWhileTrueWithBreak:
+    """while-true with break on the same line must NOT be flagged.
+
+    The break-detection heuristic previously only looked at lines
+    *after* the while-true line, missing an inline ``break`` on a
+    single-line loop like::
+
+        while true; do echo; break; done
+    """
+
+    def test_single_line_with_break(self, guard):
+        """Single-line while true; do echo; break; done must NOT be flagged."""
+        report = guard.scan("while true; do echo; break; done\n", tool_name="BashTool")
+        # It should NOT have resource-abuse findings (the break makes it finite).
+        resource_findings = [f for f in report.findings if "RESOURCE-ABUSE" in f.rule_id]
+        assert len(resource_findings) == 0
+
+    def test_single_line_without_break(self, guard):
+        """Single-line while true; do :; done without break SHOULD be flagged."""
+        report = guard.scan("while true; do :; done\n", tool_name="BashTool")
+        assert any("RESOURCE-ABUSE" in f.rule_id for f in report.findings)
+
+    def test_multi_line_with_break(self, guard):
+        """Multi-line while true with break should be allowed."""
+        script = "while true; do\n    echo hi\n    break\ndone\n"
+        report = guard.scan(script, tool_name="BashTool")
+        resource_findings = [f for f in report.findings if "RESOURCE-ABUSE" in f.rule_id]
+        assert len(resource_findings) == 0
+
+
+# ---------------------------------------------------------------------------
+# Concurrent scan — thread/context-var safety
+# ---------------------------------------------------------------------------
+
+
+class TestConcurrentScan:
+    """Concurrent scans must not cross-contaminate per-call policy overrides.
+
+    The core fix for this issue was replacing mutable-attribute injection on
+    the global singleton *Rule* instances (``rule._override`` / ``rule.ctx``)
+    with a :class:`contextvars.ContextVar` that each concurrent task owns
+    independently.
+
+    These tests use :func:`asyncio.gather` to run multiple ``scan()`` calls
+    simultaneously through *the same* ``SafetyGuard`` (which shares the
+    module-level ``global_rule_registry``), with each scan carrying a
+    *different* policy override.  If the context-var fix is working, every
+    finding's effective risk level and decision reflects *its own* policy,
+    not a peer's.
+    """
+
+    @pytest.mark.asyncio
+    async def test_concurrent_different_risk_levels(self):
+        """Concurrent scans with different risk-level overrides must not leak."""
+        # Policy A: lower the risk of DANGEROUS-FILE-OPS to MEDIUM
+        policy_a = SafetyPolicy.default()
+        policy_a.rule_overrides["BASH-DANGEROUS-FILE-OPS"] = RuleOverride(
+            enabled=True, risk_level=RiskLevel.MEDIUM, decision=Decision.DENY,
+        )
+        # Policy B: lower to LOW
+        policy_b = SafetyPolicy.default()
+        policy_b.rule_overrides["BASH-DANGEROUS-FILE-OPS"] = RuleOverride(
+            enabled=True, risk_level=RiskLevel.LOW, decision=Decision.DENY,
+        )
+        # Policy C: no override (keeps defaults: CRITICAL / DENY)
+        policy_c = SafetyPolicy.default()
+
+        guard_a = SafetyGuard(policy=policy_a)
+        guard_b = SafetyGuard(policy=policy_b)
+        guard_c = SafetyGuard(policy=policy_c)
+
+        script = "rm -rf /\n"
+
+        async def scan_a():
+            return guard_a.scan(script, tool_name="BashTool")
+        async def scan_b():
+            return guard_b.scan(script, tool_name="BashTool")
+        async def scan_c():
+            return guard_c.scan(script, tool_name="BashTool")
+
+        reports = await asyncio.gather(scan_a(), scan_b(), scan_c())
+
+        report_a, report_b, report_c = reports
+
+        # Each must still DENY the script
+        assert report_a.decision == Decision.DENY
+        assert report_b.decision == Decision.DENY
+        assert report_c.decision == Decision.DENY
+
+        # Extract the DANGEROUS-FILE-OPS finding from each report
+        finding_a = next(f for f in report_a.findings if "DANGEROUS-FILE-OPS" in f.rule_id)
+        finding_b = next(f for f in report_b.findings if "DANGEROUS-FILE-OPS" in f.rule_id)
+        finding_c = next(f for f in report_c.findings if "DANGEROUS-FILE-OPS" in f.rule_id)
+
+        # Risk levels must match each policy's override — no cross-contamination
+        assert finding_a.risk_level == RiskLevel.MEDIUM, \
+            f"Expected MEDIUM, got {finding_a.risk_level}"
+        assert finding_b.risk_level == RiskLevel.LOW, \
+            f"Expected LOW, got {finding_b.risk_level}"
+        assert finding_c.risk_level == RiskLevel.CRITICAL, \
+            f"Expected CRITICAL (default), got {finding_c.risk_level}"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_mixed_allow_and_deny(self):
+        """Concurrent scans where one policy disables a rule entirely."""
+        # Policy A: disable DANGEROUS-FILE-OPS entirely
+        policy_a = SafetyPolicy.default()
+        policy_a.rule_overrides["BASH-DANGEROUS-FILE-OPS"] = RuleOverride(
+            enabled=False,
+        )
+        # Policy B: keep default (rule active)
+        policy_b = SafetyPolicy.default()
+
+        guard_a = SafetyGuard(policy=policy_a)
+        guard_b = SafetyGuard(policy=policy_b)
+
+        script = "rm -rf /\n"
+
+        async def scan_a():
+            return guard_a.scan(script, tool_name="BashTool")
+        async def scan_b():
+            return guard_b.scan(script, tool_name="BashTool")
+
+        reports = await asyncio.gather(scan_a(), scan_b())
+        report_a, report_b = reports
+
+        # Policy A — rule disabled → no DANGEROUS-FILE-OPS finding
+        a_dangerous = [f for f in report_a.findings if "DANGEROUS-FILE-OPS" in f.rule_id]
+        assert len(a_dangerous) == 0, \
+            f"Expected NO DANGEROUS-FILE-OPS (rule disabled), got {len(a_dangerous)}"
+
+        # Policy B — rule active → must detect and deny
+        assert report_b.decision == Decision.DENY
+        assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report_b.findings)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_decision_override(self):
+        """Concurrent scans with different decision overrides must not leak."""
+        # Policy A: change the while-true finding to NEEDS_HUMAN_REVIEW
+        policy_a = SafetyPolicy.default()
+        policy_a.rule_overrides["BASH-RESOURCE-ABUSE"] = RuleOverride(
+            enabled=True, risk_level=RiskLevel.LOW, decision=Decision.NEEDS_HUMAN_REVIEW,
+        )
+        # Policy B: keep default (DENY for infinite loop — rule default_decision)
+        policy_b = SafetyPolicy.default()
+
+        guard_a = SafetyGuard(policy=policy_a)
+        guard_b = SafetyGuard(policy=policy_b)
+
+        # Use a script that triggers the while-true finding (no explicit
+        # risk_level/decision in _make_finding, so the override controls it).
+        script = "while true; do :; done\n"
+
+        async def scan_a():
+            return guard_a.scan(script, tool_name="BashTool")
+        async def scan_b():
+            return guard_b.scan(script, tool_name="BashTool")
+
+        reports = await asyncio.gather(scan_a(), scan_b())
+        report_a, report_b = reports
+
+        # Policy A — while-true finding should be NEEDS_HUMAN_REVIEW
+        assert report_a.decision == Decision.NEEDS_HUMAN_REVIEW, \
+            f"Expected NEEDS_HUMAN_REVIEW, got {report_a.decision}"
+
+        # Policy B — while-true finding should be DENY (default)
+        assert report_b.decision == Decision.DENY, \
+            f"Expected DENY, got {report_b.decision}"

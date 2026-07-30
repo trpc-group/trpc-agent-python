@@ -48,6 +48,7 @@ from ._models import ScriptType
 from ._policy import SafetyPolicy
 from ._rules import RuleRegistry
 from ._rules import ScanContext
+from ._rules import _current_override
 from ._rules import global_rule_registry
 from ._telemetry import report_to_span
 
@@ -324,11 +325,15 @@ class SafetyGuard:
         if script_type != ScriptType.UNKNOWN:
             rules = self.registry.rules_for(script_type)
             for rule in rules:
-                # Inject context + override cache into the rule
-                rule._override = self.policy.get_rule_override(rule.rule_id)  # type: ignore[attr-defined]
-                rule.ctx = ctx  # type: ignore[attr-defined]
-                if not rule._override.enabled:  # type: ignore[attr-defined]
+                # Thread-safe: the override is propagated via the
+                # _current_override context var (Python contextvars) rather
+                # than written as mutable state on the global singleton Rule
+                # instance.  Each concurrent scan() call has its own
+                # context, so there is no data race.
+                override = self.policy.get_rule_override(rule.rule_id)
+                if not override.enabled:
                     continue
+                token = _current_override.set(override)
                 try:
                     rule_findings = rule.check(ctx)
                     findings.extend(rule_findings)
@@ -344,6 +349,8 @@ class SafetyGuard:
                             evidence=str(ex)[:200],
                             recommendation="Fix or disable the failing rule in the policy.",
                         ))
+                finally:
+                    _current_override.reset(token)
 
         # Aggregate
         decision, risk_level = _aggregate_decision(findings)
