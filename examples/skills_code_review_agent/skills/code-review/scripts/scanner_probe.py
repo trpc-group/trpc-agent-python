@@ -49,7 +49,7 @@ def _run_scanner(name: str, command_template: list[str], root: Path) -> dict[str
         result = subprocess.run(command, text=True, capture_output=True, timeout=20, check=False)
     except subprocess.TimeoutExpired:
         return {"name": name, "status": "timeout", "reason": "scanner timed out", "findings": []}
-    findings = _normalize_findings(name, result.stdout)
+    findings = _normalize_findings(name, result.stdout, root)
     status = "passed" if result.returncode == 0 else "issues_found" if findings else "failed"
     return {
         "name": name,
@@ -101,7 +101,7 @@ def _safe_added_file_path(root: Path, raw_path: str) -> Path | None:
     return target
 
 
-def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:
+def _normalize_findings(name: str, stdout: str, root: Path) -> list[dict[str, object]]:
     if not stdout.strip():
         return []
     try:
@@ -117,7 +117,7 @@ def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:
             "severity":
             _severity(item.get("issue_severity", "medium")),
             "file":
-            item.get("filename", ""),
+            _relative_scanner_file(item.get("filename", ""), root),
             "line":
             int(item.get("line_number") or 1),
             "title":
@@ -134,7 +134,7 @@ def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:
             "scanner": name,
             "rule_id": f"scanner.ruff.{item.get('code', 'issue')}",
             "severity": "medium",
-            "file": item.get("filename", ""),
+            "file": _relative_scanner_file(item.get("filename", ""), root),
             "line": int(item.get("location", {}).get("row") or 1),
             "title": item.get("code", "Ruff finding"),
             "evidence": item.get("message", ""),
@@ -149,7 +149,7 @@ def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:
                     "scanner": name,
                     "rule_id": f"scanner.detect-secrets.{item.get('type', 'secret').lower().replace(' ', '-')}",
                     "severity": "critical",
-                    "file": filename,
+                    "file": _relative_scanner_file(filename, root),
                     "line": int(item.get("line_number") or 1),
                     "title": item.get("type", "Secret detected"),
                     "evidence": "secret detected by detect-secrets",
@@ -166,7 +166,7 @@ def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:
             "severity":
             _severity(item.get("extra", {}).get("severity", "medium")),
             "file":
-            item.get("path", ""),
+            _relative_scanner_file(item.get("path", ""), root),
             "line":
             int(item.get("start", {}).get("line") or 1),
             "title":
@@ -179,6 +179,19 @@ def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:
             0.86,
         } for item in data.get("results", [])]
     return []
+
+
+def _relative_scanner_file(raw_path: object, root: Path) -> str:
+    normalized = str(raw_path or "").replace("\\", "/")
+    if not normalized:
+        return ""
+    prefixes = [root.as_posix().rstrip("/"), root.resolve().as_posix().rstrip("/")]
+    for prefix in dict.fromkeys(prefixes):
+        if normalized == prefix:
+            return ""
+        if normalized.startswith(f"{prefix}/"):
+            return normalized[len(prefix) + 1:]
+    return normalized
 
 
 def _severity(value: object) -> str:

@@ -956,11 +956,4 @@ def _findings_from_scanner_runs(sandbox_runs,
 
 
 def _normalize_scanner_file(path: str) -> str:
-    normalized = path.replace("\\", "/")
-    marker = "work/cr-scan-"
-    marker_index = normalized.find(marker)
-    if marker_index >= 0 and (marker_index == 0 or normalized[marker_index - 1] == "/"):
-        parts = normalized[marker_index + len(marker):].split("/", 1)
-        if len(parts) == 2:
-            return parts[1]
-    return normalized
+    return path.replace("\\", "/")

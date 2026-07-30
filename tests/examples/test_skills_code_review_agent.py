@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -2070,11 +2071,29 @@ SESSION_SIGNING_KEY = "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe"
     assert redacted.count == 1
 
 
-def test_scanner_file_normalization_only_strips_scan_work_root() -> None:
-    assert _normalize_scanner_file("work/cr-scan-abcd/pkg/cr-scan-tool/main.py") == "pkg/cr-scan-tool/main.py"
-    assert _normalize_scanner_file("/tmp/review/work/cr-scan-abcd/pkg/cr-scan-tool/main.py") == (
-        "pkg/cr-scan-tool/main.py")
+def test_scanner_file_normalization_preserves_repo_paths() -> None:
+    assert _normalize_scanner_file("work/cr-scan-abcd1234/pkg/cr-scan-tool/main.py") == (
+        "work/cr-scan-abcd1234/pkg/cr-scan-tool/main.py")
+    assert _normalize_scanner_file("/tmp/review/work/cr-scan-abcd1234/pkg/cr-scan-tool/main.py") == (
+        "/tmp/review/work/cr-scan-abcd1234/pkg/cr-scan-tool/main.py")
+    assert _normalize_scanner_file("work\\cr-scan-tool\\main.py") == "work/cr-scan-tool/main.py"
     assert _normalize_scanner_file("pkg/cr-scan-tool/main.py") == "pkg/cr-scan-tool/main.py"
+
+
+def test_scanner_probe_returns_paths_relative_to_scan_root(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("scanner_probe", SKILL_DIR / "scripts" / "scanner_probe.py")
+    assert spec is not None
+    assert spec.loader is not None
+    scanner_probe = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scanner_probe)
+    root = tmp_path / "work" / "cr-scan-abcd1234"
+    root.mkdir(parents=True)
+
+    assert scanner_probe._relative_scanner_file(root / "pkg" / "cr-scan-tool" / "main.py", root) == (
+        "pkg/cr-scan-tool/main.py")
+    assert scanner_probe._relative_scanner_file(f"{root}\\pkg\\cr-scan-tool\\main.py", root) == (
+        "pkg/cr-scan-tool/main.py")
+    assert scanner_probe._relative_scanner_file("work/cr-scan-tool/main.py", root) == "work/cr-scan-tool/main.py"
 
 
 async def test_external_scanner_findings_are_merged_into_report_and_database(tmp_path: Path) -> None:
