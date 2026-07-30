@@ -117,7 +117,7 @@ rules:
     category: sensitive_info_leak
     risk_level: high
     title: Hardcoded credential literal
-    pattern: '(?i)(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd)\s*[=:]\s*[''"][^''"]{6,}'
+    pattern: '(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd)\s*[=:]\s*[''"][^''"]{6,}'
     recommendation: Do not embed credentials in scripts; load them from a secret manager.
 
   - rule_id: SEC002

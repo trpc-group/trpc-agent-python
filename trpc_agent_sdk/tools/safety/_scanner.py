@@ -54,6 +54,14 @@ _BASH_HINTS = re.compile(
 
 _URL_RE = re.compile(r"https?://([^/\s'\"]+)", re.IGNORECASE)
 
+# Quoted string literals on a line, used to scope bare-host extraction so
+# ordinary code tokens (e.g. ``requests.get``) are never read as domains.
+_QUOTED_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"")
+
+# Host-like token (``evil.com``) mirroring the bash layer's ``_HOST_ARG_RE``,
+# applied only to the contents of quoted literals (see :meth:`_literal_hosts`).
+_HOST_LITERAL_RE = re.compile(r"\b([a-z0-9.-]+\.[a-z]{2,})\b", re.IGNORECASE)
+
 # Secret-looking substrings masked when redaction is enabled.
 _SECRET_PATTERNS = [
     re.compile(r"(AKIA[0-9A-Z]{16})"),
@@ -173,6 +181,12 @@ class SafetyScanner:
         - A non-listed destination on the line -> keep as high (deny).
         - No destination statically determinable on the line -> downgrade to
           medium (review), honouring "uncertain is never silently allowed".
+
+        Destinations are read first from ``http(s)://`` URLs and, when none are
+        present, from bare host literals inside quoted strings (e.g.
+        ``requests.get("evil.com")`` or ``socket.connect(("evil.com", 4444))``),
+        mirroring the bash layer so a non-URL literal egress is not silently
+        downgraded from deny to review.
         """
         lines = script.splitlines()
         refined: list[RuleHit] = []
@@ -182,6 +196,8 @@ class SafetyScanner:
                 continue
             line_text = lines[hit.line - 1] if hit.line and 1 <= hit.line <= len(lines) else ""
             domains = [m.group(1).split("@")[-1].split(":")[0] for m in _URL_RE.finditer(line_text)]
+            if not domains:
+                domains = self._literal_hosts(line_text)
             if not domains:
                 unverified = " Destination could not be verified against the allow-list; review."
                 refined.append(
@@ -200,6 +216,23 @@ class SafetyScanner:
                         }))
             # else: every domain on the line is allow-listed -> drop the hit.
         return refined
+
+    @staticmethod
+    def _literal_hosts(line_text: str) -> list[str]:
+        """Extract host-like tokens from quoted string literals on a line.
+
+        A network hit without a resolvable ``http(s)://`` URL may still carry a
+        verifiable destination as a bare host literal. Hosts are pulled only
+        from inside quotes so ordinary code tokens (such as ``requests.get``
+        itself) are never mistaken for a domain.
+        """
+        hosts: list[str] = []
+        for match in _QUOTED_RE.finditer(line_text):
+            content = match.group(1) if match.group(1) is not None else match.group(2)
+            if not content:
+                continue
+            hosts.extend(m.group(1) for m in _HOST_LITERAL_RE.finditer(content))
+        return hosts
 
     # -- overlap de-duplication ------------------------------------------------
     @staticmethod

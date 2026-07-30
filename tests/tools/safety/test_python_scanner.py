@@ -59,6 +59,22 @@ def test_getattr_obfuscation_detected() -> None:
     assert "AST007" in _ids("getattr(os, 'sys' + 'tem')('id')\n")
 
 
+def test_getattr_literal_name_indirection_resolves_to_spawn() -> None:
+    """``getattr(os, "system")(...)`` resolves to the real process spawn.
+
+    A literal attribute name lets ``getattr`` build a dangerous call without
+    ever naming ``os.system`` directly. The outer call's func is the inner
+    ``getattr`` call, so it must be resolved to ``os.system`` and flagged as a
+    spawn (AST001) rather than slipping through unresolved.
+    """
+    assert "AST001" in _ids('getattr(os, "system")("id")\n')
+
+
+def test_getattr_import_indirection_resolves_to_spawn() -> None:
+    """``getattr(__import__("os"), "popen")(...)`` resolves through __import__."""
+    assert "AST001" in _ids('getattr(__import__("os"), "popen")("whoami")\n')
+
+
 def test_infinite_loop_without_break_detected() -> None:
     """``while True`` with no break is a resource-abuse hit."""
     assert "AST005" in _ids("while True:\n    pass\n")

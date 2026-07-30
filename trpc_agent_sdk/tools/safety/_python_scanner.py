@@ -224,7 +224,43 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
             if isinstance(cur, ast.Name):
                 parts.append(cur.id)
                 return ".".join(reversed(parts))
+        if isinstance(func, ast.Call):
+            # ``getattr(os, "system")("id")``: the outer call's func is itself a
+            # ``getattr`` call. Resolve the literal-name indirection so the
+            # spawned attribute (``os.system``) is judged like a direct call
+            # instead of slipping through as an unresolved dotted name.
+            return self._resolve_getattr_indirection(func)
         return None
+
+    def _resolve_getattr_indirection(self, node: ast.Call) -> Optional[str]:
+        """Resolve ``getattr(obj, "name")`` to the dotted ``obj.name``.
+
+        Only literal string names are resolved; a computed name (e.g.
+        ``"sys" + "tem"``) stays unresolved so the existing AST007 obfuscation
+        finding still fires on the ``getattr`` call itself.
+        """
+        if not (isinstance(node.func, ast.Name) and node.func.id == "getattr"):
+            return None
+        if len(node.args) < 2:
+            return None
+        name_arg = node.args[1]
+        if not (isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str)):
+            return None
+        base = self._resolve_getattr_base(node.args[0])
+        if base is None:
+            return None
+        return f"{base}.{name_arg.value}"
+
+    def _resolve_getattr_base(self, node: ast.AST) -> Optional[str]:
+        """Resolve the object argument of ``getattr`` to a dotted root name.
+
+        Handles ``__import__("os")`` (a common obfuscation) in addition to the
+        ordinary name/attribute forms understood by :meth:`_resolve_dotted`.
+        """
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "__import__"
+                and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
+            return node.args[0].value
+        return self._resolve_dotted(node)
 
     def _canonicalize(self, dotted: str) -> str:
         """Rewrite the leading segment through the alias map.
