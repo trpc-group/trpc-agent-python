@@ -9,9 +9,16 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
+import sys
+from pathlib import Path
 
-from examples.tool_safety.tool_safety_check import main
-from examples.tool_safety.tool_safety_manifest_report import main as manifest_main
+from tests.tools.safety.tool_safety_check import main
+from tests.tools.safety.tool_safety_manifest_report import main as manifest_main
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CHECK_SCRIPT = Path(__file__).resolve().parent / "tool_safety_check.py"
+MANIFEST_SCRIPT = Path(__file__).resolve().parent / "tool_safety_manifest_report.py"
 
 
 def test_cli_enforces_timeout_policy(tmp_path):
@@ -113,3 +120,74 @@ def test_manifest_report_validates_public_samples(tmp_path):
     assert report["summary"]["critical_category_checks"]["dangerous_delete_no_allow"] is True
     assert report["summary"]["critical_category_checks"]["non_whitelisted_network_no_allow"] is True
     assert report["generated_at"] == "1970-01-01T00:00:00+00:00"
+
+
+def test_check_script_file_writes_expected_report(tmp_path):
+    script_path = tmp_path / "danger.sh"
+    report_path = tmp_path / "report.json"
+    script_path.write_text("rm -rf /\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_SCRIPT),
+            "--script",
+            str(script_path),
+            "--language",
+            "bash",
+            "--output",
+            str(report_path),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert result.returncode == 2
+    assert report["decision"] == "deny"
+    assert report["blocked"] is True
+    assert report["tool_name"] == "tool_safety_cli"
+    assert [finding["rule_id"] for finding in report["findings"]] == ["BASH_RECURSIVE_DELETE"]
+
+
+def test_manifest_script_file_writes_expected_summary(tmp_path):
+    report_path = tmp_path / "all_reports.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MANIFEST_SCRIPT),
+            "--strict-policy",
+            "--output",
+            str(report_path),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["passed"] is True
+    assert report["generated_at"] == "1970-01-01T00:00:00+00:00"
+    assert report["summary"] == {
+        "sample_count": 40,
+        "decision_matches": 40,
+        "required_rule_matches": 40,
+        "decisions": {
+            "allow": 4,
+            "deny": 23,
+            "needs_human_review": 13,
+        },
+        "critical_category_checks": {
+            "dangerous_delete_no_allow": True,
+            "non_whitelisted_network_no_allow": True,
+            "safe_no_deny": True,
+            "secret_read_no_allow": True,
+        },
+        "passed": True,
+    }
+    assert report["mismatches"] == []
