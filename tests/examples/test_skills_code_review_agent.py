@@ -2075,6 +2075,14 @@ SESSION_SIGNING_KEY = "k9Vq4mZp8R2tY6wB1nC7xL5sD0hJ3aQe"
     assert redacted.count == 1
 
 
+def test_high_entropy_redaction_does_not_allow_unclassified_alphanumeric_values() -> None:
+    value = "HXbLYElKSDa7rPJaR5vAprGwNVE0IlkUwxKo"
+    redacted = redact_text(f'VALUE = "{value}"')
+
+    assert "[REDACTED]" in redacted.text
+    assert redacted.count == 1
+
+
 def test_scanner_file_normalization_preserves_repo_paths() -> None:
     assert _normalize_scanner_file("work/cr-scan-abcd1234/pkg/cr-scan-tool/main.py") == (
         "work/cr-scan-abcd1234/pkg/cr-scan-tool/main.py")

@@ -47,6 +47,7 @@ UUID_PATTERN = re.compile(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab]
 HEX_IDENTIFIER_PATTERN = re.compile(r"(?i)^[0-9a-f]{32,64}$")
 BASE64_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9+/_-]{32,64}={0,2}$")
 HYPHENATED_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9]{4,}(?:-[A-Za-z0-9]{4,}){2,}$")
+BASE64_CONTEXT_PATTERN = re.compile(r"(?i)\b(base64|fixture|blob|encoded)\b")
 SENSITIVE_LITERAL_CONTEXT_PATTERN = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key(?:[_-]?id)?|key[_-]?id|secret|token|password|passwd|pwd|"
     r"private[_-]?key|signing[_-]?key|session[_-]?key)")
@@ -107,7 +108,7 @@ def _looks_like_high_entropy_secret(value: str, *, context: str = "") -> bool:
     sensitive_context = bool(SENSITIVE_LITERAL_CONTEXT_PATTERN.search(context))
     if value.lower().startswith(("http", "pytest", "example")) and not sensitive_context:
         return False
-    if _looks_like_allowed_identifier(value) and not sensitive_context:
+    if _looks_like_allowed_identifier(value, context=context) and not sensitive_context:
         return False
     alphabet = set(value)
     if len(alphabet) < 12:
@@ -118,14 +119,19 @@ def _looks_like_high_entropy_secret(value: str, *, context: str = "") -> bool:
     return entropy >= 4.6
 
 
-def _looks_like_allowed_identifier(value: str) -> bool:
+def _looks_like_allowed_identifier(value: str, *, context: str = "") -> bool:
     """Keep common non-secret identifiers readable in review evidence."""
     if UUID_PATTERN.fullmatch(value):
         return True
     if HEX_IDENTIFIER_PATTERN.fullmatch(value):
         return True
-    if BASE64_IDENTIFIER_PATTERN.fullmatch(value) and not value.rstrip("=").startswith(("sk", "rk", "xox", "AIza")):
-        return True
+    if BASE64_IDENTIFIER_PATTERN.fullmatch(value):
+        base64_value = value.rstrip("=")
+        has_base64_specific_character = any(character in base64_value for character in "+/_-")
+        has_base64_context = bool(BASE64_CONTEXT_PATTERN.search(context))
+        has_known_secret_prefix = base64_value.startswith(("sk", "rk", "xox", "AIza"))
+        if (has_base64_specific_character or "=" in value or has_base64_context) and not has_known_secret_prefix:
+            return True
     if 28 <= len(value) <= 80 and HYPHENATED_IDENTIFIER_PATTERN.fullmatch(value):
         return True
     return False
