@@ -61,8 +61,8 @@ tRPC-Agent 的 Tool、MCP Tool、Skill 和 CodeExecutor 能让 Agent 执行脚�
 | 交付物 | 状态 | 路径 |
 | --- | --- | --- |
 | 安全检查器代码 | 已完成 | `trpc_agent_sdk/tools/safety/` |
-| CLI 工具 | 已完成 | `examples/tool_safety/tool_safety_check.py` |
-| Manifest 验收工具 | 已完成 | `examples/tool_safety/tool_safety_manifest_report.py` |
+| CLI 工具 | 已完成 | `tests/tools/safety/tool_safety_check.py` |
+| Manifest 验收工具 | 已完成 | `tests/tools/safety/tool_safety_manifest_report.py` |
 | 策略示例 | 已完成 | `examples/tool_safety/tool_safety_policy.yaml` |
 | 40 条边界测试样例 | 已完成 | `tests/tools/safety/samples/` |
 | 样例 manifest | 已完成 | `tests/tools/safety/samples/manifest.yaml` |
@@ -113,8 +113,8 @@ Tool / Skill / MCP Tool / CodeExecutor
 | `_telemetry.py` | 写入 OpenTelemetry 兼容 attributes |
 | `_wrapper.py` | 独立 wrapper，执行前扫描、审计、埋点和拦截 |
 | `_filter.py` | tRPC-Agent Filter 接入示例 |
-| `tool_safety_check.py` | 命令行扫描工具 |
-| `tool_safety_manifest_report.py` | Manifest 驱动验收和 deterministic 报告生成工具 |
+| `tests/tools/safety/tool_safety_check.py` | 命令行扫描测试工具 |
+| `tests/tools/safety/tool_safety_manifest_report.py` | Manifest 驱动验收和 deterministic 报告生成测试工具 |
 
 ## 规则体系
 
@@ -253,7 +253,7 @@ rm -rf /
 从仓库根目录执行：
 
 ```bash
-python3 examples/tool_safety/tool_safety_check.py \
+python3 tests/tools/safety/tool_safety_check.py \
   --script tests/tools/safety/samples/bash_pipe.sh \
   --language bash \
   --policy examples/tool_safety/tool_safety_policy.yaml \
@@ -292,7 +292,7 @@ MCP Tool 和 CodeExecutor 边界，不依赖真实模型凭据；真实模型运
 扫描 Python 脚本：
 
 ```bash
-python3 examples/tool_safety/tool_safety_check.py \
+python3 tests/tools/safety/tool_safety_check.py \
   --script tests/tools/safety/samples/network_whitelist.py \
   --language python \
   --policy examples/tool_safety/tool_safety_policy.yaml \
@@ -302,7 +302,7 @@ python3 examples/tool_safety/tool_safety_check.py \
 扫描执行参数：
 
 ```bash
-python3 examples/tool_safety/tool_safety_check.py \
+python3 tests/tools/safety/tool_safety_check.py \
   --script tests/tools/safety/samples/safe_python.py \
   --language python \
   --command-args "python3 safe_python.py" \
@@ -312,7 +312,7 @@ python3 examples/tool_safety/tool_safety_check.py \
 从 stdin 扫描脚本内容：
 
 ```bash
-printf 'rm -rf /\n' | python3 examples/tool_safety/tool_safety_check.py \
+printf 'rm -rf /\n' | python3 tests/tools/safety/tool_safety_check.py \
   --script - \
   --language bash \
   --tool-name stdin_bash_tool
@@ -321,7 +321,7 @@ printf 'rm -rf /\n' | python3 examples/tool_safety/tool_safety_check.py \
 批量扫描样例目录并输出汇总报告：
 
 ```bash
-python3 examples/tool_safety/tool_safety_check.py \
+python3 tests/tools/safety/tool_safety_check.py \
   --samples tests/tools/safety/samples \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --output examples/tool_safety/all_reports.json
@@ -587,7 +587,7 @@ examples/tool_safety/all_reports.json
 推荐使用 manifest 验收脚本重新生成：
 
 ```bash
-.venv/bin/python examples/tool_safety/tool_safety_manifest_report.py \
+.venv/bin/python tests/tools/safety/tool_safety_manifest_report.py \
   --strict-policy \
   --output examples/tool_safety/all_reports.json
 ```
@@ -602,7 +602,7 @@ examples/tool_safety/all_reports.json
 也可以使用通用 CLI 扫描目录：
 
 ```bash
-.venv/bin/python examples/tool_safety/tool_safety_check.py \
+.venv/bin/python tests/tools/safety/tool_safety_check.py \
   --samples tests/tools/safety/samples \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --output examples/tool_safety/all_reports.json
@@ -643,7 +643,7 @@ PY
 ### 字段验证
 
 ```bash
-.venv/bin/python examples/tool_safety/tool_safety_check.py \
+.venv/bin/python tests/tools/safety/tool_safety_check.py \
   --script tests/tools/safety/samples/danger_delete.sh \
   --language bash \
   --policy examples/tool_safety/tool_safety_policy.yaml \
@@ -779,8 +779,6 @@ trpc_agent_sdk/tools/safety/
 examples/tool_safety/
 ├── README.md
 ├── custom_policy_example.py
-├── tool_safety_check.py
-├── tool_safety_manifest_report.py
 ├── tool_safety_policy.yaml
 ├── tool_safety_report.json
 ├── tool_safety_audit.jsonl
@@ -796,6 +794,8 @@ tests/tools/safety/samples/
 └── 40 个边界测试样例
 
 tests/tools/safety/
+├── tool_safety_check.py
+├── tool_safety_manifest_report.py
 ├── test_agent_demo.py
 ├── test_audit.py
 ├── test_cli.py

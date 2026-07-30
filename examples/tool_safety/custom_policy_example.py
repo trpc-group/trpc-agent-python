@@ -11,46 +11,22 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from trpc_agent_sdk.tools.safety import Decision
-from trpc_agent_sdk.tools.safety import RiskFinding
-from trpc_agent_sdk.tools.safety import RiskLevel
+from examples.tool_safety.agent.tools import register_demo_safety_rules
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
-from trpc_agent_sdk.tools.safety import ToolScriptScanRequest
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
-
-
-def deny_internal_admin_rule(request: ToolScriptScanRequest,
-                             policy: ToolSafetyPolicy) -> Iterable[RiskFinding]:
-    """Block an organization-specific command that built-in rules do not know."""
-    del policy
-    if "internal-admin" not in request.script:
-        return []
-    return [
-        RiskFinding(
-            rule_id="CUSTOM_INTERNAL_ADMIN_COMMAND",
-            risk_type="process_command",
-            risk_level=RiskLevel.HIGH,
-            decision=Decision.DENY,
-            evidence="internal-admin",
-            recommendation="Route internal admin commands through an approved workflow.",
-            message="A user-registered safety rule matched an internal admin command.",
-        )
-    ]
 
 
 def build_scanner_from_yaml() -> ToolScriptSafetyScanner:
     policy = ToolSafetyPolicy.from_file(EXAMPLE_DIR / "tool_safety_policy.yaml", strict=True)
     scanner = ToolScriptSafetyScanner(policy)
-    scanner.register_rule(deny_internal_admin_rule)
-    return scanner
+    return register_demo_safety_rules(scanner)
 
 
 def build_scanner_from_dict() -> ToolScriptSafetyScanner:
@@ -64,7 +40,8 @@ def build_scanner_from_dict() -> ToolScriptSafetyScanner:
         },
         strict=True,
     )
-    return ToolScriptSafetyScanner(policy, custom_rules=[deny_internal_admin_rule])
+    scanner = ToolScriptSafetyScanner(policy)
+    return register_demo_safety_rules(scanner)
 
 
 def scan_demo_cases(scanner: ToolScriptSafetyScanner) -> dict[str, dict]:
