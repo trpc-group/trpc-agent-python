@@ -168,14 +168,17 @@ YAML 策略只修改配置数据，不需要修改规则实现：
 | `PARSE-001` | 轻量解析器无法安全判断的输入 |
 
 最终决策是确定性的：`deny` 优先于 `needs_human_review`，`needs_human_review` 优先于 `allow`。
-风险等级与决策动作分别报告。
+风险等级与决策动作分别报告。`policy_relaxed` 只表示本次报告实际命中的规则使用了放宽后的策略动作；
+与本次输入无关的全局放宽配置不会把该字段置为 `true`。
 
 ## 审计与 Telemetry
 
 每次受保护的调用都会在执行前产生一条审计事件。`rule_id` 保存最高优先级命中规则（允许执行时为
 `ALLOW-000`），`rule_ids` 保存全部有序命中规则。默认的 `LoggerAuditSink` 通过 SDK logger 输出一行
-结构化日志，不会创建文件。`JsonlAuditSink` 需要显式启用，并使用进程内锁；多个进程共享同一文件时，
-需要外部日志系统或锁机制。
+结构化日志，不会创建文件。`JsonlAuditSink` 需要显式启用，并使用固定大小的进程内锁分片，避免按路径
+缓存锁导致无界增长；多个进程共享同一文件时，仍需要外部日志系统或锁机制。异步 Filter 和执行 wrapper
+会把 audit sink 的同步 `emit()` 调用卸载到工作线程，避免文件 I/O 阻塞事件循环；独立扫描器和同步
+`SafetyGuard.check()` 保持同步行为。
 
 当前 OpenTelemetry span 正在记录时，安全检查器写入：
 
@@ -219,9 +222,10 @@ pytest -q tests/tools/safety
 该机制只是纵深防御中的一层，不能替代沙箱、文件系统权限、网络隔离、进程和内存配额、运行时超时，
 也不能替代依赖来源检查。
 
-`GuardedCodeExecutor` 在策略超时时发出协作式取消请求并返回失败结果，但 delegate 可以吞掉
-`CancelledError`，子进程也可能继续运行。只有具体 runtime 或沙箱停止进程、容器或远端任务，才能
-保证执行已经终止。
+`GuardedProgramRunner` 和 `GuardedCodeExecutor` 都会强制执行策略超时，超时后发出协作式取消请求并
+返回失败结果；外层调用被取消时也会向 delegate 传递取消。wrapper 会消费取消后迟到的任务异常，避免
+产生未检索任务异常，但 delegate 仍可能吞掉 `CancelledError`，子进程也可能继续运行。只有具体
+runtime 或沙箱停止进程、容器或远端任务，才能保证执行已经终止。
 
 扫描器采用闭世界放行：`allow` 表示本次输入中的每个可执行调用、命令、wrapper、重定向、执行环境覆盖
 和外部副作用参数均已被识别，并由有限的 capability/profile 和当前策略明确许可；它不等于“没有命中

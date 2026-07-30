@@ -84,6 +84,10 @@ Both `deny` and `needs_human_review` stop the handler and return a structured,
 redacted report. The same `filters=[...]` constructor argument can attach the
 filter to an `MCPTool`; MCP tool-selection predicates are not execution filters.
 
+`StreamingProgressTool` is an explicit exception: the framework calls its
+`run_streaming()` method directly instead of `BaseTool.run_async()`. Such tools
+need a dedicated wrapper and must not rely on a regular Tool Filter.
+
 ## Skill and CodeExecutor wrappers
 
 ```python
@@ -136,6 +140,10 @@ analysis, or invalid input. YAML cannot disable these completeness rules or
 relax them to `allow`, although it may tighten them to `deny`. Rules for
 fully identified operations remain configurable.
 
+`policy_relaxed` is set only when a relaxed policy action applies to a rule
+actually present in the current report. Unrelated global relaxations do not
+mark every audit event as relaxed.
+
 Project-specific matching logic can be supplied without editing the scanner:
 
 ```python
@@ -167,10 +175,15 @@ lookups, closures, and runtime reflection remain static-analysis limitations.
 ## Audit, telemetry, and failure behavior
 
 Audit events contain bounded metadata and hashes, never source, evidence, argv,
-environment values, or outputs. `JsonlAuditSink` uses an in-process lock;
-multi-process writers require an external logging system or lock. An audit sink
-failure is logged by exception type and does not replace the scanner's allow,
-review, or deny decision. OpenTelemetry failures are also isolated.
+environment values, or outputs. `JsonlAuditSink` uses a fixed-size set of
+in-process lock stripes instead of an unbounded per-path lock cache;
+multi-process writers still require an external logging system or lock.
+Asynchronous filters and execution wrappers offload the audit sink's synchronous
+`emit()` call to a worker thread so file I/O does not block the event loop.
+The standalone scanner and synchronous `SafetyGuard.check()` remain
+synchronous. An audit sink failure is logged by exception type and does not
+replace the scanner's allow, review, or deny decision. OpenTelemetry failures
+are also isolated.
 
 ## Security boundary
 
@@ -180,11 +193,14 @@ indirect code. Use filesystem permissions, network isolation, process and memory
 limits, runtime timeouts, dependency controls, and a sandbox for untrusted
 execution.
 
-`GuardedCodeExecutor` requests cooperative cancellation when its policy
-timeout expires and returns a failed result. A delegate may suppress
-`CancelledError` or leave child processes running, so this request does not
-prove that execution terminated. Only the concrete runtime or sandbox can
-guarantee termination by stopping the process, container, or remote job.
+`GuardedProgramRunner` and `GuardedCodeExecutor` both enforce the policy timeout,
+request cooperative cancellation when it expires, and propagate outer
+cancellation to the delegate. They consume late task failures after cancellation
+so those failures do not become unretrieved-task exceptions. A delegate may
+still suppress `CancelledError` or leave child processes running, so the
+cancellation request does not prove that execution terminated. Only the
+concrete runtime or sandbox can guarantee termination by stopping the process,
+container, or remote job.
 
 Tool Filters protect `BaseTool.run_async()` calls. CodeExecutor does not
 automatically pass through a Tool Filter, so it needs `GuardedCodeExecutor`.
