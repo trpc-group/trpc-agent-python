@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Correctness Review"
+  short_description: "Find concrete correctness defects in Python diffs"
+  default_prompt: "Use $python-correctness to review this Python diff for correctness defects."

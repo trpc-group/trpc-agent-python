@@ -432,6 +432,7 @@ skill_tool_set = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs
 建议先看：
 
 - [examples/code_executors](./examples/code_executors/README.md) - UnsafeLocalCodeExecutor / ContainerCodeExecutor
+- [examples/code_review_agent](./examples/code_review_agent/README.md) - 支持本地/GitHub App、Skills、沙箱分析和 SQL 持久化的代码评审 Agent
 
 相关文档：[code_executor.md](./docs/mkdocs/zh/code_executor.md)
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Security Review"
+  short_description: "Find exploitable security defects in Python diffs"
+  default_prompt: "Use $python-security to review this Python diff for security defects."

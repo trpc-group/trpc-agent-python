@@ -27,3 +27,4 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+.code-review/

@@ -461,6 +461,7 @@ skill_tool_set = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs
 Recommended first:
 
 - [examples/code_executors](./examples/code_executors/README.md) - `UnsafeLocalCodeExecutor` / `ContainerCodeExecutor`
+- [examples/code_review_agent](./examples/code_review_agent/README.md) - Local/GitHub App code review with Skills, sandboxed analyzers, and SQL persistence
 
 Related docs: [code_executor.md](./docs/mkdocs/en/code_executor.md)
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Coverage Review"
+  short_description: "Find missing tests for changed behavior and risks"
+  default_prompt: "Use $review-test-coverage to identify important missing tests for this diff."

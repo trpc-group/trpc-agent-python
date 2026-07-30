@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maintainability Review"
+  short_description: "Find costly maintainability risks in changed code"
+  default_prompt: "Use $review-maintainability to review this diff for material maintainability risks."
