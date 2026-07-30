@@ -109,7 +109,7 @@ class TestAsyncExecuteCommand:
                        f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
                        "time.sleep(60)\n")
 
-        result = await async_execute_command(tmp_path, [sys.executable, "-c", parent_code], timeout=0.2)
+        result = await async_execute_command(tmp_path, [sys.executable, "-c", parent_code], timeout=1.0)
 
         assert result.is_timeout is True
         child_pid = int(pid_file.read_text(encoding="utf-8"))

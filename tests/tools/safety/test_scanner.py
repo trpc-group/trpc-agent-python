@@ -288,6 +288,18 @@ def test_allowed_url_with_token_word_is_not_mistaken_for_secret_value():
     assert bash_report.decision == SafetyDecision.ALLOW
 
 
+def test_socket_connection_to_allowlisted_raw_hostname_is_allowed():
+    scanner = ToolScriptSafetyScanner(ToolSafetyPolicy(allowed_domains=["api.example.com"]))
+
+    report = scanner.scan(_request(
+        "import socket\nsocket.connect(('api.example.com', 443))",
+        ScriptLanguage.PYTHON,
+    ))
+
+    assert report.decision == SafetyDecision.ALLOW
+    assert "NETWORK_DOMAIN_NOT_ALLOWED" not in report.rule_ids
+
+
 @pytest.mark.parametrize(
     ("content", "language", "rule_id"),
     [

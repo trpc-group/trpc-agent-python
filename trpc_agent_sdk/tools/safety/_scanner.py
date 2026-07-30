@@ -891,7 +891,11 @@ class ToolScriptSafetyScanner:
                     secrets,
                 )
             ]
-        hostname = (urlparse(target).hostname or "").lower().rstrip(".")
+        parsed_target = target if "://" in target else f"//{target}"
+        try:
+            hostname = (urlparse(parsed_target).hostname or "").lower().rstrip(".")
+        except ValueError:
+            hostname = ""
         if hostname and any(hostname == allowed or hostname.endswith(f".{allowed}")
                             for allowed in self.policy.allowed_domains):
             return []
