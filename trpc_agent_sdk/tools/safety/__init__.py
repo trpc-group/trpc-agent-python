@@ -60,7 +60,6 @@ from ._safety_filter import ToolSafetyFilter
 from ._safety_guard import SafetyGuard
 from ._safety_guard import detect_script_type
 from ._telemetry import report_to_span
-from ._telemetry import report_audit_to_span
 
 __all__ = [
     # Core guard
@@ -104,5 +103,4 @@ __all__ = [
     "AuditLogger",
     # Telemetry
     "report_to_span",
-    "report_audit_to_span",
 ]

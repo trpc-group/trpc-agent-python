@@ -152,7 +152,6 @@ class ToolSafetyFilter(BaseFilter):
                 "script_hash": report.script_hash,
             }
             rsp.is_continue = False
-            rsp.error = None
             return
 
     @override

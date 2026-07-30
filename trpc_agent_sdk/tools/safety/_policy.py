@@ -13,12 +13,15 @@ behaviour — no code changes required.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
 from typing import Optional
 from typing import Union
+
+_logger = logging.getLogger(__name__)
 
 import yaml
 
@@ -222,12 +225,13 @@ class SafetyPolicy:
                     try:
                         override.risk_level = RiskLevel(cfg["risk_level"])
                     except ValueError:
-                        pass
+                        _logger.warning("Invalid risk_level '%s' for rule %s, using default", cfg["risk_level"],
+                                        rule_id)
                 if "decision" in cfg:
                     try:
                         override.decision = Decision(cfg["decision"])
                     except ValueError:
-                        pass
+                        _logger.warning("Invalid decision '%s' for rule %s, using default", cfg["decision"], rule_id)
                 policy.rule_overrides[rule_id] = override
         return policy
 

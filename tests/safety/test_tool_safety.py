@@ -24,7 +24,9 @@ telemetry and the ToolSafetyFilter integration.
 """
 
 import asyncio
+import concurrent.futures
 import json
+import threading
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -425,7 +427,8 @@ class TestBashPipe:
         """Safe pipe like echo | cat should be allowed."""
         report = guard.scan("echo 'test' | cat\n", tool_name="BashTool")
         # echo | cat is safe
-        assert report.decision == Decision.ALLOW or len(report.findings) == 0
+        assert report.decision == Decision.ALLOW, f"Expected ALLOW, got {report.decision}"
+        assert len(report.findings) == 0, f"Expected 0 findings, got {len(report.findings)}: {report.findings}"
 
     def test_bash_pipe_to_interpreter(self, guard):
         """Pipe to shell interpreter must be denied."""
@@ -1645,16 +1648,42 @@ class TestConcurrentScan:
     with a :class:`contextvars.ContextVar` that each concurrent task owns
     independently.
 
-    These tests use :func:`asyncio.gather` to run multiple ``scan()`` calls
-    simultaneously through *the same* ``SafetyGuard`` (which shares the
-    module-level ``global_rule_registry``), with each scan carrying a
-    *different* policy override.  If the context-var fix is working, every
-    finding's effective risk level and decision reflects *its own* policy,
-    not a peer's.
+    Unlike :func:`asyncio.gather`, which would run synchronous ``scan()``
+    calls sequentially, these tests use a :class:`ThreadPoolExecutor` so
+    that multiple scans execute in *true* parallelism across threads.
+    This exercises the ``contextvars`` isolation that the fix relies on.
     """
 
-    @pytest.mark.asyncio
-    async def test_concurrent_different_risk_levels(self):
+    # ------------------------------------------------------------------
+    # Helper: run N scan() calls across threads and collect results
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _run_concurrent(guards: list, script: str) -> tuple[list, list[str]]:
+        """Run *guards*' ``scan()`` in parallel threads.
+
+        Returns:
+            A tuple ``(reports, thread_names)`` so callers can verify that
+            the scans actually executed on different threads (proving true
+            parallelism rather than sequential execution).
+        """
+        thread_names: list[str] = [""] * len(guards)
+
+        def _scan(idx: int, guard):
+            thread_names[idx] = threading.current_thread().name
+            return guard.scan(script, "BashTool")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(guards)) as pool:
+            futures = [
+                pool.submit(_scan, i, g)
+                for i, g in enumerate(guards)
+            ]
+            reports = [f.result() for f in futures]
+        return reports, thread_names
+
+    # ------------------------------------------------------------------
+
+    def test_concurrent_different_risk_levels(self):
         """Concurrent scans with different risk-level overrides must not leak."""
         # Policy A: lower the risk of DANGEROUS-FILE-OPS to MEDIUM
         policy_a = SafetyPolicy.default()
@@ -1669,20 +1698,17 @@ class TestConcurrentScan:
         # Policy C: no override (keeps defaults: CRITICAL / DENY)
         policy_c = SafetyPolicy.default()
 
-        guard_a = SafetyGuard(policy=policy_a)
-        guard_b = SafetyGuard(policy=policy_b)
-        guard_c = SafetyGuard(policy=policy_c)
-
-        script = "rm -rf /\n"
-
-        async def scan_a():
-            return guard_a.scan(script, tool_name="BashTool")
-        async def scan_b():
-            return guard_b.scan(script, tool_name="BashTool")
-        async def scan_c():
-            return guard_c.scan(script, tool_name="BashTool")
-
-        reports = await asyncio.gather(scan_a(), scan_b(), scan_c())
+        reports, thread_names = self._run_concurrent(
+            [SafetyGuard(policy=policy_a),
+             SafetyGuard(policy=policy_b),
+             SafetyGuard(policy=policy_c)],
+            "rm -rf /\n",
+        )
+        # Verify scans ran on thread-pool workers (not the caller's thread),
+        # proving they are truly parallel from a contextvars perspective.
+        for tname in thread_names:
+            assert not tname.startswith("MainThread"), \
+                f"Scan ran on main thread instead of thread-pool worker: {tname}"
 
         report_a, report_b, report_c = reports
 
@@ -1704,28 +1730,22 @@ class TestConcurrentScan:
         assert finding_c.risk_level == RiskLevel.CRITICAL, \
             f"Expected CRITICAL (default), got {finding_c.risk_level}"
 
-    @pytest.mark.asyncio
-    async def test_concurrent_mixed_allow_and_deny(self):
+    def test_concurrent_mixed_allow_and_deny(self):
         """Concurrent scans where one policy disables a rule entirely."""
-        # Policy A: disable DANGEROUS-FILE-OPS entirely
         policy_a = SafetyPolicy.default()
         policy_a.rule_overrides["BASH-DANGEROUS-FILE-OPS"] = RuleOverride(
             enabled=False,
         )
-        # Policy B: keep default (rule active)
         policy_b = SafetyPolicy.default()
 
-        guard_a = SafetyGuard(policy=policy_a)
-        guard_b = SafetyGuard(policy=policy_b)
-
-        script = "rm -rf /\n"
-
-        async def scan_a():
-            return guard_a.scan(script, tool_name="BashTool")
-        async def scan_b():
-            return guard_b.scan(script, tool_name="BashTool")
-
-        reports = await asyncio.gather(scan_a(), scan_b())
+        reports, thread_names = self._run_concurrent(
+            [SafetyGuard(policy=policy_a),
+             SafetyGuard(policy=policy_b)],
+            "rm -rf /\n",
+        )
+        for tname in thread_names:
+            assert not tname.startswith("MainThread"), \
+                f"Scan ran on main thread: {tname}"
         report_a, report_b = reports
 
         # Policy A — rule disabled → no DANGEROUS-FILE-OPS finding
@@ -1737,30 +1757,22 @@ class TestConcurrentScan:
         assert report_b.decision == Decision.DENY
         assert any("DANGEROUS-FILE-OPS" in f.rule_id for f in report_b.findings)
 
-    @pytest.mark.asyncio
-    async def test_concurrent_decision_override(self):
+    def test_concurrent_decision_override(self):
         """Concurrent scans with different decision overrides must not leak."""
-        # Policy A: change the while-true finding to NEEDS_HUMAN_REVIEW
         policy_a = SafetyPolicy.default()
         policy_a.rule_overrides["BASH-RESOURCE-ABUSE"] = RuleOverride(
             enabled=True, risk_level=RiskLevel.LOW, decision=Decision.NEEDS_HUMAN_REVIEW,
         )
-        # Policy B: keep default (DENY for infinite loop — rule default_decision)
         policy_b = SafetyPolicy.default()
 
-        guard_a = SafetyGuard(policy=policy_a)
-        guard_b = SafetyGuard(policy=policy_b)
-
-        # Use a script that triggers the while-true finding (no explicit
-        # risk_level/decision in _make_finding, so the override controls it).
-        script = "while true; do :; done\n"
-
-        async def scan_a():
-            return guard_a.scan(script, tool_name="BashTool")
-        async def scan_b():
-            return guard_b.scan(script, tool_name="BashTool")
-
-        reports = await asyncio.gather(scan_a(), scan_b())
+        reports, thread_names = self._run_concurrent(
+            [SafetyGuard(policy=policy_a),
+             SafetyGuard(policy=policy_b)],
+            "while true; do :; done\n",
+        )
+        for tname in thread_names:
+            assert not tname.startswith("MainThread"), \
+                f"Scan ran on main thread: {tname}"
         report_a, report_b = reports
 
         # Policy A — while-true finding should be NEEDS_HUMAN_REVIEW

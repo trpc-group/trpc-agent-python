@@ -13,6 +13,7 @@ Rules are *pluggable*: you can register custom rules at runtime via
 
 from __future__ import annotations
 
+import ast
 import contextvars
 import re
 from abc import ABC
@@ -59,7 +60,7 @@ class ScanContext:
     env: dict[str, str]
     tool_name: str
     policy: SafetyPolicy
-    cached_tree: Optional[Any] = None
+    cached_tree: "Optional[ast.Module]" = None
     cached_lines: Optional[list[str]] = None
     compiled_secrets: Optional[list[re.Pattern]] = field(default=None, repr=False)
 
@@ -125,7 +126,7 @@ class Rule(ABC):
 
         return Finding(
             rule_id=self.rule_id,
-            category=self.category.value,
+            category=self.category,
             risk_level=effective_risk,
             decision=effective_decision,
             description=self.description,

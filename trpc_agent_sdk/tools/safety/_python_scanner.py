@@ -120,7 +120,7 @@ _INSTALL_PREFIXES = (
     "pip3 install",
     "python -m pip install",
     "npm install",
-    "npm i ",
+    "npm i",
     "yarn add",
     "apt install",
     "apt-get install",
@@ -398,8 +398,18 @@ class PyDangerousFileOpsRule(Rule):
 
             # shutil.rmtree — recursive directory deletion
             if dotted == ("shutil", "rmtree"):
-                path_arg = _get_str_arg(node, 0) or ""
-                if ctx.policy.is_system_dir(path_arg) or not path_arg:
+                path_arg = _get_str_arg(node, 0)
+                if path_arg is None:
+                    # Dynamic/unresolvable argument — flag as a precaution
+                    seg = _get_source_segment(ctx.script, node)
+                    findings.append(
+                        self._make_finding(
+                            seg or "shutil.rmtree(dynamic_path)",
+                            line_no,
+                            "shutil.rmtree called with a dynamic (non-literal) argument; "
+                            "ensure the path is not a system directory.",
+                        ))
+                elif ctx.policy.is_system_dir(path_arg) or not path_arg:
                     seg = _get_source_segment(ctx.script, node)
                     findings.append(
                         self._make_finding(
@@ -420,8 +430,17 @@ class PyDangerousFileOpsRule(Rule):
 
             # os.remove / os.unlink / os.rmdir on protected paths
             if dotted in (("os", "remove"), ("os", "unlink"), ("os", "rmdir"), ("os", "removedirs")):
-                path_arg = _get_str_arg(node, 0) or ""
-                if ctx.policy.is_system_dir(path_arg) or ctx.policy.is_path_forbidden(path_arg):
+                path_arg = _get_str_arg(node, 0)
+                if path_arg is None:
+                    seg = _get_source_segment(ctx.script, node)
+                    findings.append(
+                        self._make_finding(
+                            seg or f"os.{dotted[1]}(dynamic_path)",
+                            line_no,
+                            f"os.{dotted[1]} called with a dynamic (non-literal) argument; "
+                            "ensure the path is not a protected file.",
+                        ))
+                elif ctx.policy.is_system_dir(path_arg) or ctx.policy.is_path_forbidden(path_arg):
                     seg = _get_source_segment(ctx.script, node)
                     findings.append(
                         self._make_finding(
@@ -436,8 +455,18 @@ class PyDangerousFileOpsRule(Rule):
             # check it *before* the "dotted is None" guard below.
             is_open_call = isinstance(node.func, ast.Name) and node.func.id == "open"
             if dotted in _PATH_ACCESS_CALLS or is_open_call:
-                path_arg = _get_str_arg(node, 0) or ""
-                if ctx.policy.is_path_forbidden(path_arg):
+                path_arg = _get_str_arg(node, 0)
+                if path_arg is None:
+                    seg = _get_source_segment(ctx.script, node)
+                    findings.append(
+                        self._make_finding(
+                            seg or f"{dotted[1] if dotted else 'open'}(dynamic_path)",
+                            line_no,
+                            f"{dotted[1] if dotted else 'open'} called with a "
+                            "dynamic (non-literal) argument; ensure the path "
+                            "is not a credential file.",
+                        ))
+                elif ctx.policy.is_path_forbidden(path_arg):
                     seg = _get_source_segment(ctx.script, node)
                     findings.append(
                         self._make_finding(
@@ -565,7 +594,7 @@ class PyProcessSystemRule(Rule):
             combined = " ".join(cmd_args)
 
             # 1. Privilege escalation — always CRITICAL deny
-            if any(kw in combined for kw in ("sudo", "su -", "su root")):
+            if re.search(r"\bsudo\b", combined) or re.search(r"\bsu\s+-[a-zA-Z]*\b", combined) or "su root" in combined:
                 seg = _get_source_segment(ctx.script, node)
                 findings.append(
                     self._make_finding(
@@ -666,19 +695,33 @@ class PyDependencyInstallRule(Rule):
             line_no = getattr(node, "lineno", None)
             cmd_args = _get_all_str_args(node)
             combined = " ".join(cmd_args)
-            for prefix in _INSTALL_PREFIXES:
-                if prefix in combined:
-                    seg = _get_source_segment(ctx.script, node)
-                    findings.append(
-                        self._make_finding(
-                            seg or combined[:120],
-                            line_no,
-                            "Dependency installation at runtime changes the "
-                            "execution environment; declare dependencies in the "
-                            "project manifest instead.",
-                        ))
-                    break
+            if self._is_install_command(combined):
+                seg = _get_source_segment(ctx.script, node)
+                findings.append(
+                    self._make_finding(
+                        seg or combined[:120],
+                        line_no,
+                        "Dependency installation at runtime changes the "
+                        "execution environment; declare dependencies in the "
+                        "project manifest instead.",
+                    ))
+                break
         return findings
+
+    @staticmethod
+    def _is_install_command(combined: str) -> bool:
+        """Check if *combined* starts with an install prefix as a token boundary.
+
+        Uses word-boundary matching so that ``pip install_package``
+        (a single arg, not an install command) does NOT match the
+        ``pip install`` prefix, while ``pip install package`` does.
+        """
+        for prefix in _INSTALL_PREFIXES:
+            # Match at token boundary: either combined == prefix, or
+            # combined starts with prefix followed by a space.
+            if combined == prefix or combined.startswith(prefix + " "):
+                return True
+        return False
 
 
 class PyResourceAbuseRule(Rule):
@@ -741,8 +784,11 @@ class PyResourceAbuseRule(Rule):
                                 decision=Decision.NEEDS_HUMAN_REVIEW,
                             ))
 
-            # Huge range in a loop that writes data
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
+            # Huge range in a loop — only flag when the range is actually
+            # iterated (for … in range(N) or comprehensions), not standalone
+            # calls like ``x = range(9999999)`` which are harmless.
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range"
+                    and self._is_iterated_range(node, tree)):
                 args = [a for a in node.args if isinstance(a, ast.Constant)]
                 for a in args:
                     if isinstance(a.value, int) and a.value > ctx.policy.max_range_size:
@@ -756,6 +802,20 @@ class PyResourceAbuseRule(Rule):
                                 decision=Decision.NEEDS_HUMAN_REVIEW,
                             ))
         return findings
+
+    @staticmethod
+    def _is_iterated_range(node: ast.Call, tree: ast.AST) -> bool:
+        """Return True if *node* is a ``range()`` call used in a ``for`` loop
+        or comprehension (where it would actually be iterated).
+        """
+        for parent in ast.walk(tree):
+            if isinstance(parent, (ast.For, ast.AsyncFor)):
+                if parent.iter is node:
+                    return True
+            if isinstance(parent, ast.comprehension):
+                if parent.iter is node:
+                    return True
+        return False
 
 
 class PySecretLeakRule(Rule):
@@ -780,6 +840,11 @@ class PySecretLeakRule(Rule):
         seen_lines: set[int] = set()
         lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
         for idx, line in enumerate(lines, start=1):
+            # Skip comment-only lines — a pattern match in a comment is
+            # almost certainly a false positive (e.g. ``# password = x``).
+            stripped_line = line.strip()
+            if stripped_line.startswith("#"):
+                continue
             for pattern in compiled:
                 if pattern.search(line):
                     if idx not in seen_lines:
@@ -802,7 +867,7 @@ class PySecretLeakRule(Rule):
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 line_no = getattr(node, "lineno", None)
-                if line_no in seen_lines:
+                if line_no is None or line_no in seen_lines:
                     continue
                 for pattern in compiled:
                     match = pattern.search(node.value)
@@ -832,7 +897,7 @@ class PySecretLeakRule(Rule):
                 if not any(_expr_references_tainted(a, tainted) for a in args):
                     continue
                 line_no = getattr(node, "lineno", None)
-                if line_no in seen_lines:
+                if line_no is None or line_no in seen_lines:
                     continue
                 seen_lines.add(line_no)
                 seg = _get_source_segment(ctx.script, node)

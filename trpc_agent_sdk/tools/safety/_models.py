@@ -104,7 +104,7 @@ class Finding:
     """
 
     rule_id: str
-    category: str
+    category: RiskCategory
     risk_level: RiskLevel
     decision: Decision
     description: str
@@ -115,7 +115,7 @@ class Finding:
     def to_dict(self) -> dict[str, Any]:
         return {
             "rule_id": self.rule_id,
-            "category": self.category,
+            "category": self.category.value,
             "risk_level": self.risk_level.value,
             "decision": self.decision.value,
             "description": self.description,

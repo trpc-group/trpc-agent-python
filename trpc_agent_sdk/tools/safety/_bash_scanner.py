@@ -84,12 +84,12 @@ class BashDangerousFileOpsRule(Rule):
     #   3. rm --recursive --force /   (long flags)
     _RM_RF = re.compile(
         r"\brm\s+(?:"
-        r"-[a-zA-Z]*r[a-zA-Z]*f"              # -rf, -rvf  (joined, r before f)
-        r"|-[a-zA-Z]*f[a-zA-Z]*r"             # -fr, -fvr  (joined, f before r)
-        r"|-[a-zA-Z]*r\s+-[a-zA-Z]*f"         # -r -f      (split short)
-        r"|-[a-zA-Z]*f\s+-[a-zA-Z]*r"         # -f -r      (split short reversed)
-        r"|--recursive\s+--force"             # long flags
-        r"|--force\s+--recursive"             # long flags reversed
+        r"-[a-zA-Z]*r[a-zA-Z]*f"  # -rf, -rvf  (joined, r before f)
+        r"|-[a-zA-Z]*f[a-zA-Z]*r"  # -fr, -fvr  (joined, f before r)
+        r"|-[a-zA-Z]*r\s+-[a-zA-Z]*f"  # -r -f      (split short)
+        r"|-[a-zA-Z]*f\s+-[a-zA-Z]*r"  # -f -r      (split short reversed)
+        r"|--recursive\s+--force"  # long flags
+        r"|--force\s+--recursive"  # long flags reversed
         r")\s+(?P<target>\S+)",
         re.IGNORECASE,
     )
@@ -106,8 +106,11 @@ class BashDangerousFileOpsRule(Rule):
         lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
 
         # Compile credential-read command pattern once per scan.
-        read_cmds_pattern = re.compile(r"\b(" + "|".join(re.escape(c)
-                                                         for c in ctx.policy.credential_read_commands) + r")\b")
+        cred_cmds = ctx.policy.credential_read_commands
+        if cred_cmds:
+            read_cmds_pattern = re.compile(r"\b(" + "|".join(re.escape(c) for c in cred_cmds) + r")\b")
+        else:
+            read_cmds_pattern = None  # empty list → disable credential-read check
 
         for idx, line in enumerate(lines, start=1):
             stripped = line.strip()
@@ -118,6 +121,10 @@ class BashDangerousFileOpsRule(Rule):
             match = self._RM_RF.search(stripped)
             if match:
                 target = match.group("target")
+                # Strip surrounding quotes so rm -rf "/" and rm -rf '/'
+                # resolve to bare / and match the always-dangerous regex.
+                if len(target) >= 2 and target[0] == target[-1] and target[0] in ('"', "'"):
+                    target = target[1:-1]
                 if self._RM_RF_ALWAYS_DANGEROUS.match(target) or ctx.policy.is_system_dir(target):
                     findings.append(
                         self._make_finding(
@@ -129,7 +136,7 @@ class BashDangerousFileOpsRule(Rule):
                     continue
 
             # Accessing credential files — check if any path token is forbidden.
-            if read_cmds_pattern.search(stripped):
+            if read_cmds_pattern is not None and read_cmds_pattern.search(stripped):
                 for token in stripped.split():
                     # Handle --flag=value tokens (only for option-like tokens;
                     # plain tokens like "a=b.env" must be taken literally).
@@ -216,7 +223,10 @@ class BashProcessSystemRule(Rule):
     applies_to = (ScriptType.BASH, )
 
     _SUDO = re.compile(r"\b(sudo|su\s+-|su\s+root|pkexec|doas)\b", re.IGNORECASE)
-    _EVAL = re.compile(r"\b(eval|exec|source|\.)\s+", re.IGNORECASE)
+    _EVAL = re.compile(
+        r"\b(?:eval|exec|source)\s+|(?:^|\s)\.\s+",
+        re.IGNORECASE,
+    )
     _PIPE_TO_SH = re.compile(r"\|\s*(sh|bash|zsh|python\d*|perl|ruby)\b", re.IGNORECASE)
 
     def check(self, ctx: ScanContext) -> list[Finding]:
@@ -321,7 +331,7 @@ class BashResourceAbuseRule(Rule):
     # Classic fork bomb:  :(){ :|:& };:
     _FORK_BOMB = re.compile(r":\s*\(\s*\)\s*\{.*:.*:.*&.*\}\s*;\s*:", re.IGNORECASE)
     _WHILE_TRUE = re.compile(r"\bwhile\s+(true|1|\:)\s*;\s*do\b", re.IGNORECASE)
-    _YES = re.compile(r"\byes\b\s+(?!-)\S")
+    _YES = re.compile(r"\byes\b(?:\s+(?!-)\S)?")
     _SLEEP = re.compile(r"\bsleep\s+(\d+)\b", re.IGNORECASE)
 
     def check(self, ctx: ScanContext) -> list[Finding]:
@@ -550,11 +560,12 @@ class BashAllowedCommandRule(Rule):
                 cmd = tokens[0]
             if not cmd:
                 continue
-            # Skip shell keywords / control structures
-            if cmd in self._KEYWORDS:
-                continue
             # Strip directory prefix: /usr/bin/curl -> curl
             cmd_name = cmd.rsplit("/", 1)[-1].lower()
+            # Skip shell keywords / control structures (also handles
+            # full-path forms like /usr/bin/if after stripping).
+            if cmd_name in self._KEYWORDS:
+                continue
             if cmd_name not in allowed_lower:
                 findings.append(
                     self._make_finding(

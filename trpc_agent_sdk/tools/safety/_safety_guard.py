@@ -42,6 +42,7 @@ from ._models import AuditEvent
 from ._models import compute_script_hash
 from ._models import Decision
 from ._models import Finding
+from ._models import RiskCategory
 from ._models import RiskLevel
 from ._models import SafetyReport
 from ._models import ScriptType
@@ -115,9 +116,8 @@ def detect_script_type(script: str, hint: Optional[str] = None) -> ScriptType:
     # the most reliable signal: bash commands almost never parse as valid
     # Python, and Python code always does.
     try:
-        import ast as _ast
+        ast.parse(script)
 
-        _ast.parse(script)
         # Confirm it has at least one Python-ish construct to avoid
         # treating empty / trivial strings as Python.
         if _PYTHON_STRONG_INDICATORS.search(script) or _PYTHON_INDICATORS.search(script):
@@ -143,7 +143,7 @@ def detect_script_type(script: str, hint: Optional[str] = None) -> ScriptType:
         return ScriptType.BASH
     # If it looks like neither, treat single-line / short snippets as bash
     # (they are most likely shell commands) and multi-line as unknown.
-    line_count = script.strip().count("\n") + 1
+    line_count = script.count("\n") + 1
     if line_count <= 3 and script.strip():
         return ScriptType.BASH
 
@@ -276,7 +276,23 @@ class SafetyGuard:
                 cached_tree = None
 
         # Pre-compile secret patterns once for both Python and Bash rules.
-        compiled_secrets = [re.compile(p) for p in self.policy.secret_patterns]
+        findings: list[Finding] = []
+        compiled_secrets: list[re.Pattern] = []
+        for p in self.policy.secret_patterns:
+            try:
+                compiled_secrets.append(re.compile(p))
+            except re.error:
+                # A malformed pattern in the policy must not crash the scan.
+                findings.append(
+                    Finding(
+                        rule_id="GUARD-INVALID-PATTERN",
+                        category=RiskCategory.PROCESS_SYSTEM,
+                        risk_level=RiskLevel.LOW,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                        description=f"Invalid regex pattern in secret_patterns: {p}",
+                        evidence=str(p)[:200],
+                        recommendation="Fix or remove the malformed pattern in the policy YAML.",
+                    ))
 
         # Build the scan context
         ctx = ScanContext(
@@ -293,13 +309,12 @@ class SafetyGuard:
         )
 
         # Check script-length limit
-        findings: list[Finding] = []
         line_count = script.count("\n") + 1
         if line_count > self.policy.max_script_lines:
             findings.append(
                 Finding(
                     rule_id="GUARD-SCRIPT-TOO-LONG",
-                    category="resource_abuse",
+                    category=RiskCategory.RESOURCE_ABUSE,
                     risk_level=RiskLevel.MEDIUM,
                     decision=Decision.NEEDS_HUMAN_REVIEW,
                     description=f"Script exceeds maximum line count "
@@ -313,7 +328,7 @@ class SafetyGuard:
             findings.append(
                 Finding(
                     rule_id="GUARD-LARGE-SCRIPT",
-                    category="resource_abuse",
+                    category=RiskCategory.RESOURCE_ABUSE,
                     risk_level=RiskLevel.LOW,
                     decision=Decision.NEEDS_HUMAN_REVIEW,
                     description=f"Script is large ({line_count} lines); review recommended.",
@@ -342,7 +357,7 @@ class SafetyGuard:
                     findings.append(
                         Finding(
                             rule_id=f"GUARD-RULE-ERROR-{rule.rule_id}",
-                            category="process_system",
+                            category=RiskCategory.PROCESS_SYSTEM,
                             risk_level=RiskLevel.LOW,
                             decision=Decision.NEEDS_HUMAN_REVIEW,
                             description=f"Rule {rule.rule_id} raised an error: {ex}",
@@ -352,10 +367,29 @@ class SafetyGuard:
                 finally:
                     _current_override.reset(token)
 
+        else:
+            # Unknown script type — no rules apply, so flag for review
+            # instead of silently allowing execution.
+            if not findings:
+                findings.append(
+                    Finding(
+                        rule_id="GUARD-UNKNOWN-SCRIPT",
+                        category=RiskCategory.PROCESS_SYSTEM,
+                        risk_level=RiskLevel.MEDIUM,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                        description=("Script type could not be determined "
+                                     f"({line_count} lines); manual review required."),
+                        evidence=("Script was not recognized as Python or Bash. "
+                                  "Add a shebang line or use script_type_hint."),
+                        recommendation=("Add a shebang line or use script_type_hint "
+                                        "to specify the script language."),
+                    ))
+
         # Aggregate
         decision, risk_level = _aggregate_decision(findings)
         duration_ms = (time.perf_counter() - start) * 1000.0
-        sanitized = self.policy.redact_secrets_in_evidence and any(f.category == "secret_leak" for f in findings)
+        has_secret = any(f.category == RiskCategory.SECRET_LEAK for f in findings)
+        sanitized = self.policy.redact_secrets_in_evidence and has_secret
 
         # Sort findings by risk level (highest first)
         risk_order = {
@@ -380,8 +414,10 @@ class SafetyGuard:
             summary=_build_summary(decision, risk_level, findings, script_type),
         )
 
-        # Telemetry
-        blocked = decision in (Decision.DENY, Decision.NEEDS_HUMAN_REVIEW)
+        # Telemetry — only DENY means execution was actually intercepted
+        # (NEEDS_HUMAN_REVIEW only blocks when block_on_review is set;
+        # that's the filter's concern, not the guard's).
+        blocked = decision == Decision.DENY
         report_to_span(report, blocked=blocked)
 
         # Audit

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from collections import deque
 from typing import Any
 from typing import Optional
 from typing import Union
@@ -44,7 +45,7 @@ class AuditLogger:
     ) -> None:
         self._path = str(path) if path else None
         self._max_buffer = max_buffer
-        self._buffer: list[dict[str, Any]] = []
+        self._buffer: deque[dict[str, Any]] = deque()
         self._lock = threading.RLock()
 
     # ------------------------------------------------------------------
@@ -62,7 +63,7 @@ class AuditLogger:
                     fh.write(json.dumps(data, ensure_ascii=False) + "\n")
             else:
                 if len(self._buffer) >= self._max_buffer:
-                    self._buffer.pop(0)
+                    self._buffer.popleft()
                 self._buffer.append(data)
 
     # ------------------------------------------------------------------
@@ -70,7 +71,7 @@ class AuditLogger:
     def get_events(self) -> list[dict[str, Any]]:
         """Return a copy of in-memory buffered events."""
         with self._lock:
-            return list(self._buffer)
+            return list(self._buffer)  # deque→list is O(n), called only on explicit read
 
     def clear_buffer(self) -> None:
         """Clear the in-memory buffer."""
