@@ -10,8 +10,16 @@ from trpc_agent_sdk.evaluation._agent_evaluator import AgentEvaluator
 from trpc_agent_sdk.evaluation._eval_config import EvalConfig
 from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
 from trpc_agent_sdk.evaluation._eval_result import EvaluateResult
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
 
+from agent.agent import create_agent
 from pipeline._models import EvalSetReport, PerCaseScore
+
+
+# App name used for the live runner. Eval cases store this in session_input.app_name
+# when they want to override the default; otherwise the runner's app_name is used.
+LIVE_RUNNER_APP_NAME = "shopping_assistant"
 
 
 @runtime_checkable
@@ -43,6 +51,61 @@ class TraceBackend:
             eval_dataset_file_path_or_dir=eval_set_path,
             eval_metrics_file_path_or_dir=metrics_config_path,
             num_runs=num_runs,
+        )
+        # 只吞 AssertionError — 基线本来就该有失败 case
+        try:
+            await executer.evaluate()
+        except AssertionError:
+            pass
+
+        raw: EvaluateResult | None = executer.get_result()
+        if raw is None:
+            raise RuntimeError(f"评测失败 ({eval_set_path}): 无返回结果")
+        return raw, _build_report(raw)
+
+
+class LiveBackend:
+    """real 模式 backend: 每次 evaluate() 现建 Runner（→ 新 agent → 重读 system.md）。
+
+    Why a factory, not an instance: ``LlmAgent`` freezes ``instruction`` at
+    construction time. Holding a long-lived agent would let Stage 4 pick up the
+    *old* prompt. ``optimization.md`` §4.1-§4.3 require a fresh agent per
+    evaluation, so the new ``system.md`` (written by the optimizer) is read on
+    every call.
+    """
+
+    def __init__(self, agent_factory=create_agent) -> None:
+        self._agent_factory = agent_factory
+        self._agents_built: int = 0  # 供 Task 16.3 回归测试断言
+
+    def agents_built(self) -> int:
+        return self._agents_built
+
+    async def evaluate(
+        self,
+        *,
+        eval_set_path: str,
+        metrics_config_path: str,
+        num_runs: int = 1,
+    ) -> tuple[EvaluateResult, EvalSetReport]:
+        # 1. 现建 agent — 触发 _read_system_prompt() 重新读 system.md
+        agent = self._agent_factory(demo_mode=False)
+        self._agents_built += 1
+
+        # 2. 包成 Runner 注入到 AgentEvaluator.get_executer(..., runner=...)
+        #    SDK 签名: get_executer(..., runner: Optional[Runner] = None) 见
+        #    _agent_evaluator.py:373
+        runner = Runner(
+            app_name=LIVE_RUNNER_APP_NAME,
+            agent=agent,
+            session_service=InMemorySessionService(),
+        )
+
+        executer = AgentEvaluator.get_executer(
+            eval_dataset_file_path_or_dir=eval_set_path,
+            eval_metrics_file_path_or_dir=metrics_config_path,
+            num_runs=num_runs,
+            runner=runner,
         )
         # 只吞 AssertionError — 基线本来就该有失败 case
         try:
