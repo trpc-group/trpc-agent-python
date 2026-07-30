@@ -242,10 +242,9 @@ class OptimizationReport(EvalBaseModel):
             baseline = getattr(self.baseline, split)
             candidate = getattr(self.candidate, split)
             delta = getattr(self.delta, split)
-            lines.append(
-                f"| {split} | {baseline.score:.4f} | {candidate.score:.4f} | "
-                f"{delta.score_delta:+.4f} | {baseline.pass_rate:.2%} | "
-                f"{candidate.pass_rate:.2%} |")
+            lines.append(f"| {split} | {baseline.score:.4f} | {candidate.score:.4f} | "
+                         f"{delta.score_delta:+.4f} | {baseline.pass_rate:.2%} | "
+                         f"{candidate.pass_rate:.2%} |")
 
         lines.extend([
             "",
@@ -256,11 +255,10 @@ class OptimizationReport(EvalBaseModel):
         ])
         for check in self.gate_decision.checks:
             result = "PASS" if check.passed else "FAIL"
-            lines.append(
-                f"| {_markdown(check.name)} | {result} | "
-                f"{_markdown(_compact(check.actual))} | "
-                f"{_markdown(_compact(check.expected))} | "
-                f"{_markdown(check.detail)} |")
+            lines.append(f"| {_markdown(check.name)} | {result} | "
+                         f"{_markdown(_compact(check.actual))} | "
+                         f"{_markdown(_compact(check.expected))} | "
+                         f"{_markdown(check.detail)} |")
 
         lines.extend([
             "",
@@ -270,10 +268,9 @@ class OptimizationReport(EvalBaseModel):
             "| --- | ---: | ---: | ---: | --- |",
         ])
         for case in self.delta.validation.cases:
-            lines.append(
-                f"| {_markdown(case.case_id)} | {_score_text(case.baseline_score)} | "
-                f"{_score_text(case.candidate_score)} | "
-                f"{_signed_score_text(case.score_delta)} | {_markdown(case.status)} |")
+            lines.append(f"| {_markdown(case.case_id)} | {_score_text(case.baseline_score)} | "
+                         f"{_score_text(case.candidate_score)} | "
+                         f"{_signed_score_text(case.score_delta)} | {_markdown(case.status)} |")
 
         lines.extend([
             "",
@@ -314,24 +311,15 @@ class OptimizationReport(EvalBaseModel):
         """Render a Simplified Chinese reviewer report."""
         accepted = self.gate_decision.accepted
         decision = "接受" if accepted else "拒绝"
-        recommendation = (
-            f"建议接受第 {self.candidate.round} 轮候选提示词。"
-            if accepted
-            else f"不建议接受第 {self.candidate.round} 轮候选提示词。"
-        )
+        recommendation = (f"建议接受第 {self.candidate.round} 轮候选提示词。"
+                          if accepted else f"不建议接受第 {self.candidate.round} 轮候选提示词。")
         validation_baseline = self.baseline.validation
         validation_candidate = self.candidate.validation
         validation_delta = self.delta.validation
         newly_passed = "、".join(validation_delta.newly_passed) or "无"
         newly_failed = "、".join(validation_delta.newly_failed) or "无"
-        remaining_failed = "、".join(
-            case.case_id for case in validation_candidate.cases if not case.passed
-        ) or "无"
-        source_update = (
-            "已写回源提示词。"
-            if self.audit.source_updated
-            else "未自动写回源提示词，仍需人工审核后决定是否采用。"
-        )
+        remaining_failed = "、".join(case.case_id for case in validation_candidate.cases if not case.passed) or "无"
+        source_update = ("已写回源提示词。" if self.audit.source_updated else "未自动写回源提示词，仍需人工审核后决定是否采用。")
 
         lines = [
             "# 评测与提示词优化报告",
@@ -360,11 +348,9 @@ class OptimizationReport(EvalBaseModel):
             baseline = getattr(self.baseline, split)
             candidate = getattr(self.candidate, split)
             delta = getattr(self.delta, split)
-            lines.append(
-                f"| {label} | {baseline.score:.4f} | {candidate.score:.4f} | "
-                f"{delta.score_delta:+.4f} | {baseline.pass_rate:.2%} | "
-                f"{candidate.pass_rate:.2%} |"
-            )
+            lines.append(f"| {label} | {baseline.score:.4f} | {candidate.score:.4f} | "
+                         f"{delta.score_delta:+.4f} | {baseline.pass_rate:.2%} | "
+                         f"{candidate.pass_rate:.2%} |")
 
         lines.extend([
             "",
@@ -375,17 +361,11 @@ class OptimizationReport(EvalBaseModel):
         ])
         for check in self.gate_decision.checks:
             label, detail = _zh_gate_text(check.name)
-            result = (
-                "未启用"
-                if not check.configured
-                else ("通过" if check.passed else "未通过")
-            )
-            lines.append(
-                f"| {_markdown(label)} | {result} | "
-                f"{_markdown(_compact_zh(check.actual))} | "
-                f"{_markdown(_compact_zh(check.expected))} | "
-                f"{_markdown(detail)} |"
-            )
+            result = ("未启用" if not check.configured else ("通过" if check.passed else "未通过"))
+            lines.append(f"| {_markdown(label)} | {result} | "
+                         f"{_markdown(_compact_zh(check.actual))} | "
+                         f"{_markdown(_compact_zh(check.expected))} | "
+                         f"{_markdown(detail)} |")
 
         lines.extend([
             "",
@@ -395,13 +375,11 @@ class OptimizationReport(EvalBaseModel):
             "| --- | ---: | ---: | ---: | --- |",
         ])
         for case in self.delta.validation.cases:
-            lines.append(
-                f"| {_markdown(case.case_id)} | "
-                f"{_score_text(case.baseline_score)} | "
-                f"{_score_text(case.candidate_score)} | "
-                f"{_signed_score_text(case.score_delta)} | "
-                f"{_markdown(_zh_case_status(case.status))} |"
-            )
+            lines.append(f"| {_markdown(case.case_id)} | "
+                         f"{_score_text(case.baseline_score)} | "
+                         f"{_score_text(case.candidate_score)} | "
+                         f"{_signed_score_text(case.score_delta)} | "
+                         f"{_markdown(_zh_case_status(case.status))} |")
 
         lines.extend([
             "",
@@ -417,13 +395,8 @@ class OptimizationReport(EvalBaseModel):
             ("候选验证集", self.failure_attribution.candidate_validation),
         )
         for label, summary in attribution_rows:
-            rendered = (
-                "，".join(
-                    f"{_zh_failure_category(name)}={count}"
-                    for name, count in sorted(summary.counts.items())
-                )
-                or "无"
-            )
+            rendered = ("，".join(f"{_zh_failure_category(name)}={count}"
+                                 for name, count in sorted(summary.counts.items())) or "无")
             lines.append(f"| {label} | {_markdown(rendered)} |")
 
         lines.extend([
@@ -442,11 +415,7 @@ class OptimizationReport(EvalBaseModel):
             "## 决策理由",
             "",
         ])
-        failed_checks = [
-            check
-            for check in self.gate_decision.checks
-            if check.configured and not check.passed
-        ]
+        failed_checks = [check for check in self.gate_decision.checks if check.configured and not check.passed]
         if accepted:
             lines.append("- 所有已配置的接受条件均已通过。")
         else:

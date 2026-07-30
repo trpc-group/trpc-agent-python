@@ -242,9 +242,13 @@ class EvaluationOptimizationPipeline:
         finally:
             await target_prompt.write_all(baseline_prompts)
 
-        evaluation_case_runs = (baseline_train.case_run_count + baseline_validation.case_run_count +
-                                sum(train.case_run_count + validation.case_run_count
-                                    for _, train, validation, _ in evaluated))
+        candidate_case_runs = sum(train.case_run_count + validation.case_run_count
+                                  for _, train, validation, _ in evaluated)
+        evaluation_case_runs = sum([
+            baseline_train.case_run_count,
+            baseline_validation.case_run_count,
+            candidate_case_runs,
+        ])
         estimated_evaluation_cost = _rounded(evaluation_case_runs * config.pipeline.evaluation_case_cost_usd)
         total_cost = _rounded(optimize_result.total_llm_cost + estimated_evaluation_cost)
 
@@ -376,12 +380,12 @@ class EvaluationOptimizationPipeline:
         )
         result = EvaluateResult(
             results_by_eval_set_id={
-                eval_set.eval_set_id: EvalSetAggregateResult(
+                eval_set.eval_set_id:
+                EvalSetAggregateResult(
                     eval_results_by_eval_id=eval_results_by_eval_id,
                     num_runs=config.evaluate.num_runs,
                 ),
-            }
-        )
+            })
         return _build_snapshot(
             split=split,
             result=result,
@@ -408,9 +412,8 @@ class EvaluationOptimizationPipeline:
             duration: float,
         ) -> None:
             if set(prompts) != prompt_names:
-                raise ValueError(
-                    f"optimizer candidate prompt keys mismatch: expected "
-                    f"{sorted(prompt_names)}, got {sorted(prompts)}")
+                raise ValueError(f"optimizer candidate prompt keys mismatch: expected "
+                                 f"{sorted(prompt_names)}, got {sorted(prompts)}")
             fingerprint = json.dumps(prompts, ensure_ascii=False, sort_keys=True)
             if fingerprint in seen:
                 return
@@ -461,13 +464,9 @@ class EvaluationOptimizationPipeline:
         if not best_prompts:
             return selected
         best_fingerprint = json.dumps(best_prompts, ensure_ascii=False, sort_keys=True)
-        if all(
-                json.dumps(spec.prompts, ensure_ascii=False, sort_keys=True) !=
-                best_fingerprint
-                for spec in selected):
-            best_spec = next(
-                spec for spec in specs
-                if json.dumps(spec.prompts, ensure_ascii=False, sort_keys=True) == best_fingerprint)
+        if all(json.dumps(spec.prompts, ensure_ascii=False, sort_keys=True) != best_fingerprint for spec in selected):
+            best_spec = next(spec for spec in specs
+                             if json.dumps(spec.prompts, ensure_ascii=False, sort_keys=True) == best_fingerprint)
             selected[-1] = best_spec
         return selected
 
@@ -529,16 +528,14 @@ class EvaluationOptimizationPipeline:
         report.write(str(output_path))
 
     @staticmethod
-    def _temporary_optimizer_config(
-        config: OptimizeConfigFile,
-    ) -> Path:
+    def _temporary_optimizer_config(config: OptimizeConfigFile, ) -> Path:
         """Write a standard optimizer config to a short-lived UTF-8 file."""
         with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            suffix=".json",
-            prefix="trpc-eval-optimize-",
-            delete=False,
+                mode="w",
+                encoding="utf-8",
+                suffix=".json",
+                prefix="trpc-eval-optimize-",
+                delete=False,
         ) as file:
             file.write(config.model_dump_json(indent=2, by_alias=True))
             file.write("\n")
@@ -641,11 +638,7 @@ def _build_snapshot(
         for metric in case.metrics:
             if metric.score is not None:
                 metric_scores.setdefault(metric.metric_name, []).append(metric.score)
-    metric_breakdown = {
-        name: _rounded(mean(scores))
-        for name, scores in sorted(metric_scores.items())
-        if scores
-    }
+    metric_breakdown = {name: _rounded(mean(scores)) for name, scores in sorted(metric_scores.items()) if scores}
     case_count = len(cases)
     return EvaluationSnapshot(
         split=split,
@@ -653,8 +646,7 @@ def _build_snapshot(
         pass_rate=_rounded(sum(case.passed for case in cases) / case_count) if case_count else 0.0,
         case_count=case_count,
         case_run_count=sum(
-            len(runs)
-            for set_result in result.results_by_eval_set_id.values()
+            len(runs) for set_result in result.results_by_eval_set_id.values()
             for runs in set_result.eval_results_by_eval_id.values()),
         metric_breakdown=metric_breakdown,
         cases=cases,
@@ -681,8 +673,7 @@ def _build_case_evaluation(
             reasons.append(run.error_message)
         for metric in run.overall_eval_metric_results:
             thresholds.setdefault(metric.metric_name, metric.threshold)
-            statuses_by_metric.setdefault(metric.metric_name, []).append(
-                metric.eval_status == EvalStatus.PASSED)
+            statuses_by_metric.setdefault(metric.metric_name, []).append(metric.eval_status == EvalStatus.PASSED)
             if metric.score is not None:
                 values_by_metric.setdefault(metric.metric_name, []).append(metric.score)
             if metric.details and metric.details.reason:
@@ -719,9 +710,8 @@ def _build_case_evaluation(
                 reasons=_dedupe(reasons_by_metric.get(name, [])),
             ))
     score = _rounded(mean(all_metric_scores)) if all_metric_scores else float(passed)
-    hard_fail = (not passed and (
-        case_id in pipeline_config.hard_fail_case_ids
-        or bool(categories.intersection(pipeline_config.hard_fail_categories))))
+    hard_fail = (not passed and (case_id in pipeline_config.hard_fail_case_ids
+                                 or bool(categories.intersection(pipeline_config.hard_fail_categories))))
     key_trace = _trace_from_run(runs[-1]) if runs else []
     return CaseEvaluation(
         eval_set_id=eval_set_id,
@@ -769,16 +759,13 @@ def _classify_failure(
 def _classify_tool_failure(run: EvalCaseResult) -> FailureCategoryName:
     for item in run.eval_metric_result_per_invocation:
         actual = get_all_tool_calls(item.actual_invocation.intermediate_data)
-        expected = (
-            get_all_tool_calls(item.expected_invocation.intermediate_data)
-            if item.expected_invocation is not None
-            else [])
+        expected = (get_all_tool_calls(item.expected_invocation.intermediate_data)
+                    if item.expected_invocation is not None else [])
         actual_names = [call.name for call in actual]
         expected_names = [call.name for call in expected]
         if actual_names != expected_names:
             return "tool_call_error"
-        if any(actual_call.args != expected_call.args
-               for actual_call, expected_call in zip(actual, expected)):
+        if any(actual_call.args != expected_call.args for actual_call, expected_call in zip(actual, expected)):
             return "tool_argument_error"
     return "tool_call_error"
 
@@ -786,10 +773,8 @@ def _classify_tool_failure(run: EvalCaseResult) -> FailureCategoryName:
 def _has_structured_format_failure(run: EvalCaseResult) -> bool:
     for item in run.eval_metric_result_per_invocation:
         actual = _content_text(item.actual_invocation.final_response)
-        expected = (
-            _content_text(item.expected_invocation.final_response)
-            if item.expected_invocation is not None
-            else "")
+        expected = (_content_text(item.expected_invocation.final_response)
+                    if item.expected_invocation is not None else "")
         expected = expected.strip()
         if not expected.startswith(("{", "[")):
             continue
@@ -808,19 +793,15 @@ def _trace_from_run(run: EvalCaseResult) -> list[dict[str, Any]]:
     trace: list[dict[str, Any]] = []
     for index, item in enumerate(run.eval_metric_result_per_invocation):
         actual_calls = get_all_tool_calls(item.actual_invocation.intermediate_data)
-        expected_calls = (
-            get_all_tool_calls(item.expected_invocation.intermediate_data)
-            if item.expected_invocation is not None
-            else [])
+        expected_calls = (get_all_tool_calls(item.expected_invocation.intermediate_data)
+                          if item.expected_invocation is not None else [])
         trace.append({
             "invocationIndex":
-                index,
+            index,
             "actualFinalResponse":
-                _content_text(item.actual_invocation.final_response),
-            "expectedFinalResponse": (
-                _content_text(item.expected_invocation.final_response)
-                if item.expected_invocation is not None
-                else None),
+            _content_text(item.actual_invocation.final_response),
+            "expectedFinalResponse":
+            (_content_text(item.expected_invocation.final_response) if item.expected_invocation is not None else None),
             "actualToolCalls": [_function_call_payload(call) for call in actual_calls],
             "expectedToolCalls": [_function_call_payload(call) for call in expected_calls],
         })
@@ -912,8 +893,7 @@ def _apply_gate(
     candidate_by_id = {case.case_id: case for case in candidate_validation.cases}
     new_hard_fail_ids = sorted(
         case_id for case_id, candidate_case in candidate_by_id.items()
-        if candidate_case.hard_fail
-        and not (baseline_by_id.get(case_id) and baseline_by_id[case_id].hard_fail))
+        if candidate_case.hard_fail and not (baseline_by_id.get(case_id) and baseline_by_id[case_id].hard_fail))
     critical_regressions: list[str] = []
     for case_id in gate.critical_case_ids:
         before = baseline_by_id.get(case_id)
@@ -927,13 +907,10 @@ def _apply_gate(
         if before.score - after.score > gate.max_critical_score_drop + _EPSILON:
             critical_regressions.append(case_id)
     critical_regressions = sorted(set(critical_regressions))
-    validation_regressions = sorted(
-        set(validation_delta.newly_failed + validation_delta.regressed))
-    overfitting = (
-        train_delta.score_delta > _EPSILON
-        and (
-            validation_delta.score_delta + _EPSILON < gate.min_validation_score_delta
-            or bool(validation_regressions)))
+    validation_regressions = sorted(set(validation_delta.newly_failed + validation_delta.regressed))
+    overfitting = (train_delta.score_delta > _EPSILON
+                   and (validation_delta.score_delta + _EPSILON < gate.min_validation_score_delta
+                        or bool(validation_regressions)))
 
     checks = [
         GateCheck(
@@ -979,14 +956,11 @@ def _apply_gate(
         GateCheck(
             name="validation_regression_count",
             configured=gate.max_validation_regressions is not None,
-            passed=(
-                gate.max_validation_regressions is None
-                or len(validation_regressions) <= gate.max_validation_regressions),
+            passed=(gate.max_validation_regressions is None
+                    or len(validation_regressions) <= gate.max_validation_regressions),
             actual=len(validation_regressions),
-            expected=(
-                "disabled"
-                if gate.max_validation_regressions is None
-                else f"<= {gate.max_validation_regressions}"),
+            expected=("disabled"
+                      if gate.max_validation_regressions is None else f"<= {gate.max_validation_regressions}"),
             detail="Candidate validation regressions are counted per case.",
         ),
         GateCheck(
@@ -1001,23 +975,16 @@ def _apply_gate(
         GateCheck(
             name="total_cost_budget",
             configured=gate.max_total_cost_usd is not None,
-            passed=(
-                gate.max_total_cost_usd is None
-                or total_cost_usd <= gate.max_total_cost_usd + _EPSILON),
+            passed=(gate.max_total_cost_usd is None or total_cost_usd <= gate.max_total_cost_usd + _EPSILON),
             actual=total_cost_usd,
-            expected=(
-                "disabled"
-                if gate.max_total_cost_usd is None
-                else f"<= {gate.max_total_cost_usd}"),
+            expected=("disabled" if gate.max_total_cost_usd is None else f"<= {gate.max_total_cost_usd}"),
             detail="Cost includes optimizer cost and configured per-case evaluation estimates.",
         ),
     ]
     failed = [check for check in checks if check.configured and not check.passed]
     accepted = not failed
-    reasons = (
-        ["All configured acceptance checks passed."]
-        if accepted
-        else [f"{check.name}: {check.detail}" for check in failed])
+    reasons = (["All configured acceptance checks passed."]
+               if accepted else [f"{check.name}: {check.detail}" for check in failed])
     return GateDecision(
         accepted=accepted,
         reasons=reasons,
@@ -1036,13 +1003,13 @@ def _summarize_attribution(snapshot: EvaluationSnapshot) -> FailureAttributionSu
         categories = case.failure_categories or ["unknown_failure"]
         for category in categories:
             case_ids.setdefault(category, []).append(case.case_id)
-    normalized = {
-        category: sorted(set(ids))
-        for category, ids in sorted(case_ids.items())
-    }
+    normalized = {category: sorted(set(ids)) for category, ids in sorted(case_ids.items())}
     return FailureAttributionSummary(
         total_failed_cases=len(failed),
-        counts={category: len(ids) for category, ids in normalized.items()},
+        counts={
+            category: len(ids)
+            for category, ids in normalized.items()
+        },
         case_ids=normalized,
     )
 
@@ -1067,14 +1034,10 @@ def _portable_path(path: Path, base: Path) -> str:
 
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
-        return {
-            key: ("***REDACTED***" if _is_sensitive_key(key) else _redact(item))
-            for key, item in value.items()
-        }
+        return {key: ("***REDACTED***" if _is_sensitive_key(key) else _redact(item)) for key, item in value.items()}
     if isinstance(value, list):
         return [_redact(item) for item in value]
-    if isinstance(value, str) and any(
-            pattern.fullmatch(value) for pattern in _SENSITIVE_VALUE_PATTERNS):
+    if isinstance(value, str) and any(pattern.fullmatch(value) for pattern in _SENSITIVE_VALUE_PATTERNS):
         return "***REDACTED***"
     return value
 
