@@ -11,6 +11,7 @@ import pytest
 
 from trpc_agent_sdk.evaluation import AgentEvaluator, EvalConfig, EvalSet, TargetPrompt
 
+from examples.optimization.eval_optimize_loop.pipeline import backends as backends_module
 from examples.optimization.eval_optimize_loop.pipeline.backends import (
     DeterministicCandidateGenerator,
     FakeEvaluationBackend,
@@ -839,3 +840,85 @@ async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop
     assert (output_dir / "optimize.stop").read_text(encoding="utf-8") == "cancel requested\n"
     assert process.terminated is True
     assert process.returncode in {-15, -9}
+
+
+@pytest.mark.asyncio
+async def test_live_worker_success_is_loaded_through_the_strict_candidate_adapter(monkeypatch, tmp_path) -> None:
+
+    async def call_agent(query: str) -> str:
+        return query
+
+    round_ = SimpleNamespace(
+        round=1,
+        candidate_prompts={"system": "candidate"},
+        accepted=True,
+        validation_pass_rate=0.8,
+        kind="reflective",
+        optimized_field_names=["system"],
+        metric_breakdown={"quality": 0.8},
+        acceptance_reason="improved selection score",
+        skip_reason=None,
+        error_message=None,
+        round_llm_cost=0.03,
+        round_token_usage={"total": 8},
+        duration_seconds=0.2,
+    )
+    result = SimpleNamespace(
+        status="SUCCEEDED",
+        error_message="",
+        rounds=[round_],
+        algorithm="gepa_reflective",
+        baseline_prompts={"system": "baseline"},
+        best_prompts={"system": "candidate"},
+        stop_reason="completed",
+        total_reflection_lm_calls=1,
+        total_llm_cost=0.03,
+        total_token_usage={"total": 8},
+        duration_seconds=0.2,
+    )
+    captured = {}
+
+    class CompletedProcess:
+        returncode = 0
+
+        async def wait(self):
+            return self.returncode
+
+    async def fake_subprocess(*args, **kwargs):
+        request_path = Path(args[-1])
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        output_dir = Path(request["outputDir"])
+        output_dir.mkdir(parents=True)
+        (output_dir / "result.json").write_text("{}", encoding="utf-8")
+        captured.update({"args": args, "kwargs": kwargs, "request": request})
+        return CompletedProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    monkeypatch.setattr(
+        backends_module,
+        "OptimizeResult",
+        SimpleNamespace(from_file=lambda path: result),
+    )
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    proposal = await LiveCandidateGenerator(
+        call_agent,
+        callback_spec="tests.agent:call_agent",
+    ).generate(
+        target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
+        baseline_prompts={"system": "baseline"},
+        train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
+        inner_train_path="inner-train.json",
+        inner_selection_path="inner-selection.json",
+        config_path="optimizer.json",
+        output_dir=str(tmp_path / "optimizer-output"),
+    )
+    assert captured["args"][1:3] == (
+        "-m",
+        "examples.optimization.eval_optimize_loop.pipeline.optimizer_worker",
+    )
+    assert captured["request"]["callbackSpec"] == "tests.agent:call_agent"
+    assert captured["request"]["promptPaths"] == {"system": str(prompt_path)}
+    assert proposal.prompts == {"system": "candidate"}
+    assert proposal.rounds[0].metric_scores == {"quality": 0.8}
+    assert proposal.cost_sources[0].cost_usd == 0.03

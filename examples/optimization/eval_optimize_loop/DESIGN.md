@@ -75,6 +75,19 @@ compatibility shim reconstructs the discarded `v1` information.
 
 ## Lifecycle
 
+```text
+validated = preflight(config, train, validation, prompts, trace, callback_source)
+with prompt_set_lock(validated.prompt_paths):
+    baseline = evaluate(train, validation)
+    failures = attribute(structured_evidence, explicit_maps, reason_semantics, metric_fallback)
+    candidate = optimizer_worker(inner_train(failures), inner_selection)
+    regression = compare(evaluate(candidate, train, validation), baseline)
+    decision = hard_overfit_guard(regression) -> configured_gate(regression, cost, duration)
+    persist_complete_redacted_audit_or_raise()
+    apply_verified(candidate) only when decision == ACCEPT and explicitly_authorized
+on cancel: request_stop -> bounded_wait -> terminate -> bounded_wait -> kill
+```
+
 1. Preflight strictly parses config and datasets, rejects duplicate JSON keys,
    validates split isolation, hashes every input, and validates the complete
    trace phase/split/case matrix without side effects.
