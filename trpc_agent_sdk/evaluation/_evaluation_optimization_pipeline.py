@@ -64,18 +64,28 @@ PromptOptimizerRunner = Callable[..., Awaitable[OptimizeResult]]
 
 _EPSILON = 1e-9
 _SENSITIVE_KEY_NAMES = frozenset({
+    "accesskey",
+    "accesskeyid",
     "accesstoken",
     "apikey",
     "authtoken",
     "authorization",
     "bearertoken",
+    "clientkey",
     "clientsecret",
+    "credential",
+    "credentials",
     "idtoken",
     "password",
     "passwd",
+    "privatekey",
+    "privatekeypassword",
     "proxyauthorization",
     "refreshtoken",
     "secret",
+    "secretaccesskey",
+    "secretkey",
+    "signingkey",
     "token",
     "xapikey",
 })
@@ -186,6 +196,7 @@ class EvaluationOptimizationPipeline:
         runner = optimizer_runner or AgentOptimizer.optimize
         optimizer_output_dir = output_path / "optimizer"
         optimizer_config_path = cls._temporary_optimizer_config(optimizer_config)
+        optimizer_failed = False
         try:
             optimize_result = await runner(
                 config_path=str(optimizer_config_path),
@@ -198,13 +209,31 @@ class EvaluationOptimizationPipeline:
                 update_source=False,
                 verbose=verbose,
             )
+        except BaseException:
+            optimizer_failed = True
+            raise
         finally:
-            await target_prompt.write_all(baseline_prompts)
-            optimizer_config_path.unlink(missing_ok=True)
-            cls._redact_optimizer_config_snapshot(
-                optimizer_output_dir=optimizer_output_dir,
-                optimizer_config=optimizer_config,
-            )
+            cleanup_error: Optional[BaseException] = None
+            try:
+                await target_prompt.write_all(baseline_prompts)
+            except BaseException as error:
+                cleanup_error = error
+            try:
+                optimizer_config_path.unlink(missing_ok=True)
+            except BaseException as error:
+                cleanup_error = cleanup_error or error
+            try:
+                cls._redact_optimizer_config_snapshot(
+                    optimizer_output_dir=optimizer_output_dir,
+                    optimizer_config=optimizer_config,
+                )
+            except BaseException as error:
+                cleanup_error = cleanup_error or error
+            # Cleanup is best-effort after a runner failure so the original
+            # optimizer exception remains actionable. If the runner succeeded,
+            # cleanup failures are the primary error and must be surfaced.
+            if cleanup_error is not None and not optimizer_failed:
+                raise cleanup_error
         if not isinstance(optimize_result, OptimizeResult):
             raise TypeError("optimizer_runner must return OptimizeResult")
 
@@ -688,7 +717,13 @@ def _build_case_evaluation(
 
     passed = bool(runs) and all(run.final_eval_status == EvalStatus.PASSED for run in runs)
     if not passed and case_id in pipeline_config.failure_category_overrides:
-        categories = {pipeline_config.failure_category_overrides[case_id]}
+        # A domain override replaces ordinary attribution, but inferred
+        # hard-fail categories remain so an override cannot bypass the gate.
+        hard_fail_categories = categories.intersection(pipeline_config.hard_fail_categories, )
+        categories = {
+            pipeline_config.failure_category_overrides[case_id],
+            *hard_fail_categories,
+        }
     if not passed and not categories:
         categories.add("unknown_failure")
         reasons.append(_CATEGORY_REASON["unknown_failure"])
@@ -893,12 +928,14 @@ def _apply_gate(
     candidate_by_id = {case.case_id: case for case in candidate_validation.cases}
     new_hard_fail_ids = sorted(
         case_id for case_id, candidate_case in candidate_by_id.items()
-        if candidate_case.hard_fail and not (baseline_by_id.get(case_id) and baseline_by_id[case_id].hard_fail))
+        if candidate_case.hard_fail and case_id in baseline_by_id and not baseline_by_id[case_id].hard_fail)
     critical_regressions: list[str] = []
     for case_id in gate.critical_case_ids:
         before = baseline_by_id.get(case_id)
         after = candidate_by_id.get(case_id)
-        if before is None or after is None:
+        if before is None:
+            continue
+        if after is None:
             critical_regressions.append(case_id)
             continue
         if before.passed and not after.passed:

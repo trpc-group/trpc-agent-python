@@ -77,6 +77,11 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
 `EvaluationOptimizationPipeline.run(...)` 时不传 `optimizer_runner`，闭环会使用
 `AgentOptimizer.optimize`。真实模式需要安装项目的 `optimize` 可选依赖并配置模型：
 
+> `optimizer.json` 中的 `fake-model`、`http://127.0.0.1/unused` 和 `not-used`
+> 只用于本示例的 fake optimizer，不会发起模型请求。接入真实
+> `AgentOptimizer` 时必须替换 `reflection_lm` 的模型名、服务地址和认证配置；
+> 认证信息应通过业务侧安全配置注入，不应把真实密钥提交到仓库。
+
 ```bash
 pip install -e ".[optimize]"
 ```

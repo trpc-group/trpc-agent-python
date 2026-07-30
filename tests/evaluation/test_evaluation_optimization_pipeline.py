@@ -22,16 +22,22 @@ from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import EvaluationOptimizationPipeline
 from trpc_agent_sdk.evaluation import IntermediateData
 from trpc_agent_sdk.evaluation import Invocation
+from trpc_agent_sdk.evaluation import OptimizationGateConfig
 from trpc_agent_sdk.evaluation import OptimizationPipelineConfig
 from trpc_agent_sdk.evaluation import OptimizeResult
 from trpc_agent_sdk.evaluation import RoundRecord
 from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation._evaluation_optimization_pipeline import (
+    _apply_gate,
     _build_case_evaluation,
+    _compare_snapshots,
 )
 from trpc_agent_sdk.evaluation._evaluation_optimization_config import (
-    load_evaluation_optimization_config,
-)
+    load_evaluation_optimization_config, )
+from trpc_agent_sdk.evaluation._evaluation_optimization_result import (
+    CaseEvaluation, )
+from trpc_agent_sdk.evaluation._evaluation_optimization_result import (
+    EvaluationSnapshot, )
 from trpc_agent_sdk.evaluation._eval_result import EvalCaseResult
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionCall
@@ -60,9 +66,7 @@ def _invocation(
 ) -> Invocation:
     intermediate_data = None
     if tool_name is not None:
-        intermediate_data = IntermediateData(
-            tool_uses=[FunctionCall(name=tool_name, args=tool_args or {})],
-        )
+        intermediate_data = IntermediateData(tool_uses=[FunctionCall(name=tool_name, args=tool_args or {})], )
     return Invocation(
         user_content=_content("user", "query"),
         final_response=_content("model", response),
@@ -103,6 +107,34 @@ def _failed_case(
     )
 
 
+def _case_evaluation(
+    case_id: str,
+    *,
+    score: float,
+    passed: bool,
+    hard_fail: bool = False,
+) -> CaseEvaluation:
+    return CaseEvaluation(
+        eval_set_id="set",
+        case_id=case_id,
+        score=score,
+        passed=passed,
+        hard_fail=hard_fail,
+    )
+
+
+def _snapshot(*cases: CaseEvaluation) -> EvaluationSnapshot:
+    case_count = len(cases)
+    return EvaluationSnapshot(
+        split="validation",
+        score=sum(case.score for case in cases) / case_count if cases else 0.0,
+        pass_rate=(sum(case.passed for case in cases) / case_count if cases else 0.0),
+        case_count=case_count,
+        case_run_count=case_count,
+        cases=list(cases),
+    )
+
+
 def _copy_example_config(
     tmp_path: Path,
     *,
@@ -118,9 +150,7 @@ def _copy_example_config(
     payload["pipeline"]["report_language"] = report_language
     payload["pipeline"]["gate"]["max_total_cost_usd"] = max_total_cost_usd
     if reflection_lm_updates:
-        payload["optimize"]["algorithm"]["reflection_lm"].update(
-            reflection_lm_updates,
-        )
+        payload["optimize"]["algorithm"]["reflection_lm"].update(reflection_lm_updates, )
     path = tmp_path / "optimizer.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
@@ -176,10 +206,22 @@ def test_pipeline_config_is_strict_and_has_safe_gate_defaults():
 @pytest.mark.parametrize(
     "payload",
     [
-        {"gate": {"critical_case_ids": [""]}},
-        {"gate": {"critical_case_ids": ["duplicate", "duplicate"]}},
-        {"hard_fail_case_ids": [""]},
-        {"hard_fail_categories": ["execution_error", "execution_error"]},
+        {
+            "gate": {
+                "critical_case_ids": [""]
+            }
+        },
+        {
+            "gate": {
+                "critical_case_ids": ["duplicate", "duplicate"]
+            }
+        },
+        {
+            "hard_fail_case_ids": [""]
+        },
+        {
+            "hard_fail_categories": ["execution_error", "execution_error"]
+        },
     ],
 )
 def test_pipeline_config_rejects_ambiguous_case_policies(payload):
@@ -274,6 +316,67 @@ def test_failure_attribution_covers_all_explainable_categories(
     assert case.key_trace
 
 
+def test_failure_category_override_preserves_hard_fail_classification():
+    result = _failed_case(
+        metric_name="final_response_avg_score",
+        actual=_invocation(response=""),
+        expected=_invocation(response="answer"),
+        error_message="model endpoint timed out",
+    )
+    case = _build_case_evaluation(
+        eval_set_id="set",
+        case_id="case",
+        runs=[result],
+        pipeline_config=OptimizationPipelineConfig(failure_category_overrides={
+            "case": "knowledge_recall_failure",
+        }, ),
+    )
+
+    assert set(case.failure_categories) == {
+        "execution_error",
+        "knowledge_recall_failure",
+    }
+    assert case.hard_fail is True
+
+
+def test_gate_handles_added_and_removed_cases_without_false_regressions():
+    baseline = _snapshot(
+        _case_evaluation("common", score=0.8, passed=True),
+        _case_evaluation("removed_critical", score=0.9, passed=True),
+    )
+    candidate = _snapshot(
+        _case_evaluation("common", score=0.8, passed=True),
+        _case_evaluation(
+            "added_hard_fail",
+            score=0.0,
+            passed=False,
+            hard_fail=True,
+        ),
+        _case_evaluation("added_critical", score=1.0, passed=True),
+    )
+    validation_delta = _compare_snapshots(baseline, candidate)
+    decision = _apply_gate(
+        gate=OptimizationGateConfig(
+            min_validation_score_delta=-1.0,
+            min_validation_pass_rate_delta=-1.0,
+            reject_overfitting=False,
+            critical_case_ids=[
+                "added_critical",
+                "removed_critical",
+            ],
+        ),
+        train_delta=validation_delta,
+        validation_delta=validation_delta,
+        baseline_validation=baseline,
+        candidate_validation=candidate,
+        optimizer_status="SUCCEEDED",
+        total_cost_usd=0.0,
+    )
+
+    assert decision.new_hard_fail_case_ids == []
+    assert decision.critical_regression_case_ids == ["removed_critical"]
+
+
 @pytest.mark.asyncio
 async def test_six_case_fake_pipeline_generates_complete_reports_under_three_minutes(tmp_path):
     started = time.perf_counter()
@@ -294,9 +397,7 @@ async def test_six_case_fake_pipeline_generates_complete_reports_under_three_min
     assert first.gate_decision.overfitting_detected is True
     assert first.validation_delta.newly_passed == ["val_json_invoice"]
     assert first.validation_delta.newly_failed == ["val_system_prompt_safety"]
-    assert first.gate_decision.critical_regression_case_ids == [
-        "val_system_prompt_safety"
-    ]
+    assert first.gate_decision.critical_regression_case_ids == ["val_system_prompt_safety"]
     assert second.gate_decision.accepted is True
     assert second.validation_delta.newly_passed == ["val_json_invoice"]
     assert second.validation_delta.newly_failed == []
@@ -305,9 +406,7 @@ async def test_six_case_fake_pipeline_generates_complete_reports_under_three_min
     assert prompt_path.read_text(encoding="utf-8") == baseline
     assert report.audit.source_updated is False
     assert report.audit.random_seed == 91
-    assert report.audit.config_snapshot["optimize"]["algorithm"]["reflectionLm"][
-        "apiKey"
-    ] == "***REDACTED***"
+    assert report.audit.config_snapshot["optimize"]["algorithm"]["reflectionLm"]["apiKey"] == "***REDACTED***"
 
     output = tmp_path / "output"
     json_path = output / "optimization_report.json"
@@ -342,11 +441,11 @@ async def test_six_case_fake_pipeline_generates_complete_reports_under_three_min
 
 
 @pytest.mark.asyncio
-async def test_nested_provider_credentials_are_redacted_from_all_audit_snapshots(
-    tmp_path,
-):
+async def test_nested_provider_credentials_are_redacted_from_all_audit_snapshots(tmp_path, ):
     secrets = {
         "Bearer audit-secret-123",
+        "opaque-provider-credential",
+        "private-provider-key",
         "nested-x-api-key-123",
         "sk-provider-secret-123",
     }
@@ -373,7 +472,9 @@ async def test_nested_provider_credentials_are_redacted_from_all_audit_snapshots
                 "normal_option": "retained",
             },
             "generation_config": {
-                "credential": "sk-provider-secret-123",
+                "credential": "opaque-provider-credential",
+                "private_key": "private-provider-key",
+                "legacy_value": "sk-provider-secret-123",
                 "temperature": 0.2,
                 "max_tokens": 64,
             },
@@ -385,20 +486,60 @@ async def test_nested_provider_credentials_are_redacted_from_all_audit_snapshots
         json.dumps(report.audit.config_snapshot, ensure_ascii=False),
         (output / "config.snapshot.json").read_text(encoding="utf-8"),
         (output / "optimization_report.json").read_text(encoding="utf-8"),
-        (output / "optimizer" / "config.snapshot.json").read_text(
-            encoding="utf-8",
-        ),
+        (output / "optimizer" / "config.snapshot.json").read_text(encoding="utf-8", ),
     ]
     for snapshot in serialized_snapshots:
         assert "***REDACTED***" in snapshot
         assert all(secret not in snapshot for secret in secrets)
 
-    reflection_lm = report.audit.config_snapshot["optimize"]["algorithm"][
-        "reflectionLm"
-    ]
+    reflection_lm = report.audit.config_snapshot["optimize"]["algorithm"]["reflectionLm"]
     assert reflection_lm["extraFields"]["normal_option"] == "retained"
     assert reflection_lm["generationConfig"]["temperature"] == 0.2
     assert reflection_lm["generationConfig"]["max_tokens"] == 64
+
+
+@pytest.mark.asyncio
+async def test_optimizer_error_is_not_masked_by_cleanup_failure(
+    tmp_path,
+    monkeypatch,
+):
+
+    async def failing_optimizer(**_kwargs):
+        raise RuntimeError("optimizer failed")
+
+    def failing_redaction(**_kwargs):
+        raise OSError("cleanup failed")
+
+    monkeypatch.setattr(
+        EvaluationOptimizationPipeline,
+        "_redact_optimizer_config_snapshot",
+        staticmethod(failing_redaction),
+    )
+
+    with pytest.raises(RuntimeError, match="optimizer failed"):
+        await _run_example(
+            tmp_path,
+            optimizer_runner=failing_optimizer,
+        )
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failure_is_raised_after_successful_optimizer(
+    tmp_path,
+    monkeypatch,
+):
+
+    def failing_redaction(**_kwargs):
+        raise OSError("cleanup failed")
+
+    monkeypatch.setattr(
+        EvaluationOptimizationPipeline,
+        "_redact_optimizer_config_snapshot",
+        staticmethod(failing_redaction),
+    )
+
+    with pytest.raises(OSError, match="cleanup failed"):
+        await _run_example(tmp_path)
 
 
 @pytest.mark.asyncio
@@ -417,19 +558,18 @@ async def test_accepted_candidate_is_written_only_when_configured(tmp_path):
 
 @pytest.mark.asyncio
 async def test_train_improves_but_validation_regresses_is_rejected_and_not_written(tmp_path):
+
     async def overfit_only_optimizer(**kwargs):
         result = await fake_optimizer_runner(**kwargs)
         first = result.rounds[0]
-        return result.model_copy(
-            update={
-                "best_prompts": first.candidate_prompts,
-                "best_pass_rate": 1 / 3,
-                "pass_rate_improvement": 0.0,
-                "total_rounds": 1,
-                "rounds": [first],
-                "total_llm_cost": first.round_llm_cost,
-            },
-        )
+        return result.model_copy(update={
+            "best_prompts": first.candidate_prompts,
+            "best_pass_rate": 1 / 3,
+            "pass_rate_improvement": 0.0,
+            "total_rounds": 1,
+            "rounds": [first],
+            "total_llm_cost": first.round_llm_cost,
+        }, )
 
     report, prompt_path, baseline = await _run_example(
         tmp_path,
@@ -453,57 +593,57 @@ async def test_cost_budget_rejects_otherwise_acceptable_candidate(tmp_path):
     )
     assert report.audit.total_cost_usd == pytest.approx(0.004)
     assert report.gate_decision.accepted is False
-    failed_checks = {
-        check.name for check in report.gate_decision.checks if not check.passed
-    }
+    failed_checks = {check.name for check in report.gate_decision.checks if not check.passed}
     assert failed_checks == {"total_cost_budget"}
     assert prompt_path.read_text(encoding="utf-8") == baseline
 
 
 def _write_trace_evalset(path: Path, eval_set_id: str, case_id: str) -> None:
     payload = {
-        "eval_set_id": eval_set_id,
-        "eval_cases": [
-            {
-                "eval_id": case_id,
-                "eval_mode": "trace",
-                "actual_conversation": [
-                    {
-                        "invocation_id": "actual",
-                        "user_content": {
-                            "role": "user",
-                            "parts": [{"text": "hello"}],
-                        },
-                        "final_response": {
-                            "role": "model",
-                            "parts": [{"text": "hello"}],
-                        },
-                    }
-                ],
-                "conversation": [
-                    {
-                        "invocation_id": "expected",
-                        "user_content": {
-                            "role": "user",
-                            "parts": [{"text": "hello"}],
-                        },
-                        "final_response": {
-                            "role": "model",
-                            "parts": [{"text": "hello"}],
-                        },
-                    }
-                ],
-            }
-        ],
+        "eval_set_id":
+        eval_set_id,
+        "eval_cases": [{
+            "eval_id":
+            case_id,
+            "eval_mode":
+            "trace",
+            "actual_conversation": [{
+                "invocation_id": "actual",
+                "user_content": {
+                    "role": "user",
+                    "parts": [{
+                        "text": "hello"
+                    }],
+                },
+                "final_response": {
+                    "role": "model",
+                    "parts": [{
+                        "text": "hello"
+                    }],
+                },
+            }],
+            "conversation": [{
+                "invocation_id": "expected",
+                "user_content": {
+                    "role": "user",
+                    "parts": [{
+                        "text": "hello"
+                    }],
+                },
+                "final_response": {
+                    "role": "model",
+                    "parts": [{
+                        "text": "hello"
+                    }],
+                },
+            }],
+        }],
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _trace_optimizer_result(baseline: dict[str, str]) -> OptimizeResult:
-    candidate = {
-        name: f"{content.rstrip()}\n\nTRACE_CANDIDATE\n"
-        for name, content in baseline.items()
-    }
+    candidate = {name: f"{content.rstrip()}\n\nTRACE_CANDIDATE\n" for name, content in baseline.items()}
     round_record = RoundRecord(
         round=1,
         optimized_field_names=list(candidate),
@@ -541,23 +681,19 @@ def test_candidate_limit_preserves_optimizer_best_prompt():
     result = _trace_optimizer_result(baseline)
     template = result.rounds[0]
     rounds = [
-        template.model_copy(
-            update={
-                "round": round_number,
-                "candidate_prompts": {
-                    "system_prompt": f"candidate-{round_number}",
-                },
-                "accepted": round_number == 3,
+        template.model_copy(update={
+            "round": round_number,
+            "candidate_prompts": {
+                "system_prompt": f"candidate-{round_number}",
             },
-        ) for round_number in range(1, 4)
+            "accepted": round_number == 3,
+        }, ) for round_number in range(1, 4)
     ]
-    result = result.model_copy(
-        update={
-            "best_prompts": rounds[-1].candidate_prompts,
-            "total_rounds": len(rounds),
-            "rounds": rounds,
-        },
-    )
+    result = result.model_copy(update={
+        "best_prompts": rounds[-1].candidate_prompts,
+        "total_rounds": len(rounds),
+        "rounds": rounds,
+    }, )
 
     specs = EvaluationOptimizationPipeline._candidate_specs(
         optimize_result=result,
@@ -572,18 +708,17 @@ def test_candidate_limit_preserves_optimizer_best_prompt():
 
 @pytest.mark.asyncio
 async def test_empty_optimizer_result_uses_rejected_baseline_evidence(tmp_path):
+
     async def empty_optimizer(**kwargs):
         baseline = await kwargs["target_prompt"].read_all()
         result = _trace_optimizer_result(baseline)
-        return result.model_copy(
-            update={
-                "algorithm": "empty_fake_optimizer",
-                "best_prompts": {},
-                "total_rounds": 0,
-                "rounds": [],
-                "total_llm_cost": 0.0,
-            },
-        )
+        return result.model_copy(update={
+            "algorithm": "empty_fake_optimizer",
+            "best_prompts": {},
+            "total_rounds": 0,
+            "rounds": [],
+            "total_llm_cost": 0.0,
+        }, )
 
     report, prompt_path, baseline = await _run_example(
         tmp_path,
@@ -616,9 +751,7 @@ async def test_trace_mode_runs_without_call_agent_or_api_key(tmp_path):
     _write_trace_evalset(train_path, "trace_train", "trace_train_case")
     _write_trace_evalset(val_path, "trace_val", "trace_val_case")
 
-    config_payload = json.loads(
-        (_EXAMPLE_DIR / "optimizer.json").read_text(encoding="utf-8"),
-    )
+    config_payload = json.loads((_EXAMPLE_DIR / "optimizer.json").read_text(encoding="utf-8"), )
     config_payload["pipeline"]["mode"] = "trace"
     config_payload["pipeline"]["gate"]["critical_case_ids"] = []
     config_payload["pipeline"]["hard_fail_case_ids"] = []
@@ -649,17 +782,11 @@ async def test_trace_mode_runs_without_call_agent_or_api_key(tmp_path):
 
 
 def test_example_config_and_case_counts_are_valid():
-    config = load_evaluation_optimization_config(
-        str(_EXAMPLE_DIR / "optimizer.json"),
-    )
+    config = load_evaluation_optimization_config(str(_EXAMPLE_DIR / "optimizer.json"), )
     assert config.pipeline.mode == "fake"
     assert config.pipeline.report_language == "zh-CN"
-    assert config.pipeline.gate.critical_case_ids == [
-        "val_system_prompt_safety"
-    ]
+    assert config.pipeline.gate.critical_case_ids == ["val_system_prompt_safety"]
     train = json.loads((_EXAMPLE_DIR / "train.evalset.json").read_text(encoding="utf-8"))
-    validation = json.loads(
-        (_EXAMPLE_DIR / "val.evalset.json").read_text(encoding="utf-8"),
-    )
+    validation = json.loads((_EXAMPLE_DIR / "val.evalset.json").read_text(encoding="utf-8"), )
     assert len(train["eval_cases"]) == 3
     assert len(validation["eval_cases"]) == 3
