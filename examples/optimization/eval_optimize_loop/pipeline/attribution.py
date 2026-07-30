@@ -19,7 +19,6 @@ from .models import (
 )
 from .schema import sanitized_text
 
-_PRIORITY = tuple(FailureCategory)
 _KNOWN_METRICS = {
     "tool_trajectory_avg_score": FailureCategory.TOOL_CALL_ERROR,
     "llm_rubric_knowledge_recall": FailureCategory.KNOWLEDGE_RECALL_INSUFFICIENT,
@@ -107,25 +106,27 @@ def attribute_failures(
     for case in snapshot.cases:
         if case.passed:
             continue
-        candidates: list[FailureCategory] = []
+        candidates: list[tuple[FailureCategory, str]] = []
         reasons: list[str] = []
         evidence: list[str] = []
         trigger_metrics: list[str] = []
         trigger_rubrics: list[str] = []
-        authoritative = False
+
+        def add_candidate(category: FailureCategory, confidence: str) -> None:
+            if all(existing != category for existing, _ in candidates):
+                candidates.append((category, confidence))
+
         if case.error:
-            candidates.append(FailureCategory.EVALUATION_ERROR)
+            add_candidate(FailureCategory.EVALUATION_ERROR, "high")
             reasons.append("Evaluator reported an execution error.")
             evidence.append(_safe_text(case.error, max_text_chars))
-            authoritative = True
 
         tool_differences = _tool_differences(case, max_text_chars)
         structured_tool_categories = {category for category, _ in tool_differences}
         for category, item_evidence in tool_differences:
-            candidates.append(category)
+            add_candidate(category, "high")
             reasons.append("Structured expected and actual tool trajectories differ.")
             evidence.append(item_evidence)
-            authoritative = True
 
         for run in case.runs:
             for metric in run.metrics:
@@ -144,35 +145,36 @@ def attribute_failures(
                         },
                         max_text_chars,
                     ))
-                if metric.metric_name in config.metric_categories:
-                    candidates.append(config.metric_categories[metric.metric_name])
-                    authoritative = True
                 for rubric in metric.rubrics:
                     if rubric.passed:
                         continue
                     trigger_rubrics.append(rubric.id)
                     if rubric.id in config.rubric_categories:
-                        candidates.append(config.rubric_categories[rubric.id])
-                        authoritative = True
+                        add_candidate(config.rubric_categories[rubric.id], "high")
+                if metric.metric_name in config.metric_categories:
+                    add_candidate(config.metric_categories[metric.metric_name], "high")
+
+                semantic = _fallback_category(reason)
+                if semantic not in {
+                        FailureCategory.UNKNOWN,
+                        FailureCategory.FINAL_RESPONSE_MISMATCH,
+                }:
+                    add_candidate(semantic, "medium")
                 if metric.metric_name in _KNOWN_METRICS and not (metric.metric_name == "tool_trajectory_avg_score"
                                                                  and structured_tool_categories):
-                    candidates.append(_KNOWN_METRICS[metric.metric_name])
-                    authoritative = True
-                elif not authoritative:
-                    candidates.append(_fallback_category(reason))
+                    add_candidate(_KNOWN_METRICS[metric.metric_name], "medium")
+                if semantic == FailureCategory.FINAL_RESPONSE_MISMATCH:
+                    add_candidate(semantic, "medium")
 
-        categories = sorted(set(candidates or [FailureCategory.UNKNOWN]), key=_PRIORITY.index)
-        primary = categories[0]
-        confidence = ("high" if primary in {
-            FailureCategory.EVALUATION_ERROR,
-            FailureCategory.TOOL_CALL_ERROR,
-            FailureCategory.TOOL_ARGUMENT_ERROR,
-        } else "medium" if authoritative else "low")
+        if not candidates:
+            candidates.append((FailureCategory.UNKNOWN, "low"))
+        primary, confidence = candidates[0]
+        categories = tuple(category for category, _ in candidates)
         failures.append(
             FailureAttribution(
                 case_id=case.case_id,
                 primary=primary,
-                secondary=tuple(categories[1:]),
+                secondary=categories[1:],
                 reasons=tuple(dict.fromkeys(reasons or ["The failure has no mapped deterministic cause."])),
                 trigger_metrics=tuple(dict.fromkeys(trigger_metrics)),
                 trigger_rubrics=tuple(dict.fromkeys(trigger_rubrics)),

@@ -69,6 +69,8 @@ def create_report_context(
         trace_fixture=validated.trace_fixture_path,
         trace_hash=validated.input_hashes.get("trace"),
         programmatic_component=programmatic_component,
+        input_paths=validated.reproducibility_paths,
+        input_issues=validated.reproducibility_issues,
     )
     return ReportContext(
         validated=validated,
@@ -85,18 +87,20 @@ def utc_now() -> str:
 
 
 def build_reproducibility(
-    repo_root: str,
-    *,
-    mode: str,
-    config_path: str,
-    train_path: str,
-    validation_path: str,
-    run_id: str,
-    apply_candidate: bool,
-    callback_spec: Optional[str] = None,
-    trace_fixture: Optional[str] = None,
-    trace_hash: Optional[str] = None,
-    programmatic_component: bool = False,
+        repo_root: str,
+        *,
+        mode: str,
+        config_path: str,
+        train_path: str,
+        validation_path: str,
+        run_id: str,
+        apply_candidate: bool,
+        callback_spec: Optional[str] = None,
+        trace_fixture: Optional[str] = None,
+        trace_hash: Optional[str] = None,
+        programmatic_component: bool = False,
+        input_paths: tuple[str, ...] = (),
+        input_issues: tuple[str, ...] = (),
 ) -> Reproducibility:
     commit: Optional[str] = None
     dirty: Optional[bool] = None
@@ -138,6 +142,29 @@ def build_reproducibility(
         reason = "live_callback_not_importable"
     elif reason is None and mode == "trace" and (not trace_fixture or not trace_hash):
         reason = "trace_fixture_not_pinned"
+    elif reason is None and input_issues:
+        reason = input_issues[0]
+
+    if reason is None:
+        assert git_root is not None
+        for input_path in input_paths:
+            resolved = Path(input_path).resolve()
+            try:
+                relative = resolved.relative_to(git_root)
+            except ValueError:
+                reason = "input_outside_git"
+                break
+            tracked = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", "--",
+                 relative.as_posix()],
+                cwd=git_root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if tracked.returncode != 0:
+                reason = "input_not_tracked"
+                break
     reproducible = reason is None
     command = None
     if reproducible:

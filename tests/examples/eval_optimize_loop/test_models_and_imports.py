@@ -228,7 +228,7 @@ def test_pipeline_import_boundaries() -> None:
     allowed = {
         "artifacts": {"models", "schema"},
         "attribution": {"configuration", "models", "schema"},
-        "backends": {"contracts", "models", "offline_evaluation", "schema"},
+        "backends": {"contracts", "models", "offline_evaluation", "schema", "trace_fixture"},
         "candidate_runtime": {
             "artifacts",
             "attribution",
@@ -253,11 +253,13 @@ def test_pipeline_import_boundaries() -> None:
         "gate": {"configuration", "models"},
         "models": {"schema"},
         "offline_evaluation": set(),
+        "optimizer_worker": {"schema"},
         "orchestrator": {
             "artifacts",
             "attribution",
             "backends",
             "candidate_runtime",
+            "configuration",
             "contracts",
             "costing",
             "evaluation",
@@ -269,10 +271,18 @@ def test_pipeline_import_boundaries() -> None:
             "reporting",
             "schema",
         },
-        "preflight": {"artifacts", "configuration", "evaluation", "prompt_workspace", "schema"},
+        "preflight": {
+            "artifacts",
+            "configuration",
+            "evaluation",
+            "prompt_workspace",
+            "schema",
+            "trace_fixture",
+        },
         "prompt_workspace": {"schema"},
         "reporting": {"artifacts", "configuration", "models"},
         "schema": set(),
+        "trace_fixture": {"models", "schema"},
     }
     graph: dict[str, set[str]] = {}
     for path in PIPELINE_DIR.glob("*.py"):

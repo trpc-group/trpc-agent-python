@@ -24,8 +24,16 @@ from examples.optimization.eval_optimize_loop.pipeline.backends import (
     DeterministicCandidateGenerator,
     FakeEvaluationBackend,
 )
+from examples.optimization.eval_optimize_loop.pipeline.artifacts import (
+    AuditPersistenceError,
+    AuditSink,
+)
+from examples.optimization.eval_optimize_loop.pipeline.costing import CostLedger
+from examples.optimization.eval_optimize_loop.pipeline.evaluation_runtime import create_evaluation_runtime
+from examples.optimization.eval_optimize_loop.pipeline.models import Phase, Split
 from examples.optimization.eval_optimize_loop.pipeline.orchestrator import run_pipeline
 from examples.optimization.eval_optimize_loop.pipeline.preflight import preflight_run
+from examples.optimization.eval_optimize_loop.pipeline import orchestrator as orchestrator_module
 from examples.optimization.eval_optimize_loop.pipeline import reporting as reporting_module
 
 SOURCE = Path(__file__).resolve().parents[3] / "examples" / "optimization" / "eval_optimize_loop"
@@ -49,7 +57,7 @@ def _example(tmp_path: Path, *, accept: bool = False, apply: bool = False) -> Pa
 
 
 @pytest.mark.asyncio
-async def test_fake_reject_overfit_is_a_completed_audit_run(tmp_path) -> None:
+async def test_fake_reject_with_hard_regression_is_a_completed_audit_run(tmp_path) -> None:
     root = _example(tmp_path)
     report = await run_pipeline(str(root), run_id="reject-run")
     assert report.status == Decision.REJECT
@@ -58,7 +66,8 @@ async def test_fake_reject_overfit_is_a_completed_audit_run(tmp_path) -> None:
         Transition.NEW_FAIL,
         Transition.UNCHANGED,
     ]
-    assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" in report.gate_decision.reasons
+    assert "NEW_HARD_FAIL_BUDGET_EXCEEDED" in report.gate_decision.reasons
+    assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" not in report.gate_decision.reasons
     assert report.source_application.applied is False
     actual_prompt = (root / "prompts" / "system.md").read_text(encoding="utf-8")
     expected_prompt = (SOURCE / "prompts" / "system.md").read_text(encoding="utf-8")
@@ -319,6 +328,80 @@ async def test_generator_failure_is_recorded_as_unknown_cost_and_redacted(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_terminal_audit_failure_is_raised_instead_of_silently_returned(tmp_path, monkeypatch) -> None:
+    root = _example(tmp_path)
+
+    class FailingGenerator:
+
+        async def generate(self, **kwargs):
+            raise RuntimeError("optimizer unavailable")
+
+    def fail_persistence(*args, **kwargs):
+        raise OSError("audit volume unavailable")
+
+    monkeypatch.setattr(orchestrator_module, "persist_terminal_report", fail_persistence)
+    with pytest.raises(AuditPersistenceError, match="audit volume unavailable") as captured:
+        await run_pipeline(
+            str(root),
+            run_id="terminal-persistence-failure",
+            candidate_generator=FailingGenerator(),
+        )
+    assert any("original pipeline error: RuntimeError" in note for note in captured.value.__notes__)
+
+
+@pytest.mark.asyncio
+async def test_live_evaluation_cost_bounds_are_accounted_conservatively(tmp_path) -> None:
+    root = _example(tmp_path)
+    config_path = root / "optimizer.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["pipeline"].update({
+        "mode": "live",
+        "liveAgentCallMaxCostUsd": 0.01,
+        "liveMetricCallMaxCostUsd": 0.02,
+    })
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    async def call_agent(query: str) -> str:
+        return query
+
+    validated = preflight_run(
+        str(root),
+        config_path=None,
+        train_path=None,
+        validation_path=None,
+        mode=None,
+        run_id="live-cost-bounds",
+        apply_candidate=False,
+        call_agent=call_agent,
+        callback_spec="tests.agent:call_agent",
+        backend=None,
+        candidate_generator=None,
+    )
+    sink = AuditSink(validated.artifact_root, validated.run_id)
+    sink.create()
+    ledger = CostLedger()
+    runtime = create_evaluation_runtime(
+        validated=validated,
+        backend=FakeEvaluationBackend(),
+        custom_backend=False,
+        sink=sink,
+        ledger=ledger,
+    )
+    await runtime.evaluate(
+        eval_set=validated.train,
+        prompts={"system": "baseline"},
+        split=Split.TRAIN,
+        phase=Phase.BASELINE,
+    )
+    source = ledger.summary().sources[0]
+    invocations = sum(len(case.conversation or case.actual_conversation or []) for case in validated.train.eval_cases)
+    expected = invocations * validated.config.evaluate.num_runs * 0.03
+    assert source.cost_usd == pytest.approx(expected)
+    assert source.upper_bound is True
+    assert source.model_calls == invocations * validated.config.evaluate.num_runs
+
+
+@pytest.mark.asyncio
 async def test_generator_receives_only_inner_train_attribution(tmp_path) -> None:
     root = _example(tmp_path)
 
@@ -430,6 +513,8 @@ def test_reproducibility_command_contains_all_effective_cli_inputs(tmp_path, mon
             stdout = ""
         elif args[-1] == "--show-toplevel":
             stdout = str(repo) + "\n"
+        elif args[1] == "ls-files":
+            stdout = args[-1] + "\n"
         else:
             raise AssertionError(args)
         return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
@@ -444,6 +529,11 @@ def test_reproducibility_command_contains_all_effective_cli_inputs(tmp_path, mon
         run_id="exact-replay",
         apply_candidate=True,
         callback_spec="package.agent:call_agent",
+        input_paths=(
+            str(root / "custom config.json"),
+            str(root / "custom train.json"),
+            str(root / "custom validation.json"),
+        ),
     )
     args = shlex.split(result.command)
     assert result.reproducible is True
@@ -454,6 +544,52 @@ def test_reproducibility_command_contains_all_effective_cli_inputs(tmp_path, mon
     assert args[args.index("--run-id") + 1] == "exact-replay-replay"
     assert "--apply-candidate" in args
     assert args[args.index("--call-agent") + 1] == "package.agent:call_agent"
+
+
+@pytest.mark.parametrize(
+    ("input_path", "tracked", "expected_reason"),
+    (
+        ("outside/input.json", True, "input_outside_git"),
+        ("repo/untracked.json", False, "input_not_tracked"),
+    ),
+)
+def test_reproducibility_requires_all_inputs_in_the_pinned_commit(
+    tmp_path,
+    monkeypatch,
+    input_path,
+    tracked,
+    expected_reason,
+) -> None:
+    repo = tmp_path / "repo"
+    root = repo / "example"
+    root.mkdir(parents=True)
+    resolved_input = tmp_path / input_path
+
+    def fake_run(args, **kwargs):
+        if args[-1] == "HEAD":
+            return subprocess.CompletedProcess(args, 0, stdout="a" * 40 + "\n", stderr="")
+        if args[-1] == "--porcelain":
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+        if args[-1] == "--show-toplevel":
+            return subprocess.CompletedProcess(args, 0, stdout=str(repo) + "\n", stderr="")
+        if args[1] == "ls-files":
+            return subprocess.CompletedProcess(args, 0 if tracked else 1, stdout="", stderr="")
+        raise AssertionError(args)
+
+    monkeypatch.setattr(reporting_module.subprocess, "run", fake_run)
+    result = reporting_module.build_reproducibility(
+        str(root),
+        mode="fake",
+        config_path=str(root / "optimizer.json"),
+        train_path=str(root / "train.json"),
+        validation_path=str(root / "validation.json"),
+        run_id="replay",
+        apply_candidate=False,
+        input_paths=(str(resolved_input), ),
+    )
+    assert result.reproducible is False
+    assert result.reason == expected_reason
+    assert result.command is None
 
 
 @pytest.mark.asyncio

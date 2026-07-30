@@ -12,12 +12,16 @@ from pathlib import Path
 from typing import Any
 
 from .models import ArtifactRecord
-from .schema import parse_strict_json, sanitize, sanitized_text, validate_safe_component
+from .schema import parse_strict_json, sanitize, validate_safe_component
 
 _REPORT_FILES = {"optimization_report.json", "optimization_report.md"}
 _TEXT_ARTIFACT_SUFFIXES = {".log", ".md", ".txt"}
 _ATOMIC_REPLACE_LOCK = threading.Lock()
 _ATOMIC_REPLACE_ATTEMPTS = 8
+
+
+class AuditPersistenceError(RuntimeError):
+    """Raised when a terminal audit report cannot be durably persisted."""
 
 
 def load_strict_json(path: str | Path) -> dict[str, Any]:
@@ -32,8 +36,8 @@ class AuditSink:
         artifact_root: str | Path,
         run_id: str,
         *,
-        max_text_chars: int,
         publication_root: str | Path | None = None,
+        max_file_bytes: int = 25 * 1024 * 1024,
         max_import_files: int = 256,
         max_import_file_bytes: int = 5 * 1024 * 1024,
         max_import_total_bytes: int = 25 * 1024 * 1024,
@@ -43,7 +47,11 @@ class AuditSink:
         self.publication_root = Path(publication_root).resolve() if publication_root is not None else self.root.parent
         self.run_id = run_id
         self.run_dir = self.root / run_id
-        self.max_text_chars = max_text_chars
+        if min(max_file_bytes, max_import_files, max_import_file_bytes, max_import_total_bytes) < 1:
+            raise ValueError("audit and import limits must be positive")
+        if max_import_total_bytes < max_import_file_bytes:
+            raise ValueError("total import byte limit must be at least the per-file limit")
+        self.max_file_bytes = max_file_bytes
         self.max_import_files = max_import_files
         self.max_import_file_bytes = max_import_file_bytes
         self.max_import_total_bytes = max_import_total_bytes
@@ -70,8 +78,10 @@ class AuditSink:
             raise ValueError("artifact path escapes the run directory")
         return resolved
 
-    @staticmethod
-    def _atomic_write(path: Path, content: str) -> None:
+    def _atomic_write(self, path: Path, content: str) -> None:
+        byte_size = len(content.encode("utf-8"))
+        if byte_size > self.max_file_bytes:
+            raise ValueError(f"audit file exceeds byte limit: {path.name} ({byte_size} > {self.max_file_bytes})")
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
         try:
@@ -90,14 +100,16 @@ class AuditSink:
 
     def write_json(self, relative_path: str, payload: Any) -> Path:
         path = self._resolve(relative_path)
-        clean = sanitize(payload, max_text_chars=self.max_text_chars)
+        clean = sanitize(payload, max_text_chars=None)
         content = json.dumps(clean, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n"
         self._atomic_write(path, content)
         return path
 
     def write_text(self, relative_path: str, content: str) -> Path:
         path = self._resolve(relative_path)
-        clean = sanitized_text(content, max_text_chars=self.max_text_chars)
+        clean = sanitize(content, max_text_chars=None)
+        if not isinstance(clean, str):
+            raise TypeError("text audit content must remain text after sanitization")
         self._atomic_write(path, clean)
         return path
 
@@ -105,7 +117,7 @@ class AuditSink:
         path = self._resolve(relative_path)
         lines = [
             json.dumps(
-                sanitize(payload, max_text_chars=self.max_text_chars),
+                sanitize(payload, max_text_chars=None),
                 ensure_ascii=False,
                 sort_keys=True,
                 allow_nan=False,

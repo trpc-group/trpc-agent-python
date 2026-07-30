@@ -16,6 +16,7 @@ class CostLedger:
         name: str,
         *,
         cost_usd: float | None,
+        upper_bound: bool = False,
         model_calls: int | None = None,
         metric_calls: int | None = None,
         token_usage: dict[str, int] | None = None,
@@ -26,6 +27,7 @@ class CostLedger:
             CostSource(
                 name=name,
                 cost_usd=cost_usd,
+                upper_bound=upper_bound,
                 model_calls=model_calls,
                 metric_calls=metric_calls,
                 token_usage=dict(token_usage or {}),

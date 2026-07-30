@@ -178,16 +178,18 @@ def evaluate_gate(
         "Gate-observed duration stays within budget.",
         "DURATION_BUDGET_EXCEEDED",
     )
-    overfit = config.overfit_guard and train.score_delta > config.epsilon and not (score_passed and pass_rate_passed)
+    validation_regressed = (validation.score_delta < -config.epsilon or validation.pass_rate_delta < -config.epsilon)
+    overfit = train.score_delta > config.epsilon and validation_regressed
     add(
         "OVERFIT_GUARD",
         not overfit,
         {
             "trainScoreDelta": train.score_delta,
-            "validationScoreDelta": validation.score_delta
+            "validationScoreDelta": validation.score_delta,
+            "validationPassRateDelta": validation.pass_rate_delta,
         },
-        "train improvement requires held-out validation thresholds",
-        "Train-only improvement is rejected as overfitting.",
+        "train improvement cannot accompany held-out validation regression",
+        "Training improvement with held-out regression is rejected as overfitting.",
         "OVERFIT_TRAIN_UP_VALIDATION_DOWN",
     )
     accepted = all(check.passed for check in checks)

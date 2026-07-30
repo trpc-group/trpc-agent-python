@@ -200,6 +200,23 @@ def test_reference_free_failure_uses_metric_attribution_without_expected_trace()
     assert result.failures[0].primary == FailureCategory.LLM_RUBRIC_NOT_MET
 
 
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    (
+        ("response violates required JSON format schema", FailureCategory.FORMAT_VIOLATION),
+        ("knowledge retrieval recall is insufficient", FailureCategory.KNOWLEDGE_RECALL_INSUFFICIENT),
+        ("final answer mismatch", FailureCategory.FINAL_RESPONSE_MISMATCH),
+    ),
+)
+def test_reason_evidence_disambiguates_failures_from_the_same_metric(reason, expected) -> None:
+    result = attribute_failures(
+        _failed_snapshot("final_response_avg_score", reason=reason),
+        AttributionConfig(),
+        max_text_chars=200,
+    )
+    assert result.failures[0].primary == expected
+
+
 def test_tool_difference_evidence_is_recursively_sanitized() -> None:
     result = attribute_failures(
         _failed_snapshot(
@@ -351,6 +368,26 @@ def test_gate_rejects_train_only_improvement_as_overfit() -> None:
     result = _gate(validation=validation)
     assert result.decision == Decision.REJECT
     assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" in result.reasons
+
+
+def test_overfit_guard_cannot_be_bypassed_by_permissive_thresholds() -> None:
+    validation = _comparison(Split.VALIDATION, score_delta=-0.1, pass_delta=0)
+    result = _gate(
+        validation=validation,
+        config=GateConfig(
+            min_validation_score_delta=-0.2,
+            min_validation_pass_rate_delta=-1,
+            metric_max_regression={"quality": 1},
+            overfit_guard=True,
+        ),
+    )
+    assert result.decision == Decision.REJECT
+    assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" in result.reasons
+
+
+def test_overfit_guard_cannot_be_disabled() -> None:
+    with pytest.raises(ValidationError, match="mandatory safety invariant"):
+        GateConfig(overfit_guard=False)
 
 
 def test_gate_fails_closed_when_enabled_cost_is_unknown() -> None:

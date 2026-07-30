@@ -111,8 +111,8 @@ def _redact_assignment(match: re.Match[str]) -> str:
     return f"{match.group('prefix')}{quote}[REDACTED]{quote}"
 
 
-def sanitize(value: Any, *, max_text_chars: int) -> Any:
-    """Recursively redact credential fields and credential-shaped text."""
+def sanitize(value: Any, *, max_text_chars: int | None) -> Any:
+    """Recursively redact credentials and optionally bound individual strings."""
 
     if isinstance(value, dict):
         return {
@@ -124,7 +124,17 @@ def sanitize(value: Any, *, max_text_chars: int) -> Any:
     if isinstance(value, str):
         text = _SECRET_ASSIGNMENT.sub(_redact_assignment, value)
         text = _BEARER_TOKEN.sub(lambda match: match.group(1) + "[REDACTED]", text)
-        return text if len(text) <= max_text_chars else text[:max_text_chars] + "...[truncated]"
+        if max_text_chars is None or len(text) <= max_text_chars:
+            return text
+        return text[:max_text_chars] + "...[truncated]"
+    return value
+
+
+def validate_secret_free_text(value: str, *, name: str) -> str:
+    """Reject prompt content that would be changed by audit redaction."""
+
+    if sanitize(value, max_text_chars=None) != value:
+        raise ValueError(f"{name} contains credential-shaped content")
     return value
 
 

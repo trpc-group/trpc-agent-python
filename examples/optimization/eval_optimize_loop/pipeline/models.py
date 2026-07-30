@@ -275,6 +275,7 @@ class InnerSplit(StrictModel):
 class CostSource(StrictModel):
     name: str
     cost_usd: Optional[float]
+    upper_bound: bool = False
     model_calls: Optional[int] = Field(default=None, ge=0)
     metric_calls: Optional[int] = Field(default=None, ge=0)
     token_usage: dict[str, int] = Field(default_factory=dict)
@@ -290,6 +291,12 @@ class CostSource(StrictModel):
     @classmethod
     def valid_cost(cls, value: Optional[float]) -> Optional[float]:
         return None if value is None else _non_negative(value, "cost")
+
+    @model_validator(mode="after")
+    def valid_upper_bound(self) -> "CostSource":
+        if self.upper_bound and self.cost_usd is None:
+            raise ValueError("unknown cost cannot be marked as an upper bound")
+        return self
 
     @field_validator("token_usage")
     @classmethod

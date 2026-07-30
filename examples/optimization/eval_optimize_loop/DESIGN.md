@@ -13,7 +13,9 @@ configuration -> models / schema
 models -> schema
 evaluation_runtime -> backend contract / normalizer / cost ledger / artifact sink
 candidate_runtime -> generator contract / split policy / prompt workspace / artifact sink
-backends -> offline_evaluation / contracts / models
+backends -> offline_evaluation / trace_fixture / contracts / models
+optimizer_worker -> schema
+trace_fixture -> models / schema
 offline_evaluation -> SDK evaluation types
 pure policies -> models
 reporting -> models / artifacts
@@ -25,6 +27,7 @@ report facts. `preflight.py` owns validated inputs and run identity.
 `evaluation_runtime.py` owns ordered backend calls, completed-call accounting,
 and snapshot persistence. `candidate_runtime.py` owns inner-split persistence,
 the OS-temporary optimizer workspace, and sanitized optimizer output import.
+`trace_fixture.py` owns trace schema, hash and case-matrix validation.
 `offline_evaluation.py` owns offline rule parsing, evidence extraction,
 deterministic evaluators, and the run-local replacement registry. `backends.py`
 only adapts fake, trace, and live inputs to SDK calls. These are concrete flat
@@ -57,13 +60,14 @@ status, and reason; attribution consumes only failed rubric outcomes. Unsupporte
 rules, missing operands, or unavailable evidence fail the evaluation instead of
 fabricating a score.
 
-Candidate generators return independent cost sources instead of a lossy aggregate.
-The live optimizer source reports only reflection calls and optimizer cost; a
-separate unknown judge source records that judge calls and judge cost are not
-available from the SDK result. Unknown accounting remains `null` through the cost
-ledger, so the total is also unknown. Only the built-in deterministic generator
-declares zero cost and zero model calls. Custom generators default to an explicit
-`unreported` source; an enabled cost gate rejects it with `COST_UNAVAILABLE`.
+Candidate generators return independent cost sources instead of a lossy
+aggregate. The SDK defines `OptimizeResult.total_llm_cost` as total optimizer
+cost, including evaluator calls, so the live adapter records it once without an
+invented unknown judge source. Live evaluation remains unknown unless both
+per-agent-call and per-metric-call maxima are configured; then each evaluation
+source is explicitly marked as an upper bound. Unknown accounting remains
+`null` through the ledger, and an enabled cost gate rejects it with
+`COST_UNAVAILABLE`.
 
 The report schema is `v2`. It intentionally replaces `rubricIds` with structured
 `rubrics` and candidate aggregate accounting with source-level accounting; no
@@ -72,8 +76,11 @@ compatibility shim reconstructs the discarded `v1` information.
 ## Lifecycle
 
 1. Preflight strictly parses config and datasets, rejects duplicate JSON keys,
-   validates split isolation, hashes every input, and validates trace pins.
-2. The artifact directory is created exclusively; an existing run ID fails.
+   validates split isolation, hashes every input, and validates the complete
+   trace phase/split/case matrix without side effects.
+2. A cross-process lock is acquired for the complete prompt path set, then the
+   artifact directory is created exclusively; contention or a reused run ID
+   fails before prompt mutation.
 3. Baseline train and held-out validation are evaluated sequentially.
 4. A seeded inner train/selection split is persisted. Only inner-train failure
    attribution is passed to the candidate generator.
@@ -103,11 +110,19 @@ The import boundary enforces file-count, per-file-byte and total-byte budgets
 before reading optimizer output. This boundary protects audit storage; it is not
 a sandbox for a programmatic generator, which is trusted in-process code.
 
-Live cancellation writes the optimizer stop signal and waits for cooperative
-shutdown so an optimization thread is not silently abandoned. Python cannot
-safely force-kill an in-process thread. Deployments requiring a hard timeout must
-place live optimization in a supervised process or container and enforce the
-deadline there.
+CLI live optimization uses `optimizer_worker.py`. Cancellation writes the SDK
+stop signal, waits for the configured bound, then terminates and finally kills a
+worker that still does not exit. Programmatically injected generators remain
+trusted in-process components and make the report non-reproducible. Terminal
+report persistence failures raise `AuditPersistenceError`; they are never
+discarded while returning an apparently handled pipeline error. Audit writes
+redact credentials without truncation and fail before publication when the
+configured file-byte ceiling is exceeded.
+
+A replay claim is emitted only for a clean, pinned Git commit when every
+effective config, dataset, prompt, trace and live callback source is inside that
+repository and tracked. Absolute external or untracked inputs remain executable
+but are explicitly marked non-reproducible.
 
 ## Industrial Acceptance
 
@@ -122,11 +137,8 @@ manifests. The dependency test is an allowlist for all flat pipeline modules and
 rejects any new pipeline module, reverse import, or cycle until the architecture
 contract is updated deliberately.
 
-The pipeline is roughly 3,700 non-empty lines and its tests roughly 2,150. That
-size reflects immutable manifests, verified prompt rollback and apply, strict
-SDK-result normalization, partial ERROR reports, reproducibility metadata, and
-three execution modes. The implementation stays in one flat package with explicit
-ownership and an import allowlist. Line count is tracked as a review signal, not
-used as a reason to merge unrelated responsibilities or introduce facade layers.
-The largest modules are validated result models, normalization, backend adapters,
-report persistence, and the composition root.
+The implementation stays in one flat package with explicit ownership and an
+import allowlist. Line count is tracked as a review signal, not used as a reason
+to merge unrelated responsibilities or introduce facade layers. The largest
+modules remain validated result models, normalization, backend adapters, report
+persistence, and the composition root.

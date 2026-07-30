@@ -8,10 +8,11 @@ from typing import Callable, Optional
 
 from trpc_agent_sdk.evaluation import TargetPrompt
 
-from .artifacts import AuditSink
+from .artifacts import AuditPersistenceError, AuditSink
 from .attribution import attribute_failures
 from .backends import CallAgent, TraceEvaluationBackend, create_backends
 from .candidate_runtime import generate_candidate, prepare_candidate_inputs
+from .configuration import ValidatedRunConfig
 from .contracts import CandidateGenerator, EvaluationBackend
 from .costing import CostLedger
 from .evaluation import compare_snapshots
@@ -29,7 +30,12 @@ from .models import (
     SnapshotPair,
 )
 from .preflight import preflight_run
-from .prompt_workspace import PromptRestoreError, PromptWorkspace, prompt_hashes
+from .prompt_workspace import (
+    PromptRestoreError,
+    PromptRunLock,
+    PromptWorkspace,
+    prompt_hashes,
+)
 from .reporting import (
     build_optimization_report,
     create_report_context,
@@ -37,7 +43,7 @@ from .reporting import (
     persist_terminal_report,
     utc_now,
 )
-from .schema import sanitized_text
+from .schema import add_exception_note, sanitized_text
 
 FaultInjector = Callable[[str], None]
 
@@ -79,6 +85,33 @@ async def run_pipeline(
         backend=backend,
         candidate_generator=candidate_generator,
     )
+    run_lock = PromptRunLock(tuple(validated.prompt_paths.values()), )
+    with run_lock:
+        return await _run_validated_pipeline(
+            validated,
+            started_at=started_at,
+            started_clock=started_clock,
+            call_agent=call_agent,
+            callback_spec=callback_spec,
+            backend=backend,
+            candidate_generator=candidate_generator,
+            fault_injector=fault_injector,
+        )
+
+
+async def _run_validated_pipeline(
+    validated: ValidatedRunConfig,
+    *,
+    started_at: str,
+    started_clock: float,
+    call_agent: Optional[CallAgent],
+    callback_spec: Optional[str],
+    backend: Optional[EvaluationBackend],
+    candidate_generator: Optional[CandidateGenerator],
+    fault_injector: Optional[FaultInjector],
+) -> OptimizationReport:
+    """Execute the lifecycle while the caller owns the prompt-set lock."""
+
     settings = validated.config.pipeline
     custom_backend = backend is not None
     custom_components = custom_backend or candidate_generator is not None
@@ -92,6 +125,8 @@ async def run_pipeline(
                 "train": validated.input_hashes["train"],
                 "validation": validated.input_hashes["validation"],
             },
+            callback_spec=callback_spec,
+            optimizer_shutdown_timeout_seconds=settings.optimizer_shutdown_timeout_seconds,
         )
         backend = backend or default_backend
         candidate_generator = candidate_generator or default_generator
@@ -108,8 +143,8 @@ async def run_pipeline(
     sink = AuditSink(
         validated.artifact_root,
         validated.run_id,
-        max_text_chars=settings.max_text_chars,
         publication_root=validated.root_dir,
+        max_file_bytes=settings.max_audit_file_bytes,
         max_import_files=settings.max_import_files,
         max_import_file_bytes=settings.max_import_file_bytes,
         max_import_total_bytes=settings.max_import_total_bytes,
@@ -241,6 +276,7 @@ async def run_pipeline(
             ledger.record(
                 f"{stage}.{source.name}",
                 cost_usd=source.cost_usd,
+                upper_bound=source.upper_bound,
                 model_calls=source.model_calls,
                 metric_calls=source.metric_calls,
                 token_usage=source.token_usage,
@@ -332,16 +368,26 @@ async def run_pipeline(
         message = sanitized_text(error, max_text_chars=settings.max_text_chars)
         run_error = RunError(stage=stage, error_type=type(error).__name__, message=message)
         error_report = build_report(Decision.ERROR, stage, (run_error, ))
+        persistence_error: Optional[BaseException] = None
         try:
             error_report = persist_terminal_report(
                 sink,
                 error_report,
                 started_clock=started_clock,
             )
-        except BaseException:
-            pass
+        except BaseException as persist_error:
+            persistence_error = persist_error
         if fatal_restore is not None:
+            if persistence_error is not None:
+                add_exception_note(fatal_restore, f"terminal audit persistence also failed: {persistence_error}")
             raise fatal_restore
         if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+            if persistence_error is not None:
+                add_exception_note(error, f"terminal audit persistence also failed: {persistence_error}")
             raise
+        if persistence_error is not None:
+            audit_error = AuditPersistenceError(
+                f"terminal audit persistence failed at stage {stage!r}: {persistence_error}")
+            add_exception_note(audit_error, f"original pipeline error: {type(error).__name__}: {message}")
+            raise audit_error from persistence_error
         return error_report

@@ -58,6 +58,13 @@ class GateConfig(StrictModel):
     def valid_budget(cls, value: Optional[float]) -> Optional[float]:
         return None if value is None else _non_negative(value, "budget")
 
+    @field_validator("overfit_guard")
+    @classmethod
+    def overfit_guard_is_mandatory(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("overfit_guard is a mandatory safety invariant")
+        return value
+
     @field_validator("metric_max_regression")
     @classmethod
     def valid_metric_regression(cls, value: dict[str, float]) -> dict[str, float]:
@@ -83,6 +90,10 @@ class PipelineSettings(StrictModel):
     train_case_weights: dict[str, StrictFloat] = Field(default_factory=dict)
     validation_case_weights: dict[str, StrictFloat] = Field(default_factory=dict)
     max_text_chars: StrictInt = Field(default=4000, ge=64, le=100_000)
+    max_audit_file_bytes: StrictInt = Field(default=25 * 1024 * 1024, ge=1024, le=500 * 1024 * 1024)
+    live_agent_call_max_cost_usd: Optional[StrictFloat] = None
+    live_metric_call_max_cost_usd: Optional[StrictFloat] = None
+    optimizer_shutdown_timeout_seconds: StrictFloat = Field(default=10.0, ge=0.1, le=300.0)
     max_import_files: StrictInt = Field(default=256, ge=1, le=10_000)
     max_import_file_bytes: StrictInt = Field(default=5 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     max_import_total_bytes: StrictInt = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
@@ -93,6 +104,19 @@ class PipelineSettings(StrictModel):
     def valid_import_budget(self) -> "PipelineSettings":
         if self.max_import_total_bytes < self.max_import_file_bytes:
             raise ValueError("max_import_total_bytes must be at least max_import_file_bytes")
+        return self
+
+    @model_validator(mode="after")
+    def valid_live_cost_bounds(self) -> "PipelineSettings":
+        bounds = (
+            self.live_agent_call_max_cost_usd,
+            self.live_metric_call_max_cost_usd,
+        )
+        if (bounds[0] is None) != (bounds[1] is None):
+            raise ValueError("live Agent and metric call cost bounds must be configured together")
+        for value in bounds:
+            if value is not None:
+                _non_negative(value, "live call cost bound")
         return self
 
     @field_validator("inner_selection_ratio")
@@ -142,3 +166,5 @@ class ValidatedRunConfig(StrictModel):
     prompt_paths: dict[str, str]
     prompt_hashes: dict[str, str]
     adapter_identity: str
+    reproducibility_paths: tuple[str, ...]
+    reproducibility_issues: tuple[str, ...] = ()

@@ -677,7 +677,6 @@ async def test_live_generator_forces_update_source_false(monkeypatch, tmp_path) 
     assert proposal.rounds[0].metric_scores == {"quality": 0.9}
     assert [(source.name, source.cost_usd, source.model_calls) for source in proposal.cost_sources] == [
         ("optimizer_reported", 0, 1),
-        ("judge_unreported", None, None),
     ]
 
 
@@ -778,3 +777,65 @@ async def test_live_generator_requests_cooperative_stop_before_propagating_cance
     with pytest.raises(asyncio.CancelledError):
         await task
     assert stopped.is_set()
+
+
+@pytest.mark.asyncio
+async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop(monkeypatch, tmp_path) -> None:
+
+    async def call_agent(query: str) -> str:
+        return query
+
+    class StuckProcess:
+
+        def __init__(self) -> None:
+            self.returncode = None
+            self.waiting = asyncio.Event()
+            self.finished = asyncio.Event()
+            self.terminated = False
+            self.killed = False
+
+        async def wait(self):
+            self.waiting.set()
+            await self.finished.wait()
+            return self.returncode
+
+        def terminate(self):
+            self.terminated = True
+            self.returncode = -15
+            self.finished.set()
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+            self.finished.set()
+
+    process = StuckProcess()
+
+    async def fake_subprocess(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    output_dir = tmp_path / "optimizer-output"
+    task = asyncio.create_task(
+        LiveCandidateGenerator(
+            call_agent,
+            callback_spec="tests.agent:call_agent",
+            shutdown_timeout_seconds=0.01,
+        ).generate(
+            target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
+            baseline_prompts={"system": "baseline"},
+            train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
+            inner_train_path="inner-train.json",
+            inner_selection_path="inner-selection.json",
+            config_path="optimizer.json",
+            output_dir=str(output_dir),
+        ))
+    await process.waiting.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert (output_dir / "optimize.stop").read_text(encoding="utf-8") == "cancel requested\n"
+    assert process.terminated is True
+    assert process.returncode in {-15, -9}

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import inspect
+import json
+import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
@@ -23,6 +24,7 @@ from trpc_agent_sdk.evaluation import (
     InferenceConfig,
     InferenceRequest,
     LocalEvalService,
+    OptimizeResult,
     RemoteEvalService,
     TargetPrompt,
 )
@@ -38,9 +40,11 @@ from .models import (
 )
 from .offline_evaluation import prepare_offline_evaluation
 from .schema import add_exception_note, parse_strict_json
+from .trace_fixture import TraceFixture
 
 CallAgent = Callable[[str], Awaitable[str]]
 _DEFAULT_APP_NAME = "test_app"
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 async def _evaluate_with_sdk(
@@ -210,46 +214,15 @@ class TraceEvaluationBackend:
         dataset_hashes: dict[str, str],
         fixture_hash: Optional[str] = None,
     ) -> None:
-        self._fixture_path = Path(fixture_path)
-        self._dataset_hashes = dict(dataset_hashes)
-        if not self._fixture_path.is_file():
-            raise FileNotFoundError(f"trace fixture does not exist: {self._fixture_path}")
-        content = self._fixture_path.read_bytes()
-        actual_hash = hashlib.sha256(content).hexdigest()
-        if fixture_hash is not None and actual_hash != fixture_hash:
-            raise ValueError("trace fixture changed after preflight")
-        self._fixture_hash = actual_hash
-        self._payload = parse_strict_json(content.decode("utf-8"))
+        self._fixture = TraceFixture(fixture_path, dataset_hashes, fixture_hash)
 
     def validate_fixture(self, train: EvalSet, validation: EvalSet) -> None:
         """Fail before run creation when any pinned trace input has drifted."""
 
-        for phase in Phase:
-            self._trace_eval_set(train, Split.TRAIN, phase)
-            self._trace_eval_set(validation, Split.VALIDATION, phase)
+        self._fixture.validate(train, validation)
 
     def _trace_eval_set(self, eval_set: EvalSet, split: Split, phase: Phase) -> EvalSet:
-        payload = self._payload
-        if payload.get("schemaVersion") != "v1":
-            raise ValueError("unsupported trace fixture schemaVersion")
-        recorded_hashes = payload.get("datasetHashes")
-        if recorded_hashes != self._dataset_hashes:
-            raise ValueError("trace fixture dataset hashes do not match validated inputs")
-        try:
-            cases = payload["phases"][phase.value][split.value]
-        except (KeyError, TypeError) as error:
-            raise ValueError(f"trace fixture is missing {phase.value}/{split.value}") from error
-        expected_ids = [case.eval_id for case in eval_set.eval_cases]
-        if not isinstance(cases, dict) or set(cases) != set(expected_ids):
-            raise ValueError("trace fixture case IDs do not match the dataset")
-        raw = eval_set.model_dump(mode="json", by_alias=True, exclude_none=True)
-        for case in raw["evalCases"]:
-            conversation = deepcopy(cases[case["evalId"]])
-            if not isinstance(conversation, list) or not conversation:
-                raise ValueError("each trace fixture conversation must be non-empty")
-            case["evalMode"] = "trace"
-            case["actualConversation"] = conversation
-        return EvalSet.model_validate(raw)
+        return self._fixture.eval_set(eval_set, split, phase)
 
     async def evaluate(
         self,
@@ -347,11 +320,158 @@ class DeterministicCandidateGenerator:
 class LiveCandidateGenerator:
     """Adapt AgentOptimizer output into the strict candidate-only contract."""
 
-    def __init__(self, call_agent: CallAgent, *, verbose: int = 0) -> None:
+    def __init__(
+        self,
+        call_agent: CallAgent,
+        *,
+        callback_spec: Optional[str] = None,
+        shutdown_timeout_seconds: float = 10.0,
+        verbose: int = 0,
+    ) -> None:
         if not inspect.iscoroutinefunction(call_agent):
             raise TypeError("live call_agent must be an async function")
+        if shutdown_timeout_seconds <= 0:
+            raise ValueError("optimizer shutdown timeout must be positive")
         self._call_agent = call_agent
+        self._callback_spec = callback_spec
+        self._shutdown_timeout_seconds = shutdown_timeout_seconds
         self._verbose = verbose
+
+    @staticmethod
+    def _request_stop(output_dir: str, cancellation: BaseException) -> None:
+        stop_path = Path(output_dir) / "optimize.stop"
+        try:
+            stop_path.parent.mkdir(parents=True, exist_ok=True)
+            stop_path.write_text("cancel requested\n", encoding="utf-8")
+        except OSError as stop_error:
+            add_exception_note(cancellation, f"could not request optimizer stop: {stop_error}")
+
+    async def _optimize_in_process(self, **kwargs) -> OptimizeResult:
+        optimize_task = asyncio.create_task(AgentOptimizer.optimize(
+            **kwargs,
+            call_agent=self._call_agent,
+        ))
+        try:
+            return await asyncio.shield(optimize_task)
+        except asyncio.CancelledError as cancellation:
+            self._request_stop(kwargs["output_dir"], cancellation)
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(optimize_task),
+                    timeout=self._shutdown_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                add_exception_note(
+                    cancellation,
+                    "programmatic optimizer did not stop before its shutdown timeout; "
+                    "use an importable callback spec for process isolation",
+                )
+                optimize_task.add_done_callback(self._consume_task_result)
+            except BaseException as shutdown_error:
+                add_exception_note(
+                    cancellation,
+                    f"optimizer shutdown completed with {type(shutdown_error).__name__}: "
+                    f"{shutdown_error}",
+                )
+            raise
+
+    @staticmethod
+    def _consume_task_result(task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except BaseException:
+            pass
+
+    async def _stop_worker(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        output_dir: str,
+        cancellation: BaseException,
+    ) -> None:
+        self._request_stop(output_dir, cancellation)
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(process.wait()),
+                timeout=self._shutdown_timeout_seconds,
+            )
+            return
+        except asyncio.TimeoutError:
+            if process.returncode is None:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(process.wait()),
+                timeout=self._shutdown_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(process.wait()),
+                    timeout=self._shutdown_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                add_exception_note(cancellation, "optimizer worker did not report exit after kill")
+        add_exception_note(cancellation, "optimizer worker required forced termination")
+
+    async def _optimize_in_worker(self, **kwargs) -> OptimizeResult:
+        assert self._callback_spec is not None
+        output_dir = kwargs["output_dir"]
+        request_path = Path(output_dir).parent / "optimizer-worker-request.json"
+        prompt_paths = {name: kwargs["target_prompt"].describe_source(name) for name in kwargs["target_prompt"].names()}
+        request_path.write_text(
+            json.dumps(
+                {
+                    "callbackSpec": self._callback_spec,
+                    "promptPaths": prompt_paths,
+                    "configPath": kwargs["config_path"],
+                    "trainPath": kwargs["train_dataset_path"],
+                    "validationPath": kwargs["validation_dataset_path"],
+                    "outputDir": output_dir,
+                    "verbose": kwargs["verbose"],
+                },
+                ensure_ascii=False,
+                allow_nan=False,
+            ),
+            encoding="utf-8",
+        )
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "examples.optimization.eval_optimize_loop.pipeline.optimizer_worker",
+            str(request_path),
+            cwd=str(_REPOSITORY_ROOT),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            return_code = await process.wait()
+        except asyncio.CancelledError as cancellation:
+            await self._stop_worker(
+                process,
+                output_dir=output_dir,
+                cancellation=cancellation,
+            )
+            raise
+        result_path = Path(output_dir) / "result.json"
+        if return_code != 0:
+            error_path = Path(output_dir) / "worker_error.json"
+            detail = "optimizer worker failed without an error artifact"
+            if error_path.is_file():
+                payload = parse_strict_json(error_path.read_text(encoding="utf-8"))
+                detail = str(payload.get("message", detail))
+            raise RuntimeError(f"AgentOptimizer worker failed with exit code {return_code}: {detail}")
+        if not result_path.is_file():
+            raise RuntimeError("AgentOptimizer worker completed without result.json")
+        return OptimizeResult.from_file(str(result_path))
 
     async def generate(
         self,
@@ -365,38 +485,17 @@ class LiveCandidateGenerator:
         output_dir: str,
     ) -> CandidateProposal:
         del train_attribution
-        optimize_task = asyncio.create_task(
-            AgentOptimizer.optimize(
-                config_path=config_path,
-                call_agent=self._call_agent,
-                target_prompt=target_prompt,
-                train_dataset_path=inner_train_path,
-                validation_dataset_path=inner_selection_path,
-                output_dir=output_dir,
-                update_source=False,
-                verbose=self._verbose,
-            ))
-        try:
-            result = await asyncio.shield(optimize_task)
-        except asyncio.CancelledError as cancellation:
-            stop_path = Path(output_dir) / "optimize.stop"
-            try:
-                stop_path.parent.mkdir(parents=True, exist_ok=True)
-                stop_path.write_text("cancel requested\n", encoding="utf-8")
-            except OSError as stop_error:
-                add_exception_note(
-                    cancellation,
-                    f"could not request optimizer stop: {stop_error}",
-                )
-            try:
-                await optimize_task
-            except BaseException as shutdown_error:
-                add_exception_note(
-                    cancellation,
-                    f"optimizer shutdown completed with {type(shutdown_error).__name__}: "
-                    f"{shutdown_error}",
-                )
-            raise
+        optimize_kwargs = {
+            "config_path": config_path,
+            "target_prompt": target_prompt,
+            "train_dataset_path": inner_train_path,
+            "validation_dataset_path": inner_selection_path,
+            "output_dir": output_dir,
+            "update_source": False,
+            "verbose": self._verbose,
+        }
+        result = (await self._optimize_in_worker(
+            **optimize_kwargs) if self._callback_spec else await self._optimize_in_process(**optimize_kwargs))
         if result.status == "CANCELED":
             raise asyncio.CancelledError(result.error_message or "AgentOptimizer canceled")
         if result.status != "SUCCEEDED":
@@ -425,15 +524,12 @@ class LiveCandidateGenerator:
             changed=result.best_prompts != baseline_prompts,
             stop_reason=result.stop_reason,
             rounds=rounds,
-            cost_sources=(
-                CostSource(
-                    name="optimizer_reported",
-                    cost_usd=result.total_llm_cost,
-                    model_calls=result.total_reflection_lm_calls,
-                    token_usage=dict(result.total_token_usage),
-                ),
-                CostSource(name="judge_unreported", cost_usd=None, model_calls=None),
-            ),
+            cost_sources=(CostSource(
+                name="optimizer_reported",
+                cost_usd=result.total_llm_cost,
+                model_calls=result.total_reflection_lm_calls,
+                token_usage=dict(result.total_token_usage),
+            ), ),
             duration_seconds=result.duration_seconds,
         )
         return CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
@@ -446,6 +542,8 @@ def create_backends(
     trace_fixture_path: Optional[str] = None,
     trace_fixture_hash: Optional[str] = None,
     dataset_hashes: Optional[dict[str, str]] = None,
+    callback_spec: Optional[str] = None,
+    optimizer_shutdown_timeout_seconds: float = 10.0,
 ) -> tuple[EvaluationBackend, CandidateGenerator]:
     if mode == "fake":
         return FakeEvaluationBackend(), DeterministicCandidateGenerator()
@@ -459,5 +557,12 @@ def create_backends(
     if mode == "live":
         if call_agent is None:
             raise ValueError("live mode requires call_agent")
-        return LiveEvaluationBackend(call_agent), LiveCandidateGenerator(call_agent)
+        return (
+            LiveEvaluationBackend(call_agent),
+            LiveCandidateGenerator(
+                call_agent,
+                callback_spec=callback_spec,
+                shutdown_timeout_seconds=optimizer_shutdown_timeout_seconds,
+            ),
+        )
     raise ValueError(f"unsupported mode: {mode!r}")

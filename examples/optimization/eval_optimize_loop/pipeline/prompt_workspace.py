@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -14,6 +16,71 @@ from .schema import validate_safe_component
 
 class PromptRestoreError(RuntimeError):
     """The baseline prompt state could not be restored and verified."""
+
+
+class PromptRunLock:
+    """Cross-process exclusive lock for one set of file-backed prompts."""
+
+    def __init__(
+        self,
+        prompt_paths: tuple[str, ...],
+        *,
+        lock_root: str | None = None,
+    ) -> None:
+        if not prompt_paths:
+            raise ValueError("prompt run lock requires at least one prompt path")
+        identity = "\0".join(sorted(os.path.normcase(str(Path(path).resolve())) for path in prompt_paths))
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        if lock_root is not None:
+            root = Path(lock_root).resolve()
+        else:
+            root = Path(tempfile.gettempdir()).resolve() / "trpc-agent-eval-optimize-locks"
+        self.path = root / f"{digest}.lock"
+        self._handle = None
+
+    def acquire(self) -> None:
+        if self._handle is not None:
+            raise RuntimeError("prompt run lock is already acquired")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        handle = self.path.open("a+b")
+        if self.path.stat().st_size == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, BlockingIOError) as error:
+            handle.close()
+            raise RuntimeError("prompt sources are already owned by another pipeline run") from error
+        self._handle = handle
+
+    def release(self) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        try:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+            self._handle = None
+
+    def __enter__(self) -> "PromptRunLock":
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.release()
 
 
 def hash_text(value: str) -> str:

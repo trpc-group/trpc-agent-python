@@ -33,8 +33,8 @@ Reports retain each rubric's ID, score, pass status, and reason. Failure
 attribution uses only rubric outcomes that failed their metric threshold.
 
 Live mode requires an importable async `query -> str` callback. The optimizer is
-always called with `update_source=False`; only this pipeline's gate may apply a
-candidate:
+run in a supervised subprocess and always called with `update_source=False`;
+only this pipeline's gate may apply a candidate:
 
 ```bash
 python examples/optimization/eval_optimize_loop/run_pipeline.py \
@@ -45,16 +45,24 @@ Source prompts remain unchanged by default. Add `--apply-candidate` only when a
 gate ACCEPT should be written back. REJECT is a completed audit run and exits 0;
 ERROR exits non-zero. Run IDs are immutable and cannot be reused. A reproducible
 report command preserves all effective inputs but appends `-replay` to the run ID
-so it can execute without overwriting the authoritative original run.
+so it can execute without overwriting the authoritative original run. A report
+is marked reproducible only when the worktree is clean and every effective
+config, dataset, prompt, trace, and callback source is tracked by the pinned Git
+commit.
 
 Cost is reported by source. Any unreported source makes the total cost unknown;
 when a cost budget is enabled, the gate fails closed with `COST_UNAVAILABLE`.
+Live evaluation can participate in a cost gate by configuring both
+`liveAgentCallMaxCostUsd` and `liveMetricCallMaxCostUsd`; these values produce a
+conservative upper bound rather than a fabricated bill.
 
 Optimizer artifacts are accepted only through a sanitized allowlist and bounded
 by configurable file-count, per-file-byte, and total-byte limits. Live optimizer
-cancellation is cooperative. A production deployment that requires a hard
-deadline must run the live optimizer in a supervised worker process or container
-and terminate that worker at the platform boundary.
+cancellation first requests cooperative shutdown, then terminates the isolated
+worker after `optimizerShutdownTimeoutSeconds`. Audit values are redacted but
+never silently truncated; a report exceeding `maxAuditFileBytes` fails
+explicitly. Concurrent runs targeting the same prompt files are rejected by a
+cross-process lock.
 
 See [SOLUTION.md](SOLUTION.md) for the concise Chinese issue proposal and
 [DESIGN.md](DESIGN.md) for detailed stage contracts and failure semantics. A

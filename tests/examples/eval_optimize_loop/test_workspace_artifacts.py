@@ -14,6 +14,7 @@ from examples.optimization.eval_optimize_loop.pipeline.artifacts import AuditSin
 from examples.optimization.eval_optimize_loop.pipeline.costing import CostLedger
 from examples.optimization.eval_optimize_loop.pipeline.prompt_workspace import (
     PromptRestoreError,
+    PromptRunLock,
     PromptWorkspace,
 )
 
@@ -44,6 +45,19 @@ async def test_apply_is_verified_and_can_be_rolled_back(tmp_path) -> None:
     assert prompt_path.read_text(encoding="utf-8") == "baseline"
 
 
+def test_prompt_run_lock_rejects_concurrent_owner_and_releases(tmp_path) -> None:
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    lock_root = str(tmp_path / "locks")
+    first = PromptRunLock((str(prompt_path), ), lock_root=lock_root)
+    second = PromptRunLock((str(prompt_path), ), lock_root=lock_root)
+    with first:
+        with pytest.raises(RuntimeError, match="already owned"):
+            second.acquire()
+    with second:
+        assert second.path == first.path
+
+
 @pytest.mark.asyncio
 async def test_restoration_failure_is_not_downgraded_to_reject() -> None:
     state = {"value": "baseline", "fail_restore": False}
@@ -64,7 +78,7 @@ async def test_restoration_failure_is_not_downgraded_to_reject() -> None:
 
 
 def test_audit_sink_is_immutable_safe_sanitized_and_manifested(tmp_path) -> None:
-    sink = AuditSink(tmp_path / "artifacts", "run-1", max_text_chars=64)
+    sink = AuditSink(tmp_path / "artifacts", "run-1")
     sink.create()
     sink.write_json(
         "config.json",
@@ -92,7 +106,23 @@ def test_audit_sink_is_immutable_safe_sanitized_and_manifested(tmp_path) -> None
         assert record.sha256 == hashlib.sha256(content).hexdigest()
         assert record.byte_size == len(content)
     with pytest.raises(FileExistsError):
-        AuditSink(tmp_path / "artifacts", "run-1", max_text_chars=64).create()
+        AuditSink(tmp_path / "artifacts", "run-1").create()
+
+
+def test_audit_sink_preserves_complete_text_and_fails_explicitly_on_size_limit(tmp_path) -> None:
+    content = "complete-audit-content:" + "x" * 256
+    sink = AuditSink(tmp_path / "artifacts", "complete", max_file_bytes=1024)
+    sink.create()
+    sink.write_text("prompt.md", content)
+    sink.write_json("prompt.json", {"prompt": content})
+    assert (sink.run_dir / "prompt.md").read_text(encoding="utf-8") == content
+    assert json.loads((sink.run_dir / "prompt.json").read_text(encoding="utf-8"))["prompt"] == content
+
+    limited = AuditSink(tmp_path / "artifacts", "limited", max_file_bytes=64)
+    limited.create()
+    with pytest.raises(ValueError, match="audit file exceeds byte limit"):
+        limited.write_text("prompt.md", content)
+    assert not (limited.run_dir / "prompt.md").exists()
 
 
 def test_optimizer_tree_is_sanitized_before_audit_import(tmp_path) -> None:
@@ -112,7 +142,7 @@ def test_optimizer_tree_is_sanitized_before_audit_import(tmp_path) -> None:
         "result: {'clientSecret': 'markdown-secret'}",
         encoding="utf-8",
     )
-    sink = AuditSink(tmp_path / "artifacts", "run-2", max_text_chars=128)
+    sink = AuditSink(tmp_path / "artifacts", "run-2")
     sink.create()
     sink.import_tree(raw, "candidate_generation/optimizer")
     imported = "\n".join(path.read_text(encoding="utf-8") for path in sink.run_dir.rglob("*") if path.is_file())
@@ -158,7 +188,6 @@ def test_optimizer_tree_enforces_resource_budgets(tmp_path, sink_kwargs, files, 
     sink = AuditSink(
         tmp_path / "artifacts",
         "run-budget",
-        max_text_chars=128,
         **sink_kwargs,
     )
     sink.create()
@@ -173,7 +202,6 @@ def test_concurrent_latest_publication_uses_collision_free_atomic_files(tmp_path
         sink = AuditSink(
             tmp_path / "artifacts",
             f"run-{index}",
-            max_text_chars=128,
             publication_root=publication_root,
         )
         sink.create()
@@ -205,3 +233,11 @@ def test_cost_ledger_preserves_unknown_sources() -> None:
     summary = ledger.summary()
     assert summary.total_cost_usd is None
     assert [source.name for source in summary.sources] == ["fake", "live-judge"]
+
+
+def test_cost_ledger_preserves_upper_bound_basis() -> None:
+    ledger = CostLedger()
+    ledger.record("live-evaluation", cost_usd=0.5, upper_bound=True, model_calls=2)
+    summary = ledger.summary()
+    assert summary.total_cost_usd == 0.5
+    assert summary.sources[0].upper_bound is True

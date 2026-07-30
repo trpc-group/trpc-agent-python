@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 from pathlib import Path
 from typing import Any, Optional
 
@@ -11,8 +12,9 @@ from trpc_agent_sdk.evaluation import EvalSet
 from .artifacts import load_strict_json
 from .evaluation import canonical_json, dataset_fingerprint, validate_datasets
 from .configuration import PipelineConfig, ValidatedRunConfig
-from .schema import validate_safe_component
+from .schema import validate_safe_component, validate_secret_free_text
 from .prompt_workspace import prompt_hashes
+from .trace_fixture import TraceFixture
 
 
 def _sha256_file(path: Path) -> str:
@@ -46,6 +48,16 @@ def _callable_identity(call_agent: object | None, callback_spec: Optional[str]) 
     module = getattr(call_agent, "__module__", type(call_agent).__module__)
     qualname = getattr(call_agent, "__qualname__", type(call_agent).__qualname__)
     return f"{module}:{qualname}"
+
+
+def _callable_source_path(call_agent: object | None) -> Optional[Path]:
+    if call_agent is None:
+        return None
+    try:
+        source = inspect.getsourcefile(inspect.unwrap(call_agent)) or inspect.getfile(call_agent)
+    except (OSError, TypeError):
+        return None
+    return Path(source).resolve() if source else None
 
 
 def _adapter_identity(
@@ -124,7 +136,10 @@ def preflight_run(
     for name, relative in settings.prompt_paths.items():
         validate_safe_component(name, name="prompt field")
         path = inside_example_root(root, relative, f"prompt path {name!r}")
-        prompts[name] = path.read_text(encoding="utf-8")
+        prompts[name] = validate_secret_free_text(
+            path.read_text(encoding="utf-8"),
+            name=f"prompt {name!r}",
+        )
         prompt_paths[name] = str(path)
 
     hashes = {
@@ -141,6 +156,14 @@ def preflight_run(
     if settings.mode == "trace":
         trace_path = inside_example_root(root, settings.trace_fixture, "trace fixture")
         hashes["trace"] = _sha256_file(trace_path)
+        TraceFixture(
+            trace_path,
+            {
+                "train": hashes["train"],
+                "validation": hashes["validation"],
+            },
+            hashes["trace"],
+        ).validate(train, validation)
 
     adapter_identity = _adapter_identity(
         settings.mode,
@@ -149,6 +172,17 @@ def preflight_run(
         backend=backend,
         candidate_generator=candidate_generator,
     )
+    reproducibility_paths = [config_file, train_file, validation_file]
+    reproducibility_paths.extend(Path(path) for path in prompt_paths.values())
+    if trace_path is not None:
+        reproducibility_paths.append(trace_path)
+    reproducibility_issues: list[str] = []
+    if settings.mode == "live" and callback_spec:
+        callback_source = _callable_source_path(call_agent)
+        if callback_source is None:
+            reproducibility_issues.append("live_callback_source_unavailable")
+        else:
+            reproducibility_paths.append(callback_source)
     derived = ("run-" + hashlib.sha256(
         canonical_json({
             "inputHashes": hashes,
@@ -173,4 +207,6 @@ def preflight_run(
         prompt_paths=prompt_paths,
         prompt_hashes=prompt_hashes(prompts),
         adapter_identity=adapter_identity,
+        reproducibility_paths=tuple(str(path.resolve()) for path in reproducibility_paths),
+        reproducibility_issues=tuple(reproducibility_issues),
     )

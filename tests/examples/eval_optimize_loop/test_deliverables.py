@@ -60,7 +60,7 @@ def test_committed_sample_report_is_complete_and_rendered_from_the_model() -> No
     assert report.candidate and report.candidate.train and report.candidate.validation
     assert report.delta and report.delta.train and report.delta.validation
     assert report.gate_decision and report.gate_decision.decision == Decision.REJECT
-    assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" in report.gate_decision.reasons
+    assert "NEW_HARD_FAIL_BUDGET_EXCEEDED" in report.gate_decision.reasons
     transitions = {case.transition for case in report.delta.validation.cases}
     assert transitions == {
         Transition.NEW_PASS,

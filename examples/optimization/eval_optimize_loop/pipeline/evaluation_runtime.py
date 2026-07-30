@@ -28,14 +28,19 @@ def create_evaluation_runtime(
 
     settings = validated.config.pipeline
     offline = not custom_backend and settings.mode in {"fake", "trace"}
-    calls_per_invocation = (1 if not custom_backend and settings.mode == "fake" else
+    live_with_bounds = (not custom_backend and settings.mode == "live"
+                        and settings.live_agent_call_max_cost_usd is not None
+                        and settings.live_metric_call_max_cost_usd is not None)
+    calls_per_invocation = (1 if not custom_backend and settings.mode in {"fake", "live"} else
                             0 if not custom_backend and settings.mode == "trace" else None)
     return EvaluationRuntime(
         backend=backend,
         sink=sink,
         ledger=ledger,
         eval_config=validated.config.evaluate,
-        cost_usd=0 if offline else None,
+        agent_call_cost_usd=(0 if offline else settings.live_agent_call_max_cost_usd if live_with_bounds else None),
+        metric_call_cost_usd=(0 if offline else settings.live_metric_call_max_cost_usd if live_with_bounds else None),
+        cost_is_upper_bound=live_with_bounds,
         model_calls_per_invocation=calls_per_invocation,
         metric_weights=settings.metric_weights,
         train_case_weights=settings.train_case_weights,
@@ -51,7 +56,9 @@ class EvaluationRuntime:
     sink: AuditSink
     ledger: CostLedger
     eval_config: EvalConfig
-    cost_usd: float | None
+    agent_call_cost_usd: float | None
+    metric_call_cost_usd: float | None
+    cost_is_upper_bound: bool
     model_calls_per_invocation: int | None
     metric_weights: dict[str, float]
     train_case_weights: dict[str, float]
@@ -70,6 +77,15 @@ class EvaluationRuntime:
         metric_count = len(self.eval_config.get_eval_metrics())
         invocations = sum(len(case.conversation or case.actual_conversation or []) for case in eval_set.eval_cases)
         metric_calls = invocations * self.eval_config.num_runs * metric_count
+        model_calls = None
+        if self.model_calls_per_invocation is not None:
+            model_calls = invocations * self.eval_config.num_runs * self.model_calls_per_invocation
+        cost_usd = None
+        if self.agent_call_cost_usd is not None and self.metric_call_cost_usd is not None:
+            cost_usd = (
+                invocations * self.eval_config.num_runs * self.agent_call_cost_usd
+                + metric_calls * self.metric_call_cost_usd
+            )
         try:
             raw = await self.backend.evaluate(
                 eval_set=deepcopy(eval_set),
@@ -82,17 +98,15 @@ class EvaluationRuntime:
         except BaseException:
             self.ledger.record(
                 stage,
-                cost_usd=self.cost_usd,
+                cost_usd=(0 if self.agent_call_cost_usd == self.metric_call_cost_usd == 0 else None),
                 model_calls=(0 if self.model_calls_per_invocation == 0 else None),
                 metric_calls=None,
             )
             raise
-        model_calls = None
-        if self.model_calls_per_invocation is not None:
-            model_calls = invocations * self.eval_config.num_runs * self.model_calls_per_invocation
         self.ledger.record(
             stage,
-            cost_usd=self.cost_usd,
+            cost_usd=cost_usd,
+            upper_bound=self.cost_is_upper_bound,
             model_calls=model_calls,
             metric_calls=metric_calls,
         )

@@ -19,7 +19,7 @@ from .models import (
     InnerSplit,
 )
 from .prompt_workspace import PromptWorkspace
-from .schema import add_exception_note
+from .schema import add_exception_note, validate_secret_free_text
 
 
 def prepare_candidate_inputs(
@@ -118,4 +118,9 @@ async def generate_candidate(
     validated = CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
     if validated.baseline_prompts != workspace.baseline:
         raise ValueError("candidate generator baseline prompts differ from the workspace baseline")
+    for name, text in validated.prompts.items():
+        validate_secret_free_text(text, name=f"candidate prompt {name!r}")
+    for round_ in validated.rounds:
+        for name, text in round_.candidate_prompts.items():
+            validate_secret_free_text(text, name=f"candidate round {round_.round} prompt {name!r}")
     return validated
