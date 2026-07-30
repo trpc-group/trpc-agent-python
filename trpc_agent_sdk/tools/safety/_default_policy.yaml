@@ -1,0 +1,248 @@
+# Tool Script Safety Guard — default policy.
+#
+# Every rule below is data: operators can add, remove or re-tune rules, extend
+# allow-lists or forbidden paths WITHOUT changing any Python code. Copy this file,
+# edit it, and point the scanner at it via `load_policy("my_policy.yaml")`.
+#
+# risk_level semantics (see decision fusion in _scanner.py):
+#   critical / high -> deny
+#   medium          -> needs_human_review
+#   low             -> advisory (reported, does not block on its own)
+
+version: "1"
+
+# Domains network egress may target. Anything else is flagged.
+allowed_domains:
+  - api.deepseek.com
+  - api.openai.com
+  - pypi.org
+  - files.pythonhosted.org
+  - github.com
+  - raw.githubusercontent.com
+
+# Shell commands considered safe to run (bare command names).
+# Reserved: consumed by runtime/sandbox layers, not enforced by the static scanner.
+allowed_commands:
+  - ls
+  - pwd
+  - cat
+  - echo
+  - grep
+  - find
+  - head
+  - tail
+  - wc
+  - python
+  - python3
+  - git
+
+# Path fragments that must never be read or written.
+forbidden_paths:
+  - ~/.ssh
+  - /etc/shadow
+  - /etc/passwd
+  - .env
+  - id_rsa
+  - .aws/credentials
+  - .kube/config
+
+# Reserved knobs for runtime/sandbox enforcement (the static scanner cannot
+# enforce timeouts or output limits by itself).
+max_timeout_seconds: 60
+max_output_bytes: 1048576
+redact_sensitive: true
+ast_analysis: true
+
+rules:
+  # ---------------------------------------------------------------------------
+  # 1. Dangerous file operations
+  # ---------------------------------------------------------------------------
+  - rule_id: FS001
+    category: dangerous_file_operation
+    risk_level: critical
+    title: Recursive force delete of a filesystem root or home
+    language: bash
+    pattern: '\brm\s+(-[a-zA-Z]*\s+)*(-rf|-fr|-r\s+-f|-f\s+-r)\s+(/|~|/\*|\$HOME|/etc|/usr|/var|/bin|/boot)'
+    recommendation: Never recursively delete system or home directories; scope deletions to the workspace.
+
+  - rule_id: FS002
+    category: dangerous_file_operation
+    risk_level: high
+    title: Overwrite of a system directory or device
+    language: bash
+    pattern: '>\s*/(etc|usr|bin|boot|dev|sys)/'
+    recommendation: Do not redirect output into system paths or devices.
+
+  - rule_id: FS003
+    category: dangerous_file_operation
+    risk_level: high
+    title: Disk-wiping dd to a block device
+    language: bash
+    pattern: '\bdd\b.*\bof=/dev/(sd|nvme|hd|disk)'
+    recommendation: Writing raw block devices can destroy data; forbidden.
+
+  - rule_id: FS004
+    category: dangerous_file_operation
+    risk_level: high
+    title: Recursive permission change on root
+    language: bash
+    pattern: '\bchmod\s+(-[a-zA-Z]*\s+)*(-R|--recursive)\s+.*\s+(/|/etc|/usr)'
+    recommendation: Avoid recursive permission changes on system directories.
+
+  # ---------------------------------------------------------------------------
+  # 2. Reading credentials / sensitive files (must be 100% detected)
+  # ---------------------------------------------------------------------------
+  - rule_id: CR001
+    category: sensitive_info_leak
+    risk_level: critical
+    title: Access to SSH private keys
+    pattern: '(~/\.ssh|/\.ssh/|id_rsa|id_ed25519|authorized_keys)'
+    recommendation: Reading SSH keys is disallowed; remove the access.
+
+  - rule_id: CR002
+    category: sensitive_info_leak
+    risk_level: high
+    title: Reading a .env / dotenv file
+    pattern: '(\.env\b|/\.env|dotenv)'
+    recommendation: Do not read .env credential files from scripts.
+
+  - rule_id: CR003
+    category: sensitive_info_leak
+    risk_level: critical
+    title: Access to cloud / cluster credential files
+    pattern: '(\.aws/credentials|\.kube/config|/etc/shadow|/etc/passwd|\.netrc|\.pgpass)'
+    recommendation: Credential files must not be read by executed scripts.
+
+  - rule_id: SEC001
+    category: sensitive_info_leak
+    risk_level: high
+    title: Hardcoded credential literal
+    pattern: '(?i)(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd)\s*[=:]\s*[''"][^''"]{6,}'
+    recommendation: Do not embed credentials in scripts; load them from a secret manager.
+
+  - rule_id: SEC002
+    category: sensitive_info_leak
+    risk_level: critical
+    title: Private key material embedded in script
+    pattern: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    recommendation: Private keys must never be embedded in executed scripts.
+
+  - rule_id: SEC003
+    category: sensitive_info_leak
+    risk_level: high
+    title: Provider-style secret token
+    pattern: '(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,})'
+    recommendation: A live-looking secret token was found; rotate it and remove it from the script.
+
+  # ---------------------------------------------------------------------------
+  # 3. Process / system commands
+  # ---------------------------------------------------------------------------
+  - rule_id: PS001
+    category: process_system_command
+    risk_level: high
+    title: Privilege escalation via sudo/su
+    language: bash
+    pattern: '(^|\s|&&|\|\||;)\s*(sudo|su|doas)\b'
+    recommendation: Elevated privileges are not permitted in tool scripts.
+
+  - rule_id: PS002
+    category: process_system_command
+    risk_level: high
+    title: Piping remote content directly into a shell
+    language: bash
+    pattern: '\|\s*(sudo\s+)?(bash|sh|zsh|python3?)\b'
+    recommendation: Piping downloaded content into an interpreter is a common attack; blocked.
+
+  - rule_id: PS003
+    category: process_system_command
+    risk_level: medium
+    title: Backgrounded / detached process
+    language: bash
+    pattern: '(\bnohup\b|&\s*$|\bdisown\b|\bsetsid\b)'
+    recommendation: Detached background processes evade supervision; confirm intent.
+
+  - rule_id: PS004
+    category: process_system_command
+    risk_level: medium
+    title: Shell invocation from Python
+    language: python
+    pattern: '\bos\.system\s*\(|\bos\.popen\s*\(|\bsubprocess\.'
+    recommendation: Spawning shells/processes from Python is high-risk; ensure inputs are trusted.
+
+  - rule_id: PS005
+    category: process_system_command
+    risk_level: high
+    title: Dynamic code execution
+    language: python
+    pattern: '(^|[^.\w])(eval|exec)\s*\('
+    recommendation: eval/exec on dynamic input enables arbitrary code execution.
+
+  # ---------------------------------------------------------------------------
+  # 4. Dependency installation
+  # ---------------------------------------------------------------------------
+  - rule_id: DEP001
+    category: dependency_install
+    risk_level: medium
+    title: pip install invocation
+    pattern: '\bpip3?\s+install\b|python3?\s+-m\s+pip\s+install\b'
+    recommendation: Installing packages mutates the runtime; pin and review dependencies.
+
+  - rule_id: DEP002
+    category: dependency_install
+    risk_level: medium
+    title: npm / yarn / pnpm install
+    language: bash
+    pattern: '\b(npm|yarn|pnpm)\s+(install|add|i)\b'
+    recommendation: Node dependency installs can run arbitrary lifecycle scripts.
+
+  - rule_id: DEP003
+    category: dependency_install
+    risk_level: high
+    title: System package manager install
+    language: bash
+    pattern: '\b(apt|apt-get|yum|dnf|apk|brew)\s+(install|add)\b'
+    recommendation: System package installs change the host environment; not allowed by default.
+
+  # ---------------------------------------------------------------------------
+  # 5. Resource abuse
+  # ---------------------------------------------------------------------------
+  - rule_id: RES001
+    category: resource_abuse
+    risk_level: high
+    title: Fork bomb pattern
+    language: bash
+    pattern: ':\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:'
+    recommendation: Fork bombs exhaust system resources; forbidden.
+
+  - rule_id: RES002
+    category: resource_abuse
+    risk_level: medium
+    title: Long sleep
+    pattern: '\bsleep\s+([1-9][0-9]{3,})'
+    recommendation: Very long sleeps can hold resources; verify necessity.
+
+  - rule_id: RES003
+    category: resource_abuse
+    risk_level: medium
+    title: Zero-input infinite dd / yes flooding
+    language: bash
+    pattern: '(\byes\b\s*\|)|(/dev/zero)'
+    recommendation: Streaming infinite data can fill disks or memory.
+
+  # ---------------------------------------------------------------------------
+  # 6. Network exfiltration (non-whitelist egress must be 100% detected)
+  # ---------------------------------------------------------------------------
+  - rule_id: NET001
+    category: network_exfiltration
+    risk_level: high
+    title: Outbound HTTP client usage
+    pattern: '\b(curl|wget)\b|\brequests\.(get|post|put)\b|\burllib\b|\baiohttp\b|\bhttpx\b|\bsocket\.'
+    recommendation: Network egress must target only whitelisted domains; verify the destination.
+
+  - rule_id: NET002
+    category: network_exfiltration
+    risk_level: high
+    title: Raw netcat / reverse shell primitive
+    language: bash
+    pattern: '\b(nc|ncat|netcat)\b.*(-e|-c|/bin/sh|/bin/bash)'
+    recommendation: netcat with command execution is a reverse-shell primitive; forbidden.

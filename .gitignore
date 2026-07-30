@@ -27,3 +27,12 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+# experiment / optimization run artifacts (generated, must not be tracked)
+runs/
+
+# AI tooling local config
+.claude/
+
+# Windows reserved-name ghost file created by stray `2>/dev/null` redirects
+nul

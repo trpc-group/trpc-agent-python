@@ -1,0 +1,131 @@
+# Example Tool Safety Guard policy.
+#
+# This is a *copy you own*: tune severities, extend the allow-lists, or add new
+# rules here and the scanner picks them up with NO code changes. Point the
+# scanner at it via ``SafetyScanner(load_policy("tool_safety_policy.yaml"))``.
+#
+# This example starts from the bundled defaults and then customises:
+#   * adds an internal corporate domain to the network allow-list
+#   * adds a project-specific rule (CUSTOM001) — see the bottom of the file
+
+version: "1"
+
+allowed_domains:
+  - api.deepseek.com
+  - api.openai.com
+  - pypi.org
+  - files.pythonhosted.org
+  - github.com
+  - raw.githubusercontent.com
+  - internal.mycorp.com          # <-- customisation: our own artifact host
+
+allowed_commands:
+  - ls
+  - pwd
+  - cat
+  - echo
+  - grep
+  - find
+  - head
+  - tail
+  - wc
+  - python
+  - python3
+  - git
+
+forbidden_paths:
+  - ~/.ssh
+  - /etc/shadow
+  - /etc/passwd
+  - .env
+  - id_rsa
+  - .aws/credentials
+  - .kube/config
+
+max_timeout_seconds: 60
+max_output_bytes: 1048576
+redact_sensitive: true
+ast_analysis: true
+
+rules:
+  # --- Dangerous file operations -------------------------------------------
+  - rule_id: FS001
+    category: dangerous_file_operation
+    risk_level: critical
+    title: Recursive force delete of a filesystem root or home
+    language: bash
+    pattern: '\brm\s+(-[a-zA-Z]*\s+)*(-rf|-fr|-r\s+-f|-f\s+-r)\s+(/|~|/\*|\$HOME|/etc|/usr|/var|/bin|/boot)'
+    recommendation: Never recursively delete system or home directories; scope deletions to the workspace.
+
+  - rule_id: FS002
+    category: dangerous_file_operation
+    risk_level: high
+    title: Overwrite of a system directory or device
+    language: bash
+    pattern: '>\s*/(etc|usr|bin|boot|dev|sys)/'
+    recommendation: Do not redirect output into system paths or devices.
+
+  # --- Credentials / sensitive files ---------------------------------------
+  - rule_id: CR001
+    category: sensitive_info_leak
+    risk_level: critical
+    title: Access to SSH private keys
+    pattern: '(~/\.ssh|/\.ssh/|id_rsa|id_ed25519|authorized_keys)'
+    recommendation: Reading SSH keys is disallowed; remove the access.
+
+  - rule_id: CR003
+    category: sensitive_info_leak
+    risk_level: critical
+    title: Access to cloud / cluster credential files
+    pattern: '(\.aws/credentials|\.kube/config|/etc/shadow|/etc/passwd|\.netrc|\.pgpass)'
+    recommendation: Credential files must not be read by executed scripts.
+
+  - rule_id: SEC001
+    category: sensitive_info_leak
+    risk_level: high
+    title: Hardcoded credential literal
+    pattern: '(?i)(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd)\s*[=:]\s*[''"][^''"]{6,}'
+    recommendation: Do not embed credentials in scripts; load them from a secret manager.
+
+  # --- Process / system commands -------------------------------------------
+  - rule_id: PS002
+    category: process_system_command
+    risk_level: high
+    title: Piping remote content directly into a shell
+    language: bash
+    pattern: '\|\s*(sudo\s+)?(bash|sh|zsh|python3?)\b'
+    recommendation: Piping downloaded content into an interpreter is a common attack; blocked.
+
+  - rule_id: PS004
+    category: process_system_command
+    risk_level: medium
+    title: Shell invocation from Python
+    language: python
+    pattern: '\bos\.system\s*\(|\bos\.popen\s*\(|\bsubprocess\.'
+    recommendation: Spawning shells/processes from Python is high-risk; ensure inputs are trusted.
+
+  # --- Dependency installation ---------------------------------------------
+  - rule_id: DEP001
+    category: dependency_install
+    risk_level: medium
+    title: pip install invocation
+    pattern: '\bpip3?\s+install\b|python3?\s+-m\s+pip\s+install\b'
+    recommendation: Installing packages mutates the runtime; pin and review dependencies.
+
+  # --- Network egress -------------------------------------------------------
+  - rule_id: NET001
+    category: network_exfiltration
+    risk_level: high
+    title: Outbound HTTP client usage
+    pattern: '\b(curl|wget)\b|\brequests\.(get|post|put)\b|\burllib\b|\baiohttp\b|\bhttpx\b|\bsocket\.'
+    recommendation: Network egress must target only whitelisted domains; verify the destination.
+
+  # --- Project-specific customisation --------------------------------------
+  # Example of adding your own rule without touching any Python code: flag any
+  # attempt to disable TLS verification.
+  - rule_id: CUSTOM001
+    category: network_exfiltration
+    risk_level: medium
+    title: TLS verification disabled
+    pattern: '(verify\s*=\s*False|--insecure|--no-check-certificate|-k\b)'
+    recommendation: Disabling TLS verification exposes traffic to interception; keep it enabled.
