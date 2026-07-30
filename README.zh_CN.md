@@ -84,7 +84,7 @@ pip install trpc-agent-py
 按需安装扩展能力：
 
 ```bash
-pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langfuse]"
+pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langfuse,tool-safety]"
 ```
 
 ### 开发天气查询Agent

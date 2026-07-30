@@ -69,6 +69,28 @@ def _scan(content: str, language: ScriptLanguage, **kwargs):
         ))
 
 
+def test_missing_bash_parser_dependency_fails_closed_with_install_hint(monkeypatch):
+    from trpc_agent_sdk.tools.safety import _scanner
+
+    missing = ModuleNotFoundError(
+        "No module named 'tree_sitter_bash'",
+        name="tree_sitter_bash",
+    )
+
+    def unavailable(_content):
+        raise missing
+
+    monkeypatch.setattr(_scanner, "analyze_bash", unavailable)
+
+    report = _scan("echo hello", ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert report.analysis_complete is False
+    assert report.analysis_status.value == "internal_error"
+    assert report.rule_id == "PARSE-001"
+    assert "trpc-agent-py[tool-safety]" in report.findings[0].evidence
+
+
 @pytest.mark.parametrize(
     ("content", "language", "decision", "rule_id"),
     [

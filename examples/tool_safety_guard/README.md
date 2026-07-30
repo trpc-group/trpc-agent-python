@@ -14,8 +14,11 @@
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip3 install -e .
+pip3 install -e ".[tool-safety]"
 ```
+
+`tool-safety` 扩展提供 Bash 扫描所需的 tree-sitter 解析器。未安装该扩展时，Python 扫描仍可用；
+Bash 扫描会按 fail-closed 原则返回 `needs_human_review`，并提示安装扩展。
 
 然后仍在仓库根目录运行：
 
@@ -37,6 +40,9 @@ python examples/tool_safety_guard/run_safety_check.py \
 - `3`：拒绝执行（`deny`）
 
 CLI 只读取并扫描脚本，不会执行脚本。
+
+未显式传入 `--language` 时，CLI 仅从 `.py`、`.sh` 和 `.bash` 后缀推断语言。其他后缀或无后缀
+文件必须使用 `--language python` 或 `--language bash`，避免被静默误判为 Bash。
 
 ## 独立扫描器
 

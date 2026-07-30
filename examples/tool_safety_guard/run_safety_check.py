@@ -29,11 +29,21 @@ _EXIT_CODES = {
     SafetyDecision.DENY: 3,
 }
 
+_LANGUAGE_SUFFIXES = {
+    ".bash": ScriptLanguage.BASH,
+    ".py": ScriptLanguage.PYTHON,
+    ".sh": ScriptLanguage.BASH,
+}
+
 
 def _language(path: Path, explicit: str | None = None) -> ScriptLanguage:
     if explicit:
         return ScriptLanguage(explicit)
-    return ScriptLanguage.PYTHON if path.suffix == ".py" else ScriptLanguage.BASH
+    try:
+        return _LANGUAGE_SUFFIXES[path.suffix.lower()]
+    except KeyError as ex:
+        raise ValueError(f"cannot infer language for {path}; use --language python or "
+                         "--language bash") from ex
 
 
 def _scan_file(
@@ -84,11 +94,14 @@ def main() -> int:
         parser.error("provide at least one file or --manifest")
     scanner = SafetyScanner.from_yaml(args.policy) if args.policy else SafetyScanner()
     jobs: list[tuple[Path, ScriptLanguage, dict[str, Any] | None]] = []
-    if args.manifest:
-        for entry in _manifest_entries(args.manifest):
-            sample = args.manifest.parent / entry["file"]
-            jobs.append((sample, _language(sample, entry.get("language")), entry))
-    jobs.extend((path, _language(path, args.language), None) for path in args.files)
+    try:
+        if args.manifest:
+            for entry in _manifest_entries(args.manifest):
+                sample = args.manifest.parent / entry["file"]
+                jobs.append((sample, _language(sample, entry.get("language")), entry))
+        jobs.extend((path, _language(path, args.language), None) for path in args.files)
+    except ValueError as ex:
+        parser.error(str(ex))
 
     results: list[dict[str, Any]] = []
     mismatches: list[str] = []

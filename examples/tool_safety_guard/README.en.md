@@ -8,7 +8,16 @@ wrapper around a CodeExecutor or workspace program runner.
 
 ## Run the public samples
 
-From the repository root:
+Install the Bash parser extra from the repository root:
+
+```bash
+pip install -e ".[tool-safety]"
+```
+
+Python scanning remains available without this extra. Bash scanning fails closed
+with `needs_human_review` and an installation hint when the parser is missing.
+
+Then run:
 
 ```bash
 python examples/tool_safety_guard/run_safety_check.py \
@@ -23,6 +32,10 @@ python examples/tool_safety_guard/run_safety_check.py \
 The CLI only reads and scans scripts; it never executes them. Exit codes for a
 single input are `0` for `allow`, `2` for `needs_human_review`, and `3` for
 `deny`.
+
+Without `--language`, the CLI infers only `.py`, `.sh`, and `.bash`. Other
+suffixes and extensionless files require `--language python` or
+`--language bash` instead of being silently treated as Bash.
 
 The 28-sample manifest includes Bash continuations, comment and single-quote
 safe cases, constant path propagation, session keyword URLs, bare curl targets,

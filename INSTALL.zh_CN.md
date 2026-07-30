@@ -133,6 +133,7 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 | `langfuse`       | Langfuse 可观测性             | `pip install "trpc-agent-py[langfuse]"`       |
 | `eval`           | 评测框架                      | `pip install "trpc-agent-py[eval]"`           |
 | `openclaw`       | OpenClaw 集成                 | `pip install "trpc-agent-py[openclaw]"`       |
+| `tool-safety`    | Bash 安全分析                 | `pip install "trpc-agent-py[tool-safety]"`    |
 | `dev`            | 开发环境（lint/格式化/测试）  | `pip install "trpc-agent-py[dev]"`            |
 | `all`            | 所有可选依赖                  | `pip install "trpc-agent-py[all]"`            |
 
@@ -324,6 +325,7 @@ load_dotenv()
 | `langchain_community`   | `pip install "trpc-agent-py[knowledge]"`    |
 | `mem0ai`                | `pip install "trpc-agent-py[mem0]"`         |
 | `langchain_tavily`      | `pip install "trpc-agent-py[langchain_tool]"` |
+| `tree_sitter_bash`      | `pip install "trpc-agent-py[tool-safety]"`  |
 
 ---
 

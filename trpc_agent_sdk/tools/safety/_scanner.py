@@ -886,6 +886,17 @@ class SafetyScanner:
         findings: list[SafetyFinding] = []
         try:
             analysis = analyze_bash(request.content)
+        except ModuleNotFoundError as ex:
+            if ex.name in {"tree_sitter", "tree_sitter_bash"}:
+                evidence = ("bash parser dependency unavailable; install "
+                            "trpc-agent-py[tool-safety]")
+            else:
+                evidence = f"bash parser failed: {type(ex).__name__}"
+            findings.append(self._analysis_failure(evidence))
+            return AnalysisResult(
+                status=AnalysisStatus.INTERNAL_ERROR,
+                findings=findings,
+            )
         except Exception as ex:  # pylint: disable=broad-except
             findings.append(self._analysis_failure(f"bash parser failed: {type(ex).__name__}"))
             return AnalysisResult(
