@@ -220,14 +220,14 @@ long_sleep_seconds: 300
 - 最大输出大小：`max_output_bytes`
 - 依赖安装、提权、未知网络、进程执行、shell 特性的默认处理策略
 
-注意：`allowed_commands` 只是 Bash/Shell 扫描里的命令白名单配置，不是“危险命令列表”；真正的危险模式规则仍集中在 `trpc_agent_sdk/tools/safety/_rules.py`。如果需要按业务补充策略，优先改 YAML；如果需要匹配脚本内容或业务语义，可以通过 `ToolScriptSafetyScanner(custom_rules=[...])` 或 `register_rule()` 注册自定义规则。
+注意：`allowed_commands` 只是 Bash/Shell 扫描里的命令白名单配置，不是“危险命令列表”；真正的危险模式规则仍集中在 `trpc_agent_sdk/tools/safety/_rules.py`。如果需要按业务补充策略，优先改 YAML；如果需要匹配脚本内容或业务语义，可以通过 `ToolScriptSafetyScanner(custom_rules=[...])` 或 `register_rule()` 注册自定义规则。Agent 示例把自定义规则封装在 `examples/tool_safety/agent/tools.py` 的 `register_demo_safety_rules(scanner)` 中，并由 `create_safety_scanner()` 调用后统一生效。
 
 完整可运行示例见 `examples/tool_safety/custom_policy_example.py`，覆盖：
 
 - 从 YAML 加载策略：`ToolSafetyPolicy.from_file(..., strict=True)`。
 - 从 dict 创建策略：`ToolSafetyPolicy.from_dict(..., strict=True)`。
-- 在构造 scanner 时传入自定义规则：`ToolScriptSafetyScanner(policy, custom_rules=[...])`。
-- 在运行时追加自定义规则：`scanner.register_rule(...)`。
+- 调用 `examples.tool_safety.agent.tools.register_demo_safety_rules(scanner)` 注册 Agent 示例规则。
+- 通过 `create_safety_scanner()` 展示示例规则如何随 Agent 使用的 scanner 初始化一起生效。
 - 用户提示词或 tool metadata 中出现类似 `bypass_safety` 的请求时，不会覆盖策略决策。
 
 运行示例：
@@ -245,7 +245,7 @@ rm -rf /
 
 即使扫描上下文里传入了 `tool_metadata={"bypass_safety": True}`，最终仍会命中
 `BASH_RECURSIVE_DELETE` 并返回 `deny`。Safety Guard 只信任宿主代码显式加载的
-`ToolSafetyPolicy` 和注册的 `custom_rules`，不接受 LLM 输出、用户提示词或 tool call
+`ToolSafetyPolicy` 和宿主代码注册的 safety rules，不接受 LLM 输出、用户提示词或 tool call
 参数里的“绕过安全检查”指令作为授权。
 
 ## 快速开始
@@ -728,6 +728,10 @@ scanner = ToolScriptSafetyScanner(custom_rules=[deny_internal_admin_command])
 # Equivalent after construction:
 # scanner.register_rule(deny_internal_admin_command)
 ```
+
+在 Agent 示例中，推荐把这类规则封装到 `examples/tool_safety/agent/tools.py`
+的 `register_demo_safety_rules(scanner)` 中，并在 `create_safety_scanner()` 里调用，
+这样每个使用该 scanner 的 Tool、Skill、MCP Tool 和 CodeExecutor 都会统一启用示例规则。
 
 内置规则仍然在 `trpc_agent_sdk/tools/safety/_rules.py` 中实现，并返回 `RiskFinding`。
 
