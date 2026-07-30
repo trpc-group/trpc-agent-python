@@ -10,6 +10,18 @@ Tool（工具）是 trpc_agent 中扩展 Agent 能力的核心机制。借助工
 - **MCP 协议**：完整支持 STDIO、SSE、Streamable HTTP 三种传输方式
 - **会话管理**：MCP 工具集支持自动会话健康检查与重连
 
+### Tool 安全检查
+
+对于会执行 shell、Python、文件或网络操作的 Tool，可以在真实执行前启用
+Tool Script Safety Guard。它会对命令和脚本进行静态扫描，输出 `allow`、
+`needs_human_review` 或 `deny`，并支持审计日志和结构化安全报告。`deny` 会在
+执行边界前阻断，`needs_human_review` 可按配置决定是否阻断。
+
+完整使用示例见
+[examples/tool_safety/README.md](../../../examples/tool_safety/README.md)，处理流程和
+风险决策见
+[examples/tool_safety/DESIGN.md](../../../examples/tool_safety/DESIGN.md)。
+
 ## Agent 如何使用工具
 
 Agent 通过以下步骤动态使用工具：

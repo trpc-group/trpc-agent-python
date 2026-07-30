@@ -92,7 +92,7 @@ async def _run_case(runner: Runner, session_service: InMemorySessionService, que
     audit_offset = AUDIT_LOG_PATH.stat().st_size if AUDIT_LOG_PATH.exists() else 0
     printed_report = False
     await session_service.create_session(
-        app_name="tool_safety_real_agent_demo",
+        app_name="tool_safety_demo",
         user_id=user_id,
         session_id=session_id,
         state={},
@@ -151,7 +151,7 @@ async def main() -> None:
 
     agent = create_agent(block_on_review=args.block_on_review)
     session_service = InMemorySessionService()
-    runner = Runner(app_name="tool_safety_real_agent_demo", agent=agent, session_service=session_service)
+    runner = Runner(app_name="tool_safety_demo", agent=agent, session_service=session_service)
 
     try:
         selected = DEMO_QUERIES if args.case == "all" else {args.case: DEMO_QUERIES[args.case]}

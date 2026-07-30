@@ -10,8 +10,8 @@ from __future__ import annotations
 import io
 import json
 
-from scripts.tool_safety_check import main
-from scripts.tool_safety_manifest_report import main as manifest_main
+from examples.tool_safety.tool_safety_check import main
+from examples.tool_safety.tool_safety_manifest_report import main as manifest_main
 
 
 def test_cli_enforces_timeout_policy(tmp_path):

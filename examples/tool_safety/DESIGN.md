@@ -219,7 +219,7 @@ deny: 阻断
 为回应 review 中“补充真正模型执行例子”的问题，仓库提供了一个端到端示例：
 
 ```text
-examples/tool_safety/real_agent_demo/
+examples/tool_safety/
 ```
 
 该示例使用真实 `LlmAgent` 和 `Runner`，由模型产生工具调用或代码块，再进入 Safety Guard 所在的真实执行边界：
@@ -246,7 +246,7 @@ LlmAgent + real model
 运行方式：
 
 ```bash
-cd examples/tool_safety/real_agent_demo
+cd examples/tool_safety
 python3 run_agent.py
 python3 run_agent.py --case tool_deny
 python3 run_agent.py --case code_review --block-on-review
@@ -293,16 +293,16 @@ Safety: decision=deny blocked=True risk=critical rules=BASH_RECURSIVE_DELETE
 完整审计日志写入：
 
 ```text
-examples/tool_safety/real_agent_demo/real_agent_safety_audit.jsonl
+examples/tool_safety/real_agent_safety_audit.jsonl
 ```
 
 已固化一份真实模型运行输出：
 
 ```text
-examples/tool_safety/real_agent_demo/REAL_MODEL_OUTPUT.md
+examples/tool_safety/REAL_MODEL_OUTPUT.md
 ```
 
-自动化 smoke test 位于 `tests/tools/safety/test_real_agent_demo.py`。它使用
+自动化 smoke test 位于 `tests/tools/safety/test_agent_demo.py`。它使用
 fake model 产生确定的 `FunctionCall` / code block，复用同一个真实 Agent 装配
 函数，覆盖 Tool、Skill、MCP Tool 和 CodeExecutor 的执行边界，避免 CI 依赖外部
 模型服务。
