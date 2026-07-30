@@ -18,6 +18,7 @@ not break the tool it protects.
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
@@ -27,6 +28,12 @@ from typing import Optional
 from opentelemetry import trace
 
 from ._types import ScanReport
+
+# Serialises audit appends within a single process so concurrent threads /
+# coroutines cannot interleave partial JSON lines. Cross-process writers still
+# need external coordination (a per-process file or an OS-level lock); see
+# :meth:`SafetyAuditLogger._append`.
+_WRITE_LOCK = threading.Lock()
 
 # Span attribute keys required by the issue.
 SPAN_ATTR_DECISION = "tool.safety.decision"
@@ -113,12 +120,21 @@ class SafetyAuditLogger:
         return event
 
     def _append(self, event: dict[str, Any]) -> None:
-        """Append one event as a JSON line, creating parent dirs as needed."""
+        """Append one event as a JSON line, creating parent dirs as needed.
+
+        The write is guarded by a process-wide lock so concurrent threads or
+        coroutines cannot produce interleaved (corrupt) JSON lines. This does
+        NOT protect against multiple *processes* appending to the same file;
+        callers that fan out across processes should use a per-process audit
+        path or an external file lock.
+        """
         import json
 
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            with self._path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+            line = json.dumps(event, ensure_ascii=False) + "\n"
+            with _WRITE_LOCK:
+                with self._path.open("a", encoding="utf-8") as handle:
+                    handle.write(line)
         except OSError:  # pragma: no cover - disk errors must not break execution
             pass

@@ -81,6 +81,20 @@ def test_dynamic_command_needs_review() -> None:
     assert "AST008" in _ids(script)
 
 
+def test_literal_os_system_is_not_flagged_dynamic() -> None:
+    """``os.system`` with a string literal is a spawn (AST001) but not dynamic."""
+    ids = _ids('os.system("ls -la")\n')
+    assert "AST001" in ids
+    assert "AST008" not in ids
+
+
+def test_literal_argv_list_is_not_flagged_dynamic() -> None:
+    """A literal argv list like ``["ls"]`` is static, so no AST008 is raised."""
+    ids = _ids('import subprocess\nsubprocess.run(["ls", "-la"])\n')
+    assert "AST001" in ids
+    assert "AST008" not in ids
+
+
 def test_safe_script_has_no_hits() -> None:
     """A benign data-processing script yields no findings (no false positive)."""
     script = (
@@ -137,3 +151,17 @@ def test_infinite_loop_with_deeply_nested_break_not_flagged() -> None:
     """A ``break`` nested two levels deep still terminates the ``while``."""
     script = "while True:\n    if a:\n        if b:\n            break\n"
     assert "AST005" not in _ids(script)
+
+
+def test_dynamic_network_destination_adds_ast009() -> None:
+    """A network call with a non-literal destination emits the medium AST009 hit."""
+    ids = _ids("import requests\nrequests.post(exfil_url)\n")
+    assert "AST004" in ids
+    assert "AST009" in ids
+
+
+def test_literal_network_destination_has_no_ast009() -> None:
+    """A string-literal destination is statically verifiable, so no AST009."""
+    ids = _ids('import requests\nrequests.get("https://api.openai.com")\n')
+    assert "AST004" in ids
+    assert "AST009" not in ids

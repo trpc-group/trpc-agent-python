@@ -38,7 +38,15 @@ class _BashSafetyAnalyzer:
         self.hits: list[RuleHit] = []
 
     def analyze(self, script: str) -> list[RuleHit]:
-        """Analyse every logical line of the script."""
+        """Analyse every logical line of the script.
+
+        Known limitation: analysis is line-oriented (``splitlines``) and does not
+        reassemble backslash continuations or ``heredoc`` bodies. A command split
+        across physical lines -- e.g. ``curl \\`` then the URL on the next line --
+        can therefore evade per-line domain extraction. This is an accepted
+        static-analysis blind spot; defence in depth (the runtime sandbox and the
+        allow-listed egress policy) is expected to backstop it.
+        """
         for lineno, raw_line in enumerate(script.splitlines(), start=1):
             line = raw_line.strip()
             if not line or line.startswith("#"):

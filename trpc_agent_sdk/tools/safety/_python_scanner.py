@@ -88,8 +88,12 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                 node.lineno,
                 "Spawning shells/processes from Python is high-risk; ensure inputs are trusted.",
             )
-            if canonical == "os.system" or self._has_dynamic_arg(node):
-                # Dynamic command construction cannot be judged statically.
+            if self._has_dynamic_arg(node):
+                # Command built from a non-literal (variable/concatenation/call)
+                # cannot be judged statically. A literal command -- ``"ls"`` or
+                # an argv list like ``["ls"]`` -- is knowable and does NOT earn
+                # this finding, even for ``os.system``: the AST001 high hit above
+                # already covers the spawn itself.
                 self._add(
                     "AST008",
                     RiskCategory.PROCESS_SYSTEM_COMMAND,
@@ -149,6 +153,24 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     node.lineno,
                     "Network egress must target only whitelisted domains; verify the destination.",
                 )
+                if self._has_dynamic_arg(node):
+                    # The destination is computed at runtime (e.g.
+                    # ``requests.post(exfil_url, ...)``). A whitelisted URL
+                    # literal elsewhere on the same line -- say inside
+                    # ``headers={...}`` -- would let the scanner's domain-aware
+                    # pass drop the high AST004/NET001 hits and silently allow
+                    # the egress. This medium hit is deliberately NOT refinable,
+                    # so it survives that pass and forces human review: an
+                    # unverifiable destination is never silently allowed.
+                    self._add(
+                        "AST009",
+                        RiskCategory.NETWORK_EXFILTRATION,
+                        RiskLevel.MEDIUM,
+                        "Network egress to a dynamically-constructed destination",
+                        canonical,
+                        node.lineno,
+                        "Egress destination is not a string literal and cannot be verified; requires human review.",
+                    )
 
         self.generic_visit(node)
 
@@ -219,11 +241,16 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
 
     @staticmethod
     def _has_dynamic_arg(node: ast.Call) -> bool:
-        """Whether the call has a non-constant first positional argument."""
+        """Whether the first positional argument is not a static literal.
+
+        A literal command -- a string such as ``"ls -la"`` or a literal argv
+        list like ``["ls", "-la"]`` -- is statically knowable and therefore not
+        dynamic. Only a computed value (variable, concatenation, f-string, call,
+        ...) counts as dynamic and warrants the "constructed at runtime" finding.
+        """
         if not node.args:
             return False
-        first = node.args[0]
-        return not (isinstance(first, ast.Constant) and isinstance(first.value, str))
+        return not _is_static_literal(node.args[0])
 
     @staticmethod
     def _getattr_is_obfuscated(node: ast.Call) -> bool:
@@ -246,6 +273,23 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                 recommendation=recommendation,
                 layer="ast",
             ))
+
+
+def _is_static_literal(node: ast.AST) -> bool:
+    """Whether ``node`` is a compile-time literal, including literal collections.
+
+    A plain constant, or a list/tuple/set/dict whose members are themselves
+    literals, is statically knowable. Anything else (a name, attribute, call,
+    concatenation, f-string, ...) is treated as dynamic.
+    """
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return all(_is_static_literal(elt) for elt in node.elts)
+    if isinstance(node, ast.Dict):
+        return all(key is not None and _is_static_literal(key) and _is_static_literal(value)
+                   for key, value in zip(node.keys, node.values))
+    return False
 
 
 def _contains_break(node: ast.While) -> bool:

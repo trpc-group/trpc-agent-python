@@ -278,8 +278,10 @@ class SafetyScanner:
         categories = sorted({hit.category.value for hit in hits})
         summary = (f"{decision.value}: {len(hits)} finding(s) at peak risk "
                    f"'{risk_level.value}' across categories {categories}.")
-        # Recommendation comes from the highest-severity hit.
-        top = max(hits, key=lambda hit: hit.risk_level.weight)
+        # Recommendation comes from the highest-severity hit; ties break on the
+        # earliest line so the chosen recommendation is stable across runs and
+        # independent of the order hits happen to be collected in.
+        top = max(hits, key=lambda hit: (hit.risk_level.weight, -(hit.line or 0)))
         return summary, top.recommendation
 
     # -- language detection ----------------------------------------------------
@@ -293,6 +295,17 @@ class SafetyScanner:
                 return ScriptLanguage.BASH
             if "python" in first_line:
                 return ScriptLanguage.PYTHON
+        # A positive Python parse wins over the bash substring heuristic below.
+        # Command words like ``rm``/``curl`` routinely appear *inside Python
+        # string literals* (e.g. ``os.system("rm " + path)``); trusting
+        # _BASH_HINTS there would mislabel the script as Bash, skip the Python
+        # AST layer, and let a dynamic process spawn slip through as allow. We
+        # only claim Python when the source actually uses Python constructs, so a
+        # bash line that merely happens to parse as a bare expression (e.g.
+        # ``rm -rf /tmp/x`` -> a subtraction/division of names) still falls
+        # through to the bash heuristic and its regex rules.
+        if _looks_like_python(script):
+            return ScriptLanguage.PYTHON
         if _BASH_HINTS.search(script):
             return ScriptLanguage.BASH
         try:
@@ -300,6 +313,49 @@ class SafetyScanner:
             return ScriptLanguage.PYTHON
         except SyntaxError:
             return ScriptLanguage.BASH
+
+
+# AST node types that appear only in genuine Python source, never in a shell
+# command that merely happens to satisfy Python's grammar as a bare expression.
+_PYTHON_SIGNAL_NODES = (
+    ast.Import,
+    ast.ImportFrom,
+    ast.Call,
+    ast.Assign,
+    ast.AnnAssign,
+    ast.AugAssign,
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.With,
+    ast.AsyncWith,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.If,
+    ast.Try,
+    ast.Return,
+    ast.Raise,
+    ast.Assert,
+    ast.Delete,
+    ast.Lambda,
+)
+
+
+def _looks_like_python(script: str) -> bool:
+    """Whether ``script`` parses as Python *and* uses real Python constructs.
+
+    A bare shell command can occasionally satisfy Python's grammar -- ``rm -rf
+    /tmp/x`` parses as an arithmetic expression of names -- so a successful parse
+    alone is not enough to claim Python. We require at least one
+    import/call/assignment/statement node, which a shell command line does not
+    produce, before routing the script to the Python AST layer.
+    """
+    try:
+        tree = ast.parse(script)
+    except SyntaxError:
+        return False
+    return any(isinstance(node, _PYTHON_SIGNAL_NODES) for node in ast.walk(tree))
 
 
 def _mask_secrets(text: str) -> str:

@@ -130,3 +130,31 @@ def test_audit_logger_path_property(tmp_path: Path) -> None:
     assert SafetyAuditLogger().path is None
     target = tmp_path / "audit.jsonl"
     assert SafetyAuditLogger(target).path == target
+
+
+def test_concurrent_audit_appends_never_corrupt_lines(tmp_path: Path) -> None:
+    """Threaded appends are serialised so every JSON line stays parseable."""
+    import threading
+
+    from trpc_agent_sdk.tools.safety import SafetyScanner
+    from trpc_agent_sdk.tools.safety import ScanInput
+    from trpc_agent_sdk.tools.safety import ScriptLanguage
+
+    audit_file = tmp_path / "audit.jsonl"
+    logger = SafetyAuditLogger(audit_file)
+    report = SafetyScanner().scan(ScanInput(script="rm -rf /\n", language=ScriptLanguage.BASH))
+
+    def _write() -> None:
+        for _ in range(50):
+            logger.record(report, blocked=True)
+
+    threads = [threading.Thread(target=_write) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    lines = audit_file.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 8 * 50
+    for line in lines:
+        json.loads(line)  # each line parses cleanly -> no interleaved writes
