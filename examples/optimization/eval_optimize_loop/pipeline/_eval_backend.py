@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from trpc_agent_sdk.evaluation._agent_evaluator import AgentEvaluator
