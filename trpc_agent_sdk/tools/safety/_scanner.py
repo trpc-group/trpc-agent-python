@@ -183,14 +183,12 @@ class SafetyScanner:
             line_text = lines[hit.line - 1] if hit.line and 1 <= hit.line <= len(lines) else ""
             domains = [m.group(1).split("@")[-1].split(":")[0] for m in _URL_RE.finditer(line_text)]
             if not domains:
+                unverified = " Destination could not be verified against the allow-list; review."
                 refined.append(
-                    hit.model_copy(
-                        update={
-                            "risk_level":
-                            RiskLevel.MEDIUM,
-                            "recommendation": (hit.recommendation +
-                                               " Destination could not be verified against the allow-list; review."),
-                        }))
+                    hit.model_copy(update={
+                        "risk_level": RiskLevel.MEDIUM,
+                        "recommendation": hit.recommendation + unverified,
+                    }))
                 continue
             non_whitelisted = [d for d in domains if not self.policy.domain_allowed(d)]
             if non_whitelisted:
