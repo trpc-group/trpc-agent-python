@@ -59,8 +59,9 @@ _SECRET_PATTERNS = [
     re.compile(r"(AKIA[0-9A-Z]{16})"),
     re.compile(r"(sk-[A-Za-z0-9]{16,})"),
     re.compile(r"(ghp_[A-Za-z0-9]{16,})"),
-    re.compile(r"([A-Za-z0-9_\-]*(?:key|secret|token|password|passwd)[A-Za-z0-9_\-]*\s*[=:]\s*)"
-               r"['\"]?([^\s'\"]{6,})['\"]?", re.IGNORECASE),
+    re.compile(
+        r"([A-Za-z0-9_\-]*(?:key|secret|token|password|passwd)[A-Za-z0-9_\-]*\s*[=:]\s*)"
+        r"['\"]?([^\s'\"]{6,})['\"]?", re.IGNORECASE),
 ]
 
 
@@ -183,19 +184,22 @@ class SafetyScanner:
             domains = [m.group(1).split("@")[-1].split(":")[0] for m in _URL_RE.finditer(line_text)]
             if not domains:
                 refined.append(
-                    hit.model_copy(update={
-                        "risk_level": RiskLevel.MEDIUM,
-                        "recommendation": (hit.recommendation +
-                                           " Destination could not be verified against the allow-list; review."),
-                    }))
+                    hit.model_copy(
+                        update={
+                            "risk_level":
+                            RiskLevel.MEDIUM,
+                            "recommendation": (hit.recommendation +
+                                               " Destination could not be verified against the allow-list; review."),
+                        }))
                 continue
             non_whitelisted = [d for d in domains if not self.policy.domain_allowed(d)]
             if non_whitelisted:
                 refined.append(
-                    hit.model_copy(update={
-                        "risk_level": RiskLevel.HIGH,
-                        "evidence": f"{hit.evidence} -> {', '.join(sorted(set(non_whitelisted)))}",
-                    }))
+                    hit.model_copy(
+                        update={
+                            "risk_level": RiskLevel.HIGH,
+                            "evidence": f"{hit.evidence} -> {', '.join(sorted(set(non_whitelisted)))}",
+                        }))
             # else: every domain on the line is allow-listed -> drop the hit.
         return refined
 
@@ -269,8 +273,7 @@ class SafetyScanner:
 
     # -- summary ---------------------------------------------------------------
     @staticmethod
-    def _summarize(decision: SafetyDecision, risk_level: RiskLevel,
-                   hits: list[RuleHit]) -> tuple[str, str]:
+    def _summarize(decision: SafetyDecision, risk_level: RiskLevel, hits: list[RuleHit]) -> tuple[str, str]:
         """Produce a human-readable summary and an aggregate recommendation."""
         if decision is SafetyDecision.ALLOW and not hits:
             return "No blocking risks detected.", ""

@@ -154,8 +154,8 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
 
     # -- infinite loop detection ----------------------------------------------
     def visit_While(self, node: ast.While) -> None:  # noqa: N802
-        is_true = (isinstance(node.test, ast.Constant) and bool(node.test.value)) or (
-            isinstance(node.test, ast.NameConstant) if hasattr(ast, "NameConstant") else False)
+        is_true = (isinstance(node.test, ast.Constant) and bool(node.test.value)) or (isinstance(
+            node.test, ast.NameConstant) if hasattr(ast, "NameConstant") else False)
         if is_true and not _contains_break(node):
             self._add(
                 "AST005",

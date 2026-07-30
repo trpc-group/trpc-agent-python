@@ -71,17 +71,16 @@ class SafetyPolicy(BaseModel):
     """Full declarative policy governing the scanner's behaviour."""
 
     version: str = Field(default="1", description="Policy schema version.")
-    allowed_domains: list[str] = Field(default_factory=list,
-                                       description="Domains that network access may target.")
-    allowed_commands: list[str] = Field(default_factory=list,
-                                        description="(Reserved) Safe shell commands; consumed by runtime/sandbox layers, "
-                                                    "not enforced by the static scanner.")
+    allowed_domains: list[str] = Field(default_factory=list, description="Domains that network access may target.")
+    allowed_commands: list[str] = Field(
+        default_factory=list,
+        description="(Reserved) Safe shell commands; consumed by runtime/sandbox layers, "
+        "not enforced by the static scanner.")
     forbidden_paths: list[str] = Field(default_factory=list,
                                        description="Path fragments that must never be read or written.")
     max_timeout_seconds: int = Field(default=60,
                                      description="(Reserved) Max execution timeout for runtime enforcement.")
-    max_output_bytes: int = Field(default=1_048_576,
-                                  description="(Reserved) Max output size for runtime enforcement.")
+    max_output_bytes: int = Field(default=1_048_576, description="(Reserved) Max output size for runtime enforcement.")
     redact_sensitive: bool = Field(default=True, description="Whether to mask evidence in reports/audit.")
     ast_analysis: bool = Field(default=True, description="Whether to run the L2 syntax-aware layer.")
     rules: list[RegexRule] = Field(default_factory=list, description="L1 regex rule set.")
