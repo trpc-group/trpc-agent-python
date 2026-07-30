@@ -1,0 +1,208 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "trpc_agent_sdk/version.py"
+
+[project]
+name = "trpc-agent-py"
+dynamic = ["version"]
+description = "Python LLM agent framework with multi-model support (OpenAI, Anthropic, Gemini, DeepSeek), tool calling, session management, A2A/MCP/AGUI protocols, and FastAPI server integration"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{ name = "Tencent", email = "raylchen@tencent.com" }]
+keywords = ["trpc", "agent", "llm", "ai", "langchain", "langgraph", "mcp", "a2a", "fastapi", "multi-agent", "tool-calling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pydantic>=2.11.3",
+    "openai>=1.3.0",
+    "mcp>=1.10.1",
+    "aiohttp",
+    "httpx>=0.27.0",
+    "httpx-sse>=0.4.0",
+    "google-genai>=1.24.0",
+    "graphviz",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-http<2.0.0,>=1.28.0",
+    "fastapi>=0.95.0",
+    "uvicorn",
+    "langgraph",
+    "langchain>=0.3.27",
+    "tzlocal",
+    "PyMySQL",
+    "aiomysql",
+    "SQLAlchemy",
+    "redis>=6.2.0",
+    "langchain-deepseek",
+    "docker",
+    "anthropic>=0.72.1",
+    "python-magic>=0.4.27",
+    "jinja2>=3.1.0", # BSD License
+    "PyYAML>=6.0.3",
+    "rapidfuzz>=3.0.0",
+    "charset-normalizer>=3.0.0",
+    "typer>=0.12.0", # MIT License
+    "watchdog",
+    "markdownify>=1.2.0", # MIT License
+    "json-repair>=0.40.0", # MIT License: lenient JSON parsing for LLM judge outputs
+]
+
+[project.optional-dependencies]
+ag-ui = [
+    "ag-ui-protocol>=0.1.8",
+]
+langfuse=[
+    "opentelemetry-sdk<2.0.0,>=1.28.0",
+    "opentelemetry-exporter-otlp-proto-http<2.0.0,>=1.28.0",
+]
+openclaw = [
+    "nanobot-ai>=0.1.4.post5",
+     "aiofiles",
+     "wecom-aibot-sdk-python>=0.1.5",
+]
+knowledge = [
+    "numpy>=2.2.5",
+    "langchain_community>=0.3.27",
+    "langchain_huggingface>=0.1.0"
+]
+
+a2a = [
+    "a2a-sdk<1.0.0,>=0.3.22",
+    "protobuf>=5.29.5",
+]
+
+agent-claude = [
+    "claude-agent-sdk>=0.1.3,<0.1.64",
+    "cloudpickle>=2.0.0",
+]
+
+eval = [
+    "pytest",
+    "pytest-asyncio",
+    "rouge-score",
+    "pandas",
+    "tabulate",
+]
+
+optimize = [
+    "gepa>=0.0.7",
+    "rich>=13.0.0",
+]
+
+mem0 = [
+    "mem0ai>=1.0.3",
+    "sentence-transformers",
+]
+
+cube = [
+    "e2b-code-interpreter>=2.0.0",
+]
+
+mempalace = [
+    "mempalace>=3.3.3",
+]
+
+langchain_tool = [
+    "langchain_tavily",
+    "langchain",
+    "langchain-core",
+]
+
+dev = [
+    "protobuf>=5.29.5",
+    "numpy>=2.2.5",
+    "pytest",
+    "pytest-asyncio",
+    "black",
+    "flake8",
+    "yapf",
+    "langchain_community>=0.3.27",
+    "langchain_huggingface>=0.1.0",
+    "ag-ui-protocol>=0.1.8",
+    "claude-agent-sdk>=0.1.3,<0.1.64",
+    "cloudpickle>=2.0.0",
+    "typer>=0.9.0",
+]
+
+all = [
+    "protobuf>=5.29.5",
+    "numpy>=2.2.5",
+    "langchain_community>=0.3.27",
+    "langchain_huggingface>=0.1.0",
+    "langchain_tavily",
+    "ag-ui-protocol>=0.1.8",
+    "claude-agent-sdk>=0.1.3,<0.1.64",
+    "pytest",
+    "pytest-asyncio",
+    "rouge-score",
+    "pandas",
+    "tabulate",
+    "anfs>=0.0.3",
+    "mem0ai>=1.0.3",
+    "mempalace>=3.3.3",
+    "typer>=0.9.0",
+    "nanobot-ai>=0.1.4.post6",
+    "aiofiles",
+    "wecom-aibot-sdk-python>=0.1.5",
+    "a2a-sdk<1.0.0,>=0.3.22",
+    "e2b-code-interpreter>=2.0.0",
+    "gepa>=0.0.7",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+trpc_agent_cmd = "trpc_agent_sdk._cli:main"
+
+# 使用 include 保证三个包都包含进来
+[tool.hatch.build.targets.wheel]
+packages = ["trpc_agent_sdk"]
+
+[project.urls]
+Homepage = "https://github.com/trpc-group/trpc-agent-python.git"
+Documentation = "https://github.com/trpc-group/trpc-agent-python.git"
+Repository = "https://github.com/trpc-group/trpc-agent-python.git"
+
+
+
+# 可选：添加工具配置
+[tool.black]
+line-length = 120
+target-version = ['py310']
+exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | venv
+  | env
+  | node_modules
+)/
+'''
+
+[tool.yapf]
+based_on_style = "pep8"
+column_limit = 120
+indent_width = 4
+split_before_logical_operator = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "blackbox_cli_val",
+  "name": "Black-box CLI demo - val",
+  "description": "3 个中国城市的留出验证集。",
+  "eval_cases": [
+    {
+      "eval_id": "city_hangzhou",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {"parts": [{"text": "杭州"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"杭州\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "city_wuhan",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {"parts": [{"text": "武汉"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"武汉\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "city_xian",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {"parts": [{"text": "西安"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"西安\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "validator", "state": {}}
+    }
+  ]
+}

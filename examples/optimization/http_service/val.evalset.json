@@ -1,0 +1,70 @@
+{
+  "eval_set_id": "http_service_val",
+  "name": "HTTP service demo - validation",
+  "description": "3 道小学算术应用题；用于每轮全量评估、决定候选是否被接受。",
+  "eval_cases": [
+    {
+      "eval_id": "wp_seats_multiply",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [{"text": "教室里有 5 排座位，每排 8 个，一共多少个座位？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：40 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "http_service_demo_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "wp_water_weight",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [{"text": "已知 1 升水重 1 千克，3.5 升水重多少千克？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：3.5 千克"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "http_service_demo_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "wp_class_girls_percent",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [{"text": "班里一共有 30 人，其中 60% 是女生，请问有多少名女生？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：18 人"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "http_service_demo_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    }
+  ]
+}

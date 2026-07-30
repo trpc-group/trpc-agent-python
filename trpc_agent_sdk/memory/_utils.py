@@ -1,0 +1,44 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Utility functions for memory service."""
+import re
+from datetime import datetime
+from trpc_agent_sdk.events import Event
+
+
+def format_timestamp(timestamp: float) -> str:
+    """Format the timestamp of the memory entry."""
+    return datetime.fromtimestamp(timestamp).isoformat()
+
+
+def extract_words_lower(text: str) -> set[str]:
+    """Extract words from a string and convert them to lowercase.
+
+    Extracts both English words and Chinese characters.
+    For English: extracts words (sequences of letters)
+    For Chinese: extracts individual characters (Unicode range \u4e00-\u9fff)
+    """
+    words = set()
+    # Extract English words
+    words.update([word.lower() for word in re.findall(r'[A-Za-z]+', text)])
+    # Extract Chinese characters
+    words.update(re.findall(r'[\u4e00-\u9fff]', text))
+    return words
+
+
+def event_to_text(event: Event) -> str:
+    """Extract text from event content parts.
+
+    Args:
+        event: The event to extract text from.
+
+    Returns:
+        The text from the event content parts.
+    """
+    if not event.content or not event.content.parts:
+        return ""
+    parts = [part.text for part in event.content.parts if part.text]
+    return " ".join(parts).strip()

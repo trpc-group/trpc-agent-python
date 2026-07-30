@@ -1,0 +1,55 @@
+{
+  "eval_set_id": "trace_mode_example",
+  "name": "Trace 模式示例",
+  "description": "使用预录制的 actual_conversation 作为实际轨迹，不调用 Agent 推理",
+  "eval_cases": [
+    {
+      "eval_id": "replay_001",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {
+            "parts": [{"text": "上海天气怎么样"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "上海今天多云，18°C"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "t1",
+                "name": "get_weather",
+                "args": {"city": "上海"}
+              }
+            ]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "exp-1",
+          "user_content": {
+            "parts": [{"text": "上海天气怎么样"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "上海今天多云，18°C"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "t1",
+                "name": "get_weather",
+                "args": {"city": "上海"}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": "v1",
+  "algorithm": "gepa_reflective",
+  "status": "SUCCEEDED",
+  "finish_reason": "completed",
+  "stop_reason": "no_improvement",
+  "error_message": "",
+  "baseline_pass_rate": 0.3333,
+  "best_pass_rate": 0.3333,
+  "pass_rate_improvement": 0.0,
+  "baseline_metric_breakdown": {
+    "final_response_avg_score": 0.3333,
+    "tool_trajectory_avg_score": 0.6667
+  },
+  "best_metric_breakdown": {
+    "final_response_avg_score": 0.3333,
+    "tool_trajectory_avg_score": 0.6667
+  },
+  "metric_thresholds": {
+    "final_response_avg_score": 1.0,
+    "tool_trajectory_avg_score": 1.0
+  },
+  "per_metric_best_candidates": {},
+  "baseline_prompts": {
+    "system_prompt": "You are an e-commerce shopping assistant. Answer questions briefly."
+  },
+  "best_prompts": {
+    "system_prompt": "You are an e-commerce shopping assistant. Always provide detailed product information including price, rating, brand, and stock when answering product queries. When a product or order is not found, clearly state the error and list available alternatives. For cart operations, confirm the action with item names, quantities, and totals. Never fabricate order or coupon statuses — always relay exactly what the tool returns."
+  },
+  "total_rounds": 2,
+  "rounds": [
+    {
+      "round": 1,
+      "optimized_field_names": ["system_prompt"],
+      "candidate_prompts": {
+        "system_prompt": "You are a helpful e-commerce shopping assistant. When answering product questions, always include price, rating, brand, and stock availability. For cart actions, confirm with item details and totals. When a product or order is not found, clearly state the error and suggest alternatives."
+      },
+      "train_pass_rate": 0.0,
+      "validation_pass_rate": 0.3333,
+      "metric_breakdown": {
+        "final_response_avg_score": 0.3333,
+        "tool_trajectory_avg_score": 0.6667
+      },
+      "accepted": false,
+      "acceptance_reason": "No improvement in validation pass rate; val_003 regression detected.",
+      "failed_case_ids": ["val_001_optimizable", "val_002_ineffective"],
+      "failed_cases_truncated": 0,
+      "per_field_diagnosis": {
+        "system_prompt": "The candidate prompt adds product detail requirements but does not fix the coupon hallucination issue. val_001 now passes but val_002 still fails due to the agent ignoring tool output for invalid coupons."
+      },
+      "reflection_lm_calls": 1,
+      "round_llm_cost": 0.001,
+      "round_token_usage": {"prompt": 500, "completion": 200, "total": 700},
+      "started_at": "2026-07-30T10:00:00Z",
+      "duration_seconds": 5.0,
+      "kind": "reflective",
+      "train_minibatch_size": 3,
+      "train_subsample_parent_score": 0.3,
+      "train_subsample_candidate_score": 0.4,
+      "budget_used": 6,
+      "budget_total": 30
+    },
+    {
+      "round": 2,
+      "optimized_field_names": ["system_prompt"],
+      "candidate_prompts": {
+        "system_prompt": "You are an e-commerce shopping assistant. Always provide detailed product information including price, rating, brand, and stock when answering product queries. When a product or order is not found, clearly state the error and list available alternatives. For cart operations, confirm the action with item names, quantities, and totals. Never fabricate order or coupon statuses — always relay exactly what the tool returns."
+      },
+      "train_pass_rate": 0.0,
+      "validation_pass_rate": 0.3333,
+      "metric_breakdown": {
+        "final_response_avg_score": 0.3333,
+        "tool_trajectory_avg_score": 0.6667
+      },
+      "accepted": true,
+      "acceptance_reason": "Pass rate unchanged but no new regressions; this is the best candidate.",
+      "failed_case_ids": ["val_002_ineffective", "val_003_regression"],
+      "failed_cases_truncated": 0,
+      "per_field_diagnosis": {
+        "system_prompt": "This candidate adds anti-fabrication instructions but the agent still ignores tool output for invalid coupons (val_002) and now incorrectly responds to cart queries with product suggestions instead of showing cart contents (val_003 regression). Training cases improved but validation shows overfitting."
+      },
+      "reflection_lm_calls": 1,
+      "round_llm_cost": 0.001,
+      "round_token_usage": {"prompt": 600, "completion": 250, "total": 850},
+      "started_at": "2026-07-30T10:00:10Z",
+      "duration_seconds": 6.0,
+      "kind": "reflective",
+      "train_minibatch_size": 3,
+      "train_subsample_parent_score": 0.4,
+      "train_subsample_candidate_score": 0.5,
+      "budget_used": 12,
+      "budget_total": 30
+    }
+  ],
+  "total_reflection_lm_calls": 2,
+  "total_judge_model_calls": 0,
+  "total_llm_cost": 0.002,
+  "total_token_usage": {"prompt": 1100, "completion": 450, "total": 1550},
+  "duration_seconds": 15.0,
+  "started_at": "2026-07-30T09:59:55Z",
+  "finished_at": "2026-07-30T10:00:10Z",
+  "extras": {}
+}

@@ -1,0 +1,16 @@
+{
+  "type": "module",
+  "name": "agui-cancel-client",
+  "version": "1.0.0",
+  "description": "A client for AG-UI cancel demo. Sends a request and aborts the run mid-stream to verify server-side cancel behavior.",
+  "main": "main.js",
+  "scripts": {
+    "test": "node main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ag-ui/client": "0.0.42"
+  }
+}

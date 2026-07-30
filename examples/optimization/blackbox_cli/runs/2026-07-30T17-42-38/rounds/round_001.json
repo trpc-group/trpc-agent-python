@@ -1,0 +1,33 @@
+{
+  "round": 1,
+  "optimizedFieldNames": [
+    "claude_md"
+  ],
+  "candidatePrompts": {},
+  "trainPassRate": 0.0,
+  "validationPassRate": 0.0,
+  "metricBreakdown": {},
+  "accepted": false,
+  "acceptanceReason": "no candidate produced this round",
+  "failedCaseIds": [],
+  "failedCasesTruncated": 0,
+  "perFieldDiagnosis": {},
+  "reflectionLmCalls": 1,
+  "roundLlmCost": 0.0,
+  "roundTokenUsage": {
+    "prompt": 1697,
+    "completion": 1818,
+    "total": 3515
+  },
+  "startedAt": "2026-07-30T09:42:38.189553+00:00",
+  "durationSeconds": 14.841733,
+  "kind": "reflective",
+  "trainMinibatchSize": 3,
+  "trainSubsampleParentScore": 0.0,
+  "trainSubsampleCandidateScore": 0.0,
+  "skipReason": "reflect-LM produced no usable new prompt",
+  "errorMessage": null,
+  "budgetUsed": 9,
+  "budgetTotal": 24,
+  "extras": {}
+}

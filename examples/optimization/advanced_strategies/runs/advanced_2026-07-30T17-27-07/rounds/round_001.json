@@ -1,0 +1,37 @@
+{
+  "round": 1,
+  "optimizedFieldNames": [
+    "system_prompt"
+  ],
+  "candidatePrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object. The JSON must always contain exactly four keys in the following order: \"city\", \"country\", \"postal_code\", \"street\". If a field is not present in the input, set its value to null. Do not omit any keys. Output only the JSON object, with no extra whitespace, spaces, newlines, or explanatory text. Use compact JSON format (no spaces after colons or commas). Example: for \"Sydney, Australia\" output {\"city\":\"Sydney\",\"country\":\"Australia\",\"postal_code\":null,\"street\":null}."
+  },
+  "trainPassRate": 0.0,
+  "validationPassRate": 1.0,
+  "metricBreakdown": {
+    "final_response_avg_score": 1.0
+  },
+  "accepted": true,
+  "acceptanceReason": "GEPA accepted proposal (val_score=1.0000)",
+  "failedCaseIds": [],
+  "failedCasesTruncated": 0,
+  "perFieldDiagnosis": {},
+  "reflectionLmCalls": 1,
+  "roundLlmCost": 0.0,
+  "roundTokenUsage": {
+    "prompt": 1800,
+    "completion": 899,
+    "total": 2699
+  },
+  "startedAt": "2026-07-30T09:27:16.459534+00:00",
+  "durationSeconds": 26.582981,
+  "kind": "reflective",
+  "trainMinibatchSize": 3,
+  "trainSubsampleParentScore": 0.0,
+  "trainSubsampleCandidateScore": 1.0,
+  "skipReason": null,
+  "errorMessage": null,
+  "budgetUsed": 18,
+  "budgetTotal": 60,
+  "extras": {}
+}

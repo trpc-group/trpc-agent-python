@@ -1,0 +1,3 @@
+export TRPC_AGENT_MODEL_NAME=deepseek-v4-flash
+export TRPC_AGENT_API_KEY=sk-71c4298312334fdab2b3660f859f16f0
+export TRPC_AGENT_BASE_URL=https://api.deepseek.com

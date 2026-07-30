@@ -1,0 +1,67 @@
+{
+  "eval_set_id": "callbacks_example",
+  "name": "回调示例",
+  "description": "演示在评测中注册 Callbacks，在推理/打分生命周期打日志或计数",
+  "eval_cases": [
+    {
+      "eval_id": "callbacks_001",
+      "conversation": [
+        {
+          "invocation_id": "e-1",
+          "user_content": {
+            "parts": [{"text": "上海天气怎么样"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "18"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "t1",
+                "name": "get_weather",
+                "args": {"city": "上海"}
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "weather_agent",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "callbacks_002",
+      "conversation": [
+        {
+          "invocation_id": "e-1",
+          "user_content": {
+            "parts": [{"text": "我的用户名是 ljj 我买的电脑出了问题，想要退货，帮我看看退多少钱"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "2000"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "t2",
+                "name": "get_dingdan",
+                "args": {"user": "ljj"}
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "agent-zero",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}

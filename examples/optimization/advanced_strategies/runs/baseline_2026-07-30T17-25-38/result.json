@@ -1,0 +1,172 @@
+{
+  "schemaVersion": "v1",
+  "algorithm": "gepa_reflective",
+  "status": "SUCCEEDED",
+  "finishReason": "no_improvement",
+  "stopReason": "no_improvement",
+  "errorMessage": "",
+  "baselinePassRate": 0.0,
+  "bestPassRate": 0.0,
+  "passRateImprovement": 0.0,
+  "baselineMetricBreakdown": {},
+  "bestMetricBreakdown": {},
+  "metricThresholds": {
+    "final_response_avg_score": 1.0
+  },
+  "perMetricBestCandidates": {},
+  "baselinePrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object.\n"
+  },
+  "bestPrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object.\n"
+  },
+  "totalRounds": 4,
+  "rounds": [
+    {
+      "round": 1,
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {},
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.0,
+      "metricBreakdown": {},
+      "accepted": false,
+      "acceptanceReason": "no candidate produced this round",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 1,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "startedAt": "2026-07-30T09:25:38.534611+00:00",
+      "durationSeconds": 0.395364,
+      "kind": "reflective",
+      "trainMinibatchSize": 3,
+      "trainSubsampleParentScore": 0.0,
+      "trainSubsampleCandidateScore": 0.0,
+      "skipReason": "reflect-LM produced no usable new prompt",
+      "errorMessage": null,
+      "budgetUsed": 12,
+      "budgetTotal": 60,
+      "extras": {}
+    },
+    {
+      "round": 2,
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {},
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.0,
+      "metricBreakdown": {},
+      "accepted": false,
+      "acceptanceReason": "no candidate produced this round",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 1,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "startedAt": "2026-07-30T09:25:38.931865+00:00",
+      "durationSeconds": 0.027986,
+      "kind": "reflective",
+      "trainMinibatchSize": 3,
+      "trainSubsampleParentScore": 0.0,
+      "trainSubsampleCandidateScore": 0.0,
+      "skipReason": "reflect-LM produced no usable new prompt",
+      "errorMessage": null,
+      "budgetUsed": 18,
+      "budgetTotal": 60,
+      "extras": {}
+    },
+    {
+      "round": 3,
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {},
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.0,
+      "metricBreakdown": {},
+      "accepted": false,
+      "acceptanceReason": "no candidate produced this round",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 1,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "startedAt": "2026-07-30T09:25:38.961413+00:00",
+      "durationSeconds": 0.02527,
+      "kind": "reflective",
+      "trainMinibatchSize": 3,
+      "trainSubsampleParentScore": 0.0,
+      "trainSubsampleCandidateScore": 0.0,
+      "skipReason": "reflect-LM produced no usable new prompt",
+      "errorMessage": null,
+      "budgetUsed": 24,
+      "budgetTotal": 60,
+      "extras": {}
+    },
+    {
+      "round": 4,
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {},
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.0,
+      "metricBreakdown": {},
+      "accepted": false,
+      "acceptanceReason": "no candidate produced this round",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 1,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "startedAt": "2026-07-30T09:25:38.988032+00:00",
+      "durationSeconds": 0.025072,
+      "kind": "reflective",
+      "trainMinibatchSize": 3,
+      "trainSubsampleParentScore": 0.0,
+      "trainSubsampleCandidateScore": 0.0,
+      "skipReason": "reflect-LM produced no usable new prompt",
+      "errorMessage": null,
+      "budgetUsed": 30,
+      "budgetTotal": 60,
+      "extras": {}
+    }
+  ],
+  "totalReflectionLmCalls": 4,
+  "totalJudgeModelCalls": 0,
+  "totalLlmCost": 0.0,
+  "totalTokenUsage": {
+    "prompt": 0,
+    "completion": 0,
+    "total": 0
+  },
+  "durationSeconds": 0.512954,
+  "startedAt": "2026-07-30T09:25:38.501629+00:00",
+  "finishedAt": "2026-07-30T09:25:39.014583+00:00",
+  "extras": {
+    "total_metric_calls": 30
+  }
+}

@@ -1,0 +1,36 @@
+.idea
+.vscode
+.DS_Store
+*.lock
+*.log
+examples/*.log
+
+trpc-agent-py.egg-info
+
+build
+dist
+.venv
+venv
+venv*
+__pycache__
+
+.coverage
+htmlcov
+cov.tmp
+coverage.xml
+test-ngtest-ut-trpc-agent-py.xml
+.pytest_cache
+
+node_modules
+package-lock.json
+pyrightconfig.json
+
+# SDD-managed scratch (added by subagent-driven-development)
+.superpowers/sdd/
+
+# Claude Code per-machine state
+.claude/
+
+# Eval-optimize loop runtime artifacts
+examples/optimization/eval_optimize_loop/output/
+examples/optimization/eval_optimize_loop/**/__pycache__/

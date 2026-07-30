@@ -1,0 +1,214 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+#
+# Directly reuse the types from adk-python
+# Below code are copy and modified from https://github.com/google/adk-python.git
+#
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+"""Base session service interface."""
+
+from __future__ import annotations
+from typing import Optional
+from typing_extensions import override
+
+from trpc_agent_sdk.abc import SessionServiceABC
+from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.types import State
+
+from ._session import Session
+from ._summarizer_manager import SummarizerSessionManager
+from ._types import SessionServiceConfig
+
+
+class BaseSessionService(SessionServiceABC):
+    """Abstract base class for session management services.
+
+    The service provides a set of methods for managing sessions and events.
+    """
+
+    def __init__(self,
+                 summarizer_manager: Optional[SummarizerSessionManager] = None,
+                 session_config: Optional[SessionServiceConfig] = None):
+        """Initialize the base session service.
+
+        Args:
+            summarizer_manager: Optional summarizer manager for session summarization
+            session_config: Optional session configuration
+        """
+        self._summarizer_manager = summarizer_manager
+        if session_config is None:
+            session_config = SessionServiceConfig()
+            # Clean up the TTL configuration if not set
+            session_config.clean_ttl_config()
+        self._session_config = session_config
+        if self._summarizer_manager:
+            self._summarizer_manager.set_session_service(self)
+
+    @property
+    def summarizer_manager(self) -> Optional[SummarizerSessionManager]:
+        """Get the summarizer manager."""
+        return self._summarizer_manager
+
+    @property
+    def session_config(self) -> SessionServiceConfig:
+        """Get the session service configuration."""
+        return self._session_config
+
+    def set_summarizer_manager(self, summarizer_manager: SummarizerSessionManager, force: bool = False) -> None:
+        """Set the summarizer manager to use.
+
+        Args:
+            summarizer_manager: The summarizer manager to use
+            force: Whether to force update even if already set
+        """
+        if not self._summarizer_manager or force:
+            self._summarizer_manager = summarizer_manager
+            self._summarizer_manager.set_session_service(self)
+
+    @override
+    async def append_event(self, session: Session, event: Event) -> Event:
+        """Appends an event to a session object."""
+        if event.partial:
+            return event
+        event, _ = self._append_event_to_session(session, event)
+        return event
+
+    def _append_event_to_session(self, session: Session, event: Event) -> tuple[Event, list[Event]]:
+        """Append an event to the in-memory session and return filtered events."""
+        # Apply temp-scoped state to in-memory session before trimming event delta,
+        # so same-invocation consumers can still read temp values.
+        self._apply_temp_state(session, event)
+        event = self._trim_temp_delta_state(event)
+        self.__update_session_state(session, event)
+        filtered_events = session._add_event_and_get_filtered_events(
+            event,
+            event_ttl_seconds=self._session_config.event_ttl_seconds,
+            max_events=self._session_config.max_events,
+            store_filtered_events=self._session_config.store_historical_events)
+        return event, filtered_events
+
+    def _apply_temp_state(self, session: Session, event: Event) -> None:
+        """Apply temp-scoped state delta to in-memory session state only.
+
+        Temp state is intentionally ephemeral: it should be visible within
+        current invocation memory but not persisted into stored event deltas.
+        """
+        if not event.actions or not event.actions.state_delta:
+            return
+        for key, value in event.actions.state_delta.items():
+            if key.startswith(State.TEMP_PREFIX):
+                session.state[key] = value
+
+    def _trim_temp_delta_state(self, event: Event) -> Event:
+        """Removes temporary state delta keys from the event."""
+        if not event.actions or not event.actions.state_delta:
+            return event
+
+        event.actions.state_delta = {
+            key: value
+            for key, value in event.actions.state_delta.items() if not key.startswith(State.TEMP_PREFIX)
+        }
+        return event
+
+    def __update_session_state(self, session: Session, event: Event) -> None:
+        """Updates the session state based on the event.
+
+        Applies state changes from event.actions.state_delta to the session.
+        Handles different state prefixes:
+        - No prefix: Session-scoped state (stored in session.state)
+        - 'user:': User-scoped state (managed by SessionService implementation)
+        - 'app:': Application-scoped state (managed by SessionService implementation)
+        - 'temp:': Temporary state (never persisted, skipped)
+
+        Args:
+            session: The session to update
+            event: The event containing state changes
+        """
+        if not event.actions or not event.actions.state_delta:
+            return
+
+        for key, value in event.actions.state_delta.items():
+            if key.startswith(State.TEMP_PREFIX):
+                # Skip temporary state - never persisted
+                continue
+            # Session-scoped state
+            session.state[key] = value
+
+    async def update_session(self, session: Session) -> None:
+        """Update a session in storage.
+
+        This method should be implemented by concrete session services
+        to persist session changes to their storage backend.
+
+        Args:
+            session: The session to update
+        """
+        # Default implementation does nothing
+        # Concrete implementations should override this method
+        pass
+
+    @override
+    async def create_session_summary(self, session: Session, ctx: Optional[InvocationContext] = None) -> None:
+        """Summarize a session.
+
+        Args:
+            session: The session to summarize
+            ctx: The invocation context
+        """
+        if self._summarizer_manager:
+            await self._summarizer_manager.create_session_summary(session, ctx=ctx)
+
+    @override
+    async def get_session_summary(self, session: Session) -> Optional[str]:
+        """Get a summary of a session.
+
+        Args:
+            session: The session to summarize
+
+        Returns:
+            Summary text if available, None otherwise
+        """
+        if self._summarizer_manager:
+            summary = await self._summarizer_manager.get_session_summary(session)
+            if summary:
+                return summary.summary_text
+        return None
+
+    def filter_events(self, session: Session, need_copy: bool = False) -> Session:
+        """Filter events based on the session config.
+
+        Args:
+            session: Session to filter.
+            need_copy: Whether to filter a deep copy instead of mutating the input session.
+        """
+        filtered_session = session.model_copy(deep=True) if need_copy else session
+        # This is a read-view trim. Do not pass store_historical_events here:
+        # repeated get_session calls must not move view-trimmed events into
+        # historical_events or turn a read into a persistent state change.
+        filtered_session.apply_event_filtering(
+            event_ttl_seconds=self._session_config.event_ttl_seconds,
+            max_events=self._session_config.num_recent_events,
+        )
+        return filtered_session
+
+    @override
+    async def close(self) -> None:
+        """Closes the session service and releases any resources."""
+        pass

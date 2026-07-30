@@ -1,0 +1,295 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Unit tests for trpc_agent_sdk.sessions._utils.
+
+Covers:
+- StateStorageEntry dataclass
+- extract_state_delta: app/user/session/temp prefix handling
+- merge_state: merge with/without copy
+- session_key, app_state_key, user_state_key formatting
+"""
+
+from __future__ import annotations
+
+import copy
+
+import pytest
+
+from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.sessions._utils import (
+    StateStorageEntry,
+    app_state_key,
+    extract_state_delta,
+    find_events_for_summary,
+    merge_state,
+    session_key,
+    user_state_key,
+)
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.types import State
+
+
+def _make_event(author: str = "agent", text: str = "hello") -> Event:
+    return Event(author=author, content=Content(parts=[Part.from_text(text=text)]))
+
+
+class TestStateStorageEntry:
+    """Test StateStorageEntry dataclass."""
+
+    def test_defaults(self):
+        entry = StateStorageEntry()
+        assert entry.app_state_delta == {}
+        assert entry.user_state_delta == {}
+        assert entry.session_state == {}
+
+    def test_custom_values(self):
+        entry = StateStorageEntry(
+            app_state_delta={"a": 1},
+            user_state_delta={"b": 2},
+            session_state={"c": 3},
+        )
+        assert entry.app_state_delta == {"a": 1}
+        assert entry.user_state_delta == {"b": 2}
+        assert entry.session_state == {"c": 3}
+
+
+class TestExtractStateDelta:
+    """Test extract_state_delta function."""
+
+    def test_none_input(self):
+        result = extract_state_delta(None)
+        assert result.app_state_delta == {}
+        assert result.user_state_delta == {}
+        assert result.session_state == {}
+
+    def test_empty_dict(self):
+        result = extract_state_delta({})
+        assert result.app_state_delta == {}
+        assert result.user_state_delta == {}
+        assert result.session_state == {}
+
+    def test_app_prefix(self):
+        result = extract_state_delta({f"{State.APP_PREFIX}key1": "value1"})
+        assert result.app_state_delta == {"key1": "value1"}
+        assert result.user_state_delta == {}
+        assert result.session_state == {}
+
+    def test_user_prefix(self):
+        result = extract_state_delta({f"{State.USER_PREFIX}key1": "value1"})
+        assert result.app_state_delta == {}
+        assert result.user_state_delta == {"key1": "value1"}
+        assert result.session_state == {}
+
+    def test_session_state_no_prefix(self):
+        result = extract_state_delta({"key1": "value1"})
+        assert result.app_state_delta == {}
+        assert result.user_state_delta == {}
+        assert result.session_state == {"key1": "value1"}
+
+    def test_temp_prefix_ignored(self):
+        result = extract_state_delta({f"{State.TEMP_PREFIX}key1": "value1"})
+        assert result.app_state_delta == {}
+        assert result.user_state_delta == {}
+        assert result.session_state == {}
+
+    def test_temp_prefix_not_ignored(self):
+        result = extract_state_delta({f"{State.TEMP_PREFIX}key1": "value1"}, ignore_temp=False)
+        assert result.session_state == {f"{State.TEMP_PREFIX}key1": "value1"}
+
+    def test_mixed_prefixes(self):
+        state_delta = {
+            f"{State.APP_PREFIX}app_key": "app_value",
+            f"{State.USER_PREFIX}user_key": "user_value",
+            f"{State.TEMP_PREFIX}temp_key": "temp_value",
+            "session_key": "session_value",
+        }
+        result = extract_state_delta(state_delta)
+        assert result.app_state_delta == {"app_key": "app_value"}
+        assert result.user_state_delta == {"user_key": "user_value"}
+        assert result.session_state == {"session_key": "session_value"}
+
+    def test_multiple_app_keys(self):
+        state_delta = {
+            f"{State.APP_PREFIX}k1": "v1",
+            f"{State.APP_PREFIX}k2": "v2",
+        }
+        result = extract_state_delta(state_delta)
+        assert result.app_state_delta == {"k1": "v1", "k2": "v2"}
+
+
+class TestMergeState:
+    """Test merge_state function."""
+
+    def test_empty_entry(self):
+        entry = StateStorageEntry()
+        result = merge_state(entry)
+        assert result == {}
+
+    def test_session_state_only(self):
+        entry = StateStorageEntry(session_state={"key": "value"})
+        result = merge_state(entry)
+        assert result == {"key": "value"}
+
+    def test_app_state_merged_with_prefix(self):
+        entry = StateStorageEntry(app_state_delta={"app_key": "app_value"})
+        result = merge_state(entry)
+        assert result == {f"{State.APP_PREFIX}app_key": "app_value"}
+
+    def test_user_state_merged_with_prefix(self):
+        entry = StateStorageEntry(user_state_delta={"user_key": "user_value"})
+        result = merge_state(entry)
+        assert result == {f"{State.USER_PREFIX}user_key": "user_value"}
+
+    def test_all_states_merged(self):
+        entry = StateStorageEntry(
+            app_state_delta={"a": 1},
+            user_state_delta={"b": 2},
+            session_state={"c": 3},
+        )
+        result = merge_state(entry)
+        assert result == {f"{State.APP_PREFIX}a": 1, f"{State.USER_PREFIX}b": 2, "c": 3}
+
+    def test_need_copy_true(self):
+        original_session_state = {"key": "value"}
+        entry = StateStorageEntry(session_state=original_session_state)
+        result = merge_state(entry, need_copy=True)
+        result["new_key"] = "new_value"
+        assert "new_key" not in original_session_state
+
+    def test_need_copy_false(self):
+        original_session_state = {"key": "value"}
+        entry = StateStorageEntry(session_state=original_session_state)
+        result = merge_state(entry, need_copy=False)
+        result["new_key"] = "new_value"
+        assert "new_key" in original_session_state
+
+
+class TestFindEventsForSummary:
+    """Test event selection for summary generation."""
+
+    def test_defaults_start_from_user_and_keep_recent(self):
+        events = [
+            _make_event(author="system", text="system preamble"),
+            _make_event(author="user", text="question"),
+            _make_event(author="agent", text="answer"),
+            _make_event(author="user", text="recent question"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
+
+        assert selected_events == events[1:3]
+        assert insert_index == 3
+
+    def test_first_visible_summary_event_starts_summary_window(self):
+        summary_event = _make_event(author="system", text="previous summary")
+        summary_event.set_summary_event(True)
+        events = [
+            summary_event,
+            _make_event(author="agent", text="answer"),
+            _make_event(author="user", text="recent question"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
+
+        assert selected_events == events[:2]
+        assert insert_index == 2
+
+    def test_fallback_to_first_visible_event(self):
+        events = [
+            _make_event(author="agent", text="answer 1"),
+            _make_event(author="agent", text="answer 2"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
+
+        assert selected_events == events[:1]
+        assert insert_index == 1
+
+    def test_starts_from_first_user_in_active_events(self):
+        old_user = _make_event(author="user", text="old question")
+        events = [
+            _make_event(author="system", text="system preamble"),
+            old_user,
+            _make_event(author="agent", text="answer 1"),
+            _make_event(author="agent", text="answer 2"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
+
+        assert selected_events == events[1:]
+        assert insert_index == len(events)
+
+    def test_aligns_recent_window_to_next_user_turn(self):
+        events = [_make_event(author="user" if idx in (8, 80, 92) else "agent", text=f"msg {idx}") for idx in range(100)]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
+
+        assert selected_events == events[8:92]
+        assert insert_index == 92
+
+    def test_keep_recent_count_uses_active_events(self):
+        events = [_make_event(author="agent", text=f"msg {idx}") for idx in range(20)]
+
+        selected_events, insert_index = find_events_for_summary(
+            events, keep_recent_count=3, start_by_user_turn=False)
+
+        assert selected_events == events[:17]
+        assert insert_index == 17
+
+    def test_ignores_keep_recent_when_it_would_empty_selection(self):
+        events = [
+            _make_event(author="user", text="question"),
+            _make_event(author="agent", text="answer"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
+
+        assert selected_events == events
+        assert insert_index == len(events)
+
+    def test_zero_keep_recent_selects_all_matching_events(self):
+        events = [
+            _make_event(author="system", text="system preamble"),
+            _make_event(author="user", text="question"),
+            _make_event(author="agent", text="answer"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=0)
+
+        assert selected_events == events[1:]
+        assert insert_index == len(events)
+
+    def test_no_events(self):
+        selected_events, insert_index = find_events_for_summary([])
+
+        assert selected_events == []
+        assert insert_index == -1
+
+
+class TestKeyFunctions:
+    """Test key generation functions."""
+
+    def test_session_key(self):
+        assert session_key("app", "user", "sess") == "session:app:user:sess"
+
+    def test_session_key_special_chars(self):
+        assert session_key("my-app", "user@domain", "s-1") == "session:my-app:user@domain:s-1"
+
+    def test_app_state_key(self):
+        assert app_state_key("my_app") == "app_state:my_app"
+
+    def test_user_state_key(self):
+        assert user_state_key("my_app", "user_1") == "user_state:my_app:user_1"
+
+    def test_session_key_empty_strings(self):
+        assert session_key("", "", "") == "session:::"
+
+    def test_app_state_key_empty(self):
+        assert app_state_key("") == "app_state:"
+
+    def test_user_state_key_empty(self):
+        assert user_state_key("", "") == "user_state::"

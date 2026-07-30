@@ -1,0 +1,30 @@
+{
+  "metrics": [
+    {
+      "metric_name": "final_response_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "final_response": {
+          "text": {
+            "match": "contains",
+            "case_insensitive": true
+          }
+        }
+      }
+    },
+    {
+      "metric_name": "tool_trajectory_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "tool_trajectory": {
+          "default": {
+            "name": {"match": "exact", "case_insensitive": false},
+            "arguments": {"match": "exact"}
+          },
+          "order_sensitive": true,
+          "subset_matching": false
+        }
+      }
+    }
+  ]
+}

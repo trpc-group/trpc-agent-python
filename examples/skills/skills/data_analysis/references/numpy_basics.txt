@@ -1,0 +1,36 @@
+NumPy Basics Reference
+
+Array Creation:
+- np.array([1, 2, 3])
+- np.zeros((3, 4))
+- np.ones((2, 3))
+- np.arange(0, 10, 2)
+- np.linspace(0, 1, 5)
+
+Array Operations:
+- np.sum(arr)
+- np.mean(arr)
+- np.std(arr)
+- np.min(arr)
+- np.max(arr)
+- np.median(arr)
+
+Array Shape:
+- arr.shape
+- arr.reshape((2, 3))
+- arr.flatten()
+
+Mathematical Operations:
+- np.add(a, b)
+- np.subtract(a, b)
+- np.multiply(a, b)
+- np.divide(a, b)
+- np.sqrt(arr)
+- np.power(arr, 2)
+
+Statistical Functions:
+- np.mean(arr, axis=0)
+- np.std(arr, axis=1)
+- np.percentile(arr, 50)
+- np.corrcoef(x, y)
+

@@ -1,0 +1,62 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+""" Tools for the agent. """
+import os
+from pathlib import Path
+from typing import Any
+
+from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
+from trpc_agent_sdk.code_executors import create_local_workspace_runtime
+from trpc_agent_sdk.skills import ENV_SKILLS_ROOT
+from trpc_agent_sdk.skills import SkillToolSet
+from trpc_agent_sdk.skills.tools import LinkSkillStager
+from trpc_agent_sdk.skills.tools import CopySkillStager
+from trpc_agent_sdk.skills import create_default_skill_repository
+
+
+def _get_skill_paths() -> str:
+    """Get the skill paths."""
+    skills_root = os.getenv(ENV_SKILLS_ROOT)
+    if skills_root:
+        return skills_root
+    current_path = Path(__file__).parent
+    path = str(current_path.parent / "skills")
+    # convert to file URL
+    # path = "file://" + path
+    # "http://{host}:{port}/{path}/{filename}.{extension}"
+    # path = "http://localhost:8000/skills/skills.tar.gz"
+    return path
+
+
+def _create_workspace_runtime(**kwargs: Any) -> BaseWorkspaceRuntime:
+    """Create a new workspace runtime."""
+    inputs_host = kwargs.pop("inputs_host", None)
+    if inputs_host:
+        kwargs["inputs_host_base"] = inputs_host
+    return create_local_workspace_runtime(**kwargs)
+
+
+def create_skill_tool_set(is_link_stager: bool = True, use_cached_repository: bool = True) -> SkillToolSet:
+    """Create a new skill tool set.
+
+    Args:
+        is_link_stager: Whether to use link stager.
+        use_cached_repository: Whether to use cached repository.
+    """
+    tool_kwargs = {
+        "save_as_artifacts": True,
+        "omit_inline_content": False,
+    }
+    workspace_runtime_args = {}
+    workspace_runtime = _create_workspace_runtime(**workspace_runtime_args)
+    skill_paths = _get_skill_paths()
+    # use_cached_repository: Whether to use cached repository.
+    repository = create_default_skill_repository(skill_paths, workspace_runtime=workspace_runtime, 
+                                                 use_cached_repository=use_cached_repository)
+    skill_stager = LinkSkillStager() if is_link_stager else CopySkillStager()
+    # skill_stager: The stager to use for staging skills.
+    skill_toolset = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs, skill_stager=skill_stager)
+    return skill_toolset, repository

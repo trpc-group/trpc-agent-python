@@ -1,0 +1,33 @@
+{
+  "round": 2,
+  "optimizedFieldNames": [
+    "skill_md"
+  ],
+  "candidatePrompts": {},
+  "trainPassRate": 0.0,
+  "validationPassRate": 0.0,
+  "metricBreakdown": {},
+  "accepted": false,
+  "acceptanceReason": "no candidate produced this round",
+  "failedCaseIds": [],
+  "failedCasesTruncated": 0,
+  "perFieldDiagnosis": {},
+  "reflectionLmCalls": 1,
+  "roundLlmCost": 0.0,
+  "roundTokenUsage": {
+    "prompt": 1678,
+    "completion": 1025,
+    "total": 2703
+  },
+  "startedAt": "2026-07-30T09:42:53.033703+00:00",
+  "durationSeconds": 8.495375,
+  "kind": "reflective",
+  "trainMinibatchSize": 3,
+  "trainSubsampleParentScore": 0.0,
+  "trainSubsampleCandidateScore": 0.0,
+  "skipReason": "reflect-LM produced no usable new prompt",
+  "errorMessage": null,
+  "budgetUsed": 15,
+  "budgetTotal": 24,
+  "extras": {}
+}

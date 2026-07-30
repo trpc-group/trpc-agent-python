@@ -1,0 +1,102 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Skill staging interface implementation using file system.
+
+This module provides the CopySkillStager class which is responsible for staging
+skills to the workspace using file system.
+
+The actual filesystem work — digest check, ``stage_directory``, symlink
+creation, read-only chmod — is delegated to :class:`~trpc_agent.skills.stager.Stager`.
+"""
+
+from __future__ import annotations
+
+import posixpath
+
+from trpc_agent_sdk.code_executors import DIR_OUT
+from trpc_agent_sdk.code_executors import DIR_RUNS
+from trpc_agent_sdk.code_executors import DIR_SKILLS
+from trpc_agent_sdk.code_executors import DIR_WORK
+
+from ..stager import SkillStageRequest
+from ..stager import SkillStageResult
+from ..stager import Stager
+
+_ERR_REPO_NOT_CONFIGURED = "skill repository is not configured"
+
+_ALLOWED_WS_ROOTS = (
+    DIR_SKILLS,  # "skills"
+    DIR_WORK,  # "work"
+    DIR_OUT,  # "out"
+    DIR_RUNS,  # "runs"
+)
+
+
+def normalize_workspace_skill_dir(raw: str) -> str:
+    """Normalize and validate a workspace-relative skill directory.
+
+    Mirrors Go's ``normalizeWorkspaceSkillDir``.  Strips leading slashes,
+    normalizes path separators, and ensures the result stays within a
+    known workspace root.
+
+    Raises:
+        ValueError: When the path is empty or escapes the workspace.
+    """
+    d = raw.strip().replace("\\", "/")
+    if not d:
+        raise ValueError("workspace skill dir must not be empty")
+
+    if d.startswith("/"):
+        d = posixpath.normpath(d).lstrip("/") or "."
+
+    d = posixpath.normpath(d)
+    if not d or d == ".":
+        return "."
+
+    first = d.split("/")[0]
+    if first not in _ALLOWED_WS_ROOTS:
+        raise ValueError(f"workspace skill dir {raw!r} must stay within the workspace")
+    return d
+
+
+def _normalize_skill_stage_result(result: SkillStageResult) -> SkillStageResult:
+    """Return *result* with :attr:`workspace_skill_dir` normalized.
+
+    Mirrors Go's ``normalizeSkillStageResult``.
+
+    Raises:
+        ValueError: Propagated from :func:`normalize_workspace_skill_dir`.
+    """
+    return SkillStageResult(workspace_skill_dir=normalize_workspace_skill_dir(result.workspace_skill_dir))
+
+
+class CopySkillStager(Stager):
+    """Stager: copies the skill directory into ``skills/<name>``.
+
+    The actual filesystem work — digest check, ``stage_directory``, symlink
+    creation, read-only chmod — is delegated to :class:`~trpc_agent.skills.stager.Stager`.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._stage_mode: str = "copy"
+
+    async def stage_skill(self, request: SkillStageRequest) -> SkillStageResult:
+        """Stage the skill and return the normalized workspace skill dir."""
+        if request.repository is None:
+            raise ValueError(_ERR_REPO_NOT_CONFIGURED)
+
+        result = await super().stage_skill(request)
+
+        return _normalize_skill_stage_result(result)
+
+
+class LinkSkillStager(CopySkillStager):
+    """Stager: links the skill directory into ``skills/<name>`` and links the shared workspace dirs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._stage_mode: str = "link"
