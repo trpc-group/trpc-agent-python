@@ -63,14 +63,26 @@ from ._target_prompt import TargetPrompt
 PromptOptimizerRunner = Callable[..., Awaitable[OptimizeResult]]
 
 _EPSILON = 1e-9
-_SECRET_KEYS = frozenset({
-    "api_key",
-    "apiKey",
+_SENSITIVE_KEY_NAMES = frozenset({
+    "accesstoken",
+    "apikey",
+    "authtoken",
     "authorization",
+    "bearertoken",
+    "clientsecret",
+    "idtoken",
     "password",
+    "passwd",
+    "proxyauthorization",
+    "refreshtoken",
     "secret",
     "token",
+    "xapikey",
 })
+_SENSITIVE_VALUE_PATTERNS = (
+    re.compile(r"^\s*Bearer\s+\S+\s*$", re.IGNORECASE),
+    re.compile(r"^\s*sk-[A-Za-z0-9_-]{8,}\s*$", re.IGNORECASE),
+)
 _CATEGORY_REASON = {
     "final_response_mismatch": "Final response did not satisfy the reference criterion.",
     "tool_call_error": "Tool selection or call sequence did not match the expected trajectory.",
@@ -338,6 +350,8 @@ class EvaluationOptimizationPipeline:
                 report.audit.source_updated = True
                 report.write(str(output_path))
             except BaseException:
+                # Restore the source even when cancellation or interruption is
+                # propagated; leaving a partially written prompt is unsafe.
                 await target_prompt.write_all(baseline_prompts)
                 report.audit.source_updated = False
                 report.write(str(output_path))
@@ -425,17 +439,18 @@ class EvaluationOptimizationPipeline:
                 record.duration_seconds,
             )
 
-        best_prompts = optimize_result.best_prompts or baseline_prompts
-        best_round = max((spec.round for spec in specs), default=0) + 1
-        append(
-            best_round,
-            best_prompts,
-            True,
-            "optimizer best_prompts",
-            0.0,
-            0.0,
-        )
-        if not specs:
+        best_prompts = optimize_result.best_prompts
+        if best_prompts:
+            best_round = max((spec.round for spec in specs), default=0) + 1
+            append(
+                best_round,
+                best_prompts,
+                True,
+                "optimizer best_prompts",
+                0.0,
+                0.0,
+            )
+        elif not specs:
             append(
                 0,
                 baseline_prompts,
@@ -446,10 +461,13 @@ class EvaluationOptimizationPipeline:
             )
         if len(specs) <= max_candidates:
             return specs
-        best_fingerprint = json.dumps(best_prompts, ensure_ascii=False, sort_keys=True)
         selected = specs[:max_candidates]
+        if not best_prompts:
+            return selected
+        best_fingerprint = json.dumps(best_prompts, ensure_ascii=False, sort_keys=True)
         if all(
-                json.dumps(spec.prompts, ensure_ascii=False, sort_keys=True) != best_fingerprint
+                json.dumps(spec.prompts, ensure_ascii=False, sort_keys=True) !=
+                best_fingerprint
                 for spec in selected):
             best_spec = next(
                 spec for spec in specs
@@ -1054,12 +1072,20 @@ def _portable_path(path: Path, base: Path) -> str:
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: ("***REDACTED***" if key in _SECRET_KEYS else _redact(item))
+            key: ("***REDACTED***" if _is_sensitive_key(key) else _redact(item))
             for key, item in value.items()
         }
     if isinstance(value, list):
         return [_redact(item) for item in value]
+    if isinstance(value, str) and any(
+            pattern.fullmatch(value) for pattern in _SENSITIVE_VALUE_PATTERNS):
+        return "***REDACTED***"
     return value
+
+
+def _is_sensitive_key(value: Any) -> bool:
+    normalized = re.sub(r"[^a-z0-9]", "", str(value).casefold())
+    return normalized in _SENSITIVE_KEY_NAMES
 
 
 def _safe_filename(value: str) -> str:
