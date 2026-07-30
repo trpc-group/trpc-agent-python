@@ -5,6 +5,8 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Unit tests for agent evaluator (agent_evaluator)."""
 
+import os
+
 import pytest
 
 import trpc_agent_sdk.runners  # noqa: F401
@@ -108,8 +110,10 @@ class TestAgentEvaluatorParsePassNc:
 class TestLoadEvalSetFromFile:
     """Test suite for AgentEvaluator._load_eval_set_from_file.
 
-    Covers the case-selector colon parsing, including absolute paths that
-    contain a drive-letter colon on Windows (e.g. "C:\\...\\set.json").
+    Covers the case-selector colon parsing.  The drive-letter guard
+    ("an existing path containing ':' must load as-is") is exercised on
+    Windows by the absolute ``tmp_path`` ("C:\\...") and on POSIX by a
+    file whose name literally contains a colon.
     """
 
     @staticmethod
@@ -133,13 +137,32 @@ class TestLoadEvalSetFromFile:
         return str(file_path)
 
     def test_load_absolute_path_without_selector(self, tmp_path):
-        """An existing absolute path must load as-is, even if it contains ':'."""
+        """An existing absolute path must load as-is.
+
+        On Windows ``tmp_path`` starts with a drive letter, so the ':' guard
+        is hit here; POSIX coverage of the same guard lives in
+        ``test_load_existing_path_containing_colon``.
+        """
         file_path = self._write_eval_set(tmp_path, ["case_a", "case_b"])
         eval_set = AgentEvaluator._load_eval_set_from_file(file_path, EvalConfig(criteria={}))
         assert [c.eval_id for c in eval_set.eval_cases] == ["case_a", "case_b"]
 
+    @pytest.mark.skipif(os.name == "nt", reason="':' is not a legal filename character on Windows")
+    def test_load_existing_path_containing_colon(self, tmp_path):
+        """A colon inside an existing full path must not be split as a selector."""
+        source = self._write_eval_set(tmp_path, ["case_a", "case_b"])
+        colon_path = tmp_path / "drive:like.evalset.json"
+        with open(source, "r", encoding="utf-8") as f:
+            colon_path.write_text(f.read(), encoding="utf-8")
+        eval_set = AgentEvaluator._load_eval_set_from_file(str(colon_path), EvalConfig(criteria={}))
+        assert [c.eval_id for c in eval_set.eval_cases] == ["case_a", "case_b"]
+
     def test_load_with_case_selector(self, tmp_path):
-        """"file.json:case_id" selects a single case from the set."""
+        """"file.json:case_id" selects a single case from the set.
+
+        The full string never exists on disk while the part before the last
+        colon does, so the rpartition branch runs on every platform.
+        """
         file_path = self._write_eval_set(tmp_path, ["case_a", "case_b"])
         eval_set = AgentEvaluator._load_eval_set_from_file(f"{file_path}:case_b", EvalConfig(criteria={}))
         assert [c.eval_id for c in eval_set.eval_cases] == ["case_b"]

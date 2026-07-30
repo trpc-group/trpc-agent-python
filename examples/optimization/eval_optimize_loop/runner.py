@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import time
 import uuid
@@ -254,39 +253,33 @@ async def _run_evaluator(
     call_agent: Optional[CallAgent] = None,
     metric_config_path: Optional[Path] = None,
 ) -> EvaluateResult:
-    """Run the public evaluator API while avoiding the Windows drive-colon parser."""
+    """Run the public evaluator API with absolute paths.
 
-    previous_cwd = Path.cwd()
+    The SDK's ``_load_eval_set_from_file`` guards the "file.json:case_id"
+    selector with existence checks, so Windows drive-letter paths are safe
+    to pass directly and no process-wide chdir workaround is needed.
+    """
+
+    metric_arg = str(metric_config_path) if metric_config_path is not None else None
+    executer = AgentEvaluator.get_executer(
+        str(evalset_path),
+        call_agent=call_agent,
+        eval_metrics_file_path_or_dir=metric_arg,
+        print_detailed_results=False,
+        print_summary_report=False,
+    )
     try:
-        os.chdir(evalset_path.parent)
-        metric_arg: Optional[str] = None
-        if metric_config_path is not None:
-            if metric_config_path.parent.resolve() != evalset_path.parent.resolve():
-                local_config = evalset_path.parent / metric_config_path.name
-                if not local_config.exists():
-                    shutil.copyfile(metric_config_path, local_config)
-            metric_arg = metric_config_path.name
-        executer = AgentEvaluator.get_executer(
-            evalset_path.name,
-            call_agent=call_agent,
-            eval_metrics_file_path_or_dir=metric_arg,
-            print_detailed_results=False,
-            print_summary_report=False,
-        )
-        try:
-            await executer.evaluate()
-        except AssertionError as exc:
-            # Case failures are represented as AssertionError by the public facade;
-            # the structured result remains available from the executer.  Any other
-            # assertion (config/contract errors, SDK bugs) aborts before a result
-            # exists and must not be masked as an empty NOT_EVALUATED outcome.
-            if executer.get_result() is None:
-                raise RuntimeError(
-                    f"Evaluator aborted before producing results ({type(exc).__name__}): {exc}"
-                ) from exc
-        result = executer.get_result()
-    finally:
-        os.chdir(previous_cwd)
+        await executer.evaluate()
+    except AssertionError as exc:
+        # Case failures are represented as AssertionError by the public facade;
+        # the structured result remains available from the executer.  Any other
+        # assertion (config/contract errors, SDK bugs) aborts before a result
+        # exists and must not be masked as an empty NOT_EVALUATED outcome.
+        if executer.get_result() is None:
+            raise RuntimeError(
+                f"Evaluator aborted before producing results ({type(exc).__name__}): {exc}"
+            ) from exc
+    result = executer.get_result()
     return result or EvaluateResult()
 
 

@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import shlex
 import sys
 from dataclasses import asdict, dataclass
@@ -228,23 +227,18 @@ async def _run_optimize_for_candidate(
     from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
     target = TargetPrompt().add_path("system", str(champion_prompt_path))
-    # Windows 盘符含冒号，会被 evalset 的 "file.json:case_id" 语法误切；
-    # 与 runner._run_evaluator 一致，切到示例根目录并传相对路径。
-    previous_cwd = Path.cwd()
-    try:
-        os.chdir(_HERE)
-        result = await AgentOptimizer.optimize(
-            config_path=str(optimizer_config_path),
-            call_agent=call_agent,
-            target_prompt=target,
-            train_dataset_path=os.path.relpath(train_evalset_path, _HERE),
-            validation_dataset_path=os.path.relpath(val_evalset_path, _HERE),
-            output_dir=str(output_dir),
-            update_source=False,
-            verbose=0,
-        )
-    finally:
-        os.chdir(previous_cwd)
+    # SDK 已修复盘符冒号误切（_load_eval_set_from_file 用存在性守卫），
+    # 直接传绝对路径，避免进程级 chdir 带来的全局状态耦合。
+    result = await AgentOptimizer.optimize(
+        config_path=str(optimizer_config_path),
+        call_agent=call_agent,
+        target_prompt=target,
+        train_dataset_path=str(train_evalset_path),
+        validation_dataset_path=str(val_evalset_path),
+        output_dir=str(output_dir),
+        update_source=False,
+        verbose=0,
+    )
     status = _enum_value(result.status)
     if status != "SUCCEEDED" or not result.best_prompts:
         raise RuntimeError(
