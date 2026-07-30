@@ -88,11 +88,11 @@ async def code_review_tool(
     }
 
 
-def create_code_review_skill_tool_set(*, workspace_runtime):
+def create_code_review_skill_tool_set(*, workspace_runtime, allowed_skill_run_commands: list[str] | None = None):
     """Create the framework-native SkillToolSet for skill_load/skill_run."""
     from trpc_agent_sdk.skills import SkillToolSet
     from trpc_agent_sdk.skills import create_default_skill_repository
-    from trpc_agent_sdk.skills.tools import LinkSkillStager
+    from trpc_agent_sdk.skills.tools import CopySkillStager
 
     repository = create_default_skill_repository(
         str(SKILL_DIR.parent),
@@ -100,7 +100,10 @@ def create_code_review_skill_tool_set(*, workspace_runtime):
         enable_hot_reload=False,
         use_cached_repository=True,
     )
-    return SkillToolSet(repository=repository, skill_stager=LinkSkillStager()), repository
+    kwargs = {}
+    if allowed_skill_run_commands:
+        kwargs["allowed_cmds"] = allowed_skill_run_commands
+    return SkillToolSet(repository=repository, skill_stager=CopySkillStager(), **kwargs), repository
 
 
 def create_code_review_agent(*, model, skill_workspace_runtime=None):

@@ -157,6 +157,8 @@ class ReviewStore(ABC):
             path = unquote(parsed.path)
             if not path:
                 raise ValueError("sqlite URL requires a database path")
+            if len(path) >= 3 and path[0] == "/" and path[2] == ":":
+                path = path[1:]
             return SQLiteReviewStore(Path(path))
         if parsed.scheme in {"postgresql", "postgres", "mysql"}:
             raise NotImplementedError(

@@ -33,7 +33,7 @@ async def async_main() -> int:
     expected = json.loads(args.expected_file.read_text(encoding="utf-8"))
     rows = []
     total_tp = total_fp = total_fn = 0
-    with tempfile.TemporaryDirectory(prefix="cr-eval-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cr-eval-", ignore_cleanup_errors=True) as tmp:
         tmp_path = Path(tmp)
         for fixture, expected_ids in sorted(expected.items()):
             report = await run_review(

@@ -22,12 +22,37 @@
 - `ReviewStore.from_url()` 支持 `sqlite:///...`，并为 Postgres/MySQL 保留清晰 SQL 后端扩展点。
 - 报告包含置信度阈值、去重数量、Filter 摘要、沙箱摘要、监控指标和可执行修复建议。
 
+## 目录结构
+
+本示例沿用框架内 Skill 示例的目录布局：`agent/` 放 Agent 编排代码，`skills/code-review/` 放可复用 Skill 资产，`fixtures/` 和 `sample_outputs/` 放示例验证数据。
+
+```text
+examples/skills_code_review_agent/
+|-- agent/
+|-- skills/
+|   `-- code-review/
+|       |-- SKILL.md
+|       |-- docs/
+|       |-- scripts/
+|       |-- rules.json
+|       `-- filter_policy.json
+|-- fixtures/
+|-- run_agent.py
+`-- run_review.py
+```
+
 ## 运行方式
 
 在仓库根目录执行：
 
 ```bash
 python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
+```
+
+也可以使用与其他 examples 一致的入口：
+
+```bash
+python3 examples/skills_code_review_agent/run_agent.py --fixture security_issue --dry-run
 ```
 
 运行公开样例：
@@ -239,12 +264,37 @@ This example demonstrates an automatic code review agent built from a reusable S
 - `ReviewStore.from_url()` supports `sqlite:///...` and keeps explicit Postgres/MySQL extension points.
 - Reports include confidence thresholds, dedupe counts, Filter summaries, sandbox summaries, monitoring metrics, and actionable recommendations.
 
+## Directory Layout
+
+This example follows the Skill example layout used elsewhere in the framework: `agent/` contains orchestration code, `skills/code-review/` contains the reusable Skill assets, and `fixtures/` plus `sample_outputs/` contain example validation data.
+
+```text
+examples/skills_code_review_agent/
+|-- agent/
+|-- skills/
+|   `-- code-review/
+|       |-- SKILL.md
+|       |-- docs/
+|       |-- scripts/
+|       |-- rules.json
+|       `-- filter_policy.json
+|-- fixtures/
+|-- run_agent.py
+`-- run_review.py
+```
+
 ## Run
 
 From the repository root:
 
 ```bash
 python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
+```
+
+You can also use the standard example entrypoint:
+
+```bash
+python3 examples/skills_code_review_agent/run_agent.py --fixture security_issue --dry-run
 ```
 
 Run all public fixtures:

@@ -1814,6 +1814,7 @@ def test_large_diff_limit_records_parse_warning() -> None:
 
 
 def test_code_review_skill_rule_manifest_covers_all_required_categories() -> None:
+    assert SKILL_DIR == EXAMPLE_DIR / "skills" / "code-review"
     assert (SKILL_DIR / "SKILL.md").exists()
     assert (SKILL_DIR / "docs" / "rules.md").exists()
     assert (SKILL_DIR / "scripts" / "static_review.py").exists()

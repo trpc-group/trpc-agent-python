@@ -35,7 +35,11 @@ class _SkillSmokeAgent(BaseAgent):
 async def run_code_review_skill_smoke(*, diff_text: str | None = None) -> dict[str, Any]:
     """Load the code-review Skill and execute one Skill script through skill_run."""
     runtime = create_local_workspace_runtime()
-    toolset, repository = create_code_review_skill_tool_set(workspace_runtime=runtime)
+    python_executable = Path(sys.executable).as_posix()
+    toolset, repository = create_code_review_skill_tool_set(
+        workspace_runtime=runtime,
+        allowed_skill_run_commands=[python_executable, Path(sys.executable).name],
+    )
     tools = {tool.name: tool for tool in await toolset.get_tools()}
 
     service = InMemorySessionService()
@@ -62,7 +66,7 @@ async def run_code_review_skill_smoke(*, diff_text: str | None = None) -> dict[s
             tool_context=ctx,
             args={
                 "skill": "code-review",
-                "command": f"{sys.executable} scripts/diff_summary.py",
+                "command": f"{python_executable} scripts/diff_summary.py",
                 "stdin": diff_text,
                 "timeout": 5,
             },
