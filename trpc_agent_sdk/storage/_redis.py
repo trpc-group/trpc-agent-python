@@ -98,6 +98,7 @@ class RedisStorage(BaseStorage):
         super().__init__()
         self._redis_url = redis_url
         self._is_async = is_async
+        kwargs.setdefault("decode_responses", True)
         self._kwargs = kwargs
         self._redis_pool: Optional[RedisConnectionPool] = None
 

@@ -46,6 +46,18 @@ class TestRedisStorage:
         assert storage._kwargs == {"max_connections": 10, "decode_responses": True}
         assert storage._redis_pool is None
 
+    def test_init_defaults_to_decoded_responses(self, redis_url):
+        """Test RedisStorage decodes responses by default."""
+        storage = RedisStorage(redis_url=redis_url, is_async=True)
+
+        assert storage._kwargs == {"decode_responses": True}
+
+    def test_init_allows_raw_responses(self, redis_url):
+        """Test RedisStorage can still opt into raw Redis bytes."""
+        storage = RedisStorage(redis_url=redis_url, is_async=True, decode_responses=False)
+
+        assert storage._kwargs == {"decode_responses": False}
+
     @pytest.mark.asyncio
     async def test_create_redis_engine_async(self, async_storage):
         """Test creating async Redis connection pool."""
@@ -54,7 +66,7 @@ class TestRedisStorage:
 
             await async_storage.create_redis_engine()
 
-            mock_pool.from_url.assert_called_once_with(async_storage._redis_url)
+            mock_pool.from_url.assert_called_once_with(async_storage._redis_url, decode_responses=True)
             assert async_storage._redis_pool is not None
 
     @pytest.mark.asyncio
@@ -65,7 +77,7 @@ class TestRedisStorage:
 
             await sync_storage.create_redis_engine()
 
-            mock_pool.from_url.assert_called_once_with(sync_storage._redis_url)
+            mock_pool.from_url.assert_called_once_with(sync_storage._redis_url, decode_responses=True)
             assert sync_storage._redis_pool is not None
 
     @pytest.mark.asyncio

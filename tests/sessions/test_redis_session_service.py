@@ -91,15 +91,20 @@ class _MockRedisStorage:
         elif method == 'hset':
             key = args[0]
             pairs = args[1:]
+            if command.kwargs.get("mapping"):
+                encoded_mapping = {
+                    k: self._encode_hash_value(v) for k, v in command.kwargs["mapping"].items()
+                }
+                if key not in self._hash_store:
+                    self._hash_store[key] = {}
+                self._hash_store[key].update(encoded_mapping)
+                return True
+            # Kept for compatibility with older mock callers; production scoped state uses mapping.
+            encoded_pairs = [(pairs[i], self._encode_hash_value(pairs[i + 1])) for i in range(0, len(pairs), 2)]
             if key not in self._hash_store:
                 self._hash_store[key] = {}
-            if command.kwargs.get("mapping"):
-                self._hash_store[key].update({
-                    k: self._encode_hash_value(v) for k, v in command.kwargs["mapping"].items()
-                })
-                return True
-            for i in range(0, len(pairs), 2):
-                self._hash_store[key][pairs[i]] = self._encode_hash_value(pairs[i + 1])
+            for pair_key, pair_value in encoded_pairs:
+                self._hash_store[key][pair_key] = pair_value
             return True
         elif method == 'hgetall':
             key = args[0]
@@ -310,6 +315,11 @@ class TestRedisAppendEvent:
         with pytest.raises(DataError):
             await svc.append_event(session, event)
 
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert stored is not None
+        assert stored.state == {}
+        assert stored.events == []
+        assert svc._redis_storage._hash_store == {}
         await svc.close()
 
     async def test_append_does_not_persist_merged_or_temp_state_in_session_json(self):
