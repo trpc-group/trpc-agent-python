@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import sys
 from pathlib import Path
 
@@ -19,8 +20,13 @@ from trpc_agent_sdk.skills.tools import CopySkillStager
 from trpc_agent_sdk.tools import BashTool
 from trpc_agent_sdk.tools import MCPToolset
 from trpc_agent_sdk.tools import StdioConnectionParams
+from trpc_agent_sdk.tools.safety import Decision
+from trpc_agent_sdk.tools.safety import RiskFinding
+from trpc_agent_sdk.tools.safety import RiskLevel
+from trpc_agent_sdk.tools.safety import SafetyRule
 from trpc_agent_sdk.tools.safety import ToolSafetyFilter
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety import ToolScriptScanRequest
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
 
 DEMO_DIR = Path(__file__).resolve().parents[1]
@@ -28,6 +34,35 @@ POLICY_PATH = DEMO_DIR / "tool_safety_policy.yaml"
 AUDIT_LOG_PATH = DEMO_DIR / "real_agent_safety_audit.jsonl"
 SKILL_ROOT = DEMO_DIR / "skills"
 MCP_SERVER_PATH = DEMO_DIR / "mcp_server.py"
+
+
+def deny_internal_admin_rule(
+    request: ToolScriptScanRequest,
+    policy: ToolSafetyPolicy,
+) -> Iterable[RiskFinding]:
+    """Block an organization-specific command that built-in rules do not know."""
+    del policy
+    if "internal-admin" not in request.script:
+        return []
+    return [
+        RiskFinding(
+            rule_id="CUSTOM_INTERNAL_ADMIN_COMMAND",
+            risk_type="process_command",
+            risk_level=RiskLevel.HIGH,
+            decision=Decision.DENY,
+            evidence="internal-admin",
+            recommendation="Route internal admin commands through an approved workflow.",
+            message="A user-registered safety rule matched an internal admin command.",
+        )
+    ]
+
+
+def register_demo_safety_rules(scanner: ToolScriptSafetyScanner) -> ToolScriptSafetyScanner:
+    """Register demo-specific safety rules on a scanner used by the agent."""
+    demo_rules: list[SafetyRule] = [deny_internal_admin_rule]
+    for rule in demo_rules:
+        scanner.register_rule(rule)
+    return scanner
 
 
 class DemoLocalCodeExecutor(UnsafeLocalCodeExecutor):
@@ -59,7 +94,8 @@ def create_safety_scanner() -> ToolScriptSafetyScanner:
         # allows python so skill_allow can execute on Windows installations
         # where python3 is not a separate executable.
         policy.allowed_commands.append("python")
-    return ToolScriptSafetyScanner(policy)
+    scanner = ToolScriptSafetyScanner(policy)
+    return register_demo_safety_rules(scanner)
 
 
 def create_safety_filter(
