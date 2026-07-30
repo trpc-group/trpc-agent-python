@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from redis.exceptions import DataError
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._redis_session_service import RedisSessionService
@@ -66,6 +67,12 @@ class _MockRedisStorage:
     async def create_db_session(self):
         yield MagicMock()
 
+    @staticmethod
+    def _encode_hash_value(value):
+        if isinstance(value, bool):
+            raise DataError("Invalid input of type: 'bool'. Convert to a bytes, string, int or float first.")
+        return str(value)
+
     async def execute_command(self, session, command):
         method = command.method
         args = command.args
@@ -87,10 +94,12 @@ class _MockRedisStorage:
             if key not in self._hash_store:
                 self._hash_store[key] = {}
             if command.kwargs.get("mapping"):
-                self._hash_store[key].update(command.kwargs["mapping"])
+                self._hash_store[key].update({
+                    k: self._encode_hash_value(v) for k, v in command.kwargs["mapping"].items()
+                })
                 return True
             for i in range(0, len(pairs), 2):
-                self._hash_store[key][pairs[i]] = pairs[i + 1]
+                self._hash_store[key][pairs[i]] = self._encode_hash_value(pairs[i + 1])
             return True
         elif method == 'hgetall':
             key = args[0]
@@ -274,6 +283,33 @@ class TestRedisAppendEvent:
         assert stored.state["session_key"] == "sv"
         assert stored.state[f"{State.APP_PREFIX}app_key"] == "av"
         assert stored.state[f"{State.USER_PREFIX}user_key"] == "uv"
+        await svc.close()
+
+    async def test_append_with_numeric_scoped_state_matches_redis_encoding(self):
+        svc = _create_service()
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        event = _make_event(state_delta={
+            "session_count": 3,
+            f"{State.APP_PREFIX}app_count": 7,
+            f"{State.USER_PREFIX}user_ratio": 0.5,
+        })
+
+        await svc.append_event(session, event)
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert stored.state["session_count"] == 3
+        assert stored.state[f"{State.APP_PREFIX}app_count"] == "7"
+        assert stored.state[f"{State.USER_PREFIX}user_ratio"] == "0.5"
+        await svc.close()
+
+    async def test_append_with_bool_scoped_state_matches_redis_rejection(self):
+        svc = _create_service()
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        event = _make_event(state_delta={f"{State.APP_PREFIX}app_enabled": True})
+
+        with pytest.raises(DataError):
+            await svc.append_event(session, event)
+
         await svc.close()
 
     async def test_append_does_not_persist_merged_or_temp_state_in_session_json(self):
