@@ -177,6 +177,13 @@ class OptimizationExecutionReport(EvalBaseModel):
     total_llm_cost: float             # LLM 调用总成本（USD）
     best_prompts: dict[str, str] = Field(default_factory=dict)  # 最优 prompt 内容
 
+    # 审计字段 (Stage 6 报告消费)
+    stop_reason: str = ""                          # SDK: result.stop_reason
+    finish_reason: str = ""                        # SDK: result.finish_reason
+    total_token_usage: dict[str, int] = Field(default_factory=dict)  # SDK: result.total_token_usage
+    total_metric_calls: int = 0                    # SDK: result.total_metric_calls
+    rounds: list[dict] = Field(default_factory=list)  # SDK: result.rounds
+
 
 class PipelineReport(EvalBaseModel):
     """顶层流水线报告（对应 optimization_report.json）。
