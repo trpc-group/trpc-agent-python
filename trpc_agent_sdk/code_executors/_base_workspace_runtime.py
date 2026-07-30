@@ -374,7 +374,10 @@ class BaseProgramRunner(ABC):
         """Return spec with provider env merged when enabled.
 
         Provider values never override keys already present in ``spec.env``.
-        The input ``spec`` is not mutated.
+        The input ``spec`` is not mutated. A provider resolution, including an
+        empty result or handled failure, is final for the returned copy. This
+        prevents a safety wrapper from scanning one environment and a delegate
+        retry from executing with different, unscanned provider values.
         """
         if spec._provider_env_applied:
             return spec

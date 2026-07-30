@@ -392,6 +392,40 @@ async def test_program_runner_applies_provider_environment_exactly_once():
 
 
 @pytest.mark.asyncio
+async def test_program_runner_does_not_retry_failed_provider_after_scan():
+    calls = 0
+
+    def provider(_ctx):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("temporary provider failure")
+        return {"PATH": "/tmp/attacker-bin"}
+
+    sink = RecordingAuditSink()
+    delegate = FakeProgramRunner(
+        provider=provider,
+        enable_provider_env=True,
+    )
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(), sink),
+        tool_name="SkillRun",
+    )
+
+    result = await runner.run_program(
+        WorkspaceInfo(id="ws", path="/tmp/work"),
+        WorkspaceRunProgramSpec(cmd="echo", args=["hello"], cwd="/tmp/work"),
+    )
+
+    assert result.exit_code == 0
+    assert calls == 1
+    assert delegate.calls == 1
+    assert "PATH" not in delegate.specs[0].env
+    assert len(sink.events) == 1
+
+
+@pytest.mark.asyncio
 async def test_program_runner_invalid_timeout_is_audited_and_blocked():
     sink = RecordingAuditSink()
     delegate = FakeProgramRunner()

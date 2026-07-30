@@ -106,6 +106,12 @@ result = await runner.run_program(workspace, program_spec, ctx)
 Blocked programs return the existing `WorkspaceRunResult` type with exit code
 126. Code executors use the same guard and preserve `CodeExecutionResult`:
 
+For a guarded program call, provider environment values are resolved exactly
+once before scanning. An empty result or handled provider failure is also final
+for that call: retrying only inside the delegate could execute new provider
+values that were never scanned. Start a new invocation if the provider should
+be retried.
+
 ```python
 from trpc_agent_sdk.tools.safety import GuardedCodeExecutor
 

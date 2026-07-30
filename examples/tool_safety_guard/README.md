@@ -116,6 +116,10 @@ result = await runner.run_program(workspace, program_spec, ctx)
 wrapper 能识别 `bash -c <script>` 并扫描其中的脚本。调用被阻止时，它返回
 `WorkspaceRunResult(exit_code=126)`，在 `stderr` 中携带脱敏报告，且不会调用真实运行器。
 
+对于一次受保护的程序调用，provider 环境变量会在扫描前且仅解析一次。空结果或已处理的 provider
+异常同样是本次调用的最终解析结果；如果仅由 delegate 重试，可能执行扫描时从未出现的新环境值。
+需要重试 provider 时应发起一次新的调用。
+
 代码执行器可使用相同模式：
 
 ```python
