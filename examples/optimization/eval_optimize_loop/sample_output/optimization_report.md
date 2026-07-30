@@ -3,7 +3,7 @@
 - Run ID: `sample-output-v1`
 - Mode: `fake`
 - Final stage: `complete`
-- Duration: `0.219s`
+- Duration: `0.390s`
 - Reproducible: `yes`
 - Source prompt applied: `no`
 
@@ -23,9 +23,9 @@
 ## Gate
 
 - Decision: `REJECT`
-- Failed checks: `VALIDATION_SCORE_DELTA, NO_NEW_HARD_FAIL, OVERFIT_GUARD`
-- Reasons: `VALIDATION_SCORE_DELTA_BELOW_MINIMUM, NEW_HARD_FAIL_BUDGET_EXCEEDED, OVERFIT_TRAIN_UP_VALIDATION_DOWN`
-- Overfit detected: `yes`
+- Failed checks: `VALIDATION_SCORE_DELTA, NO_NEW_HARD_FAIL`
+- Reasons: `VALIDATION_SCORE_DELTA_BELOW_MINIMUM, NEW_HARD_FAIL_BUDGET_EXCEEDED`
+- Overfit detected: `no`
 
 ## Cost
 

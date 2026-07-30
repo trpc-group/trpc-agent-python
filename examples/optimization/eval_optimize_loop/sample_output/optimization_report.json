@@ -8,17 +8,17 @@
     {
       "byteSize": 13921,
       "path": "baseline_train/snapshot.json",
-      "sha256": "e3e4fa35e990241618df6d6151a1e8fc6e24ed1c98f5d19c349980964a489caf"
+      "sha256": "e1e7a1d29d8495b2f97d90ddef4179aca40c7da3cd7f28e7fac51b5207273489"
     },
     {
       "byteSize": 13955,
       "path": "baseline_validation/snapshot.json",
-      "sha256": "6c22f2743db51fe0b604389cb3585ef8850f96c5ac40311a48a2198f77a4abfd"
+      "sha256": "c56620490167625ac3aa84b67bf7914b9bbeb17a8ecb56547ac28d2b4990d5d1"
     },
     {
-      "byteSize": 1230,
+      "byteSize": 1257,
       "path": "candidate.json",
-      "sha256": "09d48df58df5b954757a9963665f61b36d981cda9c7a555b270e2d4e69dfdf53"
+      "sha256": "b426767863e0ec1d1b3e7310ad9e05809362926993428e83234ec6214a61fc17"
     },
     {
       "byteSize": 132,
@@ -26,24 +26,24 @@
       "sha256": "ed2dfc103a7763a126f690e536572c5d06d20e2119ef7ef707c0a72deb162be2"
     },
     {
-      "byteSize": 13857,
+      "byteSize": 13860,
       "path": "candidate_train/snapshot.json",
-      "sha256": "81619a1694caffa8e5661b53a6838c2347e7fc5bd4947f9c0dc17ba1fe894812"
+      "sha256": "0da1efea5c6dfc843ab03d09fc687724bb24596456c1d47692d4fd70a7afb6c7"
     },
     {
-      "byteSize": 13956,
+      "byteSize": 13953,
       "path": "candidate_validation/snapshot.json",
-      "sha256": "ba0ec006116176cd6396212950b90d66f0c1b913775f0a9fb3451b845c5e40c7"
+      "sha256": "d7ba2a08412cb7adc5a82ccb408a5e9ad5da3564550f13ec2468389c0993cf9f"
     },
     {
-      "byteSize": 5994,
+      "byteSize": 5986,
       "path": "comparison.json",
-      "sha256": "5ad875415c7ffad80abb3428be37d34e54d0ec69d09352f97375ab89ca821d89"
+      "sha256": "ce6e77862b58a753e4fe61fcf044161dd74b0194f15e61e9cb21c1e9896fd836"
     },
     {
-      "byteSize": 2769,
+      "byteSize": 2924,
       "path": "config.json",
-      "sha256": "480c323b930dcece647f3db77038b12cd333457e8abb0983417f73c1aa5a8bde"
+      "sha256": "911831d3f66d621893f03ca83840d507d29365c18a6b2c6dbbb7911d656b632e"
     },
     {
       "byteSize": 2163,
@@ -51,9 +51,9 @@
       "sha256": "af935deba41f9e95db01dcb4b8db86c17619a2f205d6dddd0addad2415896715"
     },
     {
-      "byteSize": 647,
+      "byteSize": 645,
       "path": "inner_train.attribution.json",
-      "sha256": "c6de4971edada2345c566bfe8a39258f3585bc716c6a0294b8d5d8288af0f46b"
+      "sha256": "77478a288c3f38a77677e169e5da7d1c88509c0e3091e0989c70a26a1c216aa4"
     },
     {
       "byteSize": 4108,
@@ -109,7 +109,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1023717,
+                    "creationTimestamp": 1785431480.1068149,
                     "finalResponse": {
                       "parts": [
                         {
@@ -242,7 +242,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1013703,
+                    "creationTimestamp": 1785431480.1068149,
                     "finalResponse": {
                       "parts": [
                         {
@@ -375,7 +375,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1013703,
+                    "creationTimestamp": 1785431480.1068149,
                     "finalResponse": {
                       "parts": [
                         {
@@ -524,7 +524,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1065273,
+                    "creationTimestamp": 1785431480.1110127,
                     "finalResponse": {
                       "parts": [
                         {
@@ -657,7 +657,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1065273,
+                    "creationTimestamp": 1785431480.1110127,
                     "finalResponse": {
                       "parts": [
                         {
@@ -790,7 +790,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1065273,
+                    "creationTimestamp": 1785431480.1110127,
                     "finalResponse": {
                       "parts": [
                         {
@@ -941,7 +941,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.120922,
+                    "creationTimestamp": 1785431480.1273332,
                     "finalResponse": {
                       "parts": [
                         {
@@ -1074,7 +1074,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.119919,
+                    "creationTimestamp": 1785431480.1273332,
                     "finalResponse": {
                       "parts": [
                         {
@@ -1207,7 +1207,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.119919,
+                    "creationTimestamp": 1785431480.1273332,
                     "finalResponse": {
                       "parts": [
                         {
@@ -1356,7 +1356,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1244266,
+                    "creationTimestamp": 1785431480.131333,
                     "finalResponse": {
                       "parts": [
                         {
@@ -1489,7 +1489,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1244266,
+                    "creationTimestamp": 1785431480.131333,
                     "finalResponse": {
                       "parts": [
                         {
@@ -1622,7 +1622,7 @@
               "trace": [
                 {
                   "actual": {
-                    "creationTimestamp": 1785423818.1244266,
+                    "creationTimestamp": 1785431480.131333,
                     "finalResponse": {
                       "parts": [
                         {
@@ -1749,7 +1749,7 @@
       "failures": [
         {
           "caseId": "validation_regress",
-          "confidence": "medium",
+          "confidence": "high",
           "evidence": [
             "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
           ],
@@ -1781,35 +1781,40 @@
         "metricCalls": 3,
         "modelCalls": 3,
         "name": "baseline_train",
-        "tokenUsage": {}
+        "tokenUsage": {},
+        "upperBound": false
       },
       {
         "costUsd": 0.0,
         "metricCalls": 3,
         "modelCalls": 3,
         "name": "baseline_validation",
-        "tokenUsage": {}
+        "tokenUsage": {},
+        "upperBound": false
       },
       {
         "costUsd": 0.0,
         "metricCalls": 0,
         "modelCalls": 0,
         "name": "candidate_generation.deterministic",
-        "tokenUsage": {}
+        "tokenUsage": {},
+        "upperBound": false
       },
       {
         "costUsd": 0.0,
         "metricCalls": 3,
         "modelCalls": 3,
         "name": "candidate_train",
-        "tokenUsage": {}
+        "tokenUsage": {},
+        "upperBound": false
       },
       {
         "costUsd": 0.0,
         "metricCalls": 3,
         "modelCalls": 3,
         "name": "candidate_validation",
-        "tokenUsage": {}
+        "tokenUsage": {},
+        "upperBound": false
       }
     ],
     "totalCostUsd": 0.0
@@ -1820,7 +1825,7 @@
         {
           "baselineAttribution": {
             "caseId": "train_improve_alpha",
-            "confidence": "medium",
+            "confidence": "high",
             "evidence": [
               "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
             ],
@@ -1857,7 +1862,7 @@
         {
           "baselineAttribution": {
             "caseId": "train_improve_beta",
-            "confidence": "medium",
+            "confidence": "high",
             "evidence": [
               "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
             ],
@@ -1926,7 +1931,7 @@
         {
           "baselineAttribution": {
             "caseId": "validation_improve",
-            "confidence": "medium",
+            "confidence": "high",
             "evidence": [
               "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
             ],
@@ -1966,7 +1971,7 @@
           "baselineScore": 1.0,
           "candidateAttribution": {
             "caseId": "validation_regress",
-            "confidence": "medium",
+            "confidence": "high",
             "evidence": [
               "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
             ],
@@ -2028,14 +2033,14 @@
       "split": "validation"
     }
   },
-  "durationSeconds": 0.2190000000045984,
+  "durationSeconds": 0.3899999999994179,
   "errors": [],
   "failureAttribution": {
     "train": {
       "failures": [
         {
           "caseId": "train_improve_alpha",
-          "confidence": "medium",
+          "confidence": "high",
           "evidence": [
             "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
           ],
@@ -2051,7 +2056,7 @@
         },
         {
           "caseId": "train_improve_beta",
-          "confidence": "medium",
+          "confidence": "high",
           "evidence": [
             "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
           ],
@@ -2079,7 +2084,7 @@
       "failures": [
         {
           "caseId": "validation_improve",
-          "confidence": "medium",
+          "confidence": "high",
           "evidence": [
             "{\"metric\": \"final_response_avg_score\", \"score\": 0.0, \"threshold\": 1.0}"
           ],
@@ -2104,7 +2109,7 @@
       }
     }
   },
-  "finishedAt": "2026-07-30T15:03:38.207789+00:00",
+  "finishedAt": "2026-07-30T17:11:20.215369+00:00",
   "gateDecision": {
     "accepted": false,
     "checks": [
@@ -2169,26 +2174,26 @@
       {
         "code": "DURATION_BUDGET",
         "message": "Gate-observed duration stays within budget.",
-        "observed": 0.14100000000325963,
+        "observed": 0.31199999999807915,
         "passed": true,
         "threshold": 180.0
       },
       {
         "code": "OVERFIT_GUARD",
-        "message": "Train-only improvement is rejected as overfitting.",
+        "message": "Training improvement with held-out regression is rejected as overfitting.",
         "observed": {
           "trainScoreDelta": 0.6666666666666667,
+          "validationPassRateDelta": 0.0,
           "validationScoreDelta": 0.0
         },
-        "passed": false,
-        "threshold": "train improvement requires held-out validation thresholds"
+        "passed": true,
+        "threshold": "train improvement cannot accompany held-out validation regression"
       }
     ],
     "decision": "REJECT",
     "reasons": [
       "VALIDATION_SCORE_DELTA_BELOW_MINIMUM",
-      "NEW_HARD_FAIL_BUDGET_EXCEEDED",
-      "OVERFIT_TRAIN_UP_VALIDATION_DOWN"
+      "NEW_HARD_FAIL_BUDGET_EXCEEDED"
     ]
   },
   "inputs": {
@@ -2199,8 +2204,8 @@
       "sdk": "1.1.14"
     },
     "hashes": {
-      "config": "4f1210691dcdd12c1d97a9c73e30920a39dc27c4704ec345c94717728c78637c",
-      "effectiveConfig": "c4525545639ffa945a68c8b601b54cd3328f70d435b2dc147807f380f70f03b0",
+      "config": "fef5828244ea4f0058084dc427d5c42f60ffa004ee3e3ac38bee94ba08f0667e",
+      "effectiveConfig": "69cbd345d2e3868ab5baf39f73901fa51e137a59289bdebf6e10d31086d997e1",
       "train": "db8df56423d916afa929a2fc1a6f7245d8a1f719e87ac292f88f346d1cb81789",
       "validation": "499d3bde9cdc70cc4871d425d0dfee83ed30a67d35da15a4eb87cc9549583f84"
     },
@@ -2238,7 +2243,8 @@
           "metricCalls": 0,
           "modelCalls": 0,
           "name": "deterministic",
-          "tokenUsage": {}
+          "tokenUsage": {},
+          "upperBound": false
         }
       ],
       "durationSeconds": 0.0,
@@ -2286,7 +2292,7 @@
   },
   "reproducibility": {
     "command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --config examples/optimization/eval_optimize_loop/optimizer.json --train examples/optimization/eval_optimize_loop/train.evalset.json --validation examples/optimization/eval_optimize_loop/val.evalset.json --run-id sample-output-v1-replay --no-apply-candidate",
-    "gitCommit": "ceb6ff81a7a499689ddef85f0d0c997d2e54a505",
+    "gitCommit": "858b196edcfb7d10b8e7283625177ad72fbaf8f4",
     "gitDirty": false,
     "reason": null,
     "reproducible": true
@@ -2304,6 +2310,6 @@
     "requested": false
   },
   "stage": "complete",
-  "startedAt": "2026-07-30T15:03:37.984886+00:00",
+  "startedAt": "2026-07-30T17:11:19.833935+00:00",
   "status": "REJECT"
 }
