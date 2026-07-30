@@ -137,6 +137,11 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 | `dev`            | Development (lint/format/test)| `pip install "trpc-agent-py[dev]"`            |
 | `all`            | All optional dependencies     | `pip install "trpc-agent-py[all]"`            |
 
+The `tool-safety` extra intentionally keeps `tree-sitter` and
+`tree-sitter-bash` on the validated 0.25 minor-version pair. This is a native
+parser compatibility boundary; upgrade both only after the Bash scanner test
+suite passes with the newer ABI.
+
 ---
 
 ## Configuration

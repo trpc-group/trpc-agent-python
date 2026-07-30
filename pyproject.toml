@@ -59,6 +59,8 @@ dependencies = [
 
 [project.optional-dependencies]
 tool-safety = [
+    # Keep the native parser pair on the validated 0.25 ABI. tree-sitter 0.26
+    # can crash the current tree-sitter-bash 0.25 parser on larger Bash inputs.
     "tree-sitter>=0.25,<0.26",
     "tree-sitter-bash>=0.25,<0.26",
 ]
@@ -125,6 +127,7 @@ langchain_tool = [
 dev = [
     "protobuf>=5.29.5",
     "numpy>=2.2.5",
+    # Match the validated tool-safety native parser ABI above.
     "tree-sitter>=0.25,<0.26",
     "tree-sitter-bash>=0.25,<0.26",
     "pytest",
@@ -143,6 +146,7 @@ dev = [
 all = [
     "protobuf>=5.29.5",
     "numpy>=2.2.5",
+    # Match the validated tool-safety native parser ABI above.
     "tree-sitter>=0.25,<0.26",
     "tree-sitter-bash>=0.25,<0.26",
     "langchain_community>=0.3.27",

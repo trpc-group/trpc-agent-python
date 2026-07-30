@@ -17,6 +17,8 @@ from typing import Iterable
 import pytest
 import yaml
 
+from trpc_agent_sdk.tools.safety._bash_analyzer import BashParserCompatibilityError
+from trpc_agent_sdk.tools.safety._bash_analyzer import _require_supported_tree_sitter
 from trpc_agent_sdk.tools.safety import RiskCategory
 from trpc_agent_sdk.tools.safety import RiskLevel
 from trpc_agent_sdk.tools.safety import SafetyDecision
@@ -86,6 +88,31 @@ def test_missing_bash_parser_dependency_fails_closed_with_install_hint(monkeypat
 
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert report.analysis_complete is False
+    assert report.analysis_status.value == "internal_error"
+    assert report.rule_id == "PARSE-001"
+    assert "trpc-agent-py[tool-safety]" in report.findings[0].evidence
+
+
+def test_bash_parser_dependency_version_contract():
+    _require_supported_tree_sitter("0.25.0", "0.25.99")
+
+    with pytest.raises(BashParserCompatibilityError):
+        _require_supported_tree_sitter("0.26.0", "0.25.1")
+    with pytest.raises(BashParserCompatibilityError):
+        _require_supported_tree_sitter("0.25.2", "0.26.0")
+
+
+def test_unsupported_bash_parser_dependency_fails_closed(monkeypatch):
+    from trpc_agent_sdk.tools.safety import _scanner
+
+    def incompatible(_content):
+        raise BashParserCompatibilityError("unsupported tree-sitter version")
+
+    monkeypatch.setattr(_scanner, "analyze_bash", incompatible)
+
+    report = _scan("echo hello", ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert report.analysis_status.value == "internal_error"
     assert report.rule_id == "PARSE-001"
     assert "trpc-agent-py[tool-safety]" in report.findings[0].evidence

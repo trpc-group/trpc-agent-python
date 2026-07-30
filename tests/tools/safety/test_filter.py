@@ -15,6 +15,7 @@ from mcp.types import Tool as McpBaseTool
 from typing_extensions import override
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.tools import BaseTool
 from trpc_agent_sdk.tools import BashTool
 from trpc_agent_sdk.tools import MCPTool
@@ -65,6 +66,23 @@ class FailingTool(CountingTool):
         del tool_context, args
         self.calls += 1
         raise RuntimeError("handler failed")
+
+
+class RequestRecordingFilter(BaseFilter):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "request_recording"
+        self.before_requests: list[dict[str, Any]] = []
+        self.after_requests: list[dict[str, Any]] = []
+
+    async def _before(self, ctx, req, rsp):
+        del ctx, rsp
+        self.before_requests.append(dict(req))
+
+    async def _after(self, ctx, req, rsp):
+        del ctx, rsp
+        self.after_requests.append(dict(req))
 
 
 @pytest.fixture
@@ -187,6 +205,7 @@ limits:
 @pytest.mark.asyncio
 async def test_default_timeout_is_scanned_and_passed_to_handler(tool_context):
     tool = CountingTool()
+    recorder = RequestRecordingFilter()
     tool.add_one_filter(
         ToolSafetyFilter(
             SafetyScanner(),
@@ -195,11 +214,27 @@ async def test_default_timeout_is_scanned_and_passed_to_handler(tool_context):
             timeout_field="timeout",
             default_timeout_seconds=10,
         ))
+    tool.add_one_filter(recorder)
+    args = {"command": "echo ok"}
 
-    await tool.run_async(tool_context=tool_context, args={"command": "echo ok"})
+    await tool.run_async(tool_context=tool_context, args=args)
+    await tool.run_async(tool_context=tool_context, args=args)
 
-    assert tool.calls == 1
+    assert tool.calls == 2
+    assert args == {"command": "echo ok"}
+    assert tool.last_args is not args
     assert tool.last_args == {"command": "echo ok", "timeout": 10}
+    assert recorder.before_requests == [
+        {
+            "command": "echo ok",
+            "timeout": 10
+        },
+        {
+            "command": "echo ok",
+            "timeout": 10
+        },
+    ]
+    assert recorder.after_requests == recorder.before_requests
 
 
 @pytest.mark.asyncio

@@ -179,10 +179,14 @@ class BaseTool(ToolABC, FilterRunner):
         from trpc_agent_sdk.agents import ToolCallbackFilter
         extra_filters = [ToolCallbackFilter(before_tool_callback, after_tool_callback)]
 
+        # Filters may enrich arguments for this invocation. Keep those changes
+        # visible to downstream filters and the handler without mutating the
+        # mapping owned by the caller.
+        invocation_args = dict(args)
         token = set_tool_var(self)
-        handler = partial(self._run_async_impl, tool_context=tool_context, args=args)
+        handler = partial(self._run_async_impl, tool_context=tool_context, args=invocation_args)
         try:
-            return await self._run_filters(agent_context, args, handler, extra_filters)  # type: ignore
+            return await self._run_filters(agent_context, invocation_args, handler, extra_filters)  # type: ignore
         finally:
             reset_tool_var(token)
 

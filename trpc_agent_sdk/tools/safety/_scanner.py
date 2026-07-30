@@ -19,6 +19,7 @@ from typing import Iterable
 from urllib.parse import urlparse
 
 from ._bash_analyzer import analyze_bash
+from ._bash_analyzer import BashParserCompatibilityError
 from ._bash_analyzer import extract_shell_command
 from ._decision import aggregate_report
 from ._ir import AnalysisResult
@@ -886,6 +887,14 @@ class SafetyScanner:
         findings: list[SafetyFinding] = []
         try:
             analysis = analyze_bash(request.content)
+        except BashParserCompatibilityError:
+            findings.append(
+                self._analysis_failure("bash parser dependency version unsupported; install "
+                                       "trpc-agent-py[tool-safety]"))
+            return AnalysisResult(
+                status=AnalysisStatus.INTERNAL_ERROR,
+                findings=findings,
+            )
         except ModuleNotFoundError as ex:
             if ex.name in {"tree_sitter", "tree_sitter_bash"}:
                 evidence = ("bash parser dependency unavailable; install "

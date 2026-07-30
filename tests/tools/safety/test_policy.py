@@ -281,3 +281,24 @@ def test_unmatched_relaxed_override_does_not_mark_report_as_relaxed(tmp_path):
 
     assert report.decision == SafetyDecision.ALLOW
     assert report.policy_relaxed is False
+
+
+def test_multiple_findings_for_relaxed_rule_mark_report_as_relaxed(tmp_path):
+    report = _scanner_from_yaml(
+        tmp_path,
+        "commands:\n"
+        "  allowed: [rm]\n"
+        "rule_overrides:\n"
+        "  FILE-002:\n"
+        "    action: allow\n",
+    ).scan(
+        SafetyScanRequest(
+            content="rm -rf build\nrm -rf dist",
+            language=ScriptLanguage.BASH,
+            cwd="/tmp/tool-safety-workspace",
+        ))
+
+    matching = [finding for finding in report.findings if finding.rule_id == "FILE-002"]
+    assert len(matching) == 2
+    assert report.decision == SafetyDecision.ALLOW
+    assert report.policy_relaxed is True

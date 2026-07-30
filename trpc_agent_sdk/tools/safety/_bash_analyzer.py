@@ -8,10 +8,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as distribution_version
 import shlex
 from threading import local
 
 _PARSER_STATE = local()
+_SUPPORTED_TREE_SITTER_MINOR = (0, 25)
+
+
+class BashParserCompatibilityError(RuntimeError):
+    """The installed tree-sitter ABI is unsupported by the Bash grammar."""
+
+
+def _require_supported_tree_sitter(
+    tree_sitter_version: str | None = None,
+    tree_sitter_bash_version: str | None = None,
+) -> None:
+    """Reject unvalidated native parser combinations before parsing."""
+
+    parser_versions = (
+        ("tree-sitter", "tree_sitter", tree_sitter_version),
+        ("tree-sitter-bash", "tree_sitter_bash", tree_sitter_bash_version),
+    )
+    for distribution, module, installed_version in parser_versions:
+        if installed_version is None:
+            try:
+                installed_version = distribution_version(distribution)
+            except PackageNotFoundError as ex:
+                raise ModuleNotFoundError(
+                    f"No module named {module!r}",
+                    name=module,
+                ) from ex
+        try:
+            major, minor = (int(value) for value in installed_version.split(".", 2)[:2])
+        except (TypeError, ValueError) as ex:
+            raise BashParserCompatibilityError("unsupported Bash parser dependency version") from ex
+        if (major, minor) != _SUPPORTED_TREE_SITTER_MINOR:
+            raise BashParserCompatibilityError("unsupported Bash parser dependency version")
 
 
 @dataclass(frozen=True)
@@ -108,6 +142,7 @@ def _parser():
     parser = getattr(_PARSER_STATE, "parser", None)
     if parser is not None:
         return parser
+    _require_supported_tree_sitter()
     from tree_sitter import Language
     from tree_sitter import Parser
     import tree_sitter_bash

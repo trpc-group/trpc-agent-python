@@ -16,6 +16,7 @@ from ._models import SafetyDecision
 from ._models import SafetyFinding
 from ._models import SafetyReport
 from ._policy import SafetyPolicy
+from ._policy import RuleOverride
 from ._rules import NON_RELAXABLE_REVIEW_RULE_IDS
 from ._rules import RULE_SPECS
 
@@ -31,6 +32,17 @@ _ACTION_ORDER = {
     SafetyDecision.NEEDS_HUMAN_REVIEW: 1,
     SafetyDecision.DENY: 2,
 }
+
+
+def _override_relaxes_rule(rule_id: str, override: RuleOverride) -> bool:
+    """Return whether an override weakens its built-in rule."""
+
+    if not override.enabled:
+        return True
+    if override.action is None:
+        return False
+    spec = RULE_SPECS.get(rule_id)
+    return spec is not None and _ACTION_ORDER[override.action] < _ACTION_ORDER[spec.action]
 
 
 def aggregate_report(
@@ -115,9 +127,7 @@ def aggregate_report(
         evidence = "analysis complete; no active policy finding"
         recommendation = "Execute with least privilege and runtime limits."
     matched_rule_ids = {finding.rule_id for finding in ordered}
-    relaxed = any(rule_id in matched_rule_ids and (
-        not override.enabled or (override.action is not None and rule_id in RULE_SPECS
-                                 and _ACTION_ORDER[override.action] < _ACTION_ORDER[RULE_SPECS[rule_id].action]))
+    relaxed = any(rule_id in matched_rule_ids and _override_relaxes_rule(rule_id, override)
                   for rule_id, override in policy.rule_overrides.items())
     return SafetyReport(
         decision=decision,
