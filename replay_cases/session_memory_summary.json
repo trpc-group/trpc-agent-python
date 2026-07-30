@@ -1,0 +1,12 @@
+[
+  {"name":"single_turn","operations":[{"op":"event","id":"e1","author":"user","text":"hello"},{"op":"event","id":"e2","author":"agent","text":"hi"}]},
+  {"name":"multi_turn","operations":[{"op":"event","id":"e1","author":"user","text":"one"},{"op":"event","id":"e2","author":"agent","text":"first"},{"op":"event","id":"e3","author":"user","text":"two"},{"op":"event","id":"e4","author":"agent","text":"second"}]},
+  {"name":"tool_call","operations":[{"op":"tool_call","id":"e1","name":"weather","args":{"city":"Shenzhen"}},{"op":"tool_response","id":"e2","name":"weather","response":{"temperature":28}}]},
+  {"name":"state_overwrite","operations":[{"op":"state","id":"e1","values":{"language":"zh","theme":"light"}},{"op":"state","id":"e2","values":{"theme":"dark"}}]},
+  {"name":"memory_preference","operations":[{"op":"event","id":"e1","author":"user","text":"I prefer jasmine tea"},{"op":"memory","query":"jasmine"}]},
+  {"name":"memory_fact","operations":[{"op":"event","id":"e1","author":"user","text":"My office is in Shenzhen"},{"op":"memory","query":"Shenzhen"}]},
+  {"name":"summary_create","operations":[{"op":"event","id":"e1","author":"user","text":"plan a release"},{"op":"summary","id":"sum-1","version":1,"text":"User plans a release."}]},
+  {"name":"summary_update","operations":[{"op":"summary","id":"sum-1","version":1,"text":"Initial plan."},{"op":"summary","id":"sum-2","version":2,"text":"Plan approved."}]},
+  {"name":"summary_truncation","operations":[{"op":"event","id":"e1","author":"user","text":"old context"},{"op":"summary","id":"sum-1","version":1,"text":"Old context retained."},{"op":"truncate","keep":0},{"op":"event","id":"e2","author":"user","text":"new context"}]},
+  {"name":"duplicate_recovery","operations":[{"op":"event","id":"e1","author":"user","text":"write once"},{"op":"fail"},{"op":"event","id":"e1","author":"user","text":"write once"},{"op":"state","id":"e2","values":{"recovered":true}}]}
+]

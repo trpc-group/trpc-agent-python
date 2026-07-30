@@ -1,0 +1,16 @@
+{
+  "mode": "lightweight",
+  "backends": ["in_memory", "sqlite"],
+  "cases": [
+    {"case":"single_turn","session_id":"single_turn","differences":[]},
+    {"case":"multi_turn","session_id":"multi_turn","differences":[]},
+    {"case":"tool_call","session_id":"tool_call","differences":[]},
+    {"case":"state_overwrite","session_id":"state_overwrite","differences":[]},
+    {"case":"memory_preference","session_id":"memory_preference","differences":[]},
+    {"case":"memory_fact","session_id":"memory_fact","differences":[]},
+    {"case":"summary_create","session_id":"summary_create","differences":[]},
+    {"case":"summary_update","session_id":"summary_update","differences":[]},
+    {"case":"summary_truncation","session_id":"summary_truncation","differences":[]},
+    {"case":"duplicate_recovery","session_id":"duplicate_recovery","differences":[]}
+  ]
+}
