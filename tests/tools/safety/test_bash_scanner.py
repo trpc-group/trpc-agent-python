@@ -55,6 +55,15 @@ def test_forbidden_path_access_detected() -> None:
     assert "SH030" in _ids("cat ~/.ssh/id_rsa\n")
 
 
+def test_multiple_forbidden_paths_reported_in_one_hit() -> None:
+    """A line matching several forbidden paths yields one SH030 naming them all."""
+    hits = [h for h in scan_bash("cat ~/.ssh/id_rsa\n", default_policy()) if h.rule_id == "SH030"]
+    assert len(hits) == 1
+    # Both ``~/.ssh`` and ``id_rsa`` are forbidden fragments on this line.
+    assert "~/.ssh" in hits[0].recommendation
+    assert "id_rsa" in hits[0].recommendation
+
+
 def test_safe_shell_has_no_structural_hits() -> None:
     """A benign listing command yields no structural findings."""
     assert scan_bash("ls -la /tmp\n", default_policy()) == []

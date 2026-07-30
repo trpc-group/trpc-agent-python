@@ -92,12 +92,18 @@ class _BashSafetyAnalyzer:
                           "Destination is not on the allowed_domains list; blocked.")
 
     def _check_forbidden_path(self, line: str, lineno: int) -> None:
-        for forbidden in self._policy.forbidden_paths:
-            if forbidden.lower() in line.lower():
-                self._add("SH030", RiskCategory.SENSITIVE_INFO_LEAK, RiskLevel.CRITICAL,
-                          "Access to a forbidden/sensitive path", line, lineno,
-                          f"Line references forbidden path '{forbidden}'.")
-                return
+        lowered = line.lower()
+        matched = [f for f in self._policy.forbidden_paths if f.lower() in lowered]
+        if not matched:
+            return
+        # A single line can reference several forbidden paths (e.g.
+        # ``cat ~/.ssh/id_rsa`` hits both ``~/.ssh`` and ``id_rsa``). Emit one
+        # SH030 hit that names every match: distinct hits would share the same
+        # ``(rule_id, line)`` key and be collapsed by the scanner's dedupe, so
+        # listing them here is what keeps the audit trail complete.
+        joined = ", ".join(f"'{f}'" for f in matched)
+        self._add("SH030", RiskCategory.SENSITIVE_INFO_LEAK, RiskLevel.CRITICAL, "Access to a forbidden/sensitive path",
+                  line, lineno, f"Line references forbidden path(s): {joined}.")
 
     # -- token helpers ---------------------------------------------------------
     @staticmethod
