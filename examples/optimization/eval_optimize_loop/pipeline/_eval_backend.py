@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import Protocol, runtime_checkable
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Protocol, runtime_checkable
 
 from trpc_agent_sdk.evaluation._agent_evaluator import AgentEvaluator
 from trpc_agent_sdk.evaluation._eval_config import EvalConfig
 from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
 from trpc_agent_sdk.evaluation._eval_result import EvaluateResult
+from trpc_agent_sdk.evaluation._target_prompt import TargetPrompt
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 
@@ -116,6 +118,31 @@ class LiveBackend:
         if raw is None:
             raise RuntimeError(f"评测失败 ({eval_set_path}): 无返回结果")
         return raw, _build_report(raw)
+
+
+@asynccontextmanager
+async def applied_prompts(
+    target_prompt: TargetPrompt,
+    prompts: dict[str, str],
+) -> AsyncIterator[None]:
+    """写入候选 prompt, 退出时还原 baseline. 异常路径也保证还原.
+
+    Why this exists: ``AgentOptimizer.optimize(update_source=False)`` 在 ``finally``
+    把源文件回滚成 baseline (optimization.md §3.3 FAQ)。Stage 4 若不显式写回候选,
+    评的就是 baseline 而非候选。
+
+    选型理由: 使用 SDK 主 API ``read_all`` / ``write_all``
+    (``trpc_agent_sdk/evaluation/_target_prompt.py:128`` / ``:135``) —— 两者均为
+    async, 覆盖全部已注册字段 (path-backed 与 callback-backed), 且 ``write_all``
+    自带 tmp + os.replace 原子写与多字段部分失败回滚。不使用单字段
+    ``read`` 逐个读写, 因为那样无法获得跨字段的原子性。
+    """
+    baseline = await target_prompt.read_all()
+    try:
+        await target_prompt.write_all(prompts)
+        yield
+    finally:
+        await target_prompt.write_all(baseline)
 
 
 def _build_report(raw: EvaluateResult) -> EvalSetReport:
