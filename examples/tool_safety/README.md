@@ -61,18 +61,18 @@ tRPC-Agent 的 Tool、MCP Tool、Skill 和 CodeExecutor 能让 Agent 执行脚�
 | 交付物 | 状态 | 路径 |
 | --- | --- | --- |
 | 安全检查器代码 | 已完成 | `trpc_agent_sdk/tools/safety/` |
-| CLI 工具 | 已完成 | `scripts/tool_safety_check.py` |
-| Manifest 验收工具 | 已完成 | `scripts/tool_safety_manifest_report.py` |
+| CLI 工具 | 已完成 | `examples/tool_safety/tool_safety_check.py` |
+| Manifest 验收工具 | 已完成 | `examples/tool_safety/tool_safety_manifest_report.py` |
 | 策略示例 | 已完成 | `examples/tool_safety/tool_safety_policy.yaml` |
-| 40 条公开样例 | 已完成 | `examples/tool_safety/samples/` |
-| 样例 manifest | 已完成 | `examples/tool_safety/samples/manifest.yaml` |
+| 40 条边界测试样例 | 已完成 | `tests/tools/safety/samples/` |
+| 样例 manifest | 已完成 | `tests/tools/safety/samples/manifest.yaml` |
 | 报告示例 | 已完成 | `examples/tool_safety/tool_safety_report.json` |
 | 40 条样例汇总报告 | 已完成 | `examples/tool_safety/all_reports.json` |
 | 审计日志示例 | 已完成 | `examples/tool_safety/tool_safety_audit.jsonl` |
 | 自定义策略和规则示例 | 已完成 | `examples/tool_safety/custom_policy_example.py` |
 | 自动化测试 | 已完成 | `tests/tools/safety/` |
 | 设计说明 | 已完成 | `examples/tool_safety/DESIGN.md` |
-| 真实 Agent 示例 | 已完成 | `examples/tool_safety/real_agent_demo/` |
+| 真实 Agent 示例 | 已完成 | `examples/tool_safety/` |
 
 ## 架构
 
@@ -113,8 +113,8 @@ Tool / Skill / MCP Tool / CodeExecutor
 | `_telemetry.py` | 写入 OpenTelemetry 兼容 attributes |
 | `_wrapper.py` | 独立 wrapper，执行前扫描、审计、埋点和拦截 |
 | `_filter.py` | tRPC-Agent Filter 接入示例 |
-| `scripts/tool_safety_check.py` | 命令行扫描工具 |
-| `scripts/tool_safety_manifest_report.py` | Manifest 驱动验收和 deterministic 报告生成工具 |
+| `tool_safety_check.py` | 命令行扫描工具 |
+| `tool_safety_manifest_report.py` | Manifest 驱动验收和 deterministic 报告生成工具 |
 
 ## 规则体系
 
@@ -253,8 +253,8 @@ rm -rf /
 从仓库根目录执行：
 
 ```bash
-python3 scripts/tool_safety_check.py \
-  --script examples/tool_safety/samples/bash_pipe.sh \
+python3 examples/tool_safety/tool_safety_check.py \
+  --script tests/tools/safety/samples/bash_pipe.sh \
   --language bash \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --tool-name example_bash_tool \
@@ -270,7 +270,7 @@ export TRPC_AGENT_API_KEY=...
 export TRPC_AGENT_BASE_URL=...
 export TRPC_AGENT_MODEL_NAME=...
 
-cd examples/tool_safety/real_agent_demo
+cd examples/tool_safety
 python3 run_agent.py
 python3 run_agent.py --case tool_deny
 python3 run_agent.py --case code_review --block-on-review
@@ -287,13 +287,13 @@ python3 run_agent.py --case mcp_deny
 CI smoke test 使用 fake model 走同一套 `Runner`、`LlmAgent`、Tool、Skill、
 MCP Tool 和 CodeExecutor 边界，不依赖真实模型凭据；真实模型运行仍可使用
 上面的命令手动验证。已固化一份 `gpt-5.4` 真实模型运行输出：
-`examples/tool_safety/real_agent_demo/REAL_MODEL_OUTPUT.md`。
+`examples/tool_safety/REAL_MODEL_OUTPUT.md`。
 
 扫描 Python 脚本：
 
 ```bash
-python3 scripts/tool_safety_check.py \
-  --script examples/tool_safety/samples/network_whitelist.py \
+python3 examples/tool_safety/tool_safety_check.py \
+  --script tests/tools/safety/samples/network_whitelist.py \
   --language python \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --tool-name python_tool
@@ -302,8 +302,8 @@ python3 scripts/tool_safety_check.py \
 扫描执行参数：
 
 ```bash
-python3 scripts/tool_safety_check.py \
-  --script examples/tool_safety/samples/safe_python.py \
+python3 examples/tool_safety/tool_safety_check.py \
+  --script tests/tools/safety/samples/safe_python.py \
   --language python \
   --command-args "python3 safe_python.py" \
   --policy examples/tool_safety/tool_safety_policy.yaml
@@ -312,7 +312,7 @@ python3 scripts/tool_safety_check.py \
 从 stdin 扫描脚本内容：
 
 ```bash
-printf 'rm -rf /\n' | python3 scripts/tool_safety_check.py \
+printf 'rm -rf /\n' | python3 examples/tool_safety/tool_safety_check.py \
   --script - \
   --language bash \
   --tool-name stdin_bash_tool
@@ -321,8 +321,8 @@ printf 'rm -rf /\n' | python3 scripts/tool_safety_check.py \
 批量扫描样例目录并输出汇总报告：
 
 ```bash
-python3 scripts/tool_safety_check.py \
-  --samples examples/tool_safety/samples \
+python3 examples/tool_safety/tool_safety_check.py \
+  --samples tests/tools/safety/samples \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --output examples/tool_safety/all_reports.json
 ```
@@ -572,6 +572,10 @@ if not result.is_continue:
 - Filter 执行前拦截和审计日志。
 - CLI 输出和返回码。
 
+边界脚本仅作为 scanner 的输入 fixture，统一放在
+`tests/tools/safety/samples/`，测试会根据 manifest 校验扫描结果和 JSONL 审计事件，
+不会直接执行这些脚本。包含 `rm -rf /` 的样例只验证 `deny` 决策和执行边界未被调用。
+
 ### 扫描 40 个公开样例
 
 仓库中已提供一份 deterministic 汇总报告：
@@ -583,7 +587,7 @@ examples/tool_safety/all_reports.json
 推荐使用 manifest 验收脚本重新生成：
 
 ```bash
-.venv/bin/python scripts/tool_safety_manifest_report.py \
+.venv/bin/python examples/tool_safety/tool_safety_manifest_report.py \
   --strict-policy \
   --output examples/tool_safety/all_reports.json
 ```
@@ -598,13 +602,13 @@ examples/tool_safety/all_reports.json
 也可以使用通用 CLI 扫描目录：
 
 ```bash
-.venv/bin/python scripts/tool_safety_check.py \
-  --samples examples/tool_safety/samples \
+.venv/bin/python examples/tool_safety/tool_safety_check.py \
+  --samples tests/tools/safety/samples \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --output examples/tool_safety/all_reports.json
 ```
 
-样例期望决策和 required rule ids 由 `examples/tool_safety/samples/manifest.yaml` 维护。
+样例期望决策和 required rule ids 由 `tests/tools/safety/samples/manifest.yaml` 维护。
 
 新增高价值绕过样例包括：
 
@@ -639,8 +643,8 @@ PY
 ### 字段验证
 
 ```bash
-.venv/bin/python scripts/tool_safety_check.py \
-  --script examples/tool_safety/samples/danger_delete.sh \
+.venv/bin/python examples/tool_safety/tool_safety_check.py \
+  --script tests/tools/safety/samples/danger_delete.sh \
   --language bash \
   --policy examples/tool_safety/tool_safety_policy.yaml \
   --tool-name check \
@@ -772,73 +776,33 @@ trpc_agent_sdk/tools/safety/
 ├── _types.py
 └── _wrapper.py
 
-scripts/
-├── tool_safety_check.py
-└── tool_safety_manifest_report.py
-
 examples/tool_safety/
 ├── README.md
 ├── custom_policy_example.py
+├── tool_safety_check.py
+├── tool_safety_manifest_report.py
 ├── tool_safety_policy.yaml
 ├── tool_safety_report.json
 ├── tool_safety_audit.jsonl
 ├── all_reports.json
-├── real_agent_demo/
-│   ├── README.md
-│   ├── REAL_MODEL_OUTPUT.md
-│   ├── run_agent.py
-│   ├── mcp_server.py
-│   ├── agent/
-│   └── skills/
-└── samples/
-    ├── aiohttp_non_whitelist.py
-    ├── apt_install.sh
-    ├── background_process.sh
-    ├── base64_exec_review.sh
-    ├── bash_inline_command.sh
-    ├── bash_pipe.sh
-    ├── command_substitution.sh
-    ├── credential_file_key.py
-    ├── curl_env_upload.sh
-    ├── danger_delete.sh
-    ├── dependency_install.sh
-    ├── dynamic_secret_path.py
-    ├── dynamic_url_join.py
-    ├── find_delete_review.sh
-    ├── fork_bomb.sh
-    ├── human_review.py
-    ├── infinite_loop.py
-    ├── long_sleep.sh
-    ├── manifest.yaml
-    ├── network_non_whitelist.py
-    ├── network_whitelist.py
-    ├── npm_install.sh
-    ├── os_getenv_token_exfiltration.py
-    ├── os_system.py
-    ├── pip_module_install.py
-    ├── private_key_literal.py
-    ├── privilege_escalation.sh
-    ├── python_inline_command.sh
-    ├── read_env.py
-    ├── read_secret.py
-    ├── safe_bash.sh
-    ├── safe_file_read.py
-    ├── safe_python.py
-    ├── sensitive_output.py
-    ├── shell_injection.py
-    ├── socket_access.py
-    ├── subprocess_call.py
-    ├── subprocess_danger_delete.py
-    ├── system_overwrite.sh
-    ├── unknown_network_dynamic.py
-    └── xargs_rm_review.sh
+├── run_agent.py
+├── mcp_server.py
+├── REAL_MODEL_OUTPUT.md
+├── agent/
+└── skills/
+
+tests/tools/safety/samples/
+├── manifest.yaml
+└── 40 个边界测试样例
 
 tests/tools/safety/
+├── test_agent_demo.py
 ├── test_audit.py
 ├── test_cli.py
 ├── test_core_integration.py
 ├── test_examples.py
 ├── test_policy.py
 ├── test_scanner.py
+├── test_telemetry.py
 └── test_wrapper.py
 ```

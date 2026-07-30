@@ -5,7 +5,7 @@ description: Demonstrates command execution through skill_run for Tool Script Sa
 
 # Safety Demo Skill
 
-This skill is used only by `examples/tool_safety/real_agent_demo`.
+This skill is used only by `examples/tool_safety`.
 
 When asked to run a safety scenario, call `skill_run` with:
 
@@ -15,4 +15,3 @@ When asked to run a safety scenario, call `skill_run` with:
 
 The safety filter attached to `skill_run` scans the command before the skill
 workspace executes it.
-

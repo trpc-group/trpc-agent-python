@@ -1,6 +1,6 @@
 # Real Model Output
 
-This transcript summary was produced by `examples/tool_safety/real_agent_demo/run_agent.py`
+This transcript summary was produced by `examples/tool_safety/run_agent.py`
 with a real OpenAI-compatible model endpoint on 2026-07-22. The API key is not
 included here.
 
@@ -125,5 +125,5 @@ Safety: decision=deny blocked=True risk=high rules=NETWORK_NON_WHITELIST_DOMAIN,
 ```
 
 CI runs the same `LlmAgent` wiring with a deterministic fake model in
-`tests/tools/safety/test_real_agent_demo.py`, so the full matrix remains
+`tests/tools/safety/test_agent_demo.py`, so the full matrix remains
 covered without requiring external model credentials.

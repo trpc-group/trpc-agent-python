@@ -4,6 +4,7 @@
 *.lock
 *.log
 examples/*.log
+examples/tool_safety/real_agent_safety_audit.jsonl
 
 trpc-agent-py.egg-info
 
