@@ -1,0 +1,27 @@
+diff --git a/src/downloader.py b/src/downloader.py
+index 1234567..abcdefg 100644
+--- a/src/downloader.py
++++ b/src/downloader.py
+@@ -1,3 +1,23 @@
++import requests
++import sqlite3
++
++
++def download_file(url: str, output_path: str):
++    """Download a file from URL."""
++    resp = requests.get(url)
++    f = open(output_path, "wb")
++    f.write(resp.content)
++    f.close()
++
++
++def query_db(query: str):
++    """Execute a database query."""
++    conn = sqlite3.connect("data.db")
++    cursor = conn.execute(query)
++    result = cursor.fetchall()
++    return result
++
++
+ def process_data():
+     pass

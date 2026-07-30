@@ -1,0 +1,31 @@
+diff --git a/src/auth.py b/src/auth.py
+index 1234567..abcdefg 100644
+--- a/src/auth.py
++++ b/src/auth.py
+@@ -1,5 +1,15 @@
++import subprocess
++
++
++API_KEY = "sk-proj-abc123def456ghi789jkl"
++DATABASE_PASSWORD = "admin123!"
++
++
+ def login(username: str, password: str) -> bool:
+     """Authenticate a user."""
++    cmd = f"echo {username} | grep admin"
++    result = subprocess.run(cmd, shell=True)
++
+     if username == "admin" and password == "admin":
+         return True
+     return False
+diff --git a/src/config.py b/src/config.py
+index 0000000..1111111 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -0,0 +1,6 @@
++import pickle
++
++
++def load_config(path: str):
++    data = pickle.load(open(path, "rb"))
++    return eval(repr(data))

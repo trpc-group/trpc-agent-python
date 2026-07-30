@@ -1,0 +1,12 @@
+diff --git a/src/utils.py b/src/utils.py
+index 1234567..abcdefg 100644
+--- a/src/utils.py
++++ b/src/utils.py
+@@ -10,6 +10,10 @@ def normalize_string(value: str) -> str:
+     """Normalize a string by stripping whitespace and lowercasing."""
+     return value.strip().lower()
+ 
++
++def format_date(date_obj, fmt="%Y-%m-%d"):
++    """Format a date object to string."""
++    return date_obj.strftime(fmt)

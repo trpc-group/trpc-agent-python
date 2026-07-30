@@ -1,0 +1,22 @@
+diff --git a/src/client.py b/src/client.py
+index 1234567..abcdefg 100644
+--- a/src/client.py
++++ b/src/client.py
+@@ -1,3 +1,18 @@
++import requests
++
++
+ class APIClient:
+     """Client for external API."""
+ 
++    BASE_URL = "https://api.example.com"
++    API_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuv"
++
++    def __init__(self):
++        self.api_key = "sk-abc123def456ghi789jklmno"
++        self.password = "SuperSecretPassword123!"
++
++    def request(self, endpoint: str):
++        headers = {"Authorization": f"Bearer {self.API_TOKEN}"}
++        return requests.get(f"{self.BASE_URL}/{endpoint}", headers=headers)
++

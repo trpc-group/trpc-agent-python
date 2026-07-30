@@ -1,0 +1,18 @@
+diff --git a/src/worker.py b/src/worker.py
+index 1234567..abcdefg 100644
+--- a/src/worker.py
++++ b/src/worker.py
+@@ -1,3 +1,13 @@
++import subprocess
++import time
++
++
++def run_heavy_task():
++    """Run a CPU-intensive task that may time out."""
++    # Simulate a long-running command
++    subprocess.run(["sleep", "3600"], timeout=1)
++    time.sleep(999)
++
++
+ def process():
+     pass

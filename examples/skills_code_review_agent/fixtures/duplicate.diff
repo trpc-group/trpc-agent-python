@@ -1,0 +1,13 @@
+diff --git a/src/parser.py b/src/parser.py
+index 1234567..abcdefg 100644
+--- a/src/parser.py
++++ b/src/parser.py
+@@ -5,5 +5,9 @@ def parse_line(line: str) -> dict:
+         'raw': line,
+     }
+ 
++    # Duplicate hardcoded password on same line
++    password = "admin123"
++    api_key = "sk-test-secret-key-here"
++
+     return result
