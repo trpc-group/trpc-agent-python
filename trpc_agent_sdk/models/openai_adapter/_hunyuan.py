@@ -11,7 +11,6 @@ import json
 import re
 from typing import Any
 from typing import List
-from typing import Optional
 
 from trpc_agent_sdk.types import FunctionCall
 
@@ -20,22 +19,24 @@ from ._base import ToolPromptTextFilterMixin
 
 
 class HunyuanHy3PreviewAdapter(ToolPromptTextFilterMixin, OpenAIAdapter):
-    """Provider-specific behavior for the hy3-preview model."""
+    """Provider-specific behavior for the hy3-preview model.
 
-    def __init__(self, model_name: str, base_url: Optional[str] = None):
-        super().__init__(model_name=model_name, base_url=base_url)
-
-    def parse_tool_prompt_function_calls(self, content: str, tool_prompt: Any) -> List[FunctionCall]:
-        function_calls = self._parse_hunyuan_tool_calls(content)
-        if function_calls:
-            return function_calls
-        return tool_prompt.parse_function(content)
+    hy3-preview does not support native OpenAI function calling: tools are
+    injected into the prompt and tool calls are returned as
+    ``<tool_call>NAME<tool_sep>...</tool_call>`` XML which we parse back here.
+    """
 
     def requires_add_tools_to_prompt(self) -> bool:
         return True
 
     def should_filter_reasoning_text(self) -> bool:
         return True
+
+    def parse_tool_prompt_function_calls(self, content: str, tool_prompt: Any) -> List[FunctionCall]:
+        function_calls = self._parse_hunyuan_tool_calls(content)
+        if function_calls:
+            return function_calls
+        return tool_prompt.parse_function(content)
 
     def _parse_hunyuan_tool_calls(self, content: str) -> List[FunctionCall]:
         function_calls = []
@@ -82,3 +83,21 @@ class HunyuanHy3PreviewAdapter(ToolPromptTextFilterMixin, OpenAIAdapter):
             return json.loads(value)
         except json.JSONDecodeError:
             return value
+
+
+class HunyuanHy3Adapter(OpenAIAdapter):
+    """Provider-specific behavior for the Hunyuan hy3 model.
+
+    Unlike hy3-preview, hy3 supports native OpenAI function calling, so it does
+    not use the prompt-injected XML tool-call format and must not require
+    ``add_tools_to_prompt``. It only needs the Hunyuan reasoning quirks: the
+    model's previous reasoning_content must be replayed in the request instead
+    of being stripped, and ``thought_signature`` (a Gemini-only concept) is
+    disabled.
+    """
+
+    def should_preserve_reasoning_content(self) -> bool:
+        return True
+
+    def should_include_thought_signature(self) -> bool:
+        return False

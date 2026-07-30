@@ -118,6 +118,24 @@ class TestAnthropicModelMessageFormatting:
         assert messages[1]["role"] == "assistant"
         assert messages[1]["content"][0]["text"] == "Assistant response"
 
+    def test_format_messages_strips_reasoning_content(self):
+        """Thought parts are omitted from Anthropic request history."""
+        model = AnthropicModel(model_name="claude-3-5-sonnet-20241022", api_key="test-key")
+        thought_part = Part.from_text(text="internal reasoning")
+        thought_part.thought = True
+        request = LlmRequest(contents=[
+            Content(
+                parts=[thought_part, Part.from_text(text="Assistant response")],
+                role="model",
+            ),
+        ])
+
+        messages = model._format_messages(request)
+
+        assert len(messages) == 1
+        assert len(messages[0]["content"]) == 1
+        assert messages[0]["content"][0]["text"] == "Assistant response"
+
     def test_format_function_call(self):
         """Test formatting function call message."""
         model = AnthropicModel(model_name="claude-3-5-sonnet-20241022", api_key="test-key")
@@ -797,8 +815,10 @@ class TestAnthropicModelRetryHooks:
 
     def test_x_should_retry_header_has_priority(self):
         model = self._model()
-        assert model._get_model_retry_info(_AnthropicRetryTestError(400, {"x-should-retry": "true"})).should_retry is True
-        assert model._get_model_retry_info(_AnthropicRetryTestError(500, {"x-should-retry": "false"})).should_retry is False
+        assert model._get_model_retry_info(_AnthropicRetryTestError(400,
+                                                                    {"x-should-retry": "true"})).should_retry is True
+        assert model._get_model_retry_info(_AnthropicRetryTestError(500,
+                                                                    {"x-should-retry": "false"})).should_retry is False
 
     @pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503])
     def test_retryable_status_codes(self, status_code):
@@ -810,7 +830,8 @@ class TestAnthropicModelRetryHooks:
 
     def test_timeout_exception_retried(self):
         request = httpx.Request("GET", "https://example.com")
-        assert self._model()._get_model_retry_info(httpx.TimeoutException("timeout", request=request)).should_retry is True
+        assert self._model()._get_model_retry_info(httpx.TimeoutException("timeout",
+                                                                          request=request)).should_retry is True
 
     def test_non_anthropic_exception_retried(self):
         assert self._model()._get_model_retry_info(ValueError("boom")).should_retry is True

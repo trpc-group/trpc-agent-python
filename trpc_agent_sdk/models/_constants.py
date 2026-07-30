@@ -61,6 +61,9 @@ TOOL_CALLS: str = 'tool_calls'
 TOOL_CALL_ID: str = 'tool_call_id'
 """Tool call ID field name in API responses."""
 
+TOOL_CALL_ARGUMENT_ERRORS: str = "__trpc_agent_sdk_tool_call_argument_errors__"
+"""Internal envelope key for unrecoverable tool-call arguments."""
+
 DELTA: str = 'delta'
 """Delta field name in streaming responses."""
 
