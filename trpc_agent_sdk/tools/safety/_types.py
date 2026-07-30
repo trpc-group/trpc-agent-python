@@ -180,3 +180,15 @@ def aggregate_decision(findings: List[SafetyFinding]) -> Decision:
     if max_level == RiskLevel.MEDIUM:
         return Decision.NEEDS_HUMAN_REVIEW
     return Decision.ALLOW
+
+
+def _scanner_error_finding() -> SafetyFinding:
+    """Return the canonical fail-closed finding for scanner exceptions."""
+    return SafetyFinding(
+        rule_id="SAFETY_SCANNER_ERROR",
+        rule_name="Safety Scanner Error",
+        risk_type=RiskType.SYSTEM_COMMAND,
+        risk_level=RiskLevel.CRITICAL,
+        evidence="Scanner error",
+        recommendation="Scanner failed; execution blocked.",
+    )

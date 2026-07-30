@@ -37,6 +37,28 @@ class _CapturingScanner:
         )
 
 
+class _FailingScanner:
+
+    def scan(self, req):
+        raise RuntimeError("scanner crashed")
+
+
+class _ReviewScanner:
+
+    def scan(self, req):
+        return SafetyReport(
+            tool_name=req.tool_name,
+            decision=Decision.NEEDS_HUMAN_REVIEW,
+            risk_level=RiskLevel.MEDIUM,
+            blocked=False,
+            sanitized=False,
+            duration_ms=1,
+            language=req.language,
+            target=req.target,
+            summary="Review required.",
+        )
+
+
 class TestBashToolOptIn:
 
     def test_default_no_safety_guard(self):
@@ -120,6 +142,88 @@ class TestBashToolOptIn:
         assert "TRPC_SECRET_TOKEN" in scanner.requests[0].env
         assert scanner.requests[0].env["TRPC_SECRET_TOKEN"] == ""
 
+    def test_scanner_error_report_has_finding(self):
+        """BashTool fail-closed audit report includes a matching finding."""
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool
+        tool = BashTool(enable_safety_guard=True, safety_scanner=_FailingScanner())
+        tool._safety_audit = MagicMock()
+        ctx = MagicMock()
+        ctx.session = MagicMock()
+        ctx.branch = "main"
+
+        result = asyncio.run(tool._run_async_impl(
+            tool_context=ctx,
+            args={
+                "command": "echo hello",
+                "timeout": 10
+            },
+        ))
+
+        assert result["success"] is False
+        recorded_report = tool._safety_audit.record.call_args[0][0]
+        assert recorded_report.rule_ids == ["SAFETY_SCANNER_ERROR"]
+        assert [finding.rule_id for finding in recorded_report.findings] == ["SAFETY_SCANNER_ERROR"]
+        assert recorded_report.blocked is True
+
+    def test_review_passes_when_block_on_review_disabled(self):
+        """BashTool audits review findings but executes by default."""
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool
+        tool = BashTool(enable_safety_guard=True, safety_scanner=_ReviewScanner(), block_on_review=False)
+        ctx = MagicMock()
+        ctx.session = MagicMock()
+        ctx.branch = "main"
+
+        result = asyncio.run(tool._run_async_impl(
+            tool_context=ctx,
+            args={
+                "command": "echo hello",
+                "timeout": 10
+            },
+        ))
+
+        assert result["success"] is True
+        assert "hello" in result["stdout"]
+
+    def test_review_blocks_when_block_on_review_enabled(self):
+        """BashTool blocks review findings only when configured to do so."""
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool
+        tool = BashTool(enable_safety_guard=True, safety_scanner=_ReviewScanner(), block_on_review=True)
+        ctx = MagicMock()
+        ctx.session = MagicMock()
+        ctx.branch = "main"
+
+        result = asyncio.run(tool._run_async_impl(
+            tool_context=ctx,
+            args={
+                "command": "echo hello",
+                "timeout": 10
+            },
+        ))
+
+        assert result["success"] is False
+        assert "TOOL_SAFETY_BLOCKED" in result["error"]
+
+    def test_max_output_bytes_exceeding_policy_blocks(self):
+        """Configured output metadata participates in safety resource checks."""
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool
+        policy = PolicyConfig.from_dict({"max_output_bytes": 10})
+        scanner = SafetyScanner(policy)
+        tool = BashTool(enable_safety_guard=True, safety_scanner=scanner, max_output_bytes=11)
+        ctx = MagicMock()
+        ctx.session = MagicMock()
+        ctx.branch = "main"
+
+        result = asyncio.run(tool._run_async_impl(
+            tool_context=ctx,
+            args={
+                "command": "echo hello",
+                "timeout": 10
+            },
+        ))
+
+        assert result["success"] is False
+        assert "TOOL_SAFETY_BLOCKED" in result["error"]
+
 
 class TestUnsafeLocalCodeExecutorOptIn:
 
@@ -198,6 +302,28 @@ class TestUnsafeLocalCodeExecutorOptIn:
             executor = UnsafeLocalCodeExecutor(enable_safety_guard=True, safety_scanner=scanner, timeout=2)
             block = CodeBlock(language="python", code="print('hello')")
             inp = CodeExecutionInput(code_blocks=[block], execution_id="timeout")
+            return await executor.execute_code(MagicMock(), inp)
+
+        result = asyncio.run(_run())
+        assert "blocked by safety guard" in getattr(result, 'output', '')
+
+    def test_max_output_bytes_exceeding_policy_blocks(self):
+        """UnsafeLocalCodeExecutor forwards configured output metadata."""
+        from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
+            UnsafeLocalCodeExecutor, )
+        from trpc_agent_sdk.code_executors._types import CodeBlock
+        from trpc_agent_sdk.code_executors._types import CodeExecutionInput
+
+        async def _run():
+            policy = PolicyConfig.from_dict({"max_output_bytes": 10})
+            scanner = SafetyScanner(policy)
+            executor = UnsafeLocalCodeExecutor(
+                enable_safety_guard=True,
+                safety_scanner=scanner,
+                max_output_bytes=11,
+            )
+            block = CodeBlock(language="python", code="print('hello')")
+            inp = CodeExecutionInput(code_blocks=[block], execution_id="max-output")
             return await executor.execute_code(MagicMock(), inp)
 
         result = asyncio.run(_run())

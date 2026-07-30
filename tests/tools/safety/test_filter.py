@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -113,12 +114,41 @@ class TestToolSafetyFilterBefore:
     def test_scanner_error_denies(self):
         f = ToolSafetyFilter()
         rsp = FilterResult()
+        f._audit = MagicMock()
         with patch("trpc_agent_sdk.tools.safety._filter.get_tool_var") as mock_tool:
             mock_tool.return_value = MagicMock(name="Bash")
             with patch.object(f._scanner, "scan", side_effect=RuntimeError("boom")):
                 asyncio.run(f._before(None, {"command": "ls"}, rsp))
         assert rsp.is_continue is False
         assert rsp.rsp["decision"] == "deny"
+        recorded_report = f._audit.record.call_args[0][0]
+        assert recorded_report.rule_ids == ["SAFETY_SCANNER_ERROR"]
+        assert [finding.rule_id for finding in recorded_report.findings] == ["SAFETY_SCANNER_ERROR"]
+
+    def test_run_short_circuits_on_deny(self):
+        """BaseFilter.run honors ToolSafetyFilter's mutated FilterResult."""
+        f = ToolSafetyFilter()
+        handle = AsyncMock(return_value={"success": True})
+        with patch("trpc_agent_sdk.tools.safety._filter.get_tool_var") as mock_tool:
+            mock_tool.return_value = MagicMock(name="Bash")
+            with patch.object(f._scanner, "scan") as mock_scan:
+                mock_scan.return_value = SafetyReport(
+                    tool_name="test",
+                    decision=Decision.DENY,
+                    risk_level=RiskLevel.CRITICAL,
+                    blocked=False,
+                    sanitized=False,
+                    duration_ms=1,
+                    language=ScriptLanguage.BASH,
+                    target=ScanTarget.TOOL,
+                    rule_ids=["R001_BASH_RECURSIVE_DELETE"],
+                    summary="Blocked.",
+                )
+                result = asyncio.run(f.run(None, {"command": "rm -rf /"}, handle))
+        assert handle.await_count == 0
+        assert result.is_continue is False
+        assert result.rsp["blocked"] is True
+        assert result.rsp["decision"] == "deny"
 
     def test_block_on_review_sets_audit_blocked_true(self):
         """When block_on_review=True and decision=NEEDS_HUMAN_REVIEW, audit records blocked=True."""

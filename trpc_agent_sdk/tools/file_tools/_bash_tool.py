@@ -28,6 +28,14 @@ def _env_keys_only(env: dict[str, str]) -> dict[str, str]:
     return {key: "" for key in env}
 
 
+def _scan_tool_metadata(timeout: int, max_output_bytes: int) -> dict[str, Any]:
+    """Build explicit safety metadata from configured execution limits."""
+    metadata: dict[str, Any] = {"timeout": timeout}
+    if max_output_bytes > 0:
+        metadata["max_output_bytes"] = max_output_bytes
+    return metadata
+
+
 class BashTool(BaseTool):
     """Tool for executing bash commands."""
 
@@ -42,7 +50,16 @@ class BashTool(BaseTool):
         safety_scanner: Optional[Any] = None,
         safety_audit_log_path: Optional[str] = None,
         block_on_review: bool = False,
+        max_output_bytes: int = 0,
     ):
+        """Initialize BashTool.
+
+        Args:
+            block_on_review: If True, NEEDS_HUMAN_REVIEW also blocks.
+                By default, only DENY blocks and review findings are audited.
+            max_output_bytes: Optional requested output limit for safety policy
+                checks. This does not truncate stdout/stderr at runtime.
+        """
         super().__init__(
             name="Bash",
             description=("Execute bash command in shell. Returns stdout, stderr, return_code. "
@@ -59,6 +76,7 @@ class BashTool(BaseTool):
         self._safety_scanner = safety_scanner
         self._safety_audit_log_path = safety_audit_log_path
         self._block_on_review = block_on_review
+        self.max_output_bytes = max_output_bytes
         self._safety_audit = None
         if enable_safety_guard and safety_audit_log_path:
             from trpc_agent_sdk.tools.safety import AuditLogger
@@ -186,6 +204,7 @@ class BashTool(BaseTool):
                 from trpc_agent_sdk.tools.safety import ScanTarget
                 from trpc_agent_sdk.tools.safety import ScriptLanguage
                 from trpc_agent_sdk.tools.safety import set_safety_telemetry
+                from trpc_agent_sdk.tools.safety._types import _scanner_error_finding
 
                 # Fail-closed: scanner exception → DENY with audit + telemetry
                 try:
@@ -197,9 +216,10 @@ class BashTool(BaseTool):
                             target=ScanTarget.TOOL,
                             cwd=execution_dir,
                             env=_env_keys_only(os.environ),
-                            tool_metadata={"timeout": timeout},
+                            tool_metadata=_scan_tool_metadata(timeout, self.max_output_bytes),
                         ))
                 except Exception:
+                    finding = _scanner_error_finding()
                     report = SafetyReport(
                         tool_name=self.name,
                         decision=Decision.DENY,
@@ -211,6 +231,7 @@ class BashTool(BaseTool):
                         target=ScanTarget.TOOL,
                         rule_ids=["SAFETY_SCANNER_ERROR"],
                         summary="Safety scanner error — execution blocked.",
+                        findings=[finding],
                         telemetry_attributes={
                             "tool.safety.decision": "deny",
                             "tool.safety.risk_level": "critical",

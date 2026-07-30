@@ -26,11 +26,11 @@ from ._scanner import SafetyScanner
 from ._telemetry import set_safety_telemetry
 from ._types import Decision
 from ._types import RiskLevel
-from ._types import RiskType
 from ._types import SafetyFinding
 from ._types import SafetyReport
 from ._types import ScanRequest
 from ._types import ScanTarget
+from ._types import _scanner_error_finding
 from ._types import aggregate_decision
 from ._types import normalize_language
 
@@ -43,7 +43,8 @@ class SafeCodeExecutor(BaseCodeExecutor):
         scanner_policy: PolicyConfig instance (defaults to PolicyConfig.default()).
         tool_name: Name used in scan reports (default "CodeExecutor").
         audit_path: If set, audit events are written to this JSONL file.
-        block_on_review: If True, NEEDS_HUMAN_REVIEW also blocks. Default False.
+        block_on_review: If True, NEEDS_HUMAN_REVIEW also blocks.
+            Default False audits review findings but delegates execution.
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -52,7 +53,10 @@ class SafeCodeExecutor(BaseCodeExecutor):
     scanner_policy: Optional[PolicyConfig] = Field(default=None, description="PolicyConfig for the scanner.")
     tool_name: str = Field(default="CodeExecutor", description="Name in scan reports.")
     audit_path: Optional[str] = Field(default=None, description="Audit log JSONL path.")
-    block_on_review: bool = Field(default=False, description="If True, NEEDS_HUMAN_REVIEW also blocks.")
+    block_on_review: bool = Field(
+        default=False,
+        description="If True, NEEDS_HUMAN_REVIEW also blocks; default audits review and continues.",
+    )
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -71,7 +75,10 @@ class SafeCodeExecutor(BaseCodeExecutor):
         # so context-safety checks (denied paths, timeout) can run.
         inner_cwd = getattr(self.inner_executor, 'work_dir', '')
         inner_timeout = getattr(self.inner_executor, 'timeout', 0)
+        inner_max_output = getattr(self.inner_executor, 'max_output_bytes', 0)
         tool_metadata = {"timeout": inner_timeout} if inner_timeout else {}
+        if isinstance(inner_max_output, (int, float)) and inner_max_output > 0:
+            tool_metadata["max_output_bytes"] = inner_max_output
 
         for block in code_execution_input.code_blocks:
             lang = normalize_language(block.language or "")
@@ -87,6 +94,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
             try:
                 report = scanner.scan(req)
             except Exception:
+                finding = _scanner_error_finding()
                 report = SafetyReport(
                     tool_name=self.tool_name,
                     decision=Decision.DENY,
@@ -98,16 +106,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
                     target=ScanTarget.CODE_EXECUTOR,
                     rule_ids=["SAFETY_SCANNER_ERROR"],
                     summary="Safety scanner error — execution blocked.",
-                    findings=[
-                        SafetyFinding(
-                            rule_id="SAFETY_SCANNER_ERROR",
-                            rule_name="Safety Scanner Error",
-                            risk_type=RiskType.SYSTEM_COMMAND,
-                            risk_level=RiskLevel.CRITICAL,
-                            evidence="Scanner error",
-                            recommendation="Scanner failed; execution blocked.",
-                        ),
-                    ],
+                    findings=[finding],
                     telemetry_attributes={
                         "tool.safety.decision": "deny",
                         "tool.safety.risk_level": "critical",

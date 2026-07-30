@@ -180,6 +180,14 @@ class TestEnvAllowlistCoverage:
         findings = scanner._scan_context_safety(req)
         rule_ids = {f.rule_id for f in findings}
         assert "R005_RESOURCE_ABUSE" in rule_ids
+        assert "Requested output limit" in findings[0].recommendation
+
+    def test_unconfigured_max_output_bytes_does_not_trigger(self, scanner):
+        """Missing max_output_bytes metadata does not imply a resource finding."""
+        req = ScanRequest(script="echo hi", language=ScriptLanguage.BASH, tool_name="t")
+        findings = scanner._scan_context_safety(req)
+        rule_ids = {f.rule_id for f in findings}
+        assert "R005_RESOURCE_ABUSE" not in rule_ids
 
 
 class TestGenerateSummary:

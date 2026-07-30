@@ -14,6 +14,7 @@ from unittest.mock import patch
 from trpc_agent_sdk.code_executors import BaseCodeExecutor as ExecBase
 from trpc_agent_sdk.code_executors._types import CodeBlock
 from trpc_agent_sdk.code_executors._types import CodeExecutionInput
+from trpc_agent_sdk.tools.safety._policy import PolicyConfig
 from trpc_agent_sdk.tools.safety._types import Decision
 from trpc_agent_sdk.tools.safety._types import RiskLevel
 from trpc_agent_sdk.tools.safety._types import SafetyReport
@@ -87,6 +88,24 @@ class TestSafeCodeExecutor:
 
         assert inner.called is True
         assert report.blocked is False
+
+    def test_inner_max_output_bytes_exceeding_policy_blocks(self):
+        from trpc_agent_sdk.tools.safety._wrapper import SafeCodeExecutor
+
+        inner = _FakeExecutor()
+        object.__setattr__(inner, 'max_output_bytes', 11)
+        exe = SafeCodeExecutor(
+            inner_executor=inner,
+            tool_name="test",
+            scanner_policy=PolicyConfig.from_dict({"max_output_bytes": 10}),
+        )
+        block = CodeBlock(language="python", code="print('hello')")
+        inp = CodeExecutionInput(code_blocks=[block], execution_id="1")
+
+        result = asyncio.run(exe.execute_code(MagicMock(), inp))
+
+        assert inner.called is False
+        assert "blocked by safety guard" in result.output
 
     def test_aggregate_decision_blocks_on_deny(self):
         """Verify aggregate_decision with a CRITICAL finding blocks execution."""

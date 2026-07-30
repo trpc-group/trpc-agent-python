@@ -177,7 +177,8 @@ class SafetyScanner:
                     risk_type=RiskType.RESOURCE_ABUSE,
                     risk_level=RiskLevel.HIGH,
                     evidence=f"max_output_bytes={max_output}",
-                    recommendation=f"Output size exceeds max allowed {self._policy.max_output_bytes} bytes.",
+                    recommendation=(f"Requested output limit {max_output} bytes exceeds "
+                                    f"max allowed {self._policy.max_output_bytes} bytes."),
                 ))
 
         return findings

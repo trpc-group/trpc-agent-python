@@ -50,6 +50,11 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
     timeout: float = Field(default=0, description="The timeout seconds for the code execution.")
 
+    max_output_bytes: int = Field(
+        default=0,
+        description="Optional requested output limit for safety policy checks; does not truncate runtime output.",
+    )
+
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
 
@@ -72,7 +77,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
     block_on_review: bool = Field(
         default=False,
-        description="Whether NEEDS_HUMAN_REVIEW decisions should block execution.",
+        description="If True, NEEDS_HUMAN_REVIEW also blocks; default audits review and continues.",
     )
 
     def __init__(self, **data):
@@ -206,13 +211,16 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         timeout = self.timeout
         if timeout <= 0 and getattr(self.safety_scanner, "_policy", None) is not None:
             timeout = self.safety_scanner._policy.max_timeout_seconds
+        tool_metadata = {"timeout": timeout}
+        if self.max_output_bytes > 0:
+            tool_metadata["max_output_bytes"] = self.max_output_bytes
         req = ScanRequest(
             script=block.code,
             language=normalize_language(block.language or ""),
             tool_name="UnsafeLocalCodeExecutor",
             target=ScanTarget.CODE_EXECUTOR,
             cwd=str(work_dir),
-            tool_metadata={"timeout": timeout},
+            tool_metadata=tool_metadata,
         )
         return self.safety_scanner.scan(req)
 

@@ -27,6 +27,7 @@ from ._types import Decision
 from ._types import RiskLevel
 from ._types import SafetyReport
 from ._types import ScanTarget
+from ._types import _scanner_error_finding
 
 _logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class ToolSafetyFilter(BaseFilter):
         try:
             report = self._scanner.scan(scan_req)
         except Exception:
+            finding = _scanner_error_finding()
             report = SafetyReport(
                 tool_name=getattr(tool, 'name', 'unknown'),
                 decision=Decision.DENY,
@@ -78,6 +80,7 @@ class ToolSafetyFilter(BaseFilter):
                 target=scan_req.target,
                 rule_ids=["SAFETY_SCANNER_ERROR"],
                 summary="Safety scanner error — execution blocked.",
+                findings=[finding],
                 telemetry_attributes={
                     "tool.safety.decision": "deny",
                     "tool.safety.risk_level": "critical",
