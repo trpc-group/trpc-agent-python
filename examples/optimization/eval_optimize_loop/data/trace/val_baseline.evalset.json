@@ -1,7 +1,7 @@
 {
   "eval_set_id": "shopping_assistant_val",
-  "name": "Shopping Assistant Validation Set",
-  "description": "20 validation cases: independent from training, covering same tools with different queries.",
+  "name": "Validation Baseline",
+  "description": "20 validation cases.",
   "eval_cases": [
     {
       "eval_id": "val_001_optimizable",

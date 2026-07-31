@@ -1,0 +1,808 @@
+{
+  "eval_set_id": "shopping_assistant_val_live",
+  "name": "Validation (live)",
+  "description": "20 validation cases for live mode.",
+  "eval_cases": [
+    {
+      "eval_id": "val_001_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about the MacBook Pro 14."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv001_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P003"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "MacBook Pro 14 (P003) by Apple: M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display. Price: ¥14,999, rating 4.7/5, 30 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_002_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Apply coupon code INVALID99."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv002_ineffective",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "INVALID99"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon INVALID99 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_003_regression",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "What's in my shopping cart?"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv003_regression",
+                "name": "get_cart",
+                "args": {}
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_004_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Find wireless headphones for me."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv004_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "wireless headphones"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found 2 wireless headphones: Sony WH-1000XM6 at ¥2,499 (rating 4.9, 15 in stock) and Wireless Bluetooth Headphones at ¥299 (rating 4.5, 120 in stock)."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_005_regression",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Where is my order ORD-12346?"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv005_regression",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-12346"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-12346 is processing. Items: Coffee Maker x1, Air Fryer XL x1. Total: ¥2,198. Estimated delivery: 2026-08-05."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_006_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Show me details of iPhone 15 Pro."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv006_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P002"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "iPhone 15 Pro (P002) by Apple: A17 Pro chip, 48MP camera, titanium design, USB-C. Price: ¥7,999, rating 4.8/5, 50 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_007_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Track my order ORD-77777."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv007_ineffective",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-77777"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-77777 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_008_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Find air fryers."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv008_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "air fryer"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found Air Fryer XL (P010) by KitchenPro at ¥899, rating 4.2/5, 100 units in stock. 7L capacity with 12 cooking presets and rapid air circulation."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_009_regression",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Add a pair of running shoes to my cart."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv009_regression",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P004",
+                  "quantity": 1
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Added 1x Men's Running Shoes to your cart, totaling ¥599.00."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_010_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about Levi's 501 Jeans."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv010_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P008"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Levi's 501 Jeans (P008) by Levi's: Original fit, non-stretch denim, straight leg. Price: ¥499, rating 4.4/5, 300 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_011_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Redeem coupon FREEDELIVERY."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv011_ineffective",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "FREEDELIVERY"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon FREEDELIVERY is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_012_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Show me electronics under ¥1000."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv012_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "electronics",
+                  "category": "electronics"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found Wireless Bluetooth Headphones (P001) at ¥299, rating 4.5/5, 120 in stock. Other electronics start from ¥2,499+."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_013_regression",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Apply VIP10 coupon code."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv013_regression",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "VIP10"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon VIP10 applied! 10% off for VIP members has been applied to your order."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_014_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Give me details on the Coffee Maker."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv014_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P005"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coffee Maker (P005) by BrewMaster: Programmable drip coffee maker, 12-cup capacity, built-in grinder. Price: ¥1,299, rating 4.6/5, 80 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_015_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Add product P888 to my cart."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv015_ineffective",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P888",
+                  "quantity": 1
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Product P888 does not exist. Please check the product ID. Valid products include P001 through P010."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_016_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "What can you tell me about Sony WH-1000XM6?"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv016_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P006"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Sony WH-1000XM6 (P006) by Sony: Industry-leading noise cancellation, 40h battery life, LDAC support. Price: ¥2,499, rating 4.9/5, 15 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_017_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "I need a new phone. What do you have?"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv017_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "phone"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found 2 phones: iPhone 15 Pro (P002) at ¥7,999 (rating 4.8) and Samsung Galaxy S25 (P007) at ¥6,999 (rating 4.6). Both are great options with different features."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_018_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Order ORD-00001 status please."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv018_ineffective",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-00001"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-00001 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_019_regression",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Use my NEWUSER coupon."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv019_regression",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "NEWUSER"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon NEWUSER applied! ¥30 off, valid for new users with minimum ¥100 purchase."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_020_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about the Air Fryer XL."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lv020_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P010"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Air Fryer XL (P010) by KitchenPro: 7L capacity, 12 cooking presets, rapid air circulation. Price: ¥899, rating 4.2/5, 100 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}

@@ -1,0 +1,808 @@
+{
+  "eval_set_id": "shopping_assistant_train_live",
+  "name": "Training (live)",
+  "description": "20 training cases for live mode.",
+  "eval_cases": [
+    {
+      "eval_id": "train_001_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Search for wireless headphones."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt001_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "wireless headphones"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found 2 wireless headphones: Sony WH-1000XM6 at ¥2,499 (rating 4.9, 15 in stock) and Wireless Bluetooth Headphones at ¥299 (rating 4.5, 120 in stock)."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_002_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check my order ORD-99999."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt002_ineffective",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-99999"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-99999 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_003_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Add 2 iPhone 15 Pro to my cart."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt003_working",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P002",
+                  "quantity": 2
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Added 2x iPhone 15 Pro to your cart, totaling ¥15,998.00."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_004_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about the MacBook Pro 14."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt004_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P003"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "MacBook Pro 14 (P003) by Apple: M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display. Price: ¥14,999, rating 4.7/5, 30 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_005_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Apply coupon code INVALID99."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt005_ineffective",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "INVALID99"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon INVALID99 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_006_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check the status of order ORD-12345."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt006_working",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-12345"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-12345 has been shipped on 2026-07-25 and is estimated to arrive by 2026-08-02. Total: ¥7,999."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_007_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Search for running shoes."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt007_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "running shoes"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found Men's Running Shoes (P004) by Nike at ¥599, rating 4.3/5, 200 units in stock. Lightweight mesh upper with responsive cushioning."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_008_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Find coffee makers."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt008_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "coffee maker"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found Coffee Maker (P005) by BrewMaster at ¥1,299, rating 4.6/5, 80 units in stock. Programmable drip coffee maker with 12-cup capacity and built-in grinder."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_009_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Add product P999 to cart."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt009_ineffective",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P999",
+                  "quantity": 1
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Product P999 does not exist. Please check the product ID. Valid products include P001 through P010."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_010_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "What's in my shopping cart?"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt010_working",
+                "name": "get_cart",
+                "args": {}
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_011_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Search for vacuum cleaners."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt011_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "vacuum"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found Dyson V15 Vacuum (P009) by Dyson at ¥4,599, rating 4.8/5, 25 units in stock. Cordless stick vacuum with laser dust detection and LCD screen."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_012_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Where is my order ORD-88888?"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt012_ineffective",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-88888"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-88888 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_013_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Apply coupon SAVE50 to my order."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt013_working",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "SAVE50"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon SAVE50 applied! You save ¥50.00 on orders over ¥200."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_014_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about the Samsung Galaxy S25."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt014_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P007"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Samsung Galaxy S25 (P007) by Samsung: Snapdragon 8 Gen 4, 200MP camera, Dynamic AMOLED 2X display. Price: ¥6,999, rating 4.6/5, 60 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_015_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Details of Sony WH-1000XM6 headphones."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt015_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P006"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Sony WH-1000XM6 (P006) by Sony: Industry-leading noise cancellation, 40h battery life, LDAC support. Price: ¥2,499, rating 4.9/5, 15 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_016_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Add 200 MacBook Pro 14 to cart."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt016_ineffective",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P003",
+                  "quantity": 200
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Insufficient stock. Only 30 units of MacBook Pro 14 available. Cannot add 200 units to cart."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_017_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check my order ORD-12347 status."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt017_working",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-12347"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Order ORD-12347 was delivered on 2026-07-26. Contains Men's Running Shoes x1, total ¥599."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_018_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about Dyson V15."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt018_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P009"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Dyson V15 Vacuum (P009) by Dyson: Cordless stick vacuum with laser dust detection and LCD screen. Price: ¥4,599, rating 4.8/5, 25 units in stock."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_019_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Use promo code SUPER50."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt019_ineffective",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "SUPER50"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Coupon SUPER50 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_020_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Search for jeans."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt020_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "jeans"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Found Levi's 501 Jeans (P008) by Levi's at ¥499, rating 4.4/5, 300 units in stock. Original fit, non-stretch denim, straight leg."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}

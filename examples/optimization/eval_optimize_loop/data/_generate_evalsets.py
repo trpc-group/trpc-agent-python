@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""生成 20 条评测 case 的 evalset JSON 文件。
+"""生成评测 evalset JSON 文件。
 
-该脚本生成三个文件：
-  - train_baseline.evalset.json  (20 条训练 case，trace 模式)
-  - val_baseline.evalset.json    (20 条验证 case，trace 模式)
-  - val_optimized.evalset.json   (20 条优化后验证 case，trace 模式)
+trace/ 子目录: 三件套 trace 数据（demo 模式回放用），每条 case 含 actual_conversation。
+live/  子目录: 两件套非 trace 数据（real 模式现调 LLM 用），无 actual_conversation。
 
-每个 case 包含 actual_conversation（agent 实际行为）和 conversation（期望行为），
-通过对比两者来评估 agent 的表现。
+每个 case 包含 eval_id、conversation（期望行为）、session_input，scenario 类型
+由 eval_id 后缀推导（_optimizable/_ineffective/_working/_regression）。
 """
 
 from __future__ import annotations
@@ -55,12 +53,10 @@ def _make_case(eval_id: str, actual_turns: list[dict], expected_turns: list[dict
 
 # ============================================================
 # Case 定义：每个 case 包含 (eval_id, 用户问题, 工具名, 工具参数,
-#   实际回复（差）, 期望回复（好）, 场景类型)
+#   实际回复（差）, 期望回复（好）)
 #
-# 场景类型说明：
-#   optimizable_success   - 当前 FAILED，通过优化 prompt 可修复
-#   optimization_ineffective - 当前 FAILED，仅 prompt 优化无法修复（幻觉/行为问题）
-#   working               - 当前 PASSED，正常工作
+# 场景类型由 eval_id 后缀推导（_optimizable / _ineffective / _working / _regression），
+# 由后续任务负责。
 # ============================================================
 
 TRAIN_CASES = [
@@ -68,141 +64,121 @@ TRAIN_CASES = [
     ("train_001_optimizable", "Search for wireless headphones.", "search_products",
      {"query": "wireless headphones"},
      "Found 2 results.",
-     "Found 2 wireless headphones: Sony WH-1000XM6 at ¥2,499 (rating 4.9, 15 in stock) and Wireless Bluetooth Headphones at ¥299 (rating 4.5, 120 in stock).",
-     "optimizable_success"),
+     "Found 2 wireless headphones: Sony WH-1000XM6 at ¥2,499 (rating 4.9, 15 in stock) and Wireless Bluetooth Headphones at ¥299 (rating 4.5, 120 in stock)."),
 
     # ---- ineffective: agent 忽略工具返回，幻觉出不存在的订单状态 ----
     ("train_002_ineffective", "Check my order ORD-99999.", "check_order_status",
      {"order_id": "ORD-99999"},
      "Your order ORD-99999 is on the way and will arrive tomorrow.",
-     "Order ORD-99999 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347.",
-     "optimization_ineffective"),
+     "Order ORD-99999 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."),
 
     # ---- working: 正常添加购物车 ----
     ("train_003_working", "Add 2 iPhone 15 Pro to my cart.", "add_to_cart",
      {"product_id": "P002", "quantity": 2},
      "Added 2x iPhone 15 Pro to your cart, totaling ¥15,998.00.",
-     "Added 2x iPhone 15 Pro to your cart, totaling ¥15,998.00.",
-     "optimization_regression"),
+     "Added 2x iPhone 15 Pro to your cart, totaling ¥15,998.00."),
 
     # ---- optimizable: 获取商品详情回复过短 ----
     ("train_004_optimizable", "Tell me about the MacBook Pro 14.", "get_product_details",
      {"product_id": "P003"},
      "It's a laptop.",
-     "MacBook Pro 14 (P003) by Apple: M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display. Price: ¥14,999, rating 4.7/5, 30 units in stock.",
-     "optimizable_success"),
+     "MacBook Pro 14 (P003) by Apple: M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display. Price: ¥14,999, rating 4.7/5, 30 units in stock."),
 
     # ---- ineffective: 无效优惠券，agent 幻觉成功 ----
     ("train_005_ineffective", "Apply coupon code INVALID99.", "apply_coupon",
      {"code": "INVALID99"},
      "Coupon INVALID99 applied! You saved ¥99.",
-     "Coupon INVALID99 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100).",
-     "optimization_ineffective"),
+     "Coupon INVALID99 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."),
 
     # ---- working: 查询存在且已发货的订单 ----
     ("train_006_working", "Check the status of order ORD-12345.", "check_order_status",
      {"order_id": "ORD-12345"},
      "Order ORD-12345 has been shipped on 2026-07-25 and is estimated to arrive by 2026-08-02. Total: ¥7,999.",
-     "Order ORD-12345 has been shipped on 2026-07-25 and is estimated to arrive by 2026-08-02. Total: ¥7,999.",
-     "optimization_regression"),
+     "Order ORD-12345 has been shipped on 2026-07-25 and is estimated to arrive by 2026-08-02. Total: ¥7,999."),
 
     # ---- optimizable: 搜索跑鞋回复过短 ----
     ("train_007_optimizable", "Search for running shoes.", "search_products",
      {"query": "running shoes"},
      "Found 1 result.",
-     "Found Men's Running Shoes (P004) by Nike at ¥599, rating 4.3/5, 200 units in stock. Lightweight mesh upper with responsive cushioning.",
-     "optimizable_success"),
+     "Found Men's Running Shoes (P004) by Nike at ¥599, rating 4.3/5, 200 units in stock. Lightweight mesh upper with responsive cushioning."),
 
     # ---- optimizable: 搜索咖啡机回复过短 ----
     ("train_008_optimizable", "Find coffee makers.", "search_products",
      {"query": "coffee maker"},
      "1 product found.",
-     "Found Coffee Maker (P005) by BrewMaster at ¥1,299, rating 4.6/5, 80 units in stock. Programmable drip coffee maker with 12-cup capacity and built-in grinder.",
-     "optimizable_success"),
+     "Found Coffee Maker (P005) by BrewMaster at ¥1,299, rating 4.6/5, 80 units in stock. Programmable drip coffee maker with 12-cup capacity and built-in grinder."),
 
     # ---- ineffective: 添加不存在的商品，agent 编造成功 ----
     ("train_009_ineffective", "Add product P999 to cart.", "add_to_cart",
      {"product_id": "P999", "quantity": 1},
      "Added product P999 to your cart successfully.",
-     "Product P999 does not exist. Please check the product ID. Valid products include P001 through P010.",
-     "optimization_ineffective"),
+     "Product P999 does not exist. Please check the product ID. Valid products include P001 through P010."),
 
     # ---- working: 查看购物车 ----
     ("train_010_working", "What's in my shopping cart?", "get_cart",
      {},
      "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY.",
-     "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY.",
-     "optimization_regression"),
+     "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."),
 
     # ---- optimizable: 搜索吸尘器回复过短 ----
     ("train_011_optimizable", "Search for vacuum cleaners.", "search_products",
      {"query": "vacuum"},
      "1 result.",
-     "Found Dyson V15 Vacuum (P009) by Dyson at ¥4,599, rating 4.8/5, 25 units in stock. Cordless stick vacuum with laser dust detection and LCD screen.",
-     "optimizable_success"),
+     "Found Dyson V15 Vacuum (P009) by Dyson at ¥4,599, rating 4.8/5, 25 units in stock. Cordless stick vacuum with laser dust detection and LCD screen."),
 
     # ---- ineffective: 查询另一个不存在的订单，agent 幻觉 ----
     ("train_012_ineffective", "Where is my order ORD-88888?", "check_order_status",
      {"order_id": "ORD-88888"},
      "Your order ORD-88888 is being processed and will ship soon.",
-     "Order ORD-88888 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347.",
-     "optimization_ineffective"),
+     "Order ORD-88888 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."),
 
     # ---- working: 应用有效优惠券 SAVE50 ----
     ("train_013_working", "Apply coupon SAVE50 to my order.", "apply_coupon",
      {"code": "SAVE50"},
      "Coupon SAVE50 applied! You save ¥50.00 on orders over ¥200.",
-     "Coupon SAVE50 applied! You save ¥50.00 on orders over ¥200.",
-     "optimization_regression"),
+     "Coupon SAVE50 applied! You save ¥50.00 on orders over ¥200."),
 
     # ---- optimizable: 获取三星手机详情过短 ----
     ("train_014_optimizable", "Tell me about the Samsung Galaxy S25.", "get_product_details",
      {"product_id": "P007"},
      "It's a phone from Samsung.",
-     "Samsung Galaxy S25 (P007) by Samsung: Snapdragon 8 Gen 4, 200MP camera, Dynamic AMOLED 2X display. Price: ¥6,999, rating 4.6/5, 60 units in stock.",
-     "optimizable_success"),
+     "Samsung Galaxy S25 (P007) by Samsung: Snapdragon 8 Gen 4, 200MP camera, Dynamic AMOLED 2X display. Price: ¥6,999, rating 4.6/5, 60 units in stock."),
 
     # ---- optimizable: 获取索尼耳机详情过短 ----
     ("train_015_optimizable", "Details of Sony WH-1000XM6 headphones.", "get_product_details",
      {"product_id": "P006"},
      "Those are headphones.",
-     "Sony WH-1000XM6 (P006) by Sony: Industry-leading noise cancellation, 40h battery life, LDAC support. Price: ¥2,499, rating 4.9/5, 15 units in stock.",
-     "optimizable_success"),
+     "Sony WH-1000XM6 (P006) by Sony: Industry-leading noise cancellation, 40h battery life, LDAC support. Price: ¥2,499, rating 4.9/5, 15 units in stock."),
 
     # ---- ineffective: 超量添加，agent 忽略库存限制 ----
     ("train_016_ineffective", "Add 200 MacBook Pro 14 to cart.", "add_to_cart",
      {"product_id": "P003", "quantity": 200},
      "Added 200 MacBook Pro 14 to your cart.",
-     "Insufficient stock. Only 30 units of MacBook Pro 14 available. Cannot add 200 units to cart.",
-     "optimization_ineffective"),
+     "Insufficient stock. Only 30 units of MacBook Pro 14 available. Cannot add 200 units to cart."),
 
     # ---- working: 查询已交付订单 ----
     ("train_017_working", "Check my order ORD-12347 status.", "check_order_status",
      {"order_id": "ORD-12347"},
      "Order ORD-12347 was delivered on 2026-07-26. Contains Men's Running Shoes x1, total ¥599.",
-     "Order ORD-12347 was delivered on 2026-07-26. Contains Men's Running Shoes x1, total ¥599.",
-     "optimization_regression"),
+     "Order ORD-12347 was delivered on 2026-07-26. Contains Men's Running Shoes x1, total ¥599."),
 
     # ---- optimizable: 获取戴森吸尘器详情过短 ----
     ("train_018_optimizable", "Tell me about Dyson V15.", "get_product_details",
      {"product_id": "P009"},
      "A vacuum cleaner.",
-     "Dyson V15 Vacuum (P009) by Dyson: Cordless stick vacuum with laser dust detection and LCD screen. Price: ¥4,599, rating 4.8/5, 25 units in stock.",
-     "optimizable_success"),
+     "Dyson V15 Vacuum (P009) by Dyson: Cordless stick vacuum with laser dust detection and LCD screen. Price: ¥4,599, rating 4.8/5, 25 units in stock."),
 
     # ---- ineffective: 应用不存在的优惠券（变体），agent 幻觉 ----
     ("train_019_ineffective", "Use promo code SUPER50.", "apply_coupon",
      {"code": "SUPER50"},
      "Promo code SUPER50 accepted! 50% off applied.",
-     "Coupon SUPER50 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100).",
-     "optimization_ineffective"),
+     "Coupon SUPER50 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."),
 
     # ---- optimizable: 搜索牛仔裤回复过短 ----
     ("train_020_optimizable", "Search for jeans.", "search_products",
      {"query": "jeans"},
      "1 pair found.",
-     "Found Levi's 501 Jeans (P008) by Levi's at ¥499, rating 4.4/5, 300 units in stock. Original fit, non-stretch denim, straight leg.",
-     "optimizable_success"),
+     "Found Levi's 501 Jeans (P008) by Levi's at ¥499, rating 4.4/5, 300 units in stock. Original fit, non-stretch denim, straight leg."),
 ]
 
 # 验证集 cases：与训练集类似但使用不同的 eval_id 和查询
@@ -334,7 +310,6 @@ def generate_evalset(eval_set_id: str, name: str, description: str, cases: list)
     eval_cases = []
     for case_def in cases:
         eval_id, user_text, tool_name, tool_args, actual_resp, expected_resp = case_def[:6]
-        # case_def[6] 是 scenario 类型，在 generate_evalset 中不使用
 
         actual_turn, expected_turn = _make_turn(
             inv_id=eval_id.replace("train_", "t").replace("val_", "v"),
@@ -422,88 +397,71 @@ def generate_optimized_evalset(val_cases: list, scenario_map: dict) -> dict:
     }
 
 
-def build_scenario_map(train_cases: list, val_cases: list) -> dict:
-    """生成 SCENARIO_MAP 字典，供 run_pipeline.py 和测试使用。"""
-    sm = {}
-
-    def _derive_scenario(eval_id: str) -> str:
-        if "_optimizable" in eval_id:
-            return "optimizable_success"
-        elif "_ineffective" in eval_id:
-            return "optimization_ineffective"
-        elif "_regression" in eval_id:
-            return "optimization_regression"
-        elif "_working" in eval_id:
-            return "optimization_regression"
-        return "unknown"
-
-    for case_def in train_cases:
-        eval_id = case_def[0]
-        scenario = case_def[6] if len(case_def) > 6 else _derive_scenario(eval_id)
-        sm[eval_id] = scenario
-    for case_def in val_cases:
-        eval_id = case_def[0]
-        scenario = case_def[6] if len(case_def) > 6 else _derive_scenario(eval_id)
-        sm[eval_id] = scenario
-    return sm
+def generate_live_evalset(eval_set_id: str, name: str, description: str, cases: list) -> dict:
+    """生成 live 数据集: 无 actual_conversation, 仅期望 + session_input."""
+    eval_cases = []
+    for case_def in cases:
+        eval_id, user_text, tool_name, tool_args, _actual, expected_resp = case_def[:6]
+        expected_turn = {
+            "user_content": {"parts": [{"text": user_text}], "role": "user"},
+            "intermediate_data": {
+                "tool_uses": [{"id": eval_id.replace("train_", "lt").replace("val_", "lv"),
+                               "name": tool_name, "args": tool_args}]
+            },
+            "final_response": {"parts": [{"text": expected_resp}], "role": "model"},
+        }
+        eval_cases.append({
+            "eval_id": eval_id,
+            "eval_mode": "non-trace",
+            "conversation": [expected_turn],
+            "session_input": {"app_name": "shopping_assistant", "user_id": "user", "state": {}},
+        })
+    return {
+        "eval_set_id": eval_set_id,
+        "name": name,
+        "description": description,
+        "eval_cases": eval_cases,
+    }
 
 
 def main():
     import os
     data_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # 生成训练集 evalset
-    train_evalset = generate_evalset(
-        eval_set_id="shopping_assistant_train",
-        name="Shopping Assistant Training Set",
-        description="20 training cases for optimization: covering search, product details, cart, orders, and coupons with various failure modes.",
-        cases=TRAIN_CASES,
-    )
-    train_path = os.path.join(data_dir, "train_baseline.evalset.json")
-    with open(train_path, "w", encoding="utf-8") as f:
-        json.dump(train_evalset, f, indent=2, ensure_ascii=False)
-    print(f"Generated {train_path} with {len(train_evalset['eval_cases'])} cases")
+    # ---- trace 三件套 ----
+    trace_dir = os.path.join(data_dir, "trace")
+    os.makedirs(trace_dir, exist_ok=True)
 
-    # 生成验证集 evalset
-    val_evalset = generate_evalset(
-        eval_set_id="shopping_assistant_val",
-        name="Shopping Assistant Validation Set",
-        description="20 validation cases: independent from training, covering same tools with different queries.",
-        cases=VAL_CASES,
-    )
-    val_path = os.path.join(data_dir, "val_baseline.evalset.json")
-    with open(val_path, "w", encoding="utf-8") as f:
-        json.dump(val_evalset, f, indent=2, ensure_ascii=False)
-    print(f"Generated {val_path} with {len(val_evalset['eval_cases'])} cases")
+    train = generate_evalset("shopping_assistant_train", "Training Set", "20 training cases.", TRAIN_CASES)
+    val_base = generate_evalset("shopping_assistant_val", "Validation Baseline", "20 validation cases.", VAL_CASES)
+    val_opt = generate_optimized_evalset(VAL_CASES, {})
 
-    # 生成优化后验证集 evalset
-    optimized_evalset = generate_optimized_evalset(VAL_CASES, {})
-    opt_path = os.path.join(data_dir, "val_optimized.evalset.json")
-    with open(opt_path, "w", encoding="utf-8") as f:
-        json.dump(optimized_evalset, f, indent=2, ensure_ascii=False)
-    print(f"Generated {opt_path} with {len(optimized_evalset['eval_cases'])} cases")
+    for name, payload in [("train.evalset.json", train), ("val_baseline.evalset.json", val_base), ("val_optimized.evalset.json", val_opt)]:
+        p = os.path.join(trace_dir, name)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        print(f"Generated {p} ({len(payload['eval_cases'])} cases)")
 
-    # 输出 SCENARIO_MAP（用于更新 run_pipeline.py 和 test_pipeline_fake.py）
-    sm = build_scenario_map(TRAIN_CASES, VAL_CASES)
-    print("\n# SCENARIO_MAP for run_pipeline.py and test_pipeline_fake.py:")
-    print("SCENARIO_MAP = {")
-    for k, v in sorted(sm.items()):
-        print(f'    "{k}": "{v}",')
-    print("}")
+    # ---- live 两件套（不同路径! 否则 AgentOptimizer 抛 ValueError） ----
+    live_dir = os.path.join(data_dir, "live")
+    os.makedirs(live_dir, exist_ok=True)
 
-    # 打印统计信息
-    train_scenarios = {}
-    for case_def in TRAIN_CASES:
-        s = case_def[6] if len(case_def) > 6 else "unknown"
-        train_scenarios[s] = train_scenarios.get(s, 0) + 1
+    train_live = generate_live_evalset("shopping_assistant_train_live", "Training (live)", "20 training cases for live mode.", TRAIN_CASES)
+    val_live = generate_live_evalset("shopping_assistant_val_live", "Validation (live)", "20 validation cases for live mode.", VAL_CASES)
 
-    val_scenarios = {}
-    for case_def in VAL_CASES:
-        s = case_def[6] if len(case_def) > 6 else "unknown"
-        val_scenarios[s] = val_scenarios.get(s, 0) + 1
+    train_live_path = os.path.join(live_dir, "train.evalset.json")
+    val_live_path = os.path.join(live_dir, "val.evalset.json")
+    for path, payload in [(train_live_path, train_live), (val_live_path, val_live)]:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        print(f"Generated {path} ({len(payload['eval_cases'])} cases)")
 
-    print(f"\n# Training set distribution: {train_scenarios}")
-    print(f"# Validation set distribution: {val_scenarios}")
+    # ---- 删除旧的扁平文件 ----
+    for stale in ["train_baseline.evalset.json", "val_baseline.evalset.json", "val_optimized.evalset.json"]:
+        stale_path = os.path.join(data_dir, stale)
+        if os.path.exists(stale_path):
+            os.remove(stale_path)
+            print(f"Removed {stale_path}")
 
 
 if __name__ == "__main__":

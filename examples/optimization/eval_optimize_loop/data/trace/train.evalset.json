@@ -1,7 +1,7 @@
 {
   "eval_set_id": "shopping_assistant_train",
-  "name": "Shopping Assistant Training Set",
-  "description": "20 training cases for optimization: covering search, product details, cart, orders, and coupons with various failure modes.",
+  "name": "Training Set",
+  "description": "20 training cases.",
   "eval_cases": [
     {
       "eval_id": "train_001_optimizable",
