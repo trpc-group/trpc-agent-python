@@ -48,6 +48,23 @@ def validate_model_env() -> None:
         )
 
 
+def response_text_from_event(event: Any) -> str:
+    """Collect non-thought text from a final-response event.
+
+    Uses ``getattr`` so parts from any provider adapter are safe even when
+    they carry no ``thought``/``text`` attribute at all.
+    """
+
+    if not event.is_final_response() or not event.content:
+        return ""
+    texts = []
+    for part in getattr(event.content, "parts", None) or []:
+        text = getattr(part, "text", None)
+        if text and not getattr(part, "thought", None):
+            texts.append(text)
+    return "".join(texts)
+
+
 def build_call_agent(prompt_path: Path) -> CallAgent:
     """Build a callback that reloads the current TargetPrompt on every call."""
 
@@ -87,11 +104,7 @@ def build_call_agent(prompt_path: Path) -> CallAgent:
             session_id=session_id,
             new_message=message,
         ):
-            if not event.is_final_response() or not event.content:
-                continue
-            for part in event.content.parts or []:
-                if not part.thought and part.text:
-                    response += part.text
+            response += response_text_from_event(event)
         return response.strip()
 
     # The SDK runner does not expose a provider-independent USD amount here.

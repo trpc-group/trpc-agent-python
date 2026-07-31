@@ -73,6 +73,14 @@ class GateConfig:
     budget_usd: Optional[float] = None
     epsilon: float = 0.001
 
+    def __post_init__(self) -> None:
+        # fake/trace 模式的 measured 成本恒为 0 token；若允许 budget_tokens<=0，
+        # G6 会把任意合法成本误判为超预算。
+        if self.budget_tokens <= 0:
+            raise ValueError(f"budget_tokens 必须为正整数，当前值：{self.budget_tokens}")
+        if self.budget_usd is not None and self.budget_usd <= 0:
+            raise ValueError(f"budget_usd 配置时必须为正数，当前值：{self.budget_usd}")
+
 
 @dataclass
 class Decision:
@@ -149,10 +157,8 @@ def evaluate(
     bad_slices = {k: v for k, v in slice_deltas.items() if v < -cfg.slice_tolerance}
     if bad_slices:
         violated.append("G5")
-        reasons.append(
-            f"slice 退化超过 tolerance={cfg.slice_tolerance:.4f}："
-            f"{ {k: round(v, 4) for k, v in bad_slices.items()} }。"
-        )
+        rounded = {k: round(v, 4) for k, v in bad_slices.items()}
+        reasons.append(f"slice 退化超过 tolerance={cfg.slice_tolerance:.4f}：{rounded}。")
 
     # G6: cost evidence
     if cost_status == "unavailable":

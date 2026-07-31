@@ -110,6 +110,16 @@ def _content_text(content: dict[str, Any]) -> str:
     return "\n".join(str(part.get("text", "")) for part in (content.get("parts") or []) if part.get("text"))
 
 
+def _normalized_query(query: str) -> str:
+    """归一化用于审计匹配的 query：去首尾空白并折叠连续空白。
+
+    优化器可能对 query 做 trim/换行重排等轻量改写，完全严格的文本匹配
+    会让审计直接杀死整个 optimize 流程，得不偿失。
+    """
+
+    return " ".join(query.split())
+
+
 def _case_contexts(*paths: Path) -> dict[str, list[dict[str, Any]]]:
     """Index evaluation metadata by query without treating query as eval_id.
 
@@ -129,7 +139,7 @@ def _case_contexts(*paths: Path) -> dict[str, list[dict[str, Any]]]:
             query = _content_text(invocation.get("user_content") or {})
             if not query:
                 continue
-            contexts.setdefault(query, []).append(
+            contexts.setdefault(_normalized_query(query), []).append(
                 {
                     "eval_id": case["eval_id"],
                     "split": ((case.get("session_input") or {}).get("state") or {}).get("split"),
@@ -146,9 +156,10 @@ def _audited_call_agent(
     audit: list[dict[str, Any]],
 ):
     async def call_agent(query: str) -> str:
-        matching_contexts = contexts.get(query)
-        if not matching_contexts:
-            raise KeyError(f"call_agent 收到未登记的评测 query：{query!r}")
+        # 未登记的 query 降级为空上下文继续执行并在审计中标记，
+        # 而不是抛错中断整个优化流程：审计是观察手段，不应成为故障点。
+        matching_contexts = contexts.get(_normalized_query(query)) or []
+        context_match = "matched" if matching_contexts else "unmatched"
         try:
             response = await base_call_agent(query)
         except BaseException as error:
@@ -156,6 +167,7 @@ def _audited_call_agent(
                 {
                     "query": query,
                     "eval_contexts": matching_contexts,
+                    "context_match": context_match,
                     "status": "error",
                     "error": f"{type(error).__name__}: {error}",
                 }
@@ -165,6 +177,7 @@ def _audited_call_agent(
             {
                 "query": query,
                 "eval_contexts": matching_contexts,
+                "context_match": context_match,
                 "status": "ok",
                 "actual_response": response,
             }
