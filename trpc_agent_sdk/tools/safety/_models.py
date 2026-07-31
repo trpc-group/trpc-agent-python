@@ -17,6 +17,10 @@ from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
 
+# Accommodate large provider/CI environments while bounding aggregate input.
+_MAX_ENV_ENTRIES = 1024
+_MAX_ENV_TOTAL_BYTES = 1_048_576
+
 
 class ScriptLanguage(str, Enum):
     """Script languages supported by the safety scanner."""
@@ -75,7 +79,10 @@ class SafetyScanRequest(BaseModel):
     language: ScriptLanguage
     argv: list[str] = Field(default_factory=list, max_length=256)
     cwd: str | None = Field(default=None, max_length=4096)
-    env: dict[str, str] = Field(default_factory=dict, max_length=256)
+    env: dict[str, str] = Field(
+        default_factory=dict,
+        max_length=_MAX_ENV_ENTRIES,
+    )
     timeout_seconds: float | None = Field(default=None, gt=0)
     tool_name: str | None = Field(default=None, max_length=256)
     metadata: dict[str, str] = Field(default_factory=dict, max_length=64)
@@ -96,6 +103,9 @@ class SafetyScanRequest(BaseModel):
 
         if any(not key or len(key) > 256 or len(value) > 8192 for key, value in values.items()):
             raise ValueError("env keys or values exceed safety input limits")
+        total_bytes = sum(len(key.encode("utf-8")) + len(value.encode("utf-8")) for key, value in values.items())
+        if total_bytes > _MAX_ENV_TOTAL_BYTES:
+            raise ValueError("env exceeds the total safety input limit")
         return values
 
     @field_validator("metadata")

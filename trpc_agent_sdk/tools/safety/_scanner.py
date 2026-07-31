@@ -98,6 +98,8 @@ _SYSTEM_PATHS = (
 _SAFE_SYSTEM_WRITE_PATHS = {
     Path("/dev/null"),
 }
+# Stay well below the Python recursion limit across mixed nested analyzers.
+_MAX_NESTED_ANALYSIS_DEPTH = 32
 _LOCAL_BINDING_PREFIX = "__local__."
 _NETWORK_FUNCTIONS = {
     "requests.get",
@@ -576,7 +578,11 @@ class SafetyScanner:
             status = AnalysisStatus.UNSUPPORTED
         return self._report(findings, started, digest, analysis_status=status)
 
-    def _scan_python(self, request: SafetyScanRequest) -> AnalysisResult:
+    def _scan_python(
+        self,
+        request: SafetyScanRequest,
+        analysis_depth: int = 0,
+    ) -> AnalysisResult:
         try:
             tree = ast.parse(request.content)
         except (SyntaxError, ValueError, MemoryError, RecursionError) as ex:
@@ -704,6 +710,7 @@ class SafetyScanner:
                 request,
                 stable_constants,
                 nested_statuses,
+                analysis_depth,
             )
             self._check_python_resource(findings, node, call_name, request.content, parent)
             function = functions.get(call_name)
@@ -720,6 +727,7 @@ class SafetyScanner:
                     nested_statuses,
                     sensitive_names,
                     functions,
+                    analysis_depth + 1,
                 )
             sink_values = [*node.args, *(keyword.value for keyword in node.keywords)]
             if self._is_secret_sink(call_name):
@@ -781,10 +789,19 @@ class SafetyScanner:
         nested_statuses: list[AnalysisStatus],
         sensitive_names: set[str],
         functions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef],
+        analysis_depth: int,
         visited_functions: set[str] | None = None,
     ) -> None:
         """Propagate literal arguments through one local wrapper function."""
 
+        if analysis_depth >= _MAX_NESTED_ANALYSIS_DEPTH:
+            self._append(
+                findings,
+                "PROC-003",
+                "nested analysis depth limit exceeded",
+            )
+            nested_statuses.append(AnalysisStatus.BUDGET_EXCEEDED)
+            return
         visited = set(visited_functions or ())
         if function.name in visited:
             return
@@ -845,6 +862,7 @@ class SafetyScanner:
                 request,
                 resolved,
                 nested_statuses,
+                analysis_depth,
             )
             self._check_python_resource(findings, child, child_name, request.content, parent)
             sink_values = [*child.args, *(keyword.value for keyword in child.keywords)]
@@ -880,10 +898,15 @@ class SafetyScanner:
                     nested_statuses,
                     sensitive_names | sensitive_parameters,
                     functions,
+                    analysis_depth + 1,
                     visited,
                 )
 
-    def _scan_bash(self, request: SafetyScanRequest) -> AnalysisResult:
+    def _scan_bash(
+        self,
+        request: SafetyScanRequest,
+        analysis_depth: int = 0,
+    ) -> AnalysisResult:
         findings: list[SafetyFinding] = []
         try:
             analysis = analyze_bash(request.content)
@@ -969,6 +992,7 @@ class SafetyScanner:
                 tokens,
                 resolved_request,
                 nested_statuses,
+                analysis_depth,
             )
         for redirect in analysis.redirects:
             target = redirect.target
@@ -1228,6 +1252,7 @@ class SafetyScanner:
         request: SafetyScanRequest,
         constants: dict[str, str],
         nested_statuses: list[AnalysisStatus],
+        analysis_depth: int,
     ) -> None:
         if (call_name in {
                 "eval",
@@ -1349,6 +1374,7 @@ class SafetyScanner:
                 parts,
                 nested_request,
                 nested_statuses,
+                analysis_depth + 1,
             )
         if call_name == "subprocess.Popen":
             self._append_node(findings, "PROC-004", node, request.content)
@@ -1655,7 +1681,17 @@ class SafetyScanner:
         segment: list[str],
         request: SafetyScanRequest,
         nested_statuses: list[AnalysisStatus] | None = None,
+        analysis_depth: int = 0,
     ) -> None:
+        if analysis_depth >= _MAX_NESTED_ANALYSIS_DEPTH:
+            self._append(
+                findings,
+                "PROC-003",
+                "nested analysis depth limit exceeded",
+            )
+            if nested_statuses is not None:
+                nested_statuses.append(AnalysisStatus.BUDGET_EXCEEDED)
+            return
         original_segment = list(segment)
         leading_assignments: list[str] = []
         while segment and self._is_shell_assignment(segment[0]):
@@ -1697,10 +1733,22 @@ class SafetyScanner:
 
         wrapped = self._wrapped_command(segment)
         if wrapped:
-            self._check_bash_segment(findings, wrapped, request, nested_statuses)
+            self._check_bash_segment(
+                findings,
+                wrapped,
+                request,
+                nested_statuses,
+                analysis_depth + 1,
+            )
         if command in {"busybox", "toybox"}:
             if len(segment) > 1:
-                self._check_bash_segment(findings, segment[1:], request, nested_statuses)
+                self._check_bash_segment(
+                    findings,
+                    segment[1:],
+                    request,
+                    nested_statuses,
+                    analysis_depth + 1,
+                )
             else:
                 self._append(findings, "PROC-003", evidence)
         if command in {".", "eval", "source"}:
@@ -1709,11 +1757,15 @@ class SafetyScanner:
             self._append(findings, "PROC-001", evidence)
             nested = self._privileged_command(segment)
             if nested:
-                self._check_bash_segment(findings, nested, request, nested_statuses)
+                self._check_bash_segment(
+                    findings,
+                    nested,
+                    request,
+                    nested_statuses,
+                    analysis_depth + 1,
+                )
         if command == "rm":
-            targets = [
-                self._resolve_shell_value(token, request.env) for token in segment[1:] if not token.startswith("-")
-            ]
+            targets = [self._resolve_shell_value(token, request.env) for token in self._rm_targets(segment[1:])]
             if any(self._is_dynamic_shell_value(target) for target in targets):
                 self._append(findings, "PROC-003", evidence)
             recursive = self._rm_is_recursive(segment[1:])
@@ -1732,7 +1784,13 @@ class SafetyScanner:
             find_roots = [self._resolve_shell_value(token, request.env) for token in segment[1:expression_start]]
             for nested, terminated in self._find_nested_commands(segment):
                 if nested:
-                    self._check_bash_segment(findings, nested, request, nested_statuses)
+                    self._check_bash_segment(
+                        findings,
+                        nested,
+                        request,
+                        nested_statuses,
+                        analysis_depth + 1,
+                    )
                     nested_command = Path(nested[0]).name
                     if (nested_command == "rm" and self._rm_is_recursive(nested[1:])
                             and any(self._is_protected_delete(root, request.cwd) for root in find_roots)):
@@ -1947,7 +2005,12 @@ class SafetyScanner:
                 self._append(findings, "RES-002", evidence)
         if self._bash_static_write_exceeds(segment):
             self._append(findings, "RES-003", evidence)
-        nested_status = self._scan_interpreter_parts(findings, segment, request)
+        nested_status = self._scan_interpreter_parts(
+            findings,
+            segment,
+            request,
+            analysis_depth,
+        )
         if nested_status is not None and nested_statuses is not None:
             nested_statuses.append(nested_status)
         elif command in {"bash", "python", "python3", "sh", "zsh"}:
@@ -2138,6 +2201,7 @@ class SafetyScanner:
         findings: list[SafetyFinding],
         parts: list[str],
         request: SafetyScanRequest,
+        analysis_depth: int,
     ) -> AnalysisStatus | None:
         if not parts:
             return None
@@ -2149,6 +2213,13 @@ class SafetyScanner:
             )
             if invocation is None:
                 return None
+            if analysis_depth + 1 >= _MAX_NESTED_ANALYSIS_DEPTH:
+                self._append(
+                    findings,
+                    "PROC-003",
+                    "nested analysis depth limit exceeded",
+                )
+                return AnalysisStatus.BUDGET_EXCEEDED
             nested_request = request.model_copy(update={
                 "content": invocation.content,
                 "argv": list(invocation.argv),
@@ -2158,7 +2229,10 @@ class SafetyScanner:
                     "bash_positional_arguments": "true",
                 },
             }, )
-            result = self._scan_bash(nested_request)
+            result = self._scan_bash(
+                nested_request,
+                analysis_depth + 1,
+            )
         elif command in {"python", "python3"}:
             command_index = self._python_inline_command_index(parts[1:])
             if command_index is None:
@@ -2167,11 +2241,21 @@ class SafetyScanner:
             if content_index >= len(parts):
                 findings.append(self._analysis_failure("python -c requires a script argument"))
                 return AnalysisStatus.PARSE_ERROR
+            if analysis_depth + 1 >= _MAX_NESTED_ANALYSIS_DEPTH:
+                self._append(
+                    findings,
+                    "PROC-003",
+                    "nested analysis depth limit exceeded",
+                )
+                return AnalysisStatus.BUDGET_EXCEEDED
             nested_request = request.model_copy(update={
                 "content": parts[content_index],
                 "argv": parts[content_index + 1:],
             }, )
-            result = self._scan_python(nested_request)
+            result = self._scan_python(
+                nested_request,
+                analysis_depth + 1,
+            )
         else:
             return None
         findings.extend(result.findings)
@@ -2226,6 +2310,21 @@ class SafetyScanner:
             if token.startswith("-") and any(flag in token[1:] for flag in ("r", "R")):
                 return True
         return False
+
+    @staticmethod
+    def _rm_targets(tokens: list[str]) -> list[str]:
+        """Return rm operands, including option-like names after ``--``."""
+
+        targets: list[str] = []
+        options_ended = False
+        for token in tokens:
+            if not options_ended and token == "--":
+                options_ended = True
+                continue
+            if not options_ended and token.startswith("-") and token != "-":
+                continue
+            targets.append(token)
+        return targets
 
     @staticmethod
     def _is_shell_assignment(token: str) -> bool:

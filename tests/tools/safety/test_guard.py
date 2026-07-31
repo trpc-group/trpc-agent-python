@@ -392,6 +392,29 @@ async def test_program_runner_applies_provider_environment_exactly_once():
 
 
 @pytest.mark.asyncio
+async def test_program_runner_accepts_large_bounded_provider_environment():
+    provider_env = {f"SAFE_KEY_{index}": "value" for index in range(300)}
+    delegate = FakeProgramRunner(
+        provider=lambda _ctx: provider_env,
+        enable_provider_env=True,
+    )
+    runner = GuardedProgramRunner(
+        delegate,
+        SafetyGuard(SafetyScanner(), RecordingAuditSink()),
+        tool_name="SkillRun",
+    )
+
+    result = await runner.run_program(
+        WorkspaceInfo(id="ws", path="/tmp/work"),
+        WorkspaceRunProgramSpec(cmd="echo", args=["hello"], cwd="/tmp/work"),
+    )
+
+    assert result.exit_code == 0
+    assert delegate.calls == 1
+    assert delegate.specs[0].env == provider_env
+
+
+@pytest.mark.asyncio
 async def test_program_runner_does_not_retry_failed_provider_after_scan():
     calls = 0
 

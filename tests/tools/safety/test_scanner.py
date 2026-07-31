@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import time
@@ -19,6 +20,7 @@ import yaml
 
 from trpc_agent_sdk.tools.safety._bash_analyzer import BashParserCompatibilityError
 from trpc_agent_sdk.tools.safety._bash_analyzer import _require_supported_tree_sitter
+from trpc_agent_sdk.tools.safety import AnalysisStatus
 from trpc_agent_sdk.tools.safety import RiskCategory
 from trpc_agent_sdk.tools.safety import RiskLevel
 from trpc_agent_sdk.tools.safety import SafetyDecision
@@ -401,6 +403,27 @@ def test_rm_double_dash_stops_recursive_option_parsing():
 
     assert report.decision == SafetyDecision.ALLOW
     assert "FILE-002" not in {finding.rule_id for finding in report.findings}
+
+
+def test_rm_double_dash_preserves_option_like_operands():
+    policy = SafetyPolicy.model_validate({
+        "commands": {
+            "allowed": ["rm"],
+        },
+        "paths": {
+            "denied": ["-secret"],
+            "workspace_only_delete": True,
+        },
+    })
+    report = SafetyScanner(policy).scan(
+        SafetyScanRequest(
+            content="rm -- -secret",
+            language=ScriptLanguage.BASH,
+            cwd="/tmp/tool-safety-workspace",
+        ))
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-001" in {finding.rule_id for finding in report.findings}
 
 
 @pytest.mark.parametrize(
@@ -1300,6 +1323,101 @@ def test_oversized_input_is_rejected_before_parsing():
     assert report.decision == SafetyDecision.DENY
     assert report.findings[0].rule_id == "POLICY-002"
     assert report.analysis_status.value == "budget_exceeded"
+
+
+def test_environment_total_size_is_bounded():
+    oversized_env = {f"KEY_{index}": "x" * 8192 for index in range(129)}
+
+    with pytest.raises(ValueError, match="total safety input limit"):
+        SafetyScanRequest(
+            content='print("ok")',
+            language=ScriptLanguage.PYTHON,
+            env=oversized_env,
+        )
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        "busybox",
+        "bash",
+        "env",
+        "find",
+    ],
+)
+def test_nested_command_depth_budget_fails_closed_without_recursion_error(
+    wrapper,
+    monkeypatch,
+):
+    from trpc_agent_sdk.tools.safety import _scanner
+
+    monkeypatch.setattr(_scanner, "_MAX_NESTED_ANALYSIS_DEPTH", 4)
+    nested = "echo ok"
+    if wrapper == "busybox":
+        nested = " ".join(["busybox"] * 6 + [nested])
+    elif wrapper == "bash":
+        for _ in range(6):
+            nested = f"bash -c {shlex.quote(nested)}"
+    elif wrapper == "env":
+        for _ in range(6):
+            nested = f"env -S {shlex.quote(nested)}"
+    else:
+        nested = "find . -exec " + " ".join(["busybox"] * 6) + " echo {} \\;"
+    policy = SafetyPolicy.model_validate({
+        "commands": {
+            "allowed": ["bash", "busybox", "echo", "env", "find"],
+        },
+        "rule_overrides": {
+            "PROC-003": {
+                "action": "allow",
+            },
+        },
+    })
+
+    report = SafetyScanner(policy).scan(
+        SafetyScanRequest(
+            content=nested,
+            language=ScriptLanguage.BASH,
+            cwd="/tmp/tool-safety-workspace",
+        ))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert report.analysis_status == AnalysisStatus.BUDGET_EXCEEDED
+    assert report.analysis_complete is False
+    depth_finding = next(finding for finding in report.findings if finding.rule_id == "PROC-003")
+    assert depth_finding.action == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert all("RecursionError" not in finding.evidence for finding in report.findings)
+
+
+def test_default_depth_budget_handles_thousands_of_nested_wrappers():
+    policy = SafetyPolicy.model_validate({
+        "commands": {
+            "allowed": ["busybox", "echo"],
+        },
+    })
+    nested = " ".join(["busybox"] * 1200 + ["echo", "ok"])
+
+    report = SafetyScanner(policy).scan(
+        SafetyScanRequest(
+            content=nested,
+            language=ScriptLanguage.BASH,
+            cwd="/tmp/tool-safety-workspace",
+        ))
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert report.analysis_status == AnalysisStatus.BUDGET_EXCEEDED
+    assert "nested analysis depth limit exceeded" in {finding.evidence for finding in report.findings}
+
+
+def test_nested_command_within_depth_budget_still_detects_danger():
+    nested = "rm -rf /"
+    for _ in range(3):
+        nested = f"bash -c {shlex.quote(nested)}"
+
+    report = _scan(nested, ScriptLanguage.BASH)
+
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE-001" in {finding.rule_id for finding in report.findings}
 
 
 def test_no_findings_uses_none_risk_level():
