@@ -167,6 +167,14 @@ class ReportGenerator:
             lines.append(f"| 提升 | {oe.pass_rate_improvement:+.4f} |")
             lines.append(f"| 耗时 | {oe.duration_seconds:.2f}s |")
             lines.append(f"| 成本 | ${oe.total_llm_cost:.4f} |")
+            if oe.stop_reason:
+                lines.append(f"| Stop Reason | {oe.stop_reason} |")
+            if oe.finish_reason:
+                lines.append(f"| Finish Reason | {oe.finish_reason} |")
+            if oe.total_metric_calls:
+                lines.append(f"| Total Metric Calls | {oe.total_metric_calls} |")
+            if oe.total_token_usage:
+                lines.append(f"| Token Usage | {oe.total_token_usage} |")
             lines.append("")
 
             if oe.best_prompts:
@@ -178,6 +186,22 @@ class ReportGenerator:
                     lines.append(content.strip())
                     lines.append("```")
                     lines.append("")
+
+            if oe.rounds:
+                lines.append("### 逐轮记录")
+                lines.append("")
+                lines.append("| Round | Train Pass Rate | Val Pass Rate | Accepted | Reason | Failed Cases |")
+                lines.append("|-------|----------------|---------------|----------|--------|--------------|")
+                for r in oe.rounds:
+                    failed = r.get("failedCaseIds") or []
+                    lines.append(
+                        f"| {r.get('round', '')} | {r.get('trainPassRate', 0):.4f} | "
+                        f"{r.get('validationPassRate', 0):.4f} | "
+                        f"{'Y' if r.get('accepted') else 'N'} | "
+                        f"{r.get('acceptanceReason', '')} | "
+                        f"{', '.join(failed)} |"
+                    )
+                lines.append("")
 
         lines.extend([
             "---",
