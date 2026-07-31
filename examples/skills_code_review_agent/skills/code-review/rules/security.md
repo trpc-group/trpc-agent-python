@@ -48,7 +48,7 @@ Example:
 
 ```python
 logger.info("connecting with password=%s", password)
-API_KEY = "sk-live-1234567890"
+API_KEY = "example-sensitive-api-key-value"
 ```
 
 Trigger conditions:

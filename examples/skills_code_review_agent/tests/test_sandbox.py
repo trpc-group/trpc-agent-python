@@ -74,6 +74,35 @@ def test_local_dev_with_allow_executes_rule_runner(tmp_path: Path):
     assert result["skill_name"] == "code-review"
 
 
+def test_forbidden_referenced_input_path_is_denied_before_subprocess(tmp_path: Path, monkeypatch):
+    allowed_dir = tmp_path / "allowed"
+    denied_dir = tmp_path / "denied"
+    allowed_dir.mkdir()
+    denied_dir.mkdir()
+    input_path, manifest_path = _write_inputs(denied_dir)
+    output_path = allowed_dir / "rule_result.json"
+    called = {"value": False}
+
+    def fail_if_called(*args, **kwargs):
+        called["value"] = True
+        raise AssertionError("subprocess.run should not be called for forbidden paths")
+
+    monkeypatch.setattr("examples.skills_code_review_agent.agent.sandbox.subprocess.run", fail_if_called)
+    sandbox_run, events, result = run_rule_script(
+        "task",
+        RuntimeKind.LOCAL_DEV,
+        True,
+        input_path,
+        manifest_path,
+        output_path,
+    )
+
+    assert sandbox_run.status is SandboxStatus.DENIED
+    assert events[0].reason_code.value == "forbidden_path"
+    assert called["value"] is False
+    assert result["findings"] == []
+
+
 def test_container_runtime_records_human_review(tmp_path: Path, monkeypatch):
     input_path, manifest_path = _write_inputs(tmp_path)
     monkeypatch.setattr(

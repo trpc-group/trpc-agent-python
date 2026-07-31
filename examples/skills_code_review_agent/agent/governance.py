@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from dataclasses import dataclass
 from dataclasses import field
@@ -24,18 +25,10 @@ from .sanitizer import redact_text
 MAX_TIMEOUT_SEC = 120.0
 MAX_OUTPUT_LIMIT_BYTES = 1024 * 1024
 DEFAULT_ALLOWED_ENV_KEYS = ("LANG", "LC_ALL", "PATH", "PYTHONPATH")
-_DANGEROUS_COMMAND_FRAGMENTS = (
-    "rm -rf",
-    "sudo ",
-    "chmod -R",
-    "chown -R",
-    "mkfs",
-    "dd if=",
-    "> /etc/",
-    "> /usr/",
-    "> /var/",
-)
 _NETWORK_COMMANDS = ("curl", "wget", "nc", "ncat", "telnet", "ssh", "scp")
+_SHELL_EXECUTABLES = {"sh", "bash"}
+_SHELL_PAYLOAD_FLAGS = {"-c", "-lc"}
+_SENSITIVE_REDIRECT_ROOTS = ("/etc/", "/usr/", "/var/")
 
 
 @dataclass(frozen=True)
@@ -51,6 +44,7 @@ class ExecutionRequest:
     network_allowed: bool = False
     script_path: str = ""
     allowed_roots: tuple[str, ...] = field(default_factory=tuple)
+    referenced_paths: tuple[str, ...] = field(default_factory=tuple)
     env: dict[str, str] = field(default_factory=dict)
     allowed_env_keys: tuple[str, ...] = DEFAULT_ALLOWED_ENV_KEYS
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -121,7 +115,7 @@ def evaluate_execution_request(task_id: str, request: ExecutionRequest) -> Filte
             reason_code=FilterReasonCode.NETWORK_DENIED,
             target_type=FilterTargetType.NETWORK,
         )
-    if _is_dangerous_command(command_text):
+    if _is_dangerous_command(request.command):
         return _event(
             **base,
             decision=FilterDecision.DENY,
@@ -174,15 +168,19 @@ def _event(
 def _paths_are_allowed(request: ExecutionRequest) -> bool:
     if not request.allowed_roots:
         return True
-    roots = [Path(root).expanduser().resolve() for root in request.allowed_roots]
-    paths = [Path(request.cwd).expanduser()]
+    roots = [_resolve_governance_path(root) for root in request.allowed_roots]
+    paths = [_resolve_governance_path(request.cwd)]
     if request.script_path:
-        paths.append(Path(request.script_path).expanduser())
-    for path in paths:
-        resolved = path.resolve()
+        paths.append(_resolve_governance_path(request.script_path))
+    paths.extend(_resolve_governance_path(path) for path in request.referenced_paths if path)
+    for resolved in paths:
         if not any(_is_relative_to(resolved, root) for root in roots):
             return False
     return True
+
+
+def _resolve_governance_path(path: str) -> Path:
+    return Path(path).expanduser().resolve(strict=False)
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
@@ -194,7 +192,13 @@ def _is_relative_to(path: Path, root: Path) -> bool:
 
 
 def _uses_network(command: list[str]) -> bool:
-    return any(Path(part).name in _NETWORK_COMMANDS for part in command)
+    analysis = _analyze_command(command)
+    if analysis.executable in _NETWORK_COMMANDS:
+        return True
+    for payload in analysis.shell_payloads:
+        if _payload_invokes_known_command(payload, _NETWORK_COMMANDS):
+            return True
+    return False
 
 
 def _disallowed_env_keys(request: ExecutionRequest) -> list[str]:
@@ -202,10 +206,81 @@ def _disallowed_env_keys(request: ExecutionRequest) -> list[str]:
     return sorted(key for key in request.env if key.upper() not in allowed)
 
 
-def _is_dangerous_command(command_text: str) -> bool:
-    lowered = command_text.lower()
-    return any(fragment.lower() in lowered for fragment in _DANGEROUS_COMMAND_FRAGMENTS)
+def _is_dangerous_command(command: list[str]) -> bool:
+    analysis = _analyze_command(command)
+    argv = analysis.argv
+    if _argv_is_dangerous(argv):
+        return True
+    return any(_payload_is_dangerous(payload) for payload in analysis.shell_payloads)
 
 
 def _command_text(command: list[str]) -> str:
     return shlex.join(command)
+
+
+@dataclass(frozen=True)
+class _CommandAnalysis:
+    argv: tuple[str, ...]
+    executable: str
+    shell_payloads: tuple[str, ...] = ()
+
+
+def _analyze_command(command: list[str]) -> _CommandAnalysis:
+    argv = tuple(command)
+    executable = Path(argv[0]).name.lower() if argv else ""
+    shell_payloads: list[str] = []
+    if executable in _SHELL_EXECUTABLES:
+        for index, part in enumerate(argv[:-1]):
+            if part in _SHELL_PAYLOAD_FLAGS:
+                shell_payloads.append(argv[index + 1])
+    return _CommandAnalysis(argv=argv, executable=executable, shell_payloads=tuple(shell_payloads))
+
+
+def _argv_is_dangerous(argv: tuple[str, ...]) -> bool:
+    if not argv:
+        return False
+    executable = Path(argv[0]).name.lower()
+    arguments = [item.lower() for item in argv[1:]]
+    flags = {item for item in arguments if item.startswith("-")}
+    if executable == "rm" and ({"-rf", "-fr"} & flags or {"--recursive", "--force"} <= flags):
+        return True
+    if executable == "chmod" and ("-R" in argv[1:] or "-r" in flags or "--recursive" in flags):
+        return True
+    if executable == "chown" and ("-R" in argv[1:] or "-r" in flags or "--recursive" in flags):
+        return True
+    if executable == "mkfs":
+        return True
+    if executable == "dd" and any(item.startswith("if=") for item in arguments):
+        return True
+    return False
+
+
+def _payload_invokes_known_command(payload: str, known_commands: tuple[str, ...]) -> bool:
+    lowered = payload.lower()
+    for command_name in known_commands:
+        pattern = rf"(^|[;&|][&|]?\s*){re.escape(command_name)}(\s|$)"
+        if re.search(pattern, lowered):
+            return True
+    return False
+
+
+def _payload_is_dangerous(payload: str) -> bool:
+    lowered = payload.lower()
+    for root in _SENSITIVE_REDIRECT_ROOTS:
+        trimmed_root = root.rstrip("/")
+        redirect_markers = (f"> {root}", f">> {root}", f"> {trimmed_root}", f">> {trimmed_root}")
+        if any(marker in lowered for marker in redirect_markers):
+            return True
+    if re.search(r"(^|[;&|][&|]?\s*)mkfs(\s|$)", lowered):
+        return True
+    if re.search(r"(^|[;&|][&|]?\s*)dd\s+[^;&|]*\bif=", lowered):
+        return True
+    if re.search(r"(^|[;&|][&|]?\s*)rm\s+[^;&|]*(?:-rf|-fr)\b", lowered):
+        return True
+    if re.search(r"(^|[;&|][&|]?\s*)rm\s+[^;&|]*--recursive\b[^;&|]*--force\b", lowered):
+        return True
+    if re.search(r"(^|[;&|][&|]?\s*)chmod\s+[^;&|]*(?:-r\b|--recursive\b)", lowered):
+        return True
+    if re.search(r"(^|[;&|][&|]?\s*)chown\s+[^;&|]*(?:-r\b|--recursive\b)", lowered):
+        return True
+    return False

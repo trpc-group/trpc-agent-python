@@ -48,7 +48,7 @@ def run_rule_script(
     """Run or simulate the bundled rule runner under example governance."""
     input_file = Path(input_path).expanduser().resolve()
     manifest_file = Path(manifest_path).expanduser().resolve()
-    output_file = Path(output_path).expanduser().resolve()
+    output_file = Path(output_path).expanduser().resolve(strict=False)
     script_path = Path(__file__).parents[1] / "skills" / "code-review" / "scripts" / "rule_runner.py"
     command = [
         sys.executable,
@@ -69,6 +69,7 @@ def run_rule_script(
         allow_local=allow_local,
         script_path=str(script_path),
         allowed_roots=(str(Path(__file__).parents[1]), str(output_file.parent)),
+        referenced_paths=(str(input_file), str(manifest_file), str(output_file)),
         metadata={
             "input": str(input_file),
             "manifest": str(manifest_file),

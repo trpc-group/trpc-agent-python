@@ -33,8 +33,8 @@ from .models import RuntimeKind
 from .models import SandboxRun
 from .models import TaskStatus
 from .models import utc_now_iso
+from .report import _route_findings
 from .report import build_review_report
-from .report import route_findings
 from .report import write_review_report
 from .sandbox import run_rule_script
 from .sanitizer import redact_mapping
@@ -110,6 +110,7 @@ def run_review_pipeline(config: ReviewPipelineConfig) -> ReviewPipelineResult:
     _write_json_atomic(Path(artifact_paths["sandbox_runs"]), redact_mapping({"sandbox_runs": [sandbox_run.to_dict()]}))
 
     total_duration_ms = int((time.monotonic() - started) * 1000)
+    routed = _route_findings(raw_findings, filter_events, [sandbox_run])
     report = build_review_report(
         task_id=task.id,
         input_summary=input_summary,
@@ -117,6 +118,7 @@ def run_review_pipeline(config: ReviewPipelineConfig) -> ReviewPipelineResult:
         filter_events=filter_events,
         sandbox_runs=[sandbox_run],
         total_duration_ms=total_duration_ms,
+        routed=routed,
     )
     report_json, report_md = write_review_report(output_dir, report)
     artifact_paths["review_report_json"] = str(report_json)
@@ -125,7 +127,9 @@ def run_review_pipeline(config: ReviewPipelineConfig) -> ReviewPipelineResult:
     task.status = TaskStatus.DONE
     task.summary = report.conclusion
     task.finished_at = utc_now_iso()
-    routed_findings, warnings, needs_human_review = route_findings(raw_findings, filter_events, [sandbox_run])
+    routed_findings = routed.findings
+    warnings = routed.warnings
+    needs_human_review = routed.needs_human_review
     with config.store_factory(config.db_path) as store:
         store.save_review(
             task=task,

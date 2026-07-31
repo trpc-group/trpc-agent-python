@@ -11,6 +11,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import examples.skills_code_review_agent.agent.pipeline as pipeline_module
+import examples.skills_code_review_agent.agent.report as report_module
 from examples.skills_code_review_agent.agent import InputType
 from examples.skills_code_review_agent.agent import ReviewPipelineConfig
 from examples.skills_code_review_agent.agent import ReviewStore
@@ -107,3 +109,53 @@ def test_pipeline_uses_injected_store_factory(tmp_path: Path):
     assert saved
     assert saved[0]["task"].id == result.task.id
     assert saved[0]["report"].task_id == result.task.id
+
+
+def test_pipeline_routes_findings_once_and_reuses_results(tmp_path: Path, monkeypatch):
+    saved: list[dict] = []
+    route_calls = {"count": 0}
+    original_route = pipeline_module._route_findings
+
+    class FakeStore:
+
+        def __init__(self, db_path):
+            self.db_path = db_path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def save_review(self, **kwargs):
+            saved.append(kwargs)
+
+    def counting_route(*args, **kwargs):
+        route_calls["count"] += 1
+        return original_route(*args, **kwargs)
+
+    def unexpected_report_route(*args, **kwargs):
+        raise AssertionError("build_review_report should reuse precomputed routed findings")
+
+    monkeypatch.setattr(pipeline_module, "_route_findings", counting_route)
+    monkeypatch.setattr(report_module, "_route_findings", unexpected_report_route)
+
+    result = run_review_pipeline(
+        ReviewPipelineConfig(
+            input_type=InputType.FIXTURE,
+            input_ref="secret",
+            output_dir=tmp_path,
+            db_path=tmp_path / "review.sqlite3",
+            store_factory=FakeStore,
+        ))
+
+    assert route_calls["count"] == 1
+    assert saved
+    assert [item.to_dict() for item in saved[0]["findings"]] == [item.to_dict() for item in result.findings]
+    assert [item.to_dict() for item in saved[0]["warnings"]] == [item.to_dict() for item in result.warnings]
+    assert [item.to_dict()
+            for item in saved[0]["needs_human_review"]] == [item.to_dict() for item in result.needs_human_review]
+    assert [item.to_dict() for item in result.report.findings] == [item.to_dict() for item in result.findings]
+    assert [item.to_dict() for item in result.report.warnings] == [item.to_dict() for item in result.warnings]
+    assert [item.to_dict()
+            for item in result.report.needs_human_review] == [item.to_dict() for item in result.needs_human_review]

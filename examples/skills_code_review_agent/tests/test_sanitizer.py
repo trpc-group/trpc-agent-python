@@ -9,17 +9,22 @@ from __future__ import annotations
 
 from examples.skills_code_review_agent.agent import redact_mapping
 from examples.skills_code_review_agent.agent import redact_text
+from examples.skills_code_review_agent.tests.secret_samples import bearer_like_token
+from examples.skills_code_review_agent.tests.secret_samples import openai_like_token
 
 
 def test_redacts_common_secret_shapes():
-    text = ("Authorization: Bearer abcdefghijklmnop\n"
-            "API_KEY = \"sk-abcdefghijklmnop\"\n"
+    bearer = bearer_like_token()
+    api_key = openai_like_token()
+    text = (f"Authorization: Bearer {bearer_like_token()}\n"
+            f"API_KEY = \"{openai_like_token()}\"\n"
             "password=supersecret\n"
             "postgres://user:plainpass@db.example/app\n")
 
     redacted = redact_text(text)
 
-    assert "abcdefghijklmnop" not in redacted
+    assert bearer not in redacted
+    assert api_key not in redacted
     assert "supersecret" not in redacted
     assert "plainpass" not in redacted
     assert "[REDACTED]" in redacted
@@ -33,7 +38,7 @@ def test_redacts_private_key_blocks():
 
 def test_redacts_nested_json_like_payloads():
     payload = {
-        "headers": ["Bearer abcdefghijklmnop"],
+        "headers": [f"Bearer {bearer_like_token()}"],
         "config": {
             "password": "password=plainsecret",
             "safe": "visible",

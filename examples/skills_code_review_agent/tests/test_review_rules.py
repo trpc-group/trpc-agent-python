@@ -11,10 +11,11 @@ from examples.skills_code_review_agent.agent import FindingCategory
 from examples.skills_code_review_agent.agent import FindingSeverity
 from examples.skills_code_review_agent.agent import parse_unified_diff
 from examples.skills_code_review_agent.agent import run_review_rules
+from examples.skills_code_review_agent.tests.secret_samples import openai_like_token
 
 
 def test_hard_coded_secret_is_reported_and_redacted():
-    findings = _findings("""+API_KEY = "sk-abcdefghijklmnop"\n""")
+    findings = _findings(f"""+API_KEY = "{openai_like_token()}"\n""")
 
     secret = _first(findings, FindingCategory.SECRET)
     assert secret.severity is FindingSeverity.CRITICAL

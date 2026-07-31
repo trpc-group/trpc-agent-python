@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from .models import FilterDecision
@@ -26,6 +27,13 @@ from .sanitizer import redact_mapping
 from .sanitizer import redact_text
 
 _WARNING_CONFIDENCE_THRESHOLD = 0.7
+
+
+@dataclass(frozen=True)
+class RoutedFindings:
+    findings: list[Finding]
+    warnings: list[Finding]
+    needs_human_review: list[Finding]
 
 
 def dedupe_findings(findings: list[Finding]) -> list[Finding]:
@@ -48,6 +56,15 @@ def route_findings(
     sandbox_runs: list[SandboxRun],
 ) -> tuple[list[Finding], list[Finding], list[Finding]]:
     """Split findings into report findings, warnings, and human-review items."""
+    routed = _route_findings(findings, filter_events, sandbox_runs)
+    return routed.findings, routed.warnings, routed.needs_human_review
+
+
+def _route_findings(
+    findings: list[Finding],
+    filter_events: list[FilterEvent],
+    sandbox_runs: list[SandboxRun],
+) -> RoutedFindings:
     routed_findings: list[Finding] = []
     warnings: list[Finding] = []
     needs_human_review: list[Finding] = []
@@ -62,7 +79,11 @@ def route_findings(
     for sandbox_run in sandbox_runs:
         if sandbox_run.status is not SandboxStatus.SUCCESS:
             needs_human_review.append(_sandbox_finding(sandbox_run))
-    return routed_findings, warnings, dedupe_findings(needs_human_review)
+    return RoutedFindings(
+        findings=routed_findings,
+        warnings=warnings,
+        needs_human_review=dedupe_findings(needs_human_review),
+    )
 
 
 def build_review_report(
@@ -73,9 +94,13 @@ def build_review_report(
     filter_events: list[FilterEvent],
     sandbox_runs: list[SandboxRun],
     total_duration_ms: int = 0,
+    routed: RoutedFindings | None = None,
 ) -> ReviewReport:
     """Build the final machine-readable review report."""
-    routed_findings, warnings, needs_human_review = route_findings(findings, filter_events, sandbox_runs)
+    routed = routed or _route_findings(findings, filter_events, sandbox_runs)
+    routed_findings = routed.findings
+    warnings = routed.warnings
+    needs_human_review = routed.needs_human_review
     all_items = [*routed_findings, *warnings, *needs_human_review]
     metrics = ReviewMetrics(
         total_duration_ms=total_duration_ms,

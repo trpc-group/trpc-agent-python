@@ -23,6 +23,9 @@ from examples.skills_code_review_agent.agent import dedupe_findings
 from examples.skills_code_review_agent.agent import parse_fixture
 from examples.skills_code_review_agent.agent import run_review_pipeline
 from examples.skills_code_review_agent.agent import run_review_rules
+from examples.skills_code_review_agent.tests.secret_samples import generic_api_key_value
+from examples.skills_code_review_agent.tests.secret_samples import generic_bearer_value
+from examples.skills_code_review_agent.tests.secret_samples import generic_password_value
 
 
 @pytest.mark.parametrize(
@@ -112,15 +115,15 @@ def test_secret_fixture_redacts_every_persisted_boundary(tmp_path: Path):
     assert any(item.category is FindingCategory.SECRET for item in result.findings)
 
     report_text = json.dumps(result.report.to_dict())
-    assert "sk-live-1234567890abcdef" not in report_text
-    assert "correct-horse-battery-staple" not in report_text
-    assert "very-long-token-value-123456" not in report_text
+    assert generic_api_key_value() not in report_text
+    assert generic_password_value() not in report_text
+    assert generic_bearer_value() not in report_text
 
     with ReviewStore(output_dir / "review.sqlite3") as store:
         rows = store.list_findings(result.task.id)
         assert rows
-        assert "sk-live-1234567890abcdef" not in json.dumps(rows)
-        assert "correct-horse-battery-staple" not in json.dumps(rows)
+        assert generic_api_key_value() not in json.dumps(rows)
+        assert generic_password_value() not in json.dumps(rows)
 
 
 def test_public_fixture_parser_preserves_added_line_locations():
