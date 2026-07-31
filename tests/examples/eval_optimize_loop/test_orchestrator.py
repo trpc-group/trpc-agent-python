@@ -699,14 +699,19 @@ async def test_custom_generator_unknown_cost_fails_closed_when_budget_enabled(tm
     assert "COST_UNAVAILABLE" in report.gate_decision.reasons
 
 
-def test_reproducibility_command_contains_all_effective_cli_inputs(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("object_id_length", (40, 64))
+def test_reproducibility_command_contains_all_effective_cli_inputs(
+        tmp_path,
+        monkeypatch,
+        object_id_length,
+) -> None:
     repo = tmp_path / "repo with space"
     root = repo / "examples" / "optimization" / "eval_optimize_loop"
     root.mkdir(parents=True)
 
     def fake_run(args, **kwargs):
         if args[-1] == "HEAD":
-            stdout = "a" * 40 + "\n"
+            stdout = "a" * object_id_length + "\n"
         elif args[-1] == "--porcelain":
             stdout = ""
         elif args[-1] == "--show-toplevel":
@@ -735,6 +740,7 @@ def test_reproducibility_command_contains_all_effective_cli_inputs(tmp_path, mon
     )
     args = shlex.split(result.command)
     assert result.reproducible is True
+    assert result.git_commit == "a" * object_id_length
     assert args[1] == "examples/optimization/eval_optimize_loop/run_pipeline.py"
     assert args[args.index("--config") + 1].endswith("custom config.json")
     assert args[args.index("--train") + 1].endswith("custom train.json")

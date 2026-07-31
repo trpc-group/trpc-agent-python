@@ -1107,6 +1107,57 @@ async def test_live_worker_cleanup_escalates_after_wait_and_terminate_errors(mon
 
 
 @pytest.mark.asyncio
+async def test_live_worker_uses_sanitized_stderr_when_error_artifact_is_missing(monkeypatch, tmp_path) -> None:
+    stderr = asyncio.StreamReader()
+    stderr.feed_data(b"".join((
+        b"old-diagnostic\nAuthorization: Bearer ",
+        b"boundary-secret-" * 400,
+        b"\nImportError: failed before worker main; Authorization: Bearer startup-secret\n",
+    )))
+    stderr.feed_eof()
+
+    class FailedProcess:
+        returncode = 1
+
+        def __init__(self) -> None:
+            self.stderr = stderr
+
+        async def wait(self):
+            return self.returncode
+
+    captured = {}
+
+    async def fake_subprocess(*args, **kwargs):
+        captured.update(kwargs)
+        return FailedProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    with pytest.raises(RuntimeError) as raised:
+        await LiveCandidateGenerator(_live_adapter()).generate(
+            target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
+            baseline_prompts={"system": "baseline"},
+            train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
+            inner_train_path="inner-train.json",
+            inner_selection_path="inner-selection.json",
+            config_path="optimizer.json",
+            output_dir=str(tmp_path / "optimizer-output"),
+        )
+
+    message = str(raised.value)
+    assert captured["stderr"] is asyncio.subprocess.PIPE
+    assert "failed without an error artifact" in message
+    assert "ImportError: failed before worker main" in message
+    assert "startup-secret" not in message
+    assert "boundary-secret" not in message
+    assert "[REDACTED]" in message
+    assert "old-diagnostic" not in message
+    assert len(message) < 4200
+
+
+@pytest.mark.asyncio
 async def test_live_worker_success_is_loaded_through_the_strict_candidate_adapter(monkeypatch, tmp_path) -> None:
     round_ = SimpleNamespace(
         round=1,

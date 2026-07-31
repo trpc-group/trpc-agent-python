@@ -45,6 +45,7 @@ from .trace_fixture import TraceFixture
 CallAgent = Callable[[str], Awaitable[str]]
 _DEFAULT_APP_NAME = "test_app"
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+_WORKER_STDERR_TAIL_BYTES = 4000
 
 
 async def _evaluate_with_sdk(
@@ -335,12 +336,51 @@ class LiveCandidateGenerator:
 
     @staticmethod
     def _request_stop(output_dir: str, cancellation: BaseException) -> None:
+        # The SDK's GepaReflectiveOptimizer registers a FileStopper for this
+        # exact path. Forced process termination remains the bounded fallback.
         stop_path = Path(output_dir) / "optimize.stop"
         try:
             stop_path.parent.mkdir(parents=True, exist_ok=True)
             stop_path.write_text("cancel requested\n", encoding="utf-8")
         except OSError as stop_error:
             add_exception_note(cancellation, f"could not request optimizer stop: {stop_error}")
+
+    @staticmethod
+    async def _capture_worker_stderr(stderr: Optional[asyncio.StreamReader]) -> str:
+        """Drain worker stderr continuously and retain only a sanitized tail."""
+
+        if stderr is None:
+            return ""
+        tail = bytearray()
+        truncated = False
+        try:
+            while True:
+                chunk = await stderr.read(8192)
+                if not chunk:
+                    break
+                if len(chunk) >= _WORKER_STDERR_TAIL_BYTES:
+                    tail[:] = chunk[-_WORKER_STDERR_TAIL_BYTES:]
+                    truncated = True
+                    continue
+                tail.extend(chunk)
+                overflow = len(tail) - _WORKER_STDERR_TAIL_BYTES
+                if overflow > 0:
+                    del tail[:overflow]
+                    truncated = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as capture_error:
+            detail = sanitized_text(capture_error, max_text_chars=1000)
+            return f"stderr capture failed with {type(capture_error).__name__}: {detail}"
+        if not tail:
+            return ""
+        text = tail.decode("utf-8", errors="replace")
+        if truncated:
+            line_end = text.find("\n")
+            if line_end < 0:
+                return "[stderr tail omitted: final line exceeded capture limit]"
+            text = text[line_end + 1:]
+        return sanitized_text(text, max_text_chars=_WORKER_STDERR_TAIL_BYTES)
 
     async def _wait_for_worker(
         self,
@@ -424,20 +464,31 @@ class LiveCandidateGenerator:
                     pass
 
     async def _complete_worker_stop(
-        self,
-        process: asyncio.subprocess.Process,
-        *,
-        output_dir: str,
-        cancellation: BaseException,
+            self,
+            process: asyncio.subprocess.Process,
+            *,
+            output_dir: str,
+            cancellation: BaseException,
+            stderr_capture: asyncio.Task[str],
     ) -> None:
         """Finish bounded child cleanup even if the parent task is canceled again."""
 
-        cleanup = asyncio.create_task(
-            self._stop_worker(
-                process,
-                output_dir=output_dir,
-                cancellation=cancellation,
-            ))
+        async def stop_and_discard_stderr() -> None:
+            try:
+                await self._stop_worker(
+                    process,
+                    output_dir=output_dir,
+                    cancellation=cancellation,
+                )
+            finally:
+                if not stderr_capture.done():
+                    stderr_capture.cancel()
+                try:
+                    await stderr_capture
+                except asyncio.CancelledError:
+                    pass
+
+        cleanup = asyncio.create_task(stop_and_discard_stderr())
         repeated_cancellations = 0
         while not cleanup.done():
             try:
@@ -494,8 +545,9 @@ class LiveCandidateGenerator:
             str(request_path),
             cwd=str(_REPOSITORY_ROOT),
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
+        stderr_capture = asyncio.create_task(self._capture_worker_stderr(getattr(process, "stderr", None)))
         try:
             return_code = await process.wait()
         except asyncio.CancelledError as cancellation:
@@ -503,8 +555,10 @@ class LiveCandidateGenerator:
                 process,
                 output_dir=output_dir,
                 cancellation=cancellation,
+                stderr_capture=stderr_capture,
             )
             raise
+        stderr_detail = await stderr_capture
         result_path = Path(output_dir) / "result.json"
         if return_code != 0:
             error_path = Path(output_dir) / "worker_error.json"
@@ -512,6 +566,8 @@ class LiveCandidateGenerator:
             if error_path.is_file():
                 payload = parse_strict_json(error_path.read_text(encoding="utf-8"))
                 detail = str(payload.get("message", detail))
+            elif stderr_detail:
+                detail = f"{detail}; sanitized stderr tail: {stderr_detail}"
             raise RuntimeError(f"AgentOptimizer worker failed with exit code {return_code}: {detail}")
         if not result_path.is_file():
             raise RuntimeError("AgentOptimizer worker completed without result.json")

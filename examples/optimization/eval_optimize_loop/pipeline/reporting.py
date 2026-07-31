@@ -33,6 +33,8 @@ from .models import (
     SourceApplication,
 )
 
+_GIT_OBJECT_ID_PATTERN = re.compile(r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})\Z")
+
 
 @dataclass(frozen=True)
 class ReportContext:
@@ -130,7 +132,9 @@ def build_reproducibility(
             ).stdout.strip()).resolve()
     except (OSError, subprocess.SubprocessError):
         reason = "git_metadata_unavailable"
-    if reason is None and (commit is None or not re.fullmatch(r"[0-9a-fA-F]{40}", commit)):
+    # Git repositories may use SHA-1 or SHA-256 object IDs. ``rev-parse``
+    # already verified that HEAD resolves; this check rejects malformed output.
+    if reason is None and (commit is None or _GIT_OBJECT_ID_PATTERN.fullmatch(commit) is None):
         reason = "git_commit_invalid"
     elif reason is None and dirty:
         reason = "worktree_dirty"
