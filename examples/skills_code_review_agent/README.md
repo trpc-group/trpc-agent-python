@@ -6,28 +6,32 @@ renders `review_report.json` + `review_report.md`.
 
 > 中文说明见 [README.zh_CN.md](./README.zh_CN.md)。
 
-## Quick start (no API key)
+## Quick start
 
 ```bash
 pip install -r requirements.txt
+docker build -t cr-scanners:latest ../../skills/code-review   # the sandbox image
 
-# Review a bundled fixture (no model needed). Default runtime is the sandbox
-# (auto -> container if Docker is up, else the local subprocess sandbox):
+# The product path: an LlmAgent loads the code-review Skill and runs it in a sandbox.
+export TRPC_AGENT_API_KEY=...            # any OpenAI-compatible endpoint; see .env.example
+python run_agent.py --fixture security.diff
+
+# Same four steps with no API key and no Docker (issue criterion 6):
+python run_agent.py --fixture security.diff --dry-run
+
+# The deterministic CLI: same skill script, launched directly. Used for scoring the fixtures.
 python run_review.py --fixture security.diff --out-dir /tmp/cr
 
 # Review your own diff, working tree, or an explicit file list:
 python run_review.py --diff-file my.diff
 python run_review.py --repo-path /path/to/repo --no-db
-python run_review.py --files pipeline/engine.py,pipeline/scanners.py
+python run_review.py --files pipeline/engine.py,pipeline/devrun.py
 
 # Scored self-test over the labelled fixtures (detection-rate / false-positive-rate):
 python selftest.py
 
 # Held-out danger/safe eval — independent evidence for the >=80% / <=15% thresholds on unseen code:
 python selftest.py --holdout
-
-# Run the review through the LlmAgent with the fake model (no API key needed):
-python run_agent.py --fixture security.diff --dry-run
 ```
 
 A sample report is committed under [`sample_output/`](./sample_output/); the rule catalog is in
@@ -59,22 +63,32 @@ diff/repo ──▶ diff_parser ──▶ scanners ──▶ dedup/denoise ─�
 
 ## Design note
 
-The backbone is a **deterministic pipeline**; the agent (Skills + sandbox + Filter) is *one of two
-finding sources*, not the orchestrator. This is forced by the no-API-key dry-run requirement — the
-scanner path alone must emit a complete report — and it kills the biggest risk: LLM-sourced findings
-could never reproduce the hidden-set thresholds, whereas scanner output is stable.
+The agent is the orchestrator, and the Skill is the single source of findings. A review is four
+steps: `stage_review_input` materializes the diff on the host, `skill_load` loads `SKILL.md` and its
+rule docs through the framework's Skills mechanism, `skill_run` executes the skill's own
+`scripts/run_checks.py` inside a workspace sandbox, and `finalize_review` dedups, persists and
+renders. The model decides and reports; it never invents a finding, because every finding comes from
+a scanner that ran in the sandbox.
+
+Findings are deterministic *because the scanners are*, not because the agent is bypassed — which is
+what lets the same path satisfy both the product requirement and the no-API-key dry-run (criterion
+6): `--dry-run` swaps the model, not the pipeline, so it walks the identical four steps.
 
 **Skill design.** `skills/code-review/` packages the review as a portable Skill (`SKILL.md` +
 `scripts/run_checks.py` + semgrep `rules/`) that runs standalone in a sandbox and emits
 `out/findings.json` per `docs/OUTPUT_SCHEMA.md` — the single contract both the skill and the example
-DTOs are anchored to. **Sandbox strategy.** Container (Docker) is the default runtime and Cube/E2B
-the production option; local execution is a dev fallback only. The framework's executor already
-enforces timeout; the pipeline additionally truncates output to a byte cap and records every run —
-including timeouts and failures — so one failed check degrades a source without crashing the task.
-**Filter strategy.** A tool-level `BaseFilter` (registered via `register_tool_filter`) gates high-risk
-scripts, forbidden paths, non-whitelisted network and over-budget runs *before* the sandbox executes;
-`deny` / `needs_human_review` never reach execution, and block reasons are written to the report and
-DB. **Monitoring.** Per-review metrics (total/sandbox time, tool-call count, block count, finding
+DTOs are anchored to. **Sandbox strategy.** Container (Docker) is the default runtime; local execution is a development
+fallback only, never implicitly selected. The framework's `skill_run` enforces the timeout and
+collects the output; every run — including timeouts and blocks — is recorded as a `SandboxRunResult`,
+so one failed check degrades a source without crashing the task. Because the workspace runtimes stage
+inputs at different depths, the skill script locates its own scan root from the `.changes.diff`
+sidecar staged beside the changed files; findings' paths therefore match the diff under any layout.
+**Filter strategy.** A tool-level `BaseFilter` gates high-risk scripts, forbidden paths,
+non-whitelisted network and over-budget runs *before* the sandbox executes; `deny` /
+`needs_human_review` never reach execution, and block reasons are written to the report and DB. The
+filter is attached to `skill_run`, and the toolset is narrowed to `skill_load` + `skill_run` — the
+stock `SkillToolSet` also exposes `skill_exec` / `workspace_exec`, which are built without filters
+and would otherwise let the model route around the gate entirely. **Monitoring.** Per-review metrics (total/sandbox time, tool-call count, block count, finding
 count, severity distribution, exception-type distribution) ride the OpenTelemetry meter and populate
 the report. **DB schema.** Four tables (`review_tasks`, `sandbox_runs`, `findings`, `reports`), all
 keyed by `task_id`, on `SqlStorage` with portable column types so SQLite/PostgreSQL/MySQL work by URL
@@ -86,28 +100,33 @@ a rendered report — criterion 5 is binary-checked, so redaction is centralized
 
 ## Status
 
-Implemented: deterministic pipeline, DB persistence (incl. sandbox-run rows), 8 fixtures, scored
-self-test, CLI, the fake-model agent loop (`run_agent.py`), and **sandbox execution**
-(`--runtime local` runs the scanners in a subprocess sandbox with timeout + output cap and records
-each run; `--runtime container` runs them in a Docker workspace — see `skills/code-review/Dockerfile`
-— and is skipped in tests when Docker is absent). **Secret redaction** is hardened: `redact()` layers
-provider-token regexes + a Shannon-entropy catch-all and hits 100% on the leak-test corpus with zero
-false positives (criterion 5, ≥95%).
+The agent path is the product path: a real model by default, the Skill loaded through
+`SkillToolSet` -> `skill_load` -> `skill_run`, the scanners in a container sandbox, results
+deduplicated, persisted and rendered. `--dry-run` substitutes `FakeReviewModel`, which drives the
+same four steps with no API key and no Docker (criterion 6).
 
-The **Filter gate** (criterion 7) is in place: `pipeline/policy.py::ReviewPolicy` decides
-allow / deny / needs-human-review for a sandbox action (high-risk command, forbidden path,
-non-whitelisted network, over-budget). It is enforced at two sites sharing that policy — the
-deterministic sandbox gate (a denied action never launches; the block is recorded and surfaced in
-the report's Filter-interception section) and the framework `agent/filter.py::ReviewGuardFilter`
-(TOOL-scoped, attached on the review tool).
+`skills/code-review/scripts/run_checks.py` is the only implementation of the review rules. The agent
+reaches it through the Skills mechanism; the deterministic CLI (`run_review.py`, `selftest.py`)
+reaches the same script through a development subprocess. Nothing re-implements the rules elsewhere.
+
+**Filter gate** (criterion 7/8): `pipeline/policy.py::ReviewPolicy` decides allow / deny /
+needs-human-review, enforced by `agent/filter.py::ReviewGuardFilter` on `skill_run` before the
+sandbox runs, and by the same policy in the development runner. Blocks are recorded and surfaced in
+the report's Filter-interception section. The sandbox receives only a whitelisted environment.
+
+**Secret redaction** (criterion 5): `redact()` layers provider-token regexes plus a Shannon-entropy
+catch-all and hits 100% on the leak-test corpus with zero false positives; the skill script redacts
+at emit time as well, so nothing unredacted reaches the model's context.
 
 Rule coverage spans all six required categories (security, secret_leakage, async_errors,
 resource_leak, db_lifecycle, missing_tests); the eight fixtures match the official scenarios
 (`clean`, `security`, `async_resource_leak`, `db_lifecycle`, `missing_tests`, `duplicate_finding`,
 `sandbox_failure`, `secret_redaction`). Inputs: `--diff-file`, `--repo-path`, `--files a.py,b.py`,
-or `--fixture`. The default runtime is `auto` — the container sandbox when Docker is available, else
-the local subprocess sandbox (`--runtime inprocess` is an explicit fast dev opt-in). The sandbox
-receives only a whitelisted environment. See [DESIGN.md](./DESIGN.md) for the design note.
+or `--fixture`. See [DESIGN.md](./DESIGN.md) for the design note.
 
-Remaining (non-code): an independent labelled eval set to prove the hidden-set thresholds, and
-verifying the container runtime on a Docker host (the code path and `Dockerfile` are in place).
+**Tests.** `pytest tests/examples/test_skills_code_review_agent.py` — the suite asserts the four-step
+skill sequence, that `SKILL.md`'s content reaches the model, and that findings' file paths match the
+diff. Emptying `SKILL.md` turns two tests red; deleting it turns three red. A real-model integration
+test runs under `CR_LIVE_MODEL_TEST=1` with an API key and skips cleanly without one.
+
+Remaining: an independent labelled eval set to prove the hidden-set thresholds.

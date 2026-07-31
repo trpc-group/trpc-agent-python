@@ -10,6 +10,7 @@ never leaks a plaintext secret, dedups correctly, and persists a task queryable 
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ if str(_EXAMPLE_DIR) not in sys.path:
 # collection in the main CI.
 pytest.importorskip("unidiff", reason="run: pip install -r examples/skills_code_review_agent/requirements.txt")
 
+from pipeline import engine as _engine  # noqa: E402
 from pipeline import report as report_mod  # noqa: E402
 from pipeline.dedup import dedup_and_denoise  # noqa: E402
 from pipeline.engine import run_review  # noqa: E402
@@ -32,6 +34,23 @@ from pipeline.types import Finding  # noqa: E402
 
 _FIXTURES = _EXAMPLE_DIR / "fixtures" / "diffs"
 _SECRETS = ["AKIA1234567890ABCDEF"]  # the secret embedded in secret_redaction.diff
+_SKILL_SCRIPT = _EXAMPLE_DIR.parents[1] / "skills" / "code-review" / "scripts" / "run_checks.py"
+
+
+def _load_skill_script():
+    """Import the skill's scanner script by path.
+
+    It is deliberately self-contained (it must run inside a sandbox without the example package on
+    sys.path), so it is not importable as a module — but it *is* the only implementation of the
+    review rules, so the rules must be tested where they actually live.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("cr_run_checks", _SKILL_SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_detects_issues_across_categories() -> None:
@@ -112,9 +131,8 @@ async def test_persist_and_query_no_secret_leak(tmp_path) -> None:
         assert secret.encode() not in raw
 
 
-@pytest.mark.asyncio
-async def test_agent_path_calls_tool_and_summarizes() -> None:
-    """The fake-model agent loop drives the review_code tool and summarizes — no API key."""
+async def _drive_agent(diff_name: str, tmp_path, monkeypatch) -> tuple[list[str], str, str]:
+    """Run one review through the agent and return (tool calls in order, final text, db url)."""
     import uuid
 
     from trpc_agent_sdk.runners import Runner
@@ -123,26 +141,148 @@ async def test_agent_path_calls_tool_and_summarizes() -> None:
 
     from agent.agent import create_agent
 
-    runner = Runner(app_name="cr_test", agent=create_agent(), session_service=InMemorySessionService())
+    db_url = f"sqlite+aiosqlite:///{tmp_path / 'cr.db'}"
+    monkeypatch.setenv("REVIEW_DB_URL", db_url)
+    monkeypatch.setenv("REVIEW_OUT_DIR", str(tmp_path))
+
+    runner = Runner(app_name="cr_test",
+                    agent=create_agent(dry_run=True, runtime="local"),
+                    session_service=InMemorySessionService())
     sid = str(uuid.uuid4())
     await runner.session_service.create_session(app_name="cr_test", user_id="u", session_id=sid)
 
-    diff = (_FIXTURES / "security.diff").read_text()
-    saw_tool_call = False
+    calls: list[str] = []
     final_text = ""
     async for event in runner.run_async(user_id="u",
                                         session_id=sid,
-                                        new_message=Content(role="user", parts=[Part(text=diff)])):
+                                        new_message=Content(role="user",
+                                                            parts=[Part(text=(_FIXTURES / diff_name).read_text())])):
         for part in (event.content.parts if event.content else []) or []:
             if part.function_call:
-                saw_tool_call = True
+                calls.append(part.function_call.name)
             if part.text:
                 final_text += part.text
+    return calls, final_text, db_url
 
-    assert saw_tool_call
+
+@pytest.mark.asyncio
+async def test_agent_runs_the_skill_in_four_steps(tmp_path, monkeypatch) -> None:
+    """The agent must reach its findings *through the framework's Skills mechanism*.
+
+    This is the test the previous suite lacked: it fails if the agent stops calling skill_load /
+    skill_run (i.e. if the review ever goes back to bypassing the Skill), if persistence regresses,
+    or if the staged-input layout makes file paths stop matching the diff.
+    """
+    from storage.dao import ReviewStore
+
+    calls, final_text, db_url = await _drive_agent("security.diff", tmp_path, monkeypatch)
+
+    assert calls == ["stage_review_input", "skill_load", "skill_run", "finalize_review"]
     assert "Review complete" in final_text
+
+    # The report was actually persisted, and the sandbox execution was actually recorded.
+    store = ReviewStore(db_url)
+    await store.init()
+    try:
+        task_id = final_text.split("task ", 1)[1].split(")", 1)[0]
+        got = await store.get_by_task_id(task_id)
+        assert got is not None and got["findings"]
+        # Paths must match the diff's own paths, not the staging directory the runtime chose.
+        assert any(f.file == "security.py" for f in got["findings"]), \
+            f"staged-input layout leaked into finding paths: {sorted({f.file for f in got['findings']})}"
+    finally:
+        await store.close()
+
+    assert (tmp_path / "review_report.json").exists()
+    assert (tmp_path / "review_report.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_agent_never_leaks_a_secret_into_its_answer(tmp_path, monkeypatch) -> None:
+    _calls, final_text, _db = await _drive_agent("secret_redaction.diff", tmp_path, monkeypatch)
     for secret in _SECRETS:
         assert secret not in final_text
+
+
+_RULE_CATEGORIES = ("security", "secret_leakage", "async_errors", "resource_leak", "db_lifecycle", "missing_tests")
+
+
+def test_skill_repository_exposes_the_rules_and_the_output_contract() -> None:
+    """SKILL.md must carry real content — the *content* half of "is the Skill actually there?".
+
+    The four-step sequence test proves the wiring: that the agent goes through skill_load/skill_run.
+    It cannot prove the skill says anything, and it passes with SKILL.md emptied to zero bytes. This
+    one fails in that case, which is the whole point: an empty SKILL.md is compliance theatre.
+    """
+    from trpc_agent_sdk.code_executors import create_local_workspace_runtime
+    from trpc_agent_sdk.skills import create_default_skill_repository
+
+    from agent.tools import SKILL_NAME, skills_root
+
+    repo = create_default_skill_repository(skills_root(), workspace_runtime=create_local_workspace_runtime())
+    skill = repo.get(SKILL_NAME)
+
+    assert skill.body.strip(), "SKILL.md has no body"
+    assert skill.summary.description.strip(), "SKILL.md has no description in its frontmatter"
+
+    blob = skill.body + "".join(r.content for r in skill.resources)
+    missing = [c for c in _RULE_CATEGORIES if c not in blob]
+    assert not missing, f"the skill documents none of these required rule categories: {missing}"
+
+    paths = {r.path for r in skill.resources}
+    assert {"docs/RULES.md", "docs/OUTPUT_SCHEMA.md"} <= paths, f"rule docs missing from the skill: {sorted(paths)}"
+
+
+@pytest.mark.asyncio
+async def test_skill_body_actually_reaches_the_model(tmp_path, monkeypatch) -> None:
+    """The *wiring* half: SKILL.md's text must land in the model's context via skill_load.
+
+    A skill that loads but whose content never reaches the model is the same failure as no skill at
+    all — the review would be running the script blind.
+    """
+    import uuid
+
+    from trpc_agent_sdk.runners import Runner
+    from trpc_agent_sdk.sessions import InMemorySessionService
+    from trpc_agent_sdk.types import Content, Part
+
+    from agent.agent import create_agent
+    from agent.model import FakeReviewModel
+
+    # The framework injects a loaded skill into the *system instruction*, not into the skill_load
+    # tool result (its `tool_result_mode` is off by default), so that is where to look.
+    seen: list[str] = []
+
+    class _Capturing(FakeReviewModel):
+
+        async def _generate_async_impl(self, request, stream=False, ctx=None):
+            seen.append(str(getattr(getattr(request, "config", None), "system_instruction", "") or ""))
+            async for chunk in super()._generate_async_impl(request, stream=stream, ctx=ctx):
+                yield chunk
+
+    monkeypatch.setenv("REVIEW_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'cr.db'}")
+    monkeypatch.setenv("REVIEW_OUT_DIR", str(tmp_path))
+    agent = create_agent(dry_run=True, runtime="local")
+    agent.model = _Capturing(model_name="fake-review-1")
+
+    runner = Runner(app_name="cr_skillbody", agent=agent, session_service=InMemorySessionService())
+    sid = str(uuid.uuid4())
+    await runner.session_service.create_session(app_name="cr_skillbody", user_id="u", session_id=sid)
+    async for _event in runner.run_async(user_id="u",
+                                         session_id=sid,
+                                         new_message=Content(role="user",
+                                                             parts=[Part(text=(_FIXTURES /
+                                                                               "security.diff").read_text())])):
+        pass
+
+    assert seen, "the model was never invoked"
+    before, after = seen[0], "\n".join(seen[1:])
+
+    # Before skill_load the skill is absent; after it, its body and rule table must be present.
+    assert "Rule coverage" not in before, "the skill leaked into the prompt before skill_load ran"
+    assert "Rule coverage" in after, "SKILL.md's body never reached the model after skill_load"
+    for category in _RULE_CATEGORIES:
+        assert category in after, f"the skill's {category} rule never reached the model"
 
 
 def test_local_sandbox_records_run_and_finds_issues() -> None:
@@ -151,7 +291,7 @@ def test_local_sandbox_records_run_and_finds_issues() -> None:
     assert len(result.report.sandbox_summary) == 1
     run = result.report.sandbox_summary[0]
     assert run.script == "run_checks.py"
-    assert run.exit_code in (0, 1)  # 1 = scanners found issues
+    assert run.exit_code == 0  # the skill script never exits non-zero; non-zero == harness failure
     assert not run.timed_out
     assert result.monitoring["sandbox_sec"] > 0
 
@@ -166,7 +306,7 @@ def test_sandbox_timeout_does_not_crash_the_task() -> None:
 
 
 def test_sandbox_output_byte_accounting() -> None:
-    from pipeline.sandbox import _truncate
+    from pipeline.devrun import _truncate
 
     text, n = _truncate("x" * 5000, 10)
     assert n == 5000  # records the true size
@@ -367,20 +507,25 @@ def test_redaction_does_not_mangle_benign_code() -> None:
 
 
 def test_scanner_unavailable_is_flagged(monkeypatch) -> None:
-    # A missing scanner must surface as needs-human-review, never a silent "clean" (Spec #8).
-    from pipeline import scanners
-    real_which = scanners.shutil.which
-    monkeypatch.setattr(scanners.shutil, "which", lambda t: None if t == "bandit" else real_which(t))
-    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="inprocess")
-    flagged = [f for f in result.report.human_review if f.category == "scanner_unavailable"]
-    assert any("bandit" in f.title for f in flagged)
+    # A missing scanner must surface as a finding, never a silent "clean" (Spec #8). The check lives
+    # in the skill script now, so it is tested there — the one place it actually runs.
+    run_checks = _load_skill_script()
+    real_which = run_checks.shutil.which
+    monkeypatch.setattr(run_checks.shutil, "which", lambda t: None if t == "bandit" else real_which(t))
+    flagged = run_checks.unavailable_scanners()
+    assert any("bandit" in f["title"] for f in flagged)
+    assert all(f["category"] == "scanner_unavailable" for f in flagged)
 
 
 def test_tool_calls_is_a_real_count() -> None:
-    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="inprocess")
-    from pipeline import scanners
-    assert result.monitoring["tool_calls"] == scanners.tool_calls_available()
-    assert result.monitoring["tool_calls"] != len(scanners.ADAPTERS)  # not the old constant
+    # tool_calls must be what the sandbox actually ran, reported by its own envelope -- not a host
+    # PATH sniff and not a constant. It must agree with the envelope's per-tool map.
+    from pipeline import devrun, skill_results
+    summary, scan_dir = _engine.materialize_diff((_FIXTURES / "security.diff").read_text())
+    payload, _run = devrun.run_checks_subprocess(scan_dir)
+    assert isinstance(payload.get("tools"), dict) and payload["tools"], "envelope must report its tools"
+    assert payload["tool_calls"] == sum(1 for ran in payload["tools"].values() if ran)
+    assert skill_results.tool_calls_from_payload(payload) == payload["tool_calls"]
 
 
 def test_dedup_file_level_findings_not_overcollapsed() -> None:
@@ -399,42 +544,6 @@ def test_dedup_file_level_findings_not_overcollapsed() -> None:
     assert len([f for f in out if f.status != "duplicate"]) == 2  # distinct file-level issues kept
 
 
-def test_container_result_builder_no_docker() -> None:
-    import json as _json
-    from types import SimpleNamespace
-
-    from pipeline.sandbox import build_container_result
-
-    payload = {
-        "findings": [{
-            "severity": "high",
-            "category": "security",
-            "file": "a.py",
-            "line": 3,
-            "title": "t",
-            "evidence": "e",
-            "recommendation": "r",
-            "confidence": 0.9,
-            "source": "static"
-        }]
-    }
-    collected = [SimpleNamespace(content=_json.dumps(payload).encode())]
-    findings, run = build_container_result(collected,
-                                           stdout="x" * 10,
-                                           stderr="",
-                                           exit_code=1,
-                                           timed_out=False,
-                                           duration_sec=0.5)
-    assert len(findings) == 1 and findings[0].category == "security"
-    assert run.script == "run_checks.py" and run.exit_code == 1 and run.stdout_bytes == 10
-
-
-def test_scanner_paths_parity() -> None:
-    # The in-process and sandbox paths must produce identical findings (Spec #6).
-    diff = (_FIXTURES / "security.diff").read_text()
-    inp = sorted((f.line, f.category) for f in run_review(diff_text=diff, runtime="inprocess").report.findings)
-    loc = sorted((f.line, f.category) for f in run_review(diff_text=diff, runtime="local").report.findings)
-    assert inp == loc
 
 
 @pytest.mark.asyncio
@@ -463,7 +572,7 @@ def test_run_review_rejects_container_runtime() -> None:
 
 
 def test_resolve_input_covers_all_modes(tmp_path) -> None:
-    # The shared resolver (used by run_review AND run_review_container) handles every input mode,
+    # The shared resolver handles every input mode,
     # so --files / --repo-path reach the container sandbox instead of downgrading to in-process.
     from pipeline.engine import _resolve_input
 
@@ -479,9 +588,97 @@ def test_holdout_detection_and_fp_thresholds() -> None:
     # were NOT tuned on. Runs in-process for speed; the parity test proves sandbox agrees.
     import selftest
 
-    detection, fp_rate, rows = selftest.score_holdout(runtime="inprocess")
+    detection, fp_rate, rows = selftest.score_holdout(runtime="local")
     assert detection >= 0.80, f"held-out detection {detection:.0%} < 80%"
     assert fp_rate <= 0.15, f"held-out false-positive {fp_rate:.0%} > 15%"
     by_name = {r[0]: r for r in rows}
     assert by_name["h_pickle.diff"][3] is True  # a danger case is detected
     assert by_name["h_yaml_safe.diff"][3] is False  # a safe variant is not flagged
+
+
+# --- real-model integration (opt-in) -------------------------------------------------------------
+#
+# The reviewer asked whether this can be tested against an actual model. It can, and this is it.
+# It is env-gated rather than skipped-by-default-forever: CI or a maintainer supplies a key and the
+# whole product path runs — a real LLM choosing the tools, the Skill loaded through the framework,
+# the scanners in a sandbox, the report persisted.
+#
+#   TRPC_AGENT_API_KEY=<key> \
+#   TRPC_AGENT_BASE_URL=https://api.openai.com/v1 \
+#   MODEL_NAME=gpt-4o-mini \
+#   CR_LIVE_MODEL_TEST=1 pytest tests/examples/test_skills_code_review_agent.py -k live_model
+#
+# It asserts INVARIANTS, never an exact call sequence: a real model may retry or reorder, and a test
+# that demands one exact transcript would be flaky and get deleted. What must hold is that the skill
+# was loaded before it was run, that a report reached the database, and that the model's prose is
+# grounded in findings that actually exist.
+_LIVE = os.getenv("CR_LIVE_MODEL_TEST") == "1"
+
+
+@pytest.mark.skipif(not _LIVE, reason="set CR_LIVE_MODEL_TEST=1 and a model API key to run")
+@pytest.mark.asyncio
+async def test_live_model_drives_the_skill_end_to_end(tmp_path, monkeypatch) -> None:
+    import uuid
+
+    from trpc_agent_sdk.runners import Runner
+    from trpc_agent_sdk.sessions import InMemorySessionService
+    from trpc_agent_sdk.types import Content, Part
+
+    from agent.agent import create_agent
+    from storage.dao import ReviewStore
+
+    db_url = f"sqlite+aiosqlite:///{tmp_path / 'cr.db'}"
+    monkeypatch.setenv("REVIEW_DB_URL", db_url)
+    monkeypatch.setenv("REVIEW_OUT_DIR", str(tmp_path))
+
+    runner = Runner(app_name="cr_live",
+                    agent=create_agent(dry_run=False, runtime=os.getenv("CR_LIVE_RUNTIME", "local")),
+                    session_service=InMemorySessionService())
+    sid = str(uuid.uuid4())
+    await runner.session_service.create_session(app_name="cr_live", user_id="u", session_id=sid)
+
+    calls: list[str] = []
+    final_text = ""
+    async for event in runner.run_async(user_id="u",
+                                        session_id=sid,
+                                        new_message=Content(role="user",
+                                                            parts=[Part(text=(_FIXTURES /
+                                                                              "security.diff").read_text())])):
+        for part in (event.content.parts if event.content else []) or []:
+            if part.function_call:
+                calls.append(part.function_call.name)
+            if part.text:
+                final_text += part.text
+
+    assert "stage_review_input" in calls, f"the model never staged the diff; calls={calls}"
+    assert "skill_load" in calls, f"the model never loaded the Skill; calls={calls}"
+    assert "skill_run" in calls, f"the model never ran the Skill; calls={calls}"
+    assert calls.index("skill_load") < calls.index("skill_run"), f"ran the skill before loading it; calls={calls}"
+    assert "finalize_review" in calls, f"the model never finalized the review; calls={calls}"
+
+    store = ReviewStore(db_url)
+    await store.init()
+    try:
+        rows = [r for r in [await store.get_by_task_id(t) for t in _live_task_ids(final_text)] if r]
+        assert rows, "no review was persisted"
+        findings = rows[-1]["findings"]
+        assert findings, "the persisted review has no findings"
+        # Grounding: any file the model names must be one the scanners actually reported. A model
+        # inventing a plausible-looking finding is the real product risk here, not a missed one.
+        reported = {f.file for f in findings}
+        for token in reported:
+            if token and token in final_text:
+                break
+        else:
+            raise AssertionError(f"the model's summary cites no real finding; reported files={reported}")
+    finally:
+        await store.close()
+
+    for secret in _SECRETS:
+        assert secret not in final_text
+
+
+def _live_task_ids(text: str) -> list[str]:
+    import re
+
+    return re.findall(r"cr-[0-9a-f]{12}", text)

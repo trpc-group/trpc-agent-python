@@ -13,37 +13,19 @@ LLM-agent path with a fake model, use run_agent.py --dry-run instead. Examples:
 
     python run_review.py --diff-file my.diff --out-dir /tmp/cr
     python run_review.py --repo-path /path/to/repo
-    python run_review.py --files pipeline/engine.py,pipeline/scanners.py
-    python run_review.py --fixture security.diff --no-db --runtime inprocess
+    python run_review.py --files pipeline/engine.py,pipeline/devrun.py
+    python run_review.py --fixture security.diff --no-db
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-import shutil
-import subprocess
 from pathlib import Path
 
 from pipeline import report as report_mod
-from pipeline.engine import ReviewResult, run_review, run_review_container
+from pipeline.engine import ReviewResult, run_review
 
 HERE = Path(__file__).parent
-
-
-def _docker_available() -> bool:
-    if not shutil.which("docker"):
-        return False
-    try:
-        return subprocess.run(["docker", "info"], capture_output=True, timeout=5).returncode == 0
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _resolve_runtime(runtime: str) -> str:
-    """`auto` -> container when Docker is up (production default), else the local subprocess sandbox."""
-    if runtime != "auto":
-        return runtime
-    return "container" if _docker_available() else "local"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -54,10 +36,10 @@ def _parse_args() -> argparse.Namespace:
     src.add_argument("--files", help="comma-separated list of file paths to review as fully-added")
     src.add_argument("--fixture", help="name of a bundled fixture under fixtures/diffs/")
     ap.add_argument("--runtime",
-                    choices=["auto", "inprocess", "local", "container"],
+                    choices=["auto", "local"],
                     default="auto",
-                    help="scanner runtime: auto (sandbox: container if Docker, else local), "
-                    "inprocess (fast dev), local (subprocess sandbox), container (Docker)")
+                    help="scanner runtime: auto == local. "
+                    "local (subprocess dev sandbox). Production isolation is the agent path: run_agent.py --runtime container")
     ap.add_argument("--sandbox-timeout", type=float, default=None, help="sandbox timeout in seconds")
     ap.add_argument("--out-dir", default=".", help="where to write review_report.json/.md")
     ap.add_argument("--db-url", default="sqlite+aiosqlite:///./code_review.db")
@@ -66,7 +48,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _run(args: argparse.Namespace) -> ReviewResult:
-    runtime = _resolve_runtime(args.runtime)
     if args.repo_path:
         src = {"repo_path": args.repo_path}
     elif args.files:
@@ -74,11 +55,8 @@ def _run(args: argparse.Namespace) -> ReviewResult:
     else:
         path = Path(args.diff_file) if args.diff_file else HERE / "fixtures" / "diffs" / args.fixture
         src = {"diff_text": path.read_text(encoding="utf-8")}
-    # Every input mode reaches the resolved runtime — container goes to the async container path so
-    # --files / --repo-path are not silently downgraded to in-process.
-    if runtime == "container":
-        return asyncio.run(run_review_container(sandbox_timeout=args.sandbox_timeout, **src))
-    return run_review(runtime=runtime, sandbox_timeout=args.sandbox_timeout, **src)
+    # Every input mode reaches the same skill script through the same subprocess runner.
+    return run_review(runtime=args.runtime, sandbox_timeout=args.sandbox_timeout, **src)
 
 
 async def _persist(result: ReviewResult, db_url: str) -> None:

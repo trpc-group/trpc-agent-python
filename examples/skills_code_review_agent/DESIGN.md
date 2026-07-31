@@ -8,7 +8,7 @@
 `docs/OUTPUT_SCHEMA.md` 是 findings 的唯一契约。findings 来自 bandit / ruff / detect-secrets 等
 成熟扫描器，外加两个自写检测器（DB 连接生命周期、测试缺失），覆盖全部 6 类规则。
 
-**沙箱隔离策略。** 默认走沙箱：有 Docker 时用 Container workspace，否则降级为子进程沙箱（本地仅作
+**沙箱隔离策略。** 默认走 Container workspace 沙箱；本地子进程仅作开发 fallback，不隐式选用（本地仅作
 fallback）。每次执行都有超时（`asyncio.wait_for` / subprocess timeout）、输出字节上限截断、
 资源限制（memory_mb），并把每次运行记录为 `sandbox_run`（含超时、失败、拦截）；单次失败只降级来源，
 不使整个评审崩溃。

@@ -5,13 +5,14 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Run a code review through the LlmAgent (Skills + tool) — the framework-exercising path.
+"""Run a code review through the LlmAgent — the framework-exercising path.
 
-Dry-run by default: with no API key, FakeReviewModel drives one call to the review_code tool and
-summarizes the result — no LLM, no secrets. Set TRPC_AGENT_API_KEY to use a real model instead.
+The agent loads the code-review Skill and runs it in a sandbox: stage_review_input -> skill_load ->
+skill_run -> finalize_review. A real model is the default; --dry-run swaps in FakeReviewModel, which
+drives the same four steps with no API key (issue #92 acceptance 6) and implies the local runtime.
 
-    python run_agent.py --fixture security.diff
-    python run_agent.py --fixture security.diff --dry-run   # force fake model even with a key
+    python run_agent.py --fixture security.diff                 # real model, container sandbox
+    python run_agent.py --fixture security.diff --dry-run       # no API key, no Docker
 """
 from __future__ import annotations
 
@@ -31,9 +32,9 @@ from agent.agent import create_agent
 HERE = Path(__file__).parent
 
 
-async def review(diff_text: str, dry_run: bool = False) -> None:
+async def review(diff_text: str, dry_run: bool = False, runtime: str | None = None) -> None:
     app_name = "code_review_agent"
-    agent = create_agent(dry_run=dry_run)
+    agent = create_agent(dry_run=dry_run, runtime=runtime)
     runner = Runner(app_name=app_name, agent=agent, session_service=InMemorySessionService())
 
     user_id, session_id = "reviewer", str(uuid.uuid4())
@@ -61,10 +62,14 @@ def main() -> None:
     src.add_argument("--fixture")
     ap.add_argument("--dry-run",
                     action="store_true",
-                    help="force the fake model even if an API key is set (no real LLM call)")
+                    help="force the fake model even if an API key is set (no real LLM call); implies --runtime local")
+    ap.add_argument("--runtime",
+                    choices=["container", "local"],
+                    default=None,
+                    help="sandbox the skill runs in (default: container; local is the dev fallback)")
     args = ap.parse_args()
     path = Path(args.diff_file) if args.diff_file else HERE / "fixtures" / "diffs" / args.fixture
-    asyncio.run(review(path.read_text(encoding="utf-8"), dry_run=args.dry_run))
+    asyncio.run(review(path.read_text(encoding="utf-8"), dry_run=args.dry_run, runtime=args.runtime))
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from . import diff_parser, report as report_mod, scanners
+from . import diff_parser, report as report_mod
 from .dedup import dedup_and_denoise
 from .policy import ReviewPolicy
 from .types import DiffSummary, Finding, ReviewReport
@@ -41,8 +41,27 @@ class ReviewResult:
     monitoring: dict = field(default_factory=dict)
 
 
-def _materialize(diff_text: str) -> tuple[DiffSummary, str]:
-    """Parse a diff and write its post-change files into a temp dir for scanning."""
+#: Dropped next to the materialized files so the skill script can locate its own scan root and
+#: restrict findings to changed lines. Hidden, so the scanners never scan it (it carries the diff's
+#: raw secrets verbatim).
+DIFF_SIDECAR = ".changes.diff"
+
+
+def new_task_id() -> str:
+    """A fresh review task id."""
+    return f"cr-{uuid.uuid4().hex[:12]}"
+
+
+def materialize_diff(diff_text: str) -> tuple[DiffSummary, str]:
+    """Parse a diff and write its post-change files into a temp dir for scanning.
+
+    The diff itself is written alongside as ``.changes.diff``. That sidecar is how the skill script
+    finds its scan root: the workspace runtimes stage inputs at *different* depths (the local
+    runtime nests them under a directory named after the source, the container runtime does not), so
+    a fixed ``--target`` path cannot be relied on. Anchoring on the sidecar makes findings' file
+    paths match the diff's paths under every layout — and gives the script the diff it needs for
+    changed-line filtering and the missing-tests rule.
+    """
     summary = diff_parser.parse_unified_diff(diff_text)
     files = diff_parser.materialize_new_files(diff_text)
     tmp = tempfile.mkdtemp(prefix="cr_scan_")
@@ -50,7 +69,12 @@ def _materialize(diff_text: str) -> tuple[DiffSummary, str]:
         dest = Path(tmp) / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content, encoding="utf-8")
+    (Path(tmp) / DIFF_SIDECAR).write_text(diff_text, encoding="utf-8")
     return summary, tmp
+
+
+#: Historical private name; several call sites inside this module still use it.
+_materialize = materialize_diff
 
 
 def _materialize_files(paths: list[str], repo_root: str) -> str:
@@ -80,56 +104,63 @@ def run_review(
     warn_threshold: float | None = None,
     review_threshold: float | None = None,
 ) -> ReviewResult:
-    """Run one review (deterministic, no LLM). Provide either ``diff_text`` or ``repo_path``.
+    """Run one review deterministically, with no LLM. Provide ``diff_text``, ``files`` or ``repo_path``.
 
-    ``runtime``: ``inprocess`` (default, fast) runs scanners in-process; ``local`` runs them in a
-    subprocess sandbox with timeout + output cap (dev fallback) and records a sandbox run. The
-    ``container`` runtime (production isolation) is async — see ``run_review_container``.
+    This is the **development / acceptance** path: it launches the code-review Skill's own script in
+    a subprocess (see ``devrun``). Production isolation is the container workspace the agent drives
+    through ``skill_run`` — issue #92 allows a local runtime only as a development fallback, so
+    ``runtime`` accepts just ``auto``/``local``, and both mean the same thing here.
 
     Returns a ``ReviewResult``; persistence is done separately by the async ``storage.dao.ReviewStore``
     so this core stays synchronous and dependency-light.
     """
-    task_id = task_id or f"cr-{uuid.uuid4().hex[:12]}"
+    from . import devrun, skill_results
+
+    if runtime not in ("auto", "local"):
+        raise ValueError(f"unsupported runtime {runtime!r}: the deterministic CLI runs the skill script in a "
+                         f"subprocess. For sandboxed production execution use the agent path "
+                         f"(`run_agent.py --runtime container`), which drives the skill through skill_run.")
+
+    task_id = task_id or new_task_id()
     started = time.monotonic()
     exception_dist: dict[str, int] = {}
 
-    # `auto` is the default: sandbox, not in-process. This sync entry can't drive the async container
-    # runtime, so auto resolves to the local subprocess sandbox here; the CLI upgrades auto->container
-    # when Docker is available (see run_review.py / run_review_container). `inprocess` is an opt-in dev
-    # fast-path that must be requested explicitly.
-    if runtime == "auto":
-        runtime = "local"
-    elif runtime == "container":
-        raise ValueError("container runtime is async — call run_review_container() instead of run_review()")
-
     summary, scan_dir, source_type, source_ref = _resolve_input(diff_text, files, repo_path, repo_root)
 
-    sandbox_runs: list = []
-    if runtime == "local":
-        from . import sandbox as sandbox_mod
-        raw, run = sandbox_mod.run_local(
-            scan_dir,
-            timeout=sandbox_timeout if sandbox_timeout is not None else sandbox_mod.DEFAULT_TIMEOUT_SEC,
-            max_bytes=max_output_bytes if max_output_bytes is not None else sandbox_mod.MAX_OUTPUT_BYTES,
-            policy=policy if policy is not None else ReviewPolicy())
-        sandbox_runs = [run]
-        if run.timed_out or (not run.blocked and run.exit_code not in (0, 1)):  # 1 = issues found (normal)
-            exception_dist["sandbox_failure"] = exception_dist.get("sandbox_failure", 0) + 1
-    else:  # "inprocess"
-        try:
-            raw = scanners.scan(scan_dir, summary)
-        except Exception as exc:  # noqa: BLE001 - boundary; never crash the task
-            exception_dist[type(exc).__name__] = exception_dist.get(type(exc).__name__, 0) + 1
-            raw = []
+    payload, run = devrun.run_checks_subprocess(
+        scan_dir,
+        timeout=sandbox_timeout if sandbox_timeout is not None else devrun.DEFAULT_TIMEOUT_SEC,
+        max_bytes=max_output_bytes if max_output_bytes is not None else devrun.MAX_OUTPUT_BYTES,
+        policy=policy if policy is not None else ReviewPolicy())
+    # The script always exits 0; a non-zero code means the harness itself failed.
+    if run.timed_out or (not run.blocked and run.exit_code != 0):
+        exception_dist["sandbox_failure"] = exception_dist.get("sandbox_failure", 0) + 1
 
-    # missing_tests is a diff-level check (no file content / sandbox needed) — add it for every runtime.
-    raw = list(raw) + scanners.detect_missing_tests(summary)
-    return _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, started, exception_dist,
-                     warn_threshold, review_threshold)
+    # missing_tests comes from the skill too — it reads the diff sidecar materialize_diff wrote.
+    return _assemble(task_id,
+                     summary,
+                     skill_results.findings_from_payload(payload),
+                     [run],
+                     source_type,
+                     source_ref,
+                     started,
+                     exception_dist,
+                     warn_threshold,
+                     review_threshold,
+                     tool_calls=skill_results.tool_calls_from_payload(payload))
 
 
-def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, started, exception_dist, warn_threshold,
-              review_threshold) -> ReviewResult:
+def _assemble(task_id,
+              summary,
+              raw,
+              sandbox_runs,
+              source_type,
+              source_ref,
+              started,
+              exception_dist,
+              warn_threshold,
+              review_threshold,
+              tool_calls: Optional[int] = None) -> ReviewResult:
     """Shared tail: dedup/denoise -> monitoring -> build+redact report -> ReviewResult."""
     findings = dedup_and_denoise(
         raw,
@@ -154,7 +185,9 @@ def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, star
     monitoring = {
         "total_sec": round(time.monotonic() - started, 3),
         "sandbox_sec": round(sum(r.duration_sec for r in sandbox_runs), 3),
-        "tool_calls": scanners.tool_calls_available(),
+        # How many scanners actually ran, as reported by the sandbox envelope itself — measured
+        # where the work happened, so it cannot drift from the host PATH.
+        "tool_calls": tool_calls or 0,
         "block_count": len(filter_blocks),
         "finding_count": len(active),
         "severity_dist": severity_dist,
@@ -175,11 +208,56 @@ def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, star
                         monitoring=monitoring)
 
 
+def assemble_from_skill_findings(
+    *,
+    task_id: str,
+    summary: DiffSummary,
+    payload: dict,
+    source_type: str,
+    source_ref: str,
+    started: float,
+    skill_run_result: Optional[dict] = None,
+    sandbox_runs: Optional[list] = None,
+) -> ReviewResult:
+    """Build a review result from what the code-review Skill produced.
+
+    This is the agent path's counterpart to ``run_review``: the findings already exist (the skill
+    computed them in a sandbox), so this only does the host-side half — dedup/denoise, monitoring,
+    and the redacted report.
+
+    ``skill_run_result`` is the raw ``skill_run`` tool result; when given, its exit code, duration
+    and output sizes become the report's sandbox-execution summary. ``sandbox_runs`` overrides that
+    entirely, for the case where the guard Filter blocked the run before it ever reached a sandbox.
+    """
+    from . import skill_results
+
+    runs = list(sandbox_runs) if sandbox_runs is not None else []
+    if not runs and skill_run_result is not None:
+        runs = [skill_results.sandbox_run_from_skill_result(skill_run_result)]
+
+    exception_dist: dict[str, int] = {}
+    for run in runs:
+        if run.timed_out or (not run.blocked and run.exit_code != 0):
+            exception_dist["sandbox_failure"] = exception_dist.get("sandbox_failure", 0) + 1
+
+    return _assemble(task_id,
+                     summary,
+                     skill_results.findings_from_payload(payload),
+                     runs,
+                     source_type,
+                     source_ref,
+                     started,
+                     exception_dist,
+                     None,
+                     None,
+                     tool_calls=skill_results.tool_calls_from_payload(payload))
+
+
 def _resolve_input(diff_text: Optional[str], files: Optional[list[str]], repo_path: Optional[str],
                    repo_root: str) -> tuple[DiffSummary, str, str, str]:
     """Materialize any of the three input modes into (summary, scan_dir, source_type, source_ref).
 
-    Shared by run_review and run_review_container so every input mode reaches the same sandbox path.
+    Shared by every entry point so all three input modes reach the same skill script.
     """
     if diff_text is not None:
         summary, scan_dir = _materialize(diff_text)
@@ -191,35 +269,6 @@ def _resolve_input(diff_text: Optional[str], files: Optional[list[str]], repo_pa
         return diff_parser.parse_git_worktree(repo_path), repo_path, "repo_path", repo_path
     raise ValueError("a review requires diff_text, files, or repo_path")
 
-
-async def run_review_container(
-    *,
-    task_id: Optional[str] = None,
-    diff_text: Optional[str] = None,
-    files: Optional[list[str]] = None,
-    repo_path: Optional[str] = None,
-    repo_root: str = ".",
-    sandbox_timeout: float | None = None,
-    max_output_bytes: int | None = None,
-) -> ReviewResult:
-    """Run a review with scanners inside a Container workspace (production isolation; needs Docker).
-
-    Accepts the same three input modes as run_review so file-list and worktree inputs also reach the
-    container sandbox instead of silently falling back to the in-process path.
-    """
-    from . import sandbox as sandbox_mod
-    task_id = task_id or f"cr-{uuid.uuid4().hex[:12]}"
-    started = time.monotonic()
-    summary, scan_dir, source_type, source_ref = _resolve_input(diff_text, files, repo_path, repo_root)
-    raw, run = await sandbox_mod.run_container(
-        scan_dir,
-        timeout=sandbox_timeout if sandbox_timeout is not None else sandbox_mod.DEFAULT_TIMEOUT_SEC,
-        max_bytes=max_output_bytes if max_output_bytes is not None else sandbox_mod.MAX_OUTPUT_BYTES)
-    exception_dist: dict[str, int] = {}
-    if run.timed_out or run.exit_code not in (0, 1):
-        exception_dist["sandbox_failure"] = 1
-    raw = list(raw) + scanners.detect_missing_tests(summary)
-    return _assemble(task_id, summary, raw, [run], source_type, source_ref, started, exception_dist, None, None)
 
 
 def dedup_thresholds() -> tuple[float, float]:

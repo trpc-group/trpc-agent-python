@@ -16,7 +16,7 @@ python run_review.py --fixture security.diff --out-dir /tmp/cr
 # 评审你自己的 diff、工作区，或指定文件列表：
 python run_review.py --diff-file my.diff
 python run_review.py --repo-path /path/to/repo --no-db
-python run_review.py --files pipeline/engine.py,pipeline/scanners.py
+python run_review.py --files pipeline/engine.py,pipeline/devrun.py
 
 # 在带标注的样本上打分自测（检出率 / 误报率）：
 python selftest.py
@@ -64,4 +64,4 @@ SQLite/PG/MySQL 仅换 URL。**去重降噪**：同 `(文件,行,类别)` 至多
 
 已实现：确定性流水线、数据库落库、8 个样本、打分自测、CLI、基线脱敏。
 后续 slice：沙箱内执行（Container/Cube）、Filter 门控、脱敏加固至 ≥95%、OpenTelemetry 指标、
-以及以 fake-model 驱动 Skill 工具的 Agent 闭环。
+以及 Agent 闭环:真模型经 skill_load / skill_run 在沙箱中执行 Skill,--dry-run 以 fake model 走同样四步。
