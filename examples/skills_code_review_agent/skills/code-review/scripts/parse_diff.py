@@ -57,7 +57,7 @@ def parse_diff(diff_content):
                 files[current_file].append({
                     'line': current_line_num,
                     'type': 'context',
-                    'content': line[1:] if len(line) > 0 else ''
+                    'content': line[1:] if (line and line[0] == ' ') else line
                 })
                 current_line_num += 1
 
@@ -81,7 +81,9 @@ def main():
 
     parsed = parse_diff(content)
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    out_dir = os.path.dirname(args.output)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(parsed, f, indent=2)
 

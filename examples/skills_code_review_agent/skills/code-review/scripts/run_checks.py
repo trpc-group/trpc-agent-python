@@ -176,7 +176,17 @@ def run_checks(parsed_diff, src_dir):
     for filename, lines in parsed_diff.items():
         # Try to parse the full file from workspace if present, or reconstruct code
         full_code = None
-        local_path = os.path.join(src_dir, filename) if src_dir else filename
+        # Resolve and validate path to prevent directory traversal
+        if src_dir:
+            normalized_src = os.path.abspath(src_dir)
+            local_path = os.path.abspath(os.path.join(normalized_src, filename))
+            if not local_path.startswith(normalized_src) or ".." in filename:
+                # Path traversal detected, skip reading file from disk
+                continue
+        else:
+            if ".." in filename or os.path.isabs(filename):
+                continue
+            local_path = filename
         
         # Build set of modified lines
         modified_lines_set = {item["line"] for item in lines if item["type"] == "added"}
@@ -335,7 +345,9 @@ def main():
 
     findings = run_checks(parsed_diff, args.src_dir)
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    out_dir = os.path.dirname(args.output)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(findings, f, indent=2)
 

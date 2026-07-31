@@ -57,10 +57,11 @@ class CodeReviewAgent:
     """
     Main Code Review Agent orchestrator.
     """
-    def __init__(self, db_url: str = "sqlite:///review_agent.db", runtime_mode: str = "local"):
+    def __init__(self, db_url: str = "sqlite:///review_agent.db", runtime_mode: str = "local", repo_path: str = "."):
         self.db = ReviewDbRepository(db_url)
         self.filter = FilterGovernance()
         self.runtime_mode = runtime_mode
+        self.repo_path = repo_path
         self.tool_call_count = 0
         self.block_count = 0
 
@@ -226,6 +227,8 @@ class CodeReviewAgent:
 
         # Execute run_checks in sandbox
         check_args = [sys.executable, str(scripts_dir / "run_checks.py"), "--parsed-diff", str(parsed_diff_temp), "--output", str(raw_findings_temp)]
+        if self.repo_path:
+            check_args.extend(["--src-dir", str(self.repo_path)])
         check_cmd_str = " ".join(check_args)
             
         allowed, reason = self.filter.check(check_args, inputs=[str(parsed_diff_temp), str(raw_findings_temp)])
@@ -487,7 +490,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.diff_file:
-        agent = CodeReviewAgent(db_url=args.db_url, runtime_mode=args.runtime)
+        agent = CodeReviewAgent(db_url=args.db_url, runtime_mode=args.runtime, repo_path=args.repo_path)
         task_id = f"task_{uuid.uuid4().hex[:8]}"
         print(f"Starting review task {task_id} on {args.diff_file}...")
         report_json, report_md = agent.run_review(task_id, args.diff_file, fake_model=args.fake_model)
