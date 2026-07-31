@@ -11,7 +11,7 @@ from typing import AsyncIterator
 
 from trpc_agent_sdk.evaluation import TargetPrompt
 
-from .schema import validate_safe_component
+from .schema import add_exception_note, validate_safe_component
 
 
 class PromptRestoreError(RuntimeError):
@@ -140,14 +140,26 @@ class PromptWorkspace:
             if hashes != self.baseline_hashes:
                 raise IOError("baseline prompt hashes differ after restoration")
         except BaseException as error:
-            raise PromptRestoreError("baseline prompt restoration could not be verified") from error
+            restore_error = PromptRestoreError("baseline prompt restoration could not be verified")
+            add_exception_note(
+                restore_error,
+                f"restoration operation failed with {type(error).__name__}: {error}",
+            )
+            raise restore_error from error
 
     async def apply(self, candidate: dict[str, str]) -> dict[str, str]:
         self._ensure_initialized()
         try:
             return await self._write_verified(candidate)
-        except BaseException:
-            await self.restore()
+        except BaseException as primary_error:
+            try:
+                await self.restore()
+            except PromptRestoreError as restore_error:
+                add_exception_note(
+                    restore_error,
+                    f"prompt apply also failed with {type(primary_error).__name__}: {primary_error}",
+                )
+                raise
             raise
 
     @asynccontextmanager
@@ -165,8 +177,10 @@ class PromptWorkspace:
                 await self.restore()
             except PromptRestoreError as restore_error:
                 if primary is not None:
-                    raise PromptRestoreError(
-                        "baseline restoration failed while propagating another error") from restore_error
+                    add_exception_note(
+                        restore_error,
+                        f"prompt operation also failed with {type(primary).__name__}: {primary}",
+                    )
                 raise
 
     def create_candidate_target(self, directory: str) -> TargetPrompt:

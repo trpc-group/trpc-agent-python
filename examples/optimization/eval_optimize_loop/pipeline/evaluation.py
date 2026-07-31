@@ -26,6 +26,7 @@ from .models import (
     Split,
     Transition,
 )
+from .schema import sanitize
 
 _VOLATILE_KEYS = {
     "invocationId",
@@ -82,11 +83,34 @@ def case_input_fingerprint(case: Any) -> str:
     return sha256_json(_without_execution_ids(payload))
 
 
-def dataset_fingerprint(eval_set: EvalSet) -> str:
-    # Hash the submitted dataset contract, not defaults injected by SDK or
-    # Pydantic versions after validation.
-    payload = eval_set.model_dump(mode="json", by_alias=True, exclude_unset=True)
+def dataset_contract_payload(eval_set: EvalSet) -> dict[str, Any]:
+    """Return the submitted dataset contract without injected defaults."""
+
+    return eval_set.model_dump(mode="json", by_alias=True, exclude_unset=True)
+
+
+def dataset_fingerprint_payload(payload: Mapping[str, Any]) -> str:
+    """Hash a serialized dataset contract after removing execution-only IDs."""
+
     return sha256_json(_without_execution_ids(payload))
+
+
+def dataset_fingerprint(eval_set: EvalSet) -> str:
+    """Hash the source dataset contract used for replay and trace validation."""
+
+    return dataset_fingerprint_payload(dataset_contract_payload(eval_set))
+
+
+def dataset_audit_payload(eval_set: EvalSet) -> dict[str, Any]:
+    """Return the exact credential-redacted payload persisted in the audit tree."""
+
+    return sanitize(dataset_contract_payload(eval_set), max_text_chars=None)
+
+
+def dataset_audit_fingerprint(eval_set: EvalSet) -> str:
+    """Hash the redacted dataset artifact independently from its source hash."""
+
+    return dataset_fingerprint_payload(dataset_audit_payload(eval_set))
 
 
 def _validate_case_ids(eval_set: EvalSet, label: str, minimum: int) -> set[str]:

@@ -251,6 +251,7 @@ def build_optimization_report(
         reproducibility=context.reproducibility,
         inputs={
             "hashes": validated.input_hashes,
+            "auditHashes": validated.audit_hashes,
             "paths": {
                 "config": _report_path(validated.config_path, report_root),
                 "train": _report_path(validated.train_path, report_root),

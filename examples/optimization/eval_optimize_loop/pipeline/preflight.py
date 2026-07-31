@@ -9,7 +9,12 @@ from typing import Any, Optional
 from trpc_agent_sdk.evaluation import EvalSet
 
 from .artifacts import load_strict_json
-from .evaluation import canonical_json, dataset_fingerprint, validate_datasets
+from .evaluation import (
+    canonical_json,
+    dataset_audit_fingerprint,
+    dataset_fingerprint,
+    validate_datasets,
+)
 from .configuration import PipelineConfig, ValidatedRunConfig
 from .live_adapter import LiveAdapterSpec
 from .schema import validate_safe_component, validate_secret_free_text
@@ -135,6 +140,10 @@ def preflight_run(
         "validation":
         dataset_fingerprint(validation),
     }
+    audit_hashes = {
+        "train": dataset_audit_fingerprint(train),
+        "validation": dataset_audit_fingerprint(validation),
+    }
     trace_path: Optional[Path] = None
     if settings.mode == "trace":
         trace_path = inside_example_root(root, settings.trace_fixture, "trace fixture")
@@ -194,6 +203,7 @@ def preflight_run(
         train=train,
         validation=validation,
         input_hashes=hashes,
+        audit_hashes=audit_hashes,
         prompt_paths=prompt_paths,
         prompt_hashes=prompt_hashes(prompts),
         adapter_identity=adapter_identity,

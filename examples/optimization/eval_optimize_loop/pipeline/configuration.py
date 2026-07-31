@@ -156,6 +156,7 @@ class ValidatedRunConfig(StrictModel):
     train: EvalSet
     validation: EvalSet
     input_hashes: dict[str, str]
+    audit_hashes: dict[str, str]
     prompt_paths: dict[str, str]
     prompt_hashes: dict[str, str]
     adapter_identity: str

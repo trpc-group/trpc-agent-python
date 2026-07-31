@@ -11,7 +11,12 @@ from trpc_agent_sdk.evaluation import EvalConfig, EvalSet, OptimizeConfig
 from .artifacts import AuditSink
 from .attribution import select_attribution
 from .contracts import CandidateGenerator
-from .evaluation import dataset_fingerprint, split_train_dataset
+from .evaluation import (
+    dataset_audit_fingerprint,
+    dataset_contract_payload,
+    dataset_fingerprint,
+    split_train_dataset,
+)
 from .models import (
     AttributionSnapshot,
     CandidateProposal,
@@ -41,17 +46,21 @@ def prepare_candidate_inputs(
     )
     train_path = sink.write_json(
         "inner_train.evalset.json",
-        inner_train.model_dump(mode="json", by_alias=True),
+        dataset_contract_payload(inner_train),
     )
     selection_path = sink.write_json(
         "inner_selection.evalset.json",
-        inner_selection.model_dump(mode="json", by_alias=True),
+        dataset_contract_payload(inner_selection),
     )
     inner = InnerSplit(
         train_case_ids=tuple(case.eval_id for case in inner_train.eval_cases),
         selection_case_ids=tuple(case.eval_id for case in inner_selection.eval_cases),
         train_hash=dataset_fingerprint(inner_train),
         selection_hash=dataset_fingerprint(inner_selection),
+        audit_hashes={
+            "train": dataset_audit_fingerprint(inner_train),
+            "selection": dataset_audit_fingerprint(inner_selection),
+        },
         train_path=train_path.relative_to(sink.run_dir).as_posix(),
         selection_path=selection_path.relative_to(sink.run_dir).as_posix(),
     )
@@ -106,7 +115,7 @@ async def generate_candidate(
         except BaseException as primary_error:
             try:
                 sink.import_tree(optimizer_output, "candidate_generation/optimizer")
-            except Exception as import_error:
+            except BaseException as import_error:
                 add_exception_note(
                     primary_error,
                     f"optimizer artifact import also failed with "

@@ -27,11 +27,14 @@ class _Workspace:
 
 class _ImportFailingSink:
 
+    def __init__(self, error: BaseException | None = None) -> None:
+        self.error = error or json.JSONDecodeError("half-written optimizer output", "{", 1)
+
     def phase_dir(self, name: str) -> None:
         return None
 
     def import_tree(self, source: str | Path, destination: str) -> None:
-        raise json.JSONDecodeError("half-written optimizer output", "{", 1)
+        raise self.error
 
 
 @pytest.mark.asyncio
@@ -55,3 +58,26 @@ async def test_artifact_import_failure_does_not_replace_generator_failure(primar
             inner_selection_path="inner-selection.json",
         )
     assert any("artifact import also failed" in note for note in raised.value.__notes__)
+
+
+@pytest.mark.asyncio
+async def test_base_exception_during_import_does_not_replace_generator_failure() -> None:
+
+    class FailingGenerator:
+
+        async def generate(self, **kwargs):
+            raise RuntimeError("optimizer failed first")
+
+    sink = _ImportFailingSink(KeyboardInterrupt("import interrupted"))
+    with pytest.raises(RuntimeError, match="optimizer failed first") as raised:
+        await generate_candidate(
+            generator=FailingGenerator(),
+            workspace=_Workspace(),
+            sink=sink,
+            eval_config=_DumpConfig(),
+            optimize_config=_DumpConfig(),
+            train_attribution=object(),
+            inner_train_path="inner-train.json",
+            inner_selection_path="inner-selection.json",
+        )
+    assert any("KeyboardInterrupt: import interrupted" in note for note in raised.value.__notes__)

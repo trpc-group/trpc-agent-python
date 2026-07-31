@@ -129,10 +129,17 @@ Any evaluator, optimizer, normalization, comparison, gate, render, apply, write,
 cancel, or system-exit failure restores and verifies the baseline prompt. A
 restoration failure raises `PromptRestoreError`; it is never downgraded to
 REJECT. Reports store no chain-of-thought and recursively redact credentials.
+Source `inputs.hashes` bind the submitted contracts used for replay. Separate
+`inputs.auditHashes` and inner-split `auditHashes` bind the redacted dataset
+copies stored on disk, so credential removal cannot invalidate or misrepresent
+either fact.
 Live optimizer config, prompt sandbox and raw optimizer output stay in an OS
 temporary directory; only sanitized known artifact types enter the audit tree.
-The import boundary enforces file-count, per-file-byte and total-byte budgets
-before reading optimizer output. This boundary protects audit storage; it is not
+The import boundary snapshots only regular, single-link files. It rejects
+symlinks, hard links and Windows reparse points, verifies file identity before
+and after bounded reads, and enforces file-count, per-file-byte and total-byte
+budgets before publishing any optimizer artifact. This boundary protects audit
+storage; it is not
 a sandbox for a programmatic generator, which is trusted in-process code.
 
 Default live evaluation and optimization resolve one importable callback through
@@ -149,9 +156,11 @@ baseline and registered best-prompt keys before it can enter regression. Failed
 or canceled SDK results retain their structured rounds, duration, error and cost
 facts in the terminal report. Terminal report
 persistence failures raise `AuditPersistenceError`; they are never discarded
-while returning an apparently handled pipeline error. Audit writes redact
-credentials without truncation and fail before publication when the configured
-file-byte ceiling is exceeded.
+while returning an apparently handled pipeline error. Error chains are
+credential-redacted with bounded item count and total text size, retaining the
+primary and restoration causes. Audit writes redact credentials without
+truncation and fail before publication when the configured file-byte ceiling is
+exceeded.
 
 A replay claim is emitted only for a clean, pinned Git commit when every
 effective config, dataset, prompt, trace and live callback source is inside that

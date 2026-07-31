@@ -141,6 +141,11 @@ def validate_secret_free_text(value: str, *, name: str) -> str:
 def sanitized_text(value: Any, *, max_text_chars: int) -> str:
     """Render one bounded text value after structured recursive sanitization."""
 
+    if isinstance(value, BaseException):
+        return sanitized_exception_message(value, max_text_chars=max_text_chars)
+    if isinstance(value, str) and len(value) > max_text_chars:
+        marker = "...[truncated]"
+        value = value[:max(0, max_text_chars - len(marker))] + marker
     clean = sanitize(value, max_text_chars=max_text_chars)
     if isinstance(clean, str):
         text = clean
@@ -150,6 +155,40 @@ def sanitized_text(value: Any, *, max_text_chars: int) -> str:
         text = str(clean)
         text = str(sanitize(text, max_text_chars=max_text_chars))
     return text if len(text) <= max_text_chars else text[:max_text_chars] + "...[truncated]"
+
+
+def sanitized_exception_message(
+    error: BaseException,
+    *,
+    max_text_chars: int,
+    max_parts: int = 8,
+) -> str:
+    """Render an exception chain with bounded count, text and total size."""
+
+    notes = tuple(getattr(error, "__notes__", ()))
+    all_parts = [("primary", str(error))]
+    all_parts.extend((f"diagnostic-{index}", str(note)) for index, note in enumerate(notes, start=1))
+    omitted = 0
+    if len(all_parts) > max_parts:
+        keep_notes = max_parts - 1
+        first = max(1, keep_notes // 2)
+        last = keep_notes - first
+        selected = [all_parts[0], *all_parts[1:1 + first]]
+        if last:
+            selected.extend(all_parts[-last:])
+        omitted = len(all_parts) - len(selected)
+        all_parts = selected
+    omitted_text = f"; {omitted} diagnostics omitted" if omitted else ""
+    overhead = sum(len(label) + 2 for label, _ in all_parts) + len(omitted_text)
+    part_budget = max(1, (max_text_chars - overhead) // max(1, len(all_parts)))
+    rendered: list[str] = []
+    for label, raw in all_parts:
+        marker = "...[truncated]"
+        bounded = raw if len(raw) <= part_budget else raw[:max(0, part_budget - len(marker))] + marker
+        clean = sanitize(bounded, max_text_chars=part_budget)
+        rendered.append(f"{label}: {clean if isinstance(clean, str) else str(clean)}")
+    result = "\n".join(rendered) + omitted_text
+    return result[:max_text_chars]
 
 
 class StrictModel(BaseModel):

@@ -15,7 +15,7 @@ from .candidate_runtime import generate_candidate, prepare_candidate_inputs
 from .configuration import ValidatedRunConfig
 from .contracts import CandidateGenerator, EvaluationBackend
 from .costing import CostLedger
-from .evaluation import compare_snapshots
+from .evaluation import compare_snapshots, dataset_contract_payload
 from .evaluation_runtime import create_evaluation_runtime
 from .gate import evaluate_gate
 from .models import (
@@ -44,7 +44,7 @@ from .reporting import (
     persist_terminal_report,
     utc_now,
 )
-from .schema import add_exception_note, sanitized_text
+from .schema import add_exception_note, sanitized_exception_message, sanitized_text
 
 FaultInjector = Callable[[str], None]
 
@@ -225,8 +225,8 @@ async def _run_validated_pipeline(
     try:
         enter_stage(stage)
         sink.write_json("config.json", validated.config.model_dump(mode="json", by_alias=True))
-        sink.write_json("train.evalset.json", validated.train.model_dump(mode="json", by_alias=True))
-        sink.write_json("val.evalset.json", validated.validation.model_dump(mode="json", by_alias=True))
+        sink.write_json("train.evalset.json", dataset_contract_payload(validated.train))
+        sink.write_json("val.evalset.json", dataset_contract_payload(validated.validation))
         for name, content in workspace.baseline.items():
             sink.write_text(f"baseline_prompts/{name}.md", content)
 
@@ -376,11 +376,30 @@ async def _run_validated_pipeline(
             await workspace.restore()
             applied = False
         except PromptRestoreError as restore_error:
+            original_stage = stage
+            original_message = sanitized_text(str(error), max_text_chars=settings.max_text_chars)
+            add_exception_note(
+                restore_error,
+                f"pipeline failure before final restoration at stage {original_stage!r}: "
+                f"{type(error).__name__}: {original_message}",
+            )
+            for note in getattr(error, "__notes__", ()):
+                add_exception_note(
+                    restore_error,
+                    f"prior pipeline diagnostic: {sanitized_text(str(note), max_text_chars=settings.max_text_chars)}",
+                )
             fatal_restore = restore_error
             stage = "restore"
             error = restore_error
-        message = sanitized_text(error, max_text_chars=settings.max_text_chars)
-        run_error = RunError(stage=stage, error_type=type(error).__name__, message=message)
+        message = sanitized_exception_message(
+            error,
+            max_text_chars=settings.max_text_chars,
+        )
+        run_error = RunError(
+            stage=stage,
+            error_type=type(error).__name__,
+            message=message,
+        )
         error_report = build_report(Decision.ERROR, stage, (run_error, ))
         persistence_error: Optional[BaseException] = None
         try:

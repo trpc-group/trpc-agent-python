@@ -268,6 +268,7 @@ class InnerSplit(StrictModel):
     selection_case_ids: tuple[str, ...]
     train_hash: str
     selection_hash: str
+    audit_hashes: dict[str, str] = Field(default_factory=dict)
     train_path: str
     selection_path: str
 

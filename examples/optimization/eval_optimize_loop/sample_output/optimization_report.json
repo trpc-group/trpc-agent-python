@@ -2209,6 +2209,10 @@
       "train": "af410bcc6f46c041a373efb1d1dda9f0f0f20258d1ef2146eac8a583cde99b19",
       "validation": "5011756743a6211c78c75f2b7cbc435e98cf4caf0e0c484bbac9c5f03951c7d9"
     },
+    "auditHashes": {
+      "train": "af410bcc6f46c041a373efb1d1dda9f0f0f20258d1ef2146eac8a583cde99b19",
+      "validation": "5011756743a6211c78c75f2b7cbc435e98cf4caf0e0c484bbac9c5f03951c7d9"
+    },
     "paths": {
       "config": "optimizer.json",
       "train": "train.evalset.json",
@@ -2224,6 +2228,10 @@
       ],
       "selectionHash": "ec02d7b1c9840580943cbed756a0d3bc8e0185adf2b2fc7009ad70d61aaca92a",
       "selectionPath": "inner_selection.evalset.json",
+      "auditHashes": {
+        "selection": "ec02d7b1c9840580943cbed756a0d3bc8e0185adf2b2fc7009ad70d61aaca92a",
+        "train": "70f85fca6ab8ece3ad0e3a3b1c3a6635eab921bf29efa4ed224b22513e9d9cd2"
+      },
       "trainCaseIds": [
         "train_improve_alpha",
         "train_stable"

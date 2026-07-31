@@ -166,6 +166,11 @@ def test_sanitized_text_redacts_structured_values_and_exception_messages() -> No
         RuntimeError('{"clientSecret":"error-secret"}'),
         max_text_chars=1000,
     )
+    error = RuntimeError("primary failure")
+    add_exception_note(error, "Authorization: Bearer diagnostic-secret")
+    diagnostic = sanitized_text(error, max_text_chars=1000)
+    assert "diagnostic-secret" not in diagnostic
+    assert "[REDACTED]" in diagnostic
 
 
 def test_exception_notes_work_without_python_311_add_note() -> None:
@@ -253,7 +258,7 @@ def test_pipeline_import_boundaries() -> None:
         "configuration": {"live_adapter", "models", "schema"},
         "contracts": {"models"},
         "costing": {"models"},
-        "evaluation": {"models"},
+        "evaluation": {"models", "schema"},
         "evaluation_runtime": {
             "artifacts",
             "configuration",

@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
+from trpc_agent_sdk.evaluation import EvalSet
 
 from examples.optimization.eval_optimize_loop.pipeline.models import (
     CandidateProposal,
@@ -30,10 +31,17 @@ from examples.optimization.eval_optimize_loop.pipeline.artifacts import (
     AuditSink,
 )
 from examples.optimization.eval_optimize_loop.pipeline.costing import CostLedger
+from examples.optimization.eval_optimize_loop.pipeline.evaluation import (
+    dataset_fingerprint,
+    dataset_fingerprint_payload,
+)
 from examples.optimization.eval_optimize_loop.pipeline.evaluation_runtime import create_evaluation_runtime
 from examples.optimization.eval_optimize_loop.pipeline.models import Phase, Split
 from examples.optimization.eval_optimize_loop.pipeline.orchestrator import run_pipeline
 from examples.optimization.eval_optimize_loop.pipeline.preflight import preflight_run
+from examples.optimization.eval_optimize_loop.pipeline.prompt_workspace import (
+    PromptRestoreError,
+)
 from examples.optimization.eval_optimize_loop.pipeline import orchestrator as orchestrator_module
 from examples.optimization.eval_optimize_loop.pipeline import reporting as reporting_module
 
@@ -93,6 +101,54 @@ async def test_fake_reject_with_hard_regression_is_a_completed_audit_run(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_audit_dataset_copies_round_trip_to_reported_fingerprints(tmp_path) -> None:
+    root = _example(tmp_path)
+    report = await run_pipeline(str(root), run_id="dataset-contract")
+    run_dir = root / "artifacts" / "dataset-contract"
+
+    for source_name, audit_name in (
+            ("train.evalset.json", "train.evalset.json"),
+            ("val.evalset.json", "val.evalset.json"),
+    ):
+        source = EvalSet.model_validate(json.loads((root / source_name).read_text(encoding="utf-8")))
+        audited = EvalSet.model_validate(json.loads((run_dir / audit_name).read_text(encoding="utf-8")))
+        assert dataset_fingerprint(audited) == dataset_fingerprint(source)
+
+    assert report.inputs["auditHashes"] == {
+        split: report.inputs["hashes"][split] for split in ("train", "validation")
+    }
+    assert report.optimization is not None
+    inner = report.optimization["innerSplit"]
+    for split_name, hash_name, path_name in (
+            ("train", "trainHash", "trainPath"),
+            ("selection", "selectionHash", "selectionPath"),
+    ):
+        audited_payload = json.loads((run_dir / inner[path_name]).read_text(encoding="utf-8"))
+        audited = EvalSet.model_validate(audited_payload)
+        assert inner[hash_name] == dataset_fingerprint(audited)
+        assert inner["auditHashes"][split_name] == dataset_fingerprint_payload(audited_payload)
+
+
+@pytest.mark.asyncio
+async def test_secret_bearing_dataset_has_distinct_source_and_audit_hashes(tmp_path) -> None:
+    root = _example(tmp_path)
+    train_path = root / "train.evalset.json"
+    train_payload = json.loads(train_path.read_text(encoding="utf-8"))
+    train_payload["evalCases"][0]["sessionInput"]["state"]["apiKey"] = "fixture-secret"
+    train_path.write_text(json.dumps(train_payload), encoding="utf-8")
+
+    source = EvalSet.model_validate(train_payload)
+    report = await run_pipeline(str(root), run_id="redacted-dataset-contract")
+    audited_payload = json.loads(
+        (root / "artifacts" / "redacted-dataset-contract" / "train.evalset.json").read_text(encoding="utf-8"))
+
+    assert audited_payload["evalCases"][0]["sessionInput"]["state"]["apiKey"] == "[REDACTED]"
+    assert report.inputs["hashes"]["train"] == dataset_fingerprint(source)
+    assert report.inputs["auditHashes"]["train"] == dataset_fingerprint_payload(audited_payload)
+    assert report.inputs["hashes"]["train"] != report.inputs["auditHashes"]["train"]
+
+
+@pytest.mark.asyncio
 async def test_accept_without_apply_leaves_source_unchanged(tmp_path) -> None:
     root = _example(tmp_path, accept=True)
     baseline = (root / "prompts" / "system.md").read_text(encoding="utf-8")
@@ -132,6 +188,58 @@ async def test_final_report_failure_after_apply_rolls_back(tmp_path) -> None:
     assert report.stage == "final_report"
     assert report.source_application.applied is False
     assert (root / "prompts" / "system.md").read_text(encoding="utf-8") == baseline
+
+
+@pytest.mark.asyncio
+async def test_apply_and_restore_double_failure_is_preserved_in_terminal_audit(tmp_path, monkeypatch) -> None:
+    root = _example(tmp_path, accept=True, apply=True)
+    original_write = orchestrator_module.PromptWorkspace._write_verified
+    candidate_writes = 0
+
+    async def fail_apply_and_restore(workspace, prompts):
+        nonlocal candidate_writes
+        if prompts != workspace.baseline:
+            candidate_writes += 1
+            if candidate_writes > 1:
+                raise OSError("candidate write unavailable")
+        elif candidate_writes > 1:
+            raise OSError("restore unavailable: " + "r" * 5000)
+        return await original_write(workspace, prompts)
+
+    monkeypatch.setattr(
+        orchestrator_module.PromptWorkspace,
+        "_write_verified",
+        fail_apply_and_restore,
+    )
+    with pytest.raises(PromptRestoreError):
+        await run_pipeline(str(root), run_id="apply-restore-double-failure")
+
+    report_path = root / "artifacts" / "apply-restore-double-failure" / "optimization_report.json"
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    message = payload["errors"][0]["message"]
+    assert "candidate write unavailable" in message
+    assert "restore unavailable" in message
+    assert len(message) <= 4000
+
+
+@pytest.mark.asyncio
+async def test_error_notes_have_bounded_count_and_total_size(tmp_path) -> None:
+    root = _example(tmp_path)
+
+    class FailingGenerator:
+
+        async def generate(self, **kwargs):
+            error = RuntimeError("primary failure")
+            for index in range(100):
+                error.add_note(f"note-{index}: " + "x" * 10_000)
+            raise error
+
+    report = await run_pipeline(str(root), run_id="bounded-error-notes", candidate_generator=FailingGenerator())
+    assert report.status == Decision.ERROR
+    message = report.errors[0].message
+    assert "primary failure" in message
+    assert "diagnostics omitted" in message
+    assert len(message) <= 4000
 
 
 @pytest.mark.asyncio

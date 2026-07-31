@@ -4,19 +4,37 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
 from trpc_agent_sdk.evaluation import TargetPrompt
 
 from examples.optimization.eval_optimize_loop.pipeline.artifacts import AuditSink
+from examples.optimization.eval_optimize_loop.pipeline import artifacts as artifacts_module
 from examples.optimization.eval_optimize_loop.pipeline.costing import CostLedger
 from examples.optimization.eval_optimize_loop.pipeline.prompt_workspace import (
     PromptRestoreError,
     PromptRunLock,
     PromptWorkspace,
 )
+from examples.optimization.eval_optimize_loop.pipeline.schema import sanitized_text
+
+
+def _directory_link_or_emulation(link: Path, target: Path, monkeypatch) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        link.mkdir()
+        original = getattr(Path, "is_junction", None)
+        monkeypatch.setattr(
+            Path,
+            "is_junction",
+            lambda path: path == link or (bool(original(path)) if original else False),
+            raising=False,
+        )
 
 
 @pytest.mark.asyncio
@@ -59,7 +77,7 @@ def test_prompt_run_lock_rejects_concurrent_owner_and_releases(tmp_path) -> None
 
 
 @pytest.mark.asyncio
-async def test_restoration_failure_is_not_downgraded_to_reject() -> None:
+async def test_restoration_failure_preserves_the_primary_operation_diagnostic() -> None:
     state = {"value": "baseline", "fail_restore": False}
 
     async def read() -> str:
@@ -72,9 +90,32 @@ async def test_restoration_failure_is_not_downgraded_to_reject() -> None:
 
     workspace = PromptWorkspace(TargetPrompt().add_callback("system", read=read, write=write))
     await workspace.initialize()
-    with pytest.raises(PromptRestoreError):
+    with pytest.raises(PromptRestoreError) as raised:
         async with workspace.temporary({"system": "candidate"}):
             state["fail_restore"] = True
+            raise RuntimeError("candidate evaluation failed")
+    message = sanitized_text(raised.value, max_text_chars=4000)
+    assert "candidate evaluation failed" in message
+    assert "restore unavailable" in message
+
+
+@pytest.mark.asyncio
+async def test_apply_double_failure_preserves_write_and_restore_diagnostics() -> None:
+    async def read() -> str:
+        return "baseline"
+
+    async def write(value: str) -> None:
+        if value == "candidate":
+            raise OSError("candidate write unavailable")
+        raise OSError("restore unavailable")
+
+    workspace = PromptWorkspace(TargetPrompt().add_callback("system", read=read, write=write))
+    await workspace.initialize()
+    with pytest.raises(PromptRestoreError) as raised:
+        await workspace.apply({"system": "candidate"})
+    message = sanitized_text(raised.value, max_text_chars=4000)
+    assert "candidate write unavailable" in message
+    assert "restore unavailable" in message
 
 
 def test_audit_sink_is_immutable_safe_sanitized_and_manifested(tmp_path) -> None:
@@ -151,6 +192,112 @@ def test_optimizer_tree_is_sanitized_before_audit_import(tmp_path) -> None:
     assert "quoted-log-secret" not in imported
     assert "markdown-secret" not in imported
     assert "[REDACTED]" in imported
+
+
+def test_optimizer_tree_rejects_source_directory_symlink(tmp_path, monkeypatch) -> None:
+    raw = tmp_path / "raw-optimizer"
+    raw.mkdir()
+    (raw / "secret.log").write_text("secret", encoding="utf-8")
+    alias = tmp_path / "optimizer-alias"
+    _directory_link_or_emulation(alias, raw, monkeypatch)
+
+    sink = AuditSink(tmp_path / "artifacts", "run-root-link")
+    sink.create()
+    with pytest.raises(ValueError, match="symlinks"):
+        sink.import_tree(alias, "candidate_generation/optimizer")
+
+
+def test_optimizer_tree_rejects_nested_directory_symlink(tmp_path, monkeypatch) -> None:
+    raw = tmp_path / "raw-optimizer"
+    external = tmp_path / "external"
+    raw.mkdir()
+    external.mkdir()
+    (external / "secret.log").write_text("secret", encoding="utf-8")
+    _directory_link_or_emulation(raw / "linked", external, monkeypatch)
+
+    sink = AuditSink(tmp_path / "artifacts", "run-nested-link")
+    sink.create()
+    with pytest.raises(ValueError, match="symlinks"):
+        sink.import_tree(raw, "candidate_generation/optimizer")
+
+
+def test_optimizer_tree_rejects_nested_directory_junction(tmp_path, monkeypatch) -> None:
+    raw = tmp_path / "raw-optimizer"
+    linked = raw / "linked"
+    linked.mkdir(parents=True)
+    (linked / "outside.log").write_text("outside", encoding="utf-8")
+    original = getattr(Path, "is_junction", None)
+
+    def is_junction(path: Path) -> bool:
+        return path == linked or (bool(original(path)) if original else False)
+
+    monkeypatch.setattr(Path, "is_junction", is_junction, raising=False)
+    sink = AuditSink(tmp_path / "artifacts", "run-nested-junction")
+    sink.create()
+
+    with pytest.raises(ValueError, match="reparse points"):
+        sink.import_tree(raw, "candidate_generation/optimizer")
+
+
+def test_optimizer_tree_rejects_broken_source_junction(tmp_path, monkeypatch) -> None:
+    junction = tmp_path / "broken-junction"
+    original = getattr(Path, "is_junction", None)
+    monkeypatch.setattr(
+        Path,
+        "is_junction",
+        lambda path: path == junction or (bool(original(path)) if original else False),
+        raising=False,
+    )
+    sink = AuditSink(tmp_path / "artifacts", "run-broken-junction")
+    sink.create()
+
+    with pytest.raises(ValueError, match="reparse points"):
+        sink.import_tree(junction, "candidate_generation/optimizer")
+
+
+def test_optimizer_tree_rejects_hard_link_to_external_file(tmp_path) -> None:
+    raw = tmp_path / "raw-optimizer"
+    raw.mkdir()
+    external = tmp_path / "external.log"
+    external.write_text("outside-content", encoding="utf-8")
+    os.link(external, raw / "outside.log")
+
+    sink = AuditSink(tmp_path / "artifacts", "run-hard-link")
+    sink.create()
+    with pytest.raises(ValueError, match="hard links"):
+        sink.import_tree(raw, "candidate_generation/optimizer")
+
+
+def test_optimizer_tree_validates_all_files_before_publishing(tmp_path) -> None:
+    raw = tmp_path / "raw-optimizer"
+    raw.mkdir()
+    (raw / "valid.log").write_text("valid", encoding="utf-8")
+    (raw / "invalid.bin").write_bytes(b"invalid")
+
+    sink = AuditSink(tmp_path / "artifacts", "run-batch-validation")
+    sink.create()
+    with pytest.raises(ValueError, match="unsupported"):
+        sink.import_tree(raw, "candidate_generation/optimizer")
+    assert not (sink.run_dir / "candidate_generation").exists()
+
+
+def test_optimizer_tree_rejects_file_identity_change_before_read(tmp_path, monkeypatch) -> None:
+    raw = tmp_path / "raw-optimizer"
+    raw.mkdir()
+    changed = raw / "changed.log"
+    changed.write_text("before", encoding="utf-8")
+    original_open = artifacts_module.os.open
+
+    def replace_before_open(path, flags, *args):
+        if Path(path) == changed:
+            changed.write_text("after", encoding="utf-8")
+        return original_open(path, flags, *args)
+
+    monkeypatch.setattr(artifacts_module.os, "open", replace_before_open)
+    sink = AuditSink(tmp_path / "artifacts", "run-identity-change")
+    sink.create()
+    with pytest.raises(ValueError, match="changed during validation"):
+        sink.import_tree(raw, "candidate_generation/optimizer")
 
 
 @pytest.mark.parametrize(

@@ -53,6 +53,10 @@ def test_committed_sample_report_is_complete_and_rendered_from_the_model() -> No
     report = OptimizationReport.model_validate(payload)
     assert report.status == Decision.REJECT
     assert report.stage == "complete"
+    assert report.inputs["auditHashes"] == {
+        "train": report.inputs["hashes"]["train"],
+        "validation": report.inputs["hashes"]["validation"],
+    }
     assert report.duration_seconds < 180
     assert report.reproducibility.reproducible is True
     assert report.reproducibility.git_dirty is False
@@ -68,6 +72,10 @@ def test_committed_sample_report_is_complete_and_rendered_from_the_model() -> No
         Transition.UNCHANGED,
     }
     assert report.failure_attribution
+    assert report.optimization and report.optimization["innerSplit"]["auditHashes"] == {
+        "train": report.optimization["innerSplit"]["trainHash"],
+        "selection": report.optimization["innerSplit"]["selectionHash"],
+    }
     for snapshot in (
             report.failure_attribution.train,
             report.failure_attribution.validation,
