@@ -6,6 +6,7 @@
 """Unit tests for BashTool."""
 
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 from trpc_agent_sdk.context import InvocationContext
@@ -183,8 +184,87 @@ class TestBashTool:
         assert tool._is_command_safe("echo test", str(tmp_path)) is True
         assert tool._is_command_safe("ls", "/tmp") is True
 
-        import os
+        assert tool._is_command_safe("blocked_cmd", str(tmp_path)) is True
+
         workdir = str(tmp_path)
         outside_dir = "/var" if workdir != "/var" else "/usr"
-        result = tool._is_command_safe("rm -rf /nonexistent", outside_dir)
-        assert isinstance(result, bool)
+        assert tool._is_command_safe("blocked_cmd", outside_dir) is False
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "blocked_cmd",
+            "echo ok | blocked_cmd",
+            "echo ok; blocked_cmd",
+            "echo ok && blocked_cmd",
+            "echo ok || blocked_cmd",
+            "echo ok\nblocked_cmd",
+            "echo ok & blocked_cmd",
+            "echo $(blocked_cmd)",
+            "echo `blocked_cmd`",
+            r"echo escaped\>& blocked_cmd",
+        ],
+    )
+    def test_is_command_safe_rejects_non_whitelisted_command_segments(self, tool_with_whitelist, command):
+        """Every executable command segment must be allowlisted."""
+        assert tool_with_whitelist._is_command_safe(command, tool_with_whitelist.cwd) is False
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "echo ok",
+            "echo ok | echo done",
+            "echo ok; echo done",
+            "echo ok && echo done",
+            "echo ok || echo done",
+            "echo ok\necho done",
+            "echo ok & echo done",
+        ],
+    )
+    def test_is_command_safe_allows_only_whitelisted_command_segments(self, tool_with_whitelist, command):
+        """Compound commands remain valid when every command is allowlisted."""
+        assert tool_with_whitelist._is_command_safe(command, tool_with_whitelist.cwd) is True
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "echo 'literal; not a separator'",
+            'echo "literal && not a separator"',
+            r"echo escaped\;separator",
+            "echo ok 2>&1",
+            "echo ok &>output.log",
+        ],
+    )
+    def test_is_command_safe_preserves_quoted_escaped_and_redirected_arguments(self, tool_with_whitelist, command):
+        """Shell syntax inside arguments and file-descriptor redirects is not a command boundary."""
+        assert tool_with_whitelist._is_command_safe(command, tool_with_whitelist.cwd) is True
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "echo 'unterminated",
+            "echo <(blocked_cmd)",
+            "echo >(blocked_cmd)",
+        ],
+    )
+    def test_is_command_safe_fails_closed_for_unverifiable_syntax(self, tool_with_whitelist, command):
+        """Unparseable syntax and process substitution are rejected."""
+        assert tool_with_whitelist._is_command_safe(command, tool_with_whitelist.cwd) is False
+
+    @pytest.mark.asyncio
+    @patch("trpc_agent_sdk.tools.file_tools._bash_tool.asyncio.create_subprocess_shell")
+    async def test_bash_custom_whitelist_blocks_before_subprocess(
+        self,
+        mock_create_subprocess_shell,
+        tool_with_whitelist,
+        tool_context,
+    ):
+        """A rejected command never reaches the subprocess boundary."""
+        result = await tool_with_whitelist._run_async_impl(
+            tool_context=tool_context,
+            args={"command": "blocked_cmd"},
+        )
+
+        assert result["success"] is False
+        assert "SECURITY_RESTRICTION" in result["error"]
+        mock_create_subprocess_shell.assert_not_called()

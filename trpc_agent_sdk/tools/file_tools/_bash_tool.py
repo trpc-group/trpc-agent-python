@@ -27,6 +27,99 @@ from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Type
 
 
+def _extract_base_commands(command: str) -> Optional[list[str]]:
+    """Extract every executable command segment without executing the shell."""
+    segments: list[str] = []
+    current: list[str] = []
+    quote = ""
+    escaped = False
+    index = 0
+    previous_is_redirect = False
+
+    while index < len(command):
+        char = command[index]
+
+        if escaped:
+            current.append(char)
+            escaped = False
+            previous_is_redirect = False
+            index += 1
+            continue
+
+        if char == "\\" and quote != "'":
+            current.append(char)
+            escaped = True
+            previous_is_redirect = False
+            index += 1
+            continue
+
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = ""
+            elif quote == '"' and (char == "`" or command.startswith("$(", index)):
+                return None
+            previous_is_redirect = False
+            index += 1
+            continue
+
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            previous_is_redirect = False
+            index += 1
+            continue
+
+        if char == "`" or command.startswith(("$(", "<(", ">("), index):
+            return None
+
+        if char in {"|", ";", "&", "\n"}:
+            # Keep file-descriptor redirections such as 2>&1 and &>file in
+            # the current segment; a standalone ampersand is a separator.
+            next_is_redirect = index + 1 < len(command) and command[index + 1] == ">"
+            is_redirection = char == "&" and (previous_is_redirect or next_is_redirect)
+            if is_redirection:
+                current.append(char)
+                previous_is_redirect = False
+                index += 1
+                continue
+
+            segment = "".join(current).strip()
+            if segment:
+                segments.append(segment)
+            current = []
+            previous_is_redirect = False
+            if command.startswith(("||", "&&", "|&", ";;"), index):
+                index += 2
+            else:
+                index += 1
+            continue
+
+        current.append(char)
+        previous_is_redirect = char in {"<", ">"}
+        index += 1
+
+    if quote or escaped:
+        return None
+
+    segment = "".join(current).strip()
+    if segment:
+        segments.append(segment)
+    if not segments:
+        return None
+
+    base_commands: list[str] = []
+    for segment in segments:
+        try:
+            tokens = shlex.split(segment, posix=True)
+        except ValueError:
+            return None
+        if not tokens:
+            return None
+        base_commands.append(tokens[0])
+    return base_commands
+
+
 class BashTool(BaseTool):
     """Tool for executing bash commands."""
 
@@ -127,36 +220,20 @@ class BashTool(BaseTool):
         Returns:
             Whether it's safe to execute
         """
-        try:
-            lexer = shlex.shlex(command, posix=True, punctuation_chars="|")
-            lexer.whitespace_split = True
-            tokens = list(lexer)
+        if self.whitelist_commands is not None:
+            allowed_commands = self.whitelist_commands
+        else:
+            try:
+                Path(execution_dir).resolve().relative_to(Path(self.cwd).resolve())
+                return True
+            except ValueError:
+                allowed_commands = self.ALLOWED_COMMANDS_OUTSIDE_WORKDIR
 
-            base_commands = []
-            current_command = []
-            for token in tokens:
-                if token == "|":
-                    if current_command:
-                        base_commands.append(current_command[0])
-                        current_command = []
-                else:
-                    if not current_command:
-                        current_command.append(token)
-        except Exception:  # pylint: disable=broad-except
-            base_commands = [command.split()[0] if command.split() else ""]
+        base_commands = _extract_base_commands(command)
+        if not base_commands:
+            return False
 
-        for base_command in base_commands:
-            if self.whitelist_commands is not None:
-                if base_command not in self.whitelist_commands:
-                    return False
-            else:
-                try:
-                    Path(execution_dir).resolve().relative_to(Path(self.cwd).resolve())
-                except ValueError:
-                    if base_command not in self.ALLOWED_COMMANDS_OUTSIDE_WORKDIR:
-                        return False
-
-        return True
+        return all(base_command in allowed_commands for base_command in base_commands)
 
     async def _run_async_impl(self, *, tool_context: InvocationContext, args: dict[str, Any]) -> Any:
         command = args.get("command")
