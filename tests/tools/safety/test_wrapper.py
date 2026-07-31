@@ -357,6 +357,26 @@ async def test_filter_scans_execution_context_once_for_mixed_fields():
 
 
 @pytest.mark.asyncio
+async def test_filter_deduplicates_findings_across_segments():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "command": "rm -rf /",
+            "script": "rm -rf /",
+            "tool_name": "custom",
+        },
+        result,
+    )
+
+    matching_findings = [finding for finding in result.rsp["findings"] if finding["rule_id"] == "BASH_RECURSIVE_DELETE"]
+    assert result.rsp["decision"] == "deny"
+    assert len(matching_findings) == 1
+
+
+@pytest.mark.asyncio
 async def test_filter_extracts_python_code_language():
     safety_filter = ToolSafetyFilter()
     result = FilterResult()

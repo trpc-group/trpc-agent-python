@@ -17,6 +17,7 @@ from datetime import timezone
 from pathlib import Path
 
 from ._policy import ToolSafetyPolicy
+from ._rules import _dedupe_findings
 from ._rules import _finding
 from ._rules import SENSITIVE_NAME_RE
 from ._rules import scan_bash_script
@@ -82,6 +83,7 @@ class ToolScriptSafetyScanner:
         findings.extend(self._scan_execution_context(base_request))
         for request in request_list:
             findings.extend(self._scan_custom_rules(request))
+        findings = _dedupe_findings(findings)
 
         decision = aggregate_decision(findings)
         risk_level = max_risk_level(findings)
