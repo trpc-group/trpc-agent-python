@@ -44,4 +44,9 @@ def generate_json_report(review_data: dict[str, Any]) -> str:
         ],
     }
 
+    # Pass through extra sections that the main pipeline populates
+    for key in ('filter_decisions', 'sandbox_runs', 'agent_output'):
+        if review_data.get(key):
+            report[key] = review_data.get(key)
+
     return json.dumps(report, indent=2, ensure_ascii=False)

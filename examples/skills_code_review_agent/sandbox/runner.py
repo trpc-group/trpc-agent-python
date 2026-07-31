@@ -81,6 +81,12 @@ class SandboxRunner:
 
         if self.sandbox_type == "container":
             r = self._run_docker(script_path, args, stdin_input, effective_timeout)
+            # Docker daemon unavailable → graceful degradation to local
+            if self._docker_unavailable(r):
+                r = self._run_local(script_path, args, stdin_input, effective_timeout)
+                r["_fallback"] = "container→local (Docker unavailable)"
+        elif self.sandbox_type == "cube":
+            r = self._run_cube(script_path, args, stdin_input, effective_timeout)
         else:
             r = self._run_local(script_path, args, stdin_input, effective_timeout)
 
@@ -91,6 +97,21 @@ class SandboxRunner:
         if result.get("timed_out") and not budget_ok:
             result["budget_exceeded"] = True
         return result
+
+    @staticmethod
+    def _docker_unavailable(result: dict[str, Any]) -> bool:
+        """Detect if Docker is unreachable (daemon down OR binary missing)."""
+        stderr = result.get("stderr", "").lower()
+        if result.get("exit_code") not in (-1, 1):
+            return False
+        return ("connect to the docker" in stderr
+                or "cannot connect to the docker" in stderr
+                or "docker daemon" in stderr
+                or "pipe/docker_engine" in stderr
+                or "file not found" in stderr
+                or "command not found" in stderr
+                or "is the daemon running" in stderr
+                or "docker" in stderr and "not recognized" in stderr)
 
     def _run_docker(self, script_path: str, args: list[str] | None,
                     stdin_input: str | None, timeout: float) -> dict[str, Any]:
@@ -117,6 +138,69 @@ class SandboxRunner:
         result = self._exec(cmd, stdin_input, start, timeout)
         result["script"] = script_path
         return result
+
+    def _run_cube(self, script_path: str, args: list[str] | None,
+                  stdin_input: str | None, timeout: float) -> dict[str, Any]:
+        """Run script in a remote Cube/E2B sandbox via the framework client.
+
+        Requires the optional ``[cube]`` extra and Cube/E2B credentials
+        (E2B_API_URL / E2B_API_KEY / E2B_TEMPLATE). Raises RuntimeError with a
+        clear message when unavailable so the caller can fail loudly instead of
+        silently degrading to local execution.
+        """
+        import asyncio
+        import shlex
+
+        async def _go() -> dict[str, Any]:
+            from trpc_agent_sdk.code_executors.cube import create_cube_sandbox_client
+            from trpc_agent_sdk.code_executors.cube._types import CubeClientConfig
+
+            cfg = CubeClientConfig()
+            try:
+                cfg.resolve_api_url()
+                cfg.resolve_api_key()
+                cfg.resolve_template()
+            except ValueError as exc:
+                raise RuntimeError(f"cube backend unavailable: {exc}") from exc
+
+            client = await create_cube_sandbox_client(cfg)
+            start = time.time()
+            try:
+                remote_dir = f"/tmp/cr_{time.time_ns()}"
+                await client.commands_run(f"mkdir -p {remote_dir}")
+                await client.upload_path(Path(script_path).parent, remote_dir)
+                name = Path(script_path).name
+                cmd = f"python {remote_dir}/{name}"
+                if args:
+                    cmd += " " + " ".join(shlex.quote(str(a)) for a in args)
+                res = await client.commands_run(
+                    cmd,
+                    stdin=stdin_input.encode("utf-8") if stdin_input else None,
+                    timeout=timeout,
+                )
+                return {
+                    "exit_code": res.exit_code,
+                    "stdout": res.stdout[: self.max_output],
+                    "stderr": res.stderr[: self.max_output],
+                    "timed_out": res.timed_out,
+                    "exception_type": "TimeoutExpired" if res.timed_out else None,
+                    "duration_ms": int((time.time() - start) * 1000),
+                    "_fallback": "cube",
+                }
+            finally:
+                try:
+                    await client.destroy()
+                except Exception:  # pragma: no cover - best effort cleanup
+                    pass
+
+        try:
+            return asyncio.run(_go())
+        except RuntimeError:
+            raise
+        except ImportError as exc:
+            raise RuntimeError(
+                "cube backend requires the optional extra: pip install trpc-agent-py[cube]"
+            ) from exc
 
     def _run_local(self, script_path: str, args: list[str] | None,
                    stdin_input: str | None, timeout: float) -> dict[str, Any]:
@@ -149,6 +233,10 @@ class SandboxRunner:
             result["exit_code"] = proc.returncode
             result["stdout"] = proc.stdout[:self.max_output]
             result["stderr"] = proc.stderr[:self.max_output]
+            # Docker timeout command exits with 124 when the timeout fires
+            if proc.returncode == 124 and self.sandbox_type == "container":
+                result["timed_out"] = True
+                result["exception_type"] = "TimeoutExpired"
         except subprocess.TimeoutExpired:
             result["timed_out"] = True
             result["exception_type"] = "TimeoutExpired"

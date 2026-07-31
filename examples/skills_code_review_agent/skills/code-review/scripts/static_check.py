@@ -63,7 +63,7 @@ RULES = [
         'severity': 'high',
         'title': 'Unclosed File Handle',
         'patterns': [
-            r'^\s*[^=#]*\bopen\(',
+            r'(?<!\bwith\s)\bopen\(',
         ],
         'recommendation': 'Use "with open(...) as f:" context manager to ensure file closure'
     },
@@ -95,9 +95,10 @@ RULES = [
         'severity': 'high',
         'title': 'Swallowed Exception',
         'patterns': [
-            r'except\s*(?:(?:Exception|BaseException)\s*)?:',
+            r'except\s+\w+(?:\s+as\s+\w+)?\s*:',
         ],
-        'recommendation': 'Log the exception or re-raise. Never silently swallow exceptions.'
+        'recommendation': 'Log the exception or re-raise. Never silently swallow exceptions.',
+        'needs_swallow_check': True,
     },
     {
         'rule_id': 'ERR-002',
@@ -118,14 +119,7 @@ RULES = [
         'patterns': [],
         'recommendation': 'Add unit tests for new functions and methods'
     },
-    {
-        'rule_id': 'TST-002',
-        'category': 'testing',
-        'severity': 'low',
-        'title': 'Modified Code Without Test Update',
-        'patterns': [],
-        'recommendation': 'Update existing tests to cover modified behavior'
-    },
+    # TST-002 removed: it had no patterns and never fired (dead rule)
 ]
 
 
@@ -151,6 +145,31 @@ def check_line(line_text: str, patterns: list, line_num: int, file_path: str) ->
     return findings
 
 
+_SWALLOW_RE = re.compile(r'^\s*(?:pass|return|break|continue)\s*(?:#.*)?$')
+
+
+def _is_swallowed(hunk: dict, match_idx: int, line_text: str) -> bool:
+    """Check if the except at match_idx is followed by a swallow statement.
+
+    Mirrors agent/rule_engine.py's _check_exception_swallow: the except line
+    must be followed within 1-2 added lines by pass/return/break/continue
+    at same or deeper indentation.
+    """
+    indent = len(line_text) - len(line_text.lstrip())
+    added_lines = hunk.get('added_lines', [])
+    for offset in range(1, min(3, len(added_lines) - match_idx)):
+        nxt = added_lines[match_idx + offset]
+        nxt_text = nxt.get('text', '')
+        nxt_indent = len(nxt_text) - len(nxt_text.lstrip())
+        if nxt_indent < indent:
+            return False
+        if _SWALLOW_RE.match(nxt_text):
+            return True
+        if nxt_text.strip():
+            return False
+    return False
+
+
 def run_checks(parsed_diff: dict) -> list:
     """Run all rules against parsed diff data."""
     findings = []
@@ -159,7 +178,8 @@ def run_checks(parsed_diff: dict) -> list:
     for file_info in files:
         file_path = file_info.get('path', '')
         for hunk in file_info.get('hunks', []):
-            for added in hunk.get('added_lines', []):
+            added_lines = hunk.get('added_lines', [])
+            for added_idx, added in enumerate(added_lines):
                 line_text = added.get('text', '')
                 line_num = added.get('line', 0)
 
@@ -168,6 +188,9 @@ def run_checks(parsed_diff: dict) -> list:
                         continue
                     hits = check_line(line_text, rule['patterns'], line_num, file_path)
                     for hit in hits:
+                        # ERR-001 needs two-line swallow confirmation
+                        if rule.get('needs_swallow_check') and not _is_swallowed(hunk, added_idx, line_text):
+                            continue
                         findings.append({
                             'severity': rule['severity'],
                             'category': rule['category'],

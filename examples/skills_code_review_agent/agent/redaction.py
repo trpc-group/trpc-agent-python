@@ -57,8 +57,15 @@ def redact_text(text: str) -> str:
     words = result.split()
     for i, word in enumerate(words):
         if len(word) > 16 and _shannon_entropy(word) > 3.5:
-            # Avoid redacting URLs, hex strings, UUIDs
-            if not any(c in word for c in '/.{}[]<>') and '-' not in word[1:]:
+            # Skip URLs, paths, hex strings, UUIDs, and identifiers
+            w = word.strip("'\",;")
+            if not any(c in word for c in '/.{}[]<>'):
+                if w.isdigit() or re.fullmatch(r'[0-9a-fA-F]+', w):
+                    continue  # numeric or hex string
+                if re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}', w):
+                    continue  # UUID
+                if '-' in word[1:]:
+                    continue
                 words[i] = REDACTION_TEXT
     result = ' '.join(words)
 
@@ -76,13 +83,17 @@ def redact_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def check_sensitive(text: str) -> list[dict[str, str]]:
-    """Check text for sensitive information. Returns list of detections."""
+    """Check text for sensitive information. Returns list of detections.
+
+    Each detection has 'type' (category name) and 'value' (the full matched text).
+    Uses finditer to always return the complete match string regardless of
+    whether the pattern contains capture groups.
+    """
     detections: list[dict[str, str]] = []
     for pattern, name in SENSITIVE_PATTERNS:
-        matches = pattern.findall(text)
-        for m in matches:
+        for m in pattern.finditer(text):
             detections.append({
                 'type': name,
-                'value': m,
+                'value': m.group(),
             })
     return detections

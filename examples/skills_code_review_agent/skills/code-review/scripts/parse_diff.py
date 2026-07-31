@@ -51,6 +51,7 @@ def parse_diff(diff_text: str) -> dict:
                 'new_count': int(hunk_match.group(4) or 1),
                 'added_lines': [],
                 'context_before': [],
+                '_line_counter': int(hunk_match.group(3)),
             }
             current_file['hunks'].append(current_hunk)
             continue
@@ -59,13 +60,15 @@ def parse_diff(diff_text: str) -> dict:
             if line.startswith('+') and not line.startswith('+++'):
                 text = line[1:] if len(line) > 1 else ''
                 current_hunk['added_lines'].append({
-                    'line': current_hunk['new_start'] + len(current_hunk['added_lines']),
+                    'line': current_hunk['_line_counter'],
                     'text': text,
-                    'context': current_hunk['context_before'][-3:]  # last 3 context lines
+                    'context': current_hunk['context_before'][-3:]
                 })
+                current_hunk['_line_counter'] += 1
             elif not line.startswith('-'):
                 ctx_text = line[1:] if line.startswith(' ') else line
                 current_hunk['context_before'].append(ctx_text)
+                current_hunk['_line_counter'] += 1
 
     result = {
         'files': files,
@@ -75,6 +78,10 @@ def parse_diff(diff_text: str) -> dict:
             for f in files
         )
     }
+    for f in files:
+        for h in f['hunks']:
+            h.pop('_line_counter', None)
+
     return result
 
 

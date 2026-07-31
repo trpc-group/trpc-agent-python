@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS finding (
     recommendation TEXT,
     confidence REAL DEFAULT 0.85,
     rule_id TEXT,
+    source TEXT,
     is_warning INTEGER DEFAULT 0,
     FOREIGN KEY (task_id) REFERENCES review_task(id)
 );
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS sandbox_run (
     stderr TEXT,
     duration_ms INTEGER DEFAULT 0,
     timed_out INTEGER DEFAULT 0,
+    fallback TEXT,
     FOREIGN KEY (task_id) REFERENCES review_task(id)
 );
 
@@ -121,12 +123,13 @@ class ReviewStore:
                       is_warning: bool = False) -> int:
         cursor = self.conn.execute(
             "INSERT INTO finding (task_id, severity, category, file, line, title, "
-            "evidence, recommendation, confidence, rule_id, is_warning) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "evidence, recommendation, confidence, rule_id, source, is_warning) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (task_id, finding.get('severity'), finding.get('category'),
              finding.get('file'), finding.get('line'), finding.get('title'),
              finding.get('evidence'), finding.get('recommendation'),
              finding.get('confidence'), finding.get('rule_id'),
+             finding.get('source', 'deterministic_rules'),
              1 if is_warning else 0)
         )
         self.conn.commit()
@@ -140,13 +143,14 @@ class ReviewStore:
     def save_sandbox_run(self, task_id: str, run_result: dict[str, Any]) -> int:
         cursor = self.conn.execute(
             "INSERT INTO sandbox_run (task_id, script, exit_code, stdout, stderr, "
-            "duration_ms, timed_out) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "duration_ms, timed_out, fallback) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (task_id, run_result.get('script', ''),
              run_result.get('exit_code', -1),
              run_result.get('stdout', ''),
              run_result.get('stderr', ''),
              run_result.get('duration_ms', 0),
-             1 if run_result.get('timed_out') else 0)
+             1 if run_result.get('timed_out') else 0,
+             run_result.get('_fallback', ''))
         )
         self.conn.commit()
         return cursor.lastrowid

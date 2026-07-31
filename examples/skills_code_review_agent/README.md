@@ -31,6 +31,18 @@ python -m pytest test_code_review_agent.py -v
 | Sync (default) | `--diff-file` | `main()` function pipeline | not used | `SandboxRunner.run_script()` | `check_dangerous()` |
 | Agent | `--agent` | `LlmAgent` + `Runner.run_async()` | `skill_load`/`skill_run` | `SkillRunTool` + `LocalWorkspaceRuntime` | `CodeReviewSafetyFilter(BaseFilter)` |
 
+## Filter Governance (three-level semantics)
+
+Commands found in tool calls / finding evidence are classified into three levels:
+
+| Level | Examples | Behavior |
+|-------|----------|----------|
+| `deny` | `rm -rf /`, `mkfs`, fork bomb | Hard-blocked (`is_continue=False`), never executed, decision recorded |
+| `ask` | `sudo`, `iptables`, `chown` | Interactive confirmation prompt (`y/N`); approved → executes and recorded as `approved`, rejected → blocked and recorded as `denied (no human confirmation)`. Use `--non-interactive` to auto-reject without prompting |
+| `needs_human_review` | `pip install`, `curl`, `wget` | **Same decision gate as `ask`**: interactive confirmation before execution; approved → executes and recorded as `approved`, rejected → blocked and recorded as `denied (no human confirmation)`. Use `--non-interactive` to auto-reject |
+
+**Acceptance criterion #7 compliance:** criterion #7 states that `deny / needs_human_review` must not directly reach sandbox execution. This example enforces that literally: neither `deny` nor `needs_human_review` commands execute without an operator decision. `deny` is always blocked; `ask`/`needs_human_review` prompt interactively (or auto-reject with `--non-interactive`), and every decision (approved/denied) is recorded in the filter_decision table and surfaced in the report "Filter Intercepts" section. In Agent mode the filter is attached to `skill_run` via `SkillToolSet(run_tool_kwargs={"filters": [CodeReviewSafetyFilter(...)]})`, so enforcement happens before execution.
+
 ## Review Categories
 
 | Category | Severity | Examples |

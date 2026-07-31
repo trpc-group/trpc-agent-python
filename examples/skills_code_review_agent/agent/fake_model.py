@@ -80,7 +80,17 @@ def build_code_review_steps(diff_path: str) -> list[LlmResponse]:
         LlmResponse(
             content=Content(
                 role="model",
-                parts=[Part(text="Code review completed. Findings have been stored.")]
+                parts=[Part(text=(
+                    "Code review completed. Findings have been stored.\n\n"
+                    "FINDINGS_JSON\n"
+                    "```json\n"
+                    '[{"severity": "high", "category": "security", '
+                    '"file": "a.py", "line": 1, '
+                    '"title": "Hardcoded credential (LLM)", '
+                    '"evidence": "token = \\"abc123\\"", '
+                    '"recommendation": "Use env var", "confidence": 0.9}]\n'
+                    "```"
+                ))]
             ),
             partial=False,
         ),

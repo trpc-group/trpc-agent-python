@@ -40,6 +40,7 @@ def main():
     tables = [
         r[0] for r in
         store.conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        if r[0] != 'sqlite_sequence'  # SQLite internal autoincrement helper, not a business table
     ]
 
     print(f"Tables created: {len(tables)}")

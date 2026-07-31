@@ -16,12 +16,60 @@ Usage:
 """
 import argparse
 import asyncio
+import contextlib
 import json
-import sys
 import os
+import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Iterator
+
+# Sandbox env whitelist applied in Agent mode when --strict-env is set.
+# Matches sandbox/runner.py's DEFAULT_ALLOWED_ENV plus framework/process vars.
+SANDBOX_ALLOWED_ENV_RE = re.compile(
+    r"^(PATH|COMSPEC|PATHEXT|WINDIR|SYSTEMROOT|HOME|USERPROFILE|HOMEDRIVE|"
+    r"HOMEPATH|TEMP|TMP|USER|USERNAME|LANG|LC_[A-Z_]+|PYTHON[A-Z_]*|"
+    r"TRPC_AGENT[A-Z_]*|CUBE_[A-Z_]*|E2B_[A-Z_]*)$"
+)
+
+# Cap for agent transcript / tool output stored in DB and reports. The
+# 100KB sandbox stdout/stderr cap (sandbox/runner.py) is a separate,
+# requirement-mandated limit and is left untouched.
+AGENT_OUTPUT_MAX = 200_000
+
+
+def _cap_text(text: str, limit: int = AGENT_OUTPUT_MAX) -> str:
+    """Size-cap a string without hard-truncating: keep a marker when cut.
+
+    The marker is reserved inside the limit so the result never exceeds it.
+    """
+    if len(text) <= limit:
+        return text
+    marker = "\n...[truncated]"
+    keep = max(0, limit - len(marker))
+    return text[:keep] + marker
+
+
+@contextlib.contextmanager
+def _whitelisted_os_environ(pattern: re.Pattern = SANDBOX_ALLOWED_ENV_RE) -> Iterator[None]:
+    """Temporarily replace os.environ with a whitelisted view.
+
+    The framework's local workspace runtime builds command environments from
+    ``os.environ.copy()``; this is the only way to enforce an environment
+    whitelist for Agent-mode local sandbox execution. The previous environment
+    is restored on exit.
+    """
+    original = dict(os.environ)
+    filtered = {k: v for k, v in original.items() if pattern.match(k.upper())}
+    os.environ.clear()
+    os.environ.update(filtered)
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(original)
 
 
 def parse_args():
@@ -44,9 +92,15 @@ def parse_args():
                         help='Output directory for reports (default: ./output)')
     parser.add_argument('--sandbox', type=str, default='container',
                         choices=['local', 'container', 'cube'],
-                        help='Sandbox runtime type (default: container; local for dev)')
+                        help='Sandbox runtime type (default: container; falls back to local if Docker unavailable)')
     parser.add_argument('--db', type=str, default=None,
                         help='SQLite database path')
+    parser.add_argument('--agent-budget', type=float, default=300.0,
+                        help='Global budget (seconds) for Agent-mode execution (default: 300)')
+    parser.add_argument('--non-interactive', action='store_true', default=False,
+                        help='Disable interactive ask confirmation; ask commands are blocked')
+    parser.add_argument('--strict-env', action='store_true', default=False,
+                        help='Enforce an environment whitelist for --sandbox local Agent mode')
     return parser.parse_args()
 
 
@@ -77,6 +131,7 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
     db_path = args.db or str(output_dir / 'review.db')
     sandbox_duration_ms = 0
     intercept_count = 0
+    tool_call_count = 0
     exception_dist: dict[str, int] = {}
 
     store = ReviewStore(db_path)
@@ -113,6 +168,9 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
     if blocked:
         print(f"[filter] Denied {len(blocked)} destructive items (blocked from sandbox)")
         findings = [f for f in findings if f.get('filter_action') != 'deny']
+    # Note: sync sandbox runs fixed parse/static scripts on the diff text only;
+    # findings' evidence never drives sandbox execution, so ask/needs_human_review
+    # findings cannot reach the sandbox. Agent-mode enforcement is in filter_agent._before().
     if needs_review:
         # needs_review items stay in findings but are flagged for human
         print(f"[filter] Flagged {len(needs_review)} items for human review "
@@ -124,43 +182,57 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
     # Sandbox execution
     active_scripts_dir = Path(__file__).parent / 'skills' / 'code-review' / 'scripts'
     if not args.dry_run and active_scripts_dir.exists():
-        runner = SandboxRunner(sandbox_type=args.sandbox)
+        try:
+            runner = SandboxRunner(sandbox_type=args.sandbox)
+        except ValueError as e:
+            print(f"[error] {e}")
+            sys.exit(1)
         parsed_json = None
-        diff_tmp = output_dir / '_input.diff'
-        diff_tmp.write_text(diff_text, encoding='utf-8')
 
-        parse_diff_script = active_scripts_dir / 'parse_diff.py'
-        if parse_diff_script.exists():
-            print(f"[sandbox] Running: parse_diff.py <diff>")
-            result = runner.run_script(str(parse_diff_script), stdin_input=diff_text)
-            result['stdout'] = redact_text(result.get('stdout', ''))
-            result['stderr'] = redact_text(result.get('stderr', ''))
-            if result.get('exception_type'):
-                exc_type = result['exception_type']
-                exception_dist[exc_type] = exception_dist.get(exc_type, 0) + 1
-            store.save_sandbox_run(task_id, result)
-            sandbox_duration_ms += result.get('duration_ms', 0)
-            if result.get('exit_code') == 0 and result.get('stdout', '').strip():
-                parsed_json = result['stdout']
-                print(f"[sandbox] parse_diff.py OK ({result.get('duration_ms', 0)}ms)")
-            else:
-                print(f"[sandbox] parse_diff.py exit={result['exit_code']}")
+        try:
+            parse_diff_script = active_scripts_dir / 'parse_diff.py'
+            if parse_diff_script.exists():
+                print(f"[sandbox] Running: parse_diff.py <diff>")
+                result = runner.run_script(str(parse_diff_script), stdin_input=diff_text)
+                tool_call_count += 1
+                result['stdout'] = redact_text(result.get('stdout', ''))
+                result['stderr'] = redact_text(result.get('stderr', ''))
+                if result.get('exception_type'):
+                    exc_type = result['exception_type']
+                    exception_dist[exc_type] = exception_dist.get(exc_type, 0) + 1
+                store.save_sandbox_run(task_id, result)
+                sandbox_duration_ms += result.get('duration_ms', 0)
+                if result.get('exit_code') == 0 and result.get('stdout', '').strip():
+                    parsed_json = result['stdout']
+                    print(f"[sandbox] parse_diff.py OK ({result.get('duration_ms', 0)}ms)")
+                else:
+                    print(f"[sandbox] parse_diff.py exit={result['exit_code']}")
 
-        static_check_script = active_scripts_dir / 'static_check.py'
-        if static_check_script.exists():
-            print(f"[sandbox] Running: static_check.py")
-            result = runner.run_script(str(static_check_script), stdin_input=parsed_json)
-            result['stdout'] = redact_text(result.get('stdout', ''))
-            result['stderr'] = redact_text(result.get('stderr', ''))
-            if result.get('exception_type'):
-                exc_type = result['exception_type']
-                exception_dist[exc_type] = exception_dist.get(exc_type, 0) + 1
-            store.save_sandbox_run(task_id, result)
-            sandbox_duration_ms += result.get('duration_ms', 0)
-            exit_msg = "OK" if result.get('exit_code') == 0 else f"exit={result['exit_code']}"
-            print(f"[sandbox] static_check.py {exit_msg} ({result.get('duration_ms', 0)}ms)")
-
-        diff_tmp.unlink(missing_ok=True)
+            static_check_script = active_scripts_dir / 'static_check.py'
+            if static_check_script.exists() and parsed_json is not None:
+                print(f"[sandbox] Running: static_check.py")
+                result = runner.run_script(str(static_check_script), stdin_input=parsed_json)
+                tool_call_count += 1
+                result['stdout'] = redact_text(result.get('stdout', ''))
+                result['stderr'] = redact_text(result.get('stderr', ''))
+                if result.get('exception_type'):
+                    exc_type = result['exception_type']
+                    exception_dist[exc_type] = exception_dist.get(exc_type, 0) + 1
+                store.save_sandbox_run(task_id, result)
+                sandbox_duration_ms += result.get('duration_ms', 0)
+                exit_msg = "OK" if result.get('exit_code') == 0 else f"exit={result['exit_code']}"
+                print(f"[sandbox] static_check.py {exit_msg} ({result.get('duration_ms', 0)}ms)")
+        except RuntimeError as e:
+            # Sandbox backend config errors (e.g. cube without credentials)
+            # must not crash the whole review task.
+            print(f"[error] Sandbox execution failed: {e}")
+            exception_dist['SandboxConfigError'] = exception_dist.get('SandboxConfigError', 0) + 1
+            store.save_sandbox_run(task_id, {
+                'script': 'parse_diff.py', 'exit_code': -1,
+                'stdout': '', 'stderr': str(e),
+                'duration_ms': 0, 'timed_out': False,
+                '_fallback': 'error',
+            })
     elif not args.dry_run:
         store.save_sandbox_run(task_id, {'script': '__dry_run_skipped__', 'exit_code': 0,
                                          'stdout': 'Sandbox skipped (no scripts)', 'stderr': '',
@@ -183,7 +255,7 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
     store.save_monitoring(task_id, {
         'total_duration_ms': total_duration_ms,
         'sandbox_duration_ms': sandbox_duration_ms,
-        'tool_call_count': len(findings) + len(warnings),
+        'tool_call_count': tool_call_count,
         'intercept_count': intercept_count,
         'finding_count': len(findings),
         'severity_distribution': severity_dist,
@@ -206,7 +278,7 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
     }
 
     json_path = output_dir / 'review_report.json'
-    json_content = json.dumps(report, indent=2, ensure_ascii=False)
+    json_content = generate_json_report(report)
     json_path.write_text(json_content, encoding='utf-8')
     store.save_report(task_id, 'json', json_content)
 
@@ -229,21 +301,80 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
 # Agent Pipeline (new — uses LlmAgent + SkillToolSet + Runner)
 # ============================================================
 
-async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
+async def _pick_workspace_runtime(sandbox: str):
+    """Select the framework workspace runtime for Agent mode.
+
+    container — framework Docker runtime (network=none by default)
+    cube      — framework Cube/E2B runtime; requires [cube] extra + credentials
+    local     — framework local runtime (NO OS isolation); dev only
+
+    Returns the runtime instance, or raises SystemExit with a clear message.
+    """
+    if sandbox == 'container':
+        try:
+            from trpc_agent_sdk.code_executors import create_container_workspace_runtime
+            runtime = create_container_workspace_runtime(
+                host_config={"network_mode": "none", "mem_limit": "512m"})
+            print("[agent] Using container workspace runtime (network=none)")
+            return runtime
+        except Exception as e:
+            from trpc_agent_sdk.code_executors import create_local_workspace_runtime
+            runtime = create_local_workspace_runtime()
+            print(f"[agent] WARNING: Container runtime unavailable, "
+                  f"falling back to LOCAL (no isolation): {e}")
+            return runtime
+
+    if sandbox == 'cube':
+        try:
+            from trpc_agent_sdk.code_executors.cube import (
+                create_cube_sandbox_client,
+                create_cube_workspace_runtime,
+            )
+            from trpc_agent_sdk.code_executors.cube._types import CubeClientConfig
+        except Exception:
+            raise SystemExit(
+                "[error] --sandbox cube requires the optional extra: "
+                "pip install trpc-agent-py[cube]")
+
+        cfg = CubeClientConfig()
+        try:
+            cfg.resolve_api_url()
+            cfg.resolve_api_key()
+            cfg.resolve_template()
+        except ValueError as e:
+            raise SystemExit(f"[error] --sandbox cube: {e}")
+
+        try:
+            client = await create_cube_sandbox_client(cfg)
+        except Exception as e:
+            raise SystemExit(f"[error] --sandbox cube: failed to open sandbox: {e}")
+        print("[agent] Using Cube/E2B workspace runtime")
+        return create_cube_workspace_runtime(sandbox_client=client, execute_timeout=60.0)
+
+    # local
+    from trpc_agent_sdk.code_executors import create_local_workspace_runtime
+    print("[agent] WARNING: --sandbox local has NO network/OS isolation; "
+          "use --sandbox container/cube for production")
+    return create_local_workspace_runtime()
+
+
+async def run_agent_pipeline_async(args, task_id: str, diff_text: str,
+                                   _model_override=None, _confirm=None):
     """Run code review using the Agent-driven pipeline."""
     from trpc_agent_sdk.agents import LlmAgent
     from trpc_agent_sdk.runners import Runner
     from trpc_agent_sdk.sessions import InMemorySessionService
     from trpc_agent_sdk.types import Content, Part
     from trpc_agent_sdk.skills import SkillToolSet, create_default_skill_repository
-    from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 
     from agent.fake_model import FakeModel, build_code_review_steps
+    from agent.filter_agent import CodeReviewSafetyFilter
     from agent.diff_parser import parse_diff
     from agent.rule_engine import run_rules
     from agent.dedup import dedup_findings
-    from agent.filter import check_dangerous
+    from agent.filter import check_dangerous, classify_command
     from agent.redaction import redact_findings, redact_text
+    from agent.llm_findings import parse_llm_findings
     from storage.schema import ReviewStore
     from report.json_report import generate_json_report
     from report.markdown_report import generate_markdown_report
@@ -266,7 +397,10 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
     diff_tmp.write_text(diff_text, encoding='utf-8')
 
     # Create model
-    if args.model:
+    if _model_override is not None:
+        model = _model_override
+        print(f"[review] Using injected model override")
+    elif args.model:
         from trpc_agent_sdk.models import OpenAIModel
         model = OpenAIModel(
             model_name=args.model,
@@ -279,15 +413,36 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
         model.set_steps(build_code_review_steps(str(diff_tmp)))
         print(f"[review] Using fake model with {len(model._steps)} pre-recorded steps")
 
+    def _record_decision(action: str, rule: str, reason: str) -> None:
+        store.save_filter_decision(task_id, action=action, rule=rule, reason=reason)
+        print(f"[filter] {action}: {rule} — {reason[:120]}")
+
+    # Three-level tool filter: deny blocks, ask/needs_human_review require
+    # explicit operator confirmation before execution.
+    safety_filter = CodeReviewSafetyFilter(
+        record=_record_decision,
+        confirm=_confirm,
+        interactive=not args.non_interactive,
+    )
+
     # Create Skill repository and toolset (use CopySkillStager on Windows)
     from trpc_agent_sdk.skills.tools import CopySkillStager
     skills_dir = str(Path(__file__).parent / 'skills')
-    workspace_runtime = create_local_workspace_runtime()
+    workspace_runtime = await _pick_workspace_runtime(args.sandbox)
     repo = create_default_skill_repository(skills_dir, workspace_runtime=workspace_runtime)
-    skill_toolset = SkillToolSet(repository=repo, skill_stager=CopySkillStager())
+    skill_toolset = SkillToolSet(
+        repository=repo,
+        skill_stager=CopySkillStager(),
+        run_tool_kwargs={
+            # Attach the safety filter to skill_run so deny/ask enforcement
+            # happens before execution (BaseTool.run_async runs tool filters).
+            "filters": [safety_filter],
+            # Per-command timeout aligned with SandboxRunner's 30s default.
+            "run_tool_kwargs": {"timeout": 30.0},
+        },
+    )
 
-    # Create agent with code_review_safety filter
-    import agent.filter_agent  # noqa: F401 — triggers @register_agent_filter
+    # Create agent
     agent = LlmAgent(
         name="code_review_agent",
         description="Analyzes git diffs for security, resource, error, and testing issues",
@@ -295,11 +450,17 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
         instruction=(
             "You are a code review agent. When you receive a diff, load the "
             "'code-review' skill, review its documentation, then run "
-            "'parse_diff.py' and 'static_check.py' in order. Report findings."
+            "'parse_diff.py' and 'static_check.py' in order. Report findings.\n\n"
+            "At the end of your review, output your findings as a JSON array "
+            "inside a code block starting with exactly:\n"
+            "FINDINGS_JSON\n"
+            "Each finding must be an object with keys: severity "
+            "(critical/high/medium/low), category (security/resource_leak/"
+            "error_handling/testing/database/concurrency/performance/other), "
+            "file, line, title, evidence, recommendation, confidence (0-1)."
         ),
         tools=[skill_toolset],
         skill_repository=repo,
-        filters_name=["code_review_safety"],
     )
 
     session_service = InMemorySessionService()
@@ -315,58 +476,122 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
     print(f"[agent] Starting Agent pipeline...")
 
     findings_text = []
-    sandbox_start = 0.0
-    sandbox_duration_ms = 0
+    agent_loop_start = time.time()
     exception_dist: dict[str, int] = {}
-    try:
+    _last_tool_name = ''
+    tool_call_count = 0
+    agent_budget = float(getattr(args, 'agent_budget', 300.0) or 300.0)
+
+    async def _consume_events():
         async for event in runner.run_async(
             user_id=user_id,
             session_id=session_id,
             new_message=Content(parts=[Part.from_text(text=message)]),
         ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call and not event.partial:
-                        fn_name = part.function_call.name
-                        if fn_name in ("skill_run", "skill_exec"):
-                            sandbox_start = time.time()
-                        print(f"[agent] → {fn_name}({part.function_call.args})")
-                    elif part.function_response and not event.partial:
-                        if sandbox_start > 0:
-                            sandbox_duration_ms += int((time.time() - sandbox_start) * 1000)
-                            sandbox_start = 0
-                        resp_data = part.function_response.response
-                        resp = str(resp_data)[:100]
-                        if isinstance(resp_data, dict):
-                            err = resp_data.get('error', '') or resp_data.get('status', '')
-                            if err and err != 'success':
-                                exc_key = f"Agent:{err}" if isinstance(err, str) else "Agent:error"
-                                exception_dist[exc_key] = exception_dist.get(exc_key, 0) + 1
-                        store.save_sandbox_run(task_id, {
-                            'script': f"agent_{event.author or 'tool'}",
-                            'exit_code': 0,
-                            'stdout': redact_text(resp),
-                            'stderr': '',
-                            'duration_ms': 0,
-                            'timed_out': False,
-                        })
-                        print(f"[agent] ← {resp}")
-                    elif part.text and not event.partial:
-                        print(f"[agent]   {part.text[:200]}")
-                        findings_text.append(part.text)
-    except Exception as e:
-        exc_key = type(e).__name__
-        exception_dist[exc_key] = exception_dist.get(exc_key, 0) + 1
-        print(f"[agent] Agent execution error: {e}")
+            yield event
+
+    env_ctx: contextlib.AbstractContextManager = (
+        _whitelisted_os_environ() if (args.sandbox == 'local' and args.strict_env)
+        else contextlib.nullcontext()
+    )
+
+    if args.dry_run:
+        # dry-run: skip sandbox execution, go straight to rule-based post-processing
+        print("[agent] Dry-run mode: skipping Agent skill_run execution")
+        findings_text.append("(dry-run: sandbox execution skipped)")
+    else:
+        try:
+            async_gen = _consume_events()
+            with env_ctx:
+                while True:
+                    if time.time() - agent_loop_start > agent_budget:
+                        exception_dist['AgentBudgetExceeded'] = exception_dist.get(
+                            'AgentBudgetExceeded', 0) + 1
+                        print(f"[agent] Global budget exceeded ({agent_budget:.0f}s), stopping")
+                        break
+                    try:
+                        event = await async_gen.__anext__()
+                    except StopAsyncIteration:
+                        break
+
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.function_call and not event.partial:
+                                fn_name = part.function_call.name
+                                tool_call_count += 1
+                                _last_tool_name = fn_name
+                                # skill_run enforcement is owned by the tool filter.
+                                # skill_exec/workspace_exec fall back to inline recording.
+                                if fn_name not in ('skill_run',):
+                                    args_dict = part.function_call.args or {}
+                                    cmd_parts = []
+                                    cmd = str(args_dict.get('command', '') or args_dict.get('cmd', ''))
+                                    if cmd:
+                                        cmd_parts.append(cmd)
+                                    for akey in ('args', 'argv'):
+                                        aval = args_dict.get(akey)
+                                        if isinstance(aval, list):
+                                            cmd_parts.append(' '.join(str(x) for x in aval))
+                                        elif isinstance(aval, str) and aval:
+                                            cmd_parts.append(aval)
+                                    cmd_all = ' '.join(cmd_parts)
+                                    if cmd_all:
+                                        level, pattern = classify_command(cmd_all)
+                                        if level in ('deny', 'ask', 'needs_human_review'):
+                                            _record_decision(
+                                                level, pattern,
+                                                f'[agent:{fn_name}] {cmd_all}')
+                                print(f"[agent] → {fn_name}({part.function_call.args})")
+                            elif part.function_response and not event.partial:
+                                resp_data = part.function_response.response
+                                resp = _cap_text(str(resp_data))
+                                if isinstance(resp_data, dict):
+                                    err = resp_data.get('error', '') or resp_data.get('status', '')
+                                    if err and err != 'success':
+                                        exc_key = f"Agent:{err}" if isinstance(err, str) else "Agent:error"
+                                        exception_dist[exc_key] = exception_dist.get(exc_key, 0) + 1
+                                # Only record sandbox execution for actual sandbox tools
+                                if _last_tool_name in ('skill_run', 'skill_exec', 'workspace_exec'):
+                                    store.save_sandbox_run(task_id, {
+                                        'script': f"agent_{_last_tool_name}",
+                                        'exit_code': 0,
+                                        'stdout': redact_text(resp),
+                                        'stderr': '',
+                                        'duration_ms': 0,
+                                        'timed_out': False,
+                                    })
+                                print(f"[agent] ← {resp[:200]}")
+                            elif part.text and not event.partial:
+                                print(f"[agent]   {part.text[:200]}")
+                                findings_text.append(redact_text(_cap_text(part.text)))
+        except Exception as e:
+            exc_key = type(e).__name__
+            exception_dist[exc_key] = exception_dist.get(exc_key, 0) + 1
+            print(f"[agent] Agent execution error: {e}")
+
+    # Release the remote Cube/E2B sandbox (no-op for local/container runtimes).
+    if args.sandbox == 'cube' and hasattr(workspace_runtime, 'destroy'):
+        try:
+            await workspace_runtime.destroy()
+            print("[agent] Cube sandbox destroyed")
+        except Exception as e:
+            print(f"[agent] Cube sandbox cleanup failed (ignored): {e}")
 
     diff_tmp.unlink(missing_ok=True)
 
-    # Post-processing: Agent handles orchestration (skill_load/skill_run).
-    # The deterministic pipeline below produces structured findings from the
-    # raw diff text, independent of the Agent's output. This ensures finding
-    # quality does not depend on LLM behavior.
+    # Agent loop duration approximation for sandbox time.
+    # Includes LLM inference latency — not purely sandbox execution time.
+    # Sync pipeline measures actual subprocess wall time instead.
+    agent_sandbox_ms = int((time.time() - agent_loop_start) * 1000)
+
+    # Post-processing: deterministic rules always run against the raw diff so
+    # finding quality does not depend on LLM behavior. LLM findings are parsed
+    # from the transcript and MERGED with the rule results so the LLM's semantic
+    # review contributes to the final findings (not just agent_output).
     parsed = parse_diff(diff_text)
-    findings = run_rules(parsed)
+    rule_findings = run_rules(parsed)
+    llm_findings = parse_llm_findings('\n'.join(findings_text))
+    findings = rule_findings + llm_findings
     findings, warnings = dedup_findings(findings)
 
     blocked, needs_review_agent, allowed = check_dangerous(findings)
@@ -401,8 +626,8 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
     }
 
     store.save_monitoring(task_id, {
-        'total_duration_ms': total_duration_ms, 'sandbox_duration_ms': sandbox_duration_ms,
-        'tool_call_count': len(findings) + len(warnings),
+        'total_duration_ms': total_duration_ms, 'sandbox_duration_ms': agent_sandbox_ms,
+        'tool_call_count': tool_call_count,
         'intercept_count': intercept_count, 'finding_count': len(findings),
         'severity_distribution': severity_dist,
         'exception_distribution': exception_dist,
@@ -410,7 +635,7 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
 
     monitoring = {
         'task_id': task_id, 'total_duration_ms': total_duration_ms,
-        'sandbox_duration_ms': sandbox_duration_ms,
+        'sandbox_duration_ms': agent_sandbox_ms,
         'file_count': file_count, 'total_added_lines': added_lines,
         'finding_count': len(findings), 'warning_count': len(warnings),
         'intercept_count': intercept_count, 'review_count': review_count,
@@ -425,7 +650,7 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
     }
 
     json_path = output_dir / 'review_report.json'
-    json_content = json.dumps(report_data, indent=2, ensure_ascii=False)
+    json_content = generate_json_report(report_data)
     json_path.write_text(json_content, encoding='utf-8')
     store.save_report(task_id, 'json', json_content)
 
@@ -442,8 +667,8 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
     print(f"[summary] {total_duration_ms}ms | {file_count} files, {added_lines} lines | "
            f"Findings: {len(findings)} (C:{sev['critical']} H:{sev['high']} M:{sev['medium']} L:{sev['low']}) | "
            f"Warnings: {len(warnings)} | Intercepts: {intercept_count}")
-    if sandbox_duration_ms:
-        print(f"[summary] Sandbox time: {sandbox_duration_ms}ms")
+    if agent_sandbox_ms:
+        print(f"[summary] Agent sandbox (loop) time: {agent_sandbox_ms}ms")
     print(f"[agent] Agent mode complete")
 
 
@@ -467,7 +692,7 @@ def main():
             print(f"[error] Repo path not found: {args.repo_path}")
             sys.exit(1)
         import subprocess as sp
-        result = sp.run(['git', 'diff'], cwd=str(repo_path),
+        result = sp.run(['git', 'diff', 'HEAD'], cwd=str(repo_path),
                         capture_output=True, text=True, encoding='utf-8',
                         errors='replace')
         if result.returncode != 0:
