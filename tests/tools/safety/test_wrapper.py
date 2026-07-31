@@ -310,6 +310,53 @@ async def test_filter_allows_safe_mixed_language_fields_in_strict_mode():
 
 
 @pytest.mark.asyncio
+async def test_filter_scans_untyped_code_conservatively():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "code": "rm -rf /",
+            "tool_name": "custom",
+        },
+        result,
+    )
+
+    assert result.is_continue is False
+    assert result.rsp["language"] == "unknown"
+    assert result.rsp["decision"] == "deny"
+    assert any(finding["rule_id"] == "BASH_RECURSIVE_DELETE" for finding in result.rsp["findings"])
+
+
+@pytest.mark.asyncio
+async def test_filter_scans_execution_context_once_for_mixed_fields():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "python_code": "print('ok')",
+            "command": "echo ok",
+            "tool_metadata": {
+                "timeout": 301
+            },
+            "tool_name": "mixed_tool",
+        },
+        result,
+    )
+
+    matching_findings = [
+        finding for finding in result.rsp["findings"] if finding["rule_id"] == "RESOURCE_TIMEOUT_LIMIT_EXCEEDED"
+    ]
+    assert result.rsp["language"] == "mixed"
+    assert result.rsp["decision"] == "needs_human_review"
+    assert len(matching_findings) == 1
+    assert result.rsp["telemetry_attributes"]["tool.safety.scan_id"] == result.rsp["scan_id"]
+
+
+@pytest.mark.asyncio
 async def test_filter_extracts_python_code_language():
     safety_filter = ToolSafetyFilter()
     result = FilterResult()

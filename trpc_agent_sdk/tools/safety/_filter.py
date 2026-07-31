@@ -24,8 +24,6 @@ from ._telemetry import record_safety_attributes
 from ._types import Decision
 from ._types import SafetyReport
 from ._types import ToolScriptScanRequest
-from ._types import aggregate_decision
-from ._types import max_risk_level
 
 _PYTHON_ARG_KEYS = ("python_code", )
 _BASH_ARG_KEYS = ("command", "cmd", "bash_code")
@@ -68,7 +66,7 @@ class ToolSafetyFilter(BaseFilter):
         requests = _extract_scan_requests(req, tool_name)
         if not requests:
             return None
-        report = _merge_reports([self.scanner.scan(request) for request in requests])
+        report = self.scanner.scan_segments(requests)
         should_block = report.decision == Decision.DENY or (self.block_on_review
                                                             and report.decision == Decision.NEEDS_HUMAN_REVIEW)
         report.set_blocked(should_block)
@@ -104,7 +102,7 @@ def _extract_scan_requests(req: dict[str, Any], tool_name: str) -> list[ToolScri
     generic_language = _extract_language(req, tool_name)
     for key in _GENERIC_ARG_KEYS:
         _add_script_part(grouped_parts, generic_language, req.get(key))
-    code_language = _extract_explicit_language(req) or "python"
+    code_language = _extract_explicit_language(req) or generic_language
     _add_script_part(grouped_parts, code_language, req.get("code"))
 
     code_blocks = req.get("code_blocks")
@@ -125,17 +123,16 @@ def _extract_scan_requests(req: dict[str, Any], tool_name: str) -> list[ToolScri
     env = dict(req.get("env", {}) or {})
     tool_metadata = dict(req.get("tool_metadata", {}) or {})
     requests: list[ToolScriptScanRequest] = []
-    for index, (language, parts) in enumerate(grouped_parts.items()):
-        include_context = index == 0
+    for language, parts in grouped_parts.items():
         requests.append(
             ToolScriptScanRequest(
                 script="\n".join(parts),
                 language=language,
-                command_args=command_args if include_context else [],
-                cwd=cwd if include_context else "",
-                env=env if include_context else {},
+                command_args=command_args,
+                cwd=cwd,
+                env=env,
                 tool_name=tool_name,
-                tool_metadata=tool_metadata if include_context else {},
+                tool_metadata=tool_metadata,
             ))
     return requests
 
@@ -146,34 +143,6 @@ def _add_script_part(grouped_parts: dict[str, list[str]], language: str, value: 
     parts = grouped_parts.setdefault(_canonical_language(language), [])
     if value not in parts:
         parts.append(value)
-
-
-def _merge_reports(reports: list[SafetyReport]) -> SafetyReport:
-    report = reports[0]
-    if len(reports) == 1:
-        return report
-
-    report.findings = [finding for item in reports for finding in item.findings]
-    report.decision = aggregate_decision(report.findings)
-    report.risk_level = max_risk_level(report.findings)
-    report.elapsed_ms = round(sum(item.elapsed_ms for item in reports), 3)
-    report.sanitized = any(item.sanitized for item in reports)
-    languages = list(dict.fromkeys(item.language for item in reports))
-    report.language = languages[0] if len(languages) == 1 else "mixed"
-    rule_ids = [finding.rule_id for finding in report.findings]
-    if rule_ids:
-        report.summary = (f"Decision {report.decision.value} with {report.risk_level.value} risk from rules: "
-                          f"{', '.join(rule_ids[:5])}.")
-    else:
-        report.summary = "No safety rules matched; execution is allowed by the current static policy."
-    report.telemetry_attributes.update({
-        "tool.safety.decision": report.decision.value,
-        "tool.safety.risk_level": report.risk_level.value,
-        "tool.safety.rule_id": ",".join(rule_ids[:10]),
-        "tool.safety.sanitized": report.sanitized,
-        "tool.safety.duration_ms": report.elapsed_ms,
-    })
-    return report
 
 
 def _extract_tool_name(req: dict[str, Any]) -> str:
