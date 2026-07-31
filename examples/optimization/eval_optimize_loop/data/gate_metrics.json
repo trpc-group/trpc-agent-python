@@ -18,13 +18,19 @@
       "criterion": {
         "tool_trajectory": {
           "default": {
-            "name": {"match": "exact", "case_insensitive": false},
-            "arguments": {"match": "exact"}
+            "name": {
+              "match": "exact",
+              "case_insensitive": false
+            },
+            "arguments": {
+              "match": "exact"
+            }
           },
           "order_sensitive": true,
           "subset_matching": false
         }
       }
     }
-  ]
+  ],
+  "num_runs": 2
 }
