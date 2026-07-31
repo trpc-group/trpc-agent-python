@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "v1",
+  "algorithm": "gepa_reflective",
+  "status": "FAILED",
+  "finishReason": "error",
+  "stopReason": null,
+  "errorMessage": "frontier_type='objective' requires objective_scores to be provided by the evaluator, but none were found. Use an evaluator that returns objective_scores or use frontier_type='instance'.",
+  "baselinePassRate": 0.0,
+  "bestPassRate": 0.0,
+  "passRateImprovement": 0.0,
+  "baselineMetricBreakdown": {},
+  "bestMetricBreakdown": {},
+  "metricThresholds": {
+    "final_response_avg_score": 1.0
+  },
+  "perMetricBestCandidates": {},
+  "baselinePrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object.\n"
+  },
+  "bestPrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object.\n"
+  },
+  "totalRounds": 0,
+  "rounds": [],
+  "totalReflectionLmCalls": 0,
+  "totalJudgeModelCalls": 0,
+  "totalLlmCost": 0.0,
+  "totalTokenUsage": {
+    "prompt": 0,
+    "completion": 0,
+    "total": 0
+  },
+  "durationSeconds": 0.024374,
+  "startedAt": "2026-07-30T09:24:38.791593+00:00",
+  "finishedAt": "2026-07-30T09:24:38.815967+00:00",
+  "extras": {}
+}

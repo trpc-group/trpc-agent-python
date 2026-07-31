@@ -1,0 +1,808 @@
+{
+  "eval_set_id": "shopping_assistant_train_live",
+  "name": "训练集（live 模式）",
+  "description": "20 个训练用例（live 模式）。",
+  "eval_cases": [
+    {
+      "eval_id": "train_001_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "帮我搜索无线耳机。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt001_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "wireless headphones"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "找到\\ 2\\ 款无线耳机[\\s\\S]*Sony\\ WH\\-1000XM6\\ 售价\\ ¥2,499（评分\\ 4\\.9[\\s\\S]*库存\\ 15\\ 件）[\\s\\S]*Wireless\\ Bluetooth\\ Headphones\\ 售价\\ ¥299（评分\\ 4\\.5[\\s\\S]*库存\\ 120\\ 件）"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_002_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "查询我的订单 ORD-99999。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt002_ineffective",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-99999"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "订单\\ ORD\\-99999\\ 不存在[\\s\\S]*请核实订单\\ ID[\\s\\S]*有效订单[\\s\\S]*ORD\\-12345、ORD\\-12346、ORD\\-12347"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_003_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "往我的购物车里加 2 个 iPhone 15 Pro。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt003_working",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P002",
+                  "quantity": 2
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "已将\\ 2\\ 个\\ iPhone\\ 15\\ Pro\\ 加入购物车[\\s\\S]*合计\\ ¥15,998\\.00"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_004_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "介绍一下 MacBook Pro 14。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt004_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P003"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "MacBook\\ Pro\\ 14（P003）苹果出品[\\s\\S]*M3\\ Pro\\ 芯片[\\s\\S]*18GB\\ 内存[\\s\\S]*512GB\\ 固态硬盘[\\s\\S]*Liquid\\ Retina\\ XDR\\ 显示屏[\\s\\S]*售价\\ ¥14,999[\\s\\S]*评分\\ 4\\.7[\\s\\S]*库存\\ 30\\ 件"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_005_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "帮我用优惠券 INVALID99。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt005_ineffective",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "INVALID99"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "优惠券\\ INVALID99\\ 无效或已过期[\\s\\S]*有效优惠券[\\s\\S]*SAVE50（满\\ ¥200\\ 减\\ ¥50）、VIP10（9\\ 折）、NEWUSER（满\\ ¥100\\ 减\\ ¥30）"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_006_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "查询订单 ORD-12345 的状态。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt006_working",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-12345"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "订单\\ ORD\\-12345\\ 已于\\ 2026\\-07\\-25\\ 发货[\\s\\S]*预计\\ 2026\\-08\\-02\\ 送达[\\s\\S]*总金额\\ ¥7,999"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_007_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "搜索跑步鞋。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt007_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "running shoes"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "找到\\ Men's\\ Running\\ Shoes（P004）耐克出品[\\s\\S]*售价\\ ¥599[\\s\\S]*评分\\ 4\\.3[\\s\\S]*库存\\ 200\\ 件[\\s\\S]*轻量网面鞋身[\\s\\S]*缓震回弹良好"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_008_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "找找咖啡机。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt008_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "coffee maker"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "找到\\ Coffee\\ Maker（P005）BrewMaster\\ 出品[\\s\\S]*售价\\ ¥1,299[\\s\\S]*评分\\ 4\\.6[\\s\\S]*库存\\ 80\\ 件[\\s\\S]*12\\ 杯容量可编程滴漏咖啡机[\\s\\S]*内置研磨器"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_009_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "把商品 P999 加入购物车。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt009_ineffective",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P999",
+                  "quantity": 1
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "商品\\ P999\\ 不存在[\\s\\S]*请检查商品\\ ID[\\s\\S]*有效商品[\\s\\S]*P001\\ 至\\ P010"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_010_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "我的购物车里有什么？"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt010_working",
+                "name": "get_cart",
+                "args": {}
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "您的购物车有\\ 3\\ 件商品[\\s\\S]*iPhone\\ 15\\ Pro\\ x1（¥7,999）、Men's\\ Running\\ Shoes\\ x2（¥1,198）[\\s\\S]*合计\\ ¥9,197\\ CNY"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_011_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "搜索吸尘器。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt011_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "vacuum"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "找到\\ Dyson\\ V15\\ Vacuum（P009）戴森出品[\\s\\S]*售价\\ ¥4,599[\\s\\S]*评分\\ 4\\.8[\\s\\S]*库存\\ 25\\ 件[\\s\\S]*无线手持吸尘器[\\s\\S]*配备激光探测和\\ LCD\\ 屏幕"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_012_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "我的订单 ORD-88888 到哪了？"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt012_ineffective",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-88888"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "订单\\ ORD\\-88888\\ 不存在[\\s\\S]*请核实订单\\ ID[\\s\\S]*有效订单[\\s\\S]*ORD\\-12345、ORD\\-12346、ORD\\-12347"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_013_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "给我的订单用优惠券 SAVE50。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt013_working",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "SAVE50"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "优惠券\\ SAVE50\\ 已使用[\\s\\S]*订单满\\ ¥200\\ 立减\\ ¥50\\.00"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_014_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "介绍一下 Samsung Galaxy S25。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt014_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P007"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Samsung\\ Galaxy\\ S25（P007）三星出品[\\s\\S]*Snapdragon\\ 8\\ Gen\\ 4\\ 芯片[\\s\\S]*200MP\\ 摄像头[\\s\\S]*Dynamic\\ AMOLED\\ 2X\\ 显示屏[\\s\\S]*售价\\ ¥6,999[\\s\\S]*评分\\ 4\\.6[\\s\\S]*库存\\ 60\\ 件"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_015_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Sony WH-1000XM6 耳机的详情。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt015_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P006"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Sony\\ WH\\-1000XM6（P006）索尼出品[\\s\\S]*业界领先的降噪技术[\\s\\S]*40\\ 小时续航[\\s\\S]*支持\\ LDAC[\\s\\S]*售价\\ ¥2,499[\\s\\S]*评分\\ 4\\.9[\\s\\S]*库存\\ 15\\ 件"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_016_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "往购物车加 200 个 MacBook Pro 14。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt016_ineffective",
+                "name": "add_to_cart",
+                "args": {
+                  "product_id": "P003",
+                  "quantity": 200
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "库存不足[\\s\\S]*MacBook\\ Pro\\ 14\\ 仅有\\ 30\\ 件库存[\\s\\S]*无法添加\\ 200\\ 件"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_017_working",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "查询我的订单 ORD-12347 状态。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt017_working",
+                "name": "check_order_status",
+                "args": {
+                  "order_id": "ORD-12347"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "订单\\ ORD\\-12347\\ 已于\\ 2026\\-07\\-26\\ 交付[\\s\\S]*商品[\\s\\S]*Men's\\ Running\\ Shoes\\ x1[\\s\\S]*总金额\\ ¥599"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_018_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "介绍一下 Dyson V15。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt018_optimizable",
+                "name": "get_product_details",
+                "args": {
+                  "product_id": "P009"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Dyson\\ V15\\ Vacuum（P009）戴森出品[\\s\\S]*无线手持吸尘器[\\s\\S]*配备激光探测和\\ LCD\\ 屏幕[\\s\\S]*售价\\ ¥4,599[\\s\\S]*评分\\ 4\\.8[\\s\\S]*库存\\ 25\\ 件"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_019_ineffective",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "使用促销码 SUPER50。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt019_ineffective",
+                "name": "apply_coupon",
+                "args": {
+                  "code": "SUPER50"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "优惠券\\ SUPER50\\ 无效或已过期[\\s\\S]*有效优惠券[\\s\\S]*SAVE50（满\\ ¥200\\ 减\\ ¥50）、VIP10（9\\ 折）、NEWUSER（满\\ ¥100\\ 减\\ ¥30）"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_020_optimizable",
+      "eval_mode": "non-trace",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "搜索牛仔裤。"
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "lt020_optimizable",
+                "name": "search_products",
+                "args": {
+                  "query": "jeans"
+                }
+              }
+            ]
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "找到\\ Levi's\\ 501\\ Jeans（P008）Levi's\\ 出品[\\s\\S]*售价\\ ¥499[\\s\\S]*评分\\ 4\\.4[\\s\\S]*库存\\ 300\\ 件[\\s\\S]*原版剪裁[\\s\\S]*非弹力牛仔布[\\s\\S]*直筒裤型"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "shopping_assistant",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}

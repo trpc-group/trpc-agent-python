@@ -1,0 +1,11 @@
+id,name,category,price,rating,stock,description,brand
+P001,Wireless Bluetooth Headphones,electronics,299.00,4.5,120,"Noise-cancelling wireless headphones with 30h battery life. Bluetooth 5.3, IPX5 water resistant.",SoundMax
+P002,iPhone 15 Pro,electronics,7999.00,4.8,50,"A17 Pro chip, 48MP camera, titanium design, USB-C.",Apple
+P003,MacBook Pro 14,electronics,14999.00,4.7,30,"M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display.",Apple
+P004,Men's Running Shoes,clothing,599.00,4.3,200,"Lightweight mesh upper, responsive cushioning, rubber outsole.",Nike
+P005,Coffee Maker,home,1299.00,4.6,80,"Programmable drip coffee maker, 12-cup capacity, built-in grinder.",BrewMaster
+P006,Sony WH-1000XM6 Headphones,electronics,2499.00,4.9,15,"Industry-leading noise cancellation, 40h battery, LDAC support.",Sony
+P007,Samsung Galaxy S25,electronics,6999.00,4.6,60,"Snapdragon 8 Gen 4, 200MP camera, Dynamic AMOLED 2X.",Samsung
+P008,Levi's 501 Jeans,clothing,499.00,4.4,300,"Original fit, non-stretch denim, straight leg.",Levi's
+P009,Dyson V15 Vacuum,home,4599.00,4.8,25,"Cordless stick vacuum, laser dust detection, LCD screen.",Dyson
+P010,Air Fryer XL,home,899.00,4.2,100,"7L capacity, 12 cooking presets, rapid air circulation.",KitchenPro

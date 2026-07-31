@@ -635,10 +635,10 @@ class LocalEvalService(BaseEvalService):
                     raise ValueError(
                         f"inference eval case (eval_case_id={eval_case.eval_id}, session_id={session_id}): "
                         "actual_conversation is only supported in trace mode")
-                if root_agent is None:
+                if root_agent is None and self._runner is None:
                     raise ValueError(f"inference eval case (eval_case_id={eval_case.eval_id}, "
-                                     f"session_id={session_id}): a root_agent is required for "
-                                     f"standard (non-trace) eval_mode; got root_agent=None")
+                                     f"session_id={session_id}): a root_agent or runner is required for "
+                                     f"standard (non-trace) eval_mode; got both root_agent=None and runner=None")
                 inferences = await self._generate_inferences_from_agent(
                     agent=root_agent,
                     eval_case=eval_case,

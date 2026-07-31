@@ -1,0 +1,19 @@
+Optimization complete  |  status=SUCCEEDED  |  algorithm=gepa_reflective
+
+pass_rate     : 0.0000 -> 0.0000   (+0.0000, no improvement)
+rounds        : 0 accepted / 4 total
+duration      : 0.51s
+started_at    : 2026-07-30T09:25:38.501629+00:00
+finished_at   : 2026-07-30T09:25:39.014583+00:00
+stop_reason   : no_improvement
+update_source : false
+output_dir    : /Users/lvjiajia/Desktop/trpc-agent-python-main/examples/optimization/advanced_strategies/runs/baseline_2026-07-30T17-25-38
+
+metric breakdown (threshold | baseline -> best):
+  - final_response_avg_score                 threshold 1.0000   nan -> nan
+
+best prompts:
+  - system_prompt                            63 chars   (best_prompts/system_prompt.md)
+
+artifacts directory: /Users/lvjiajia/Desktop/trpc-agent-python-main/examples/optimization/advanced_strategies/runs/baseline_2026-07-30T17-25-38
+  result.json   summary.txt   rounds/   run.log   baseline_prompts/   best_prompts/   config.snapshot.json

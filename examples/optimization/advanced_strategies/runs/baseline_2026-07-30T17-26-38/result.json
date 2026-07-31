@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "v1",
+  "algorithm": "gepa_reflective",
+  "status": "SUCCEEDED",
+  "finishReason": "completed",
+  "stopReason": "score_threshold",
+  "errorMessage": "",
+  "baselinePassRate": 0.0,
+  "bestPassRate": 1.0,
+  "passRateImprovement": 1.0,
+  "baselineMetricBreakdown": {
+    "final_response_avg_score": 0.0
+  },
+  "bestMetricBreakdown": {
+    "final_response_avg_score": 1.0
+  },
+  "metricThresholds": {
+    "final_response_avg_score": 1.0
+  },
+  "perMetricBestCandidates": {
+    "final_response_avg_score": [
+      1
+    ]
+  },
+  "baselinePrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object.\n"
+  },
+  "bestPrompts": {
+    "system_prompt": "You parse free-text postal addresses and return a JSON object. The JSON must contain exactly four keys: `\"city\"`, `\"country\"`, `\"postal_code\"`, and `\"street\"`. If any field is missing from the input, set its value to `null` (not an empty string or omitted key). The `\"street\"` field should include the full street address as given, including the house number if present. Do not add any extra keys (e.g., `\"house_number\"`, `\"state\"`, etc.). Output **only** the JSON object, with no additional text, explanations, or formatting."
+  },
+  "totalRounds": 1,
+  "rounds": [
+    {
+      "round": 1,
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {
+        "system_prompt": "You parse free-text postal addresses and return a JSON object. The JSON must contain exactly four keys: `\"city\"`, `\"country\"`, `\"postal_code\"`, and `\"street\"`. If any field is missing from the input, set its value to `null` (not an empty string or omitted key). The `\"street\"` field should include the full street address as given, including the house number if present. Do not add any extra keys (e.g., `\"house_number\"`, `\"state\"`, etc.). Output **only** the JSON object, with no additional text, explanations, or formatting."
+      },
+      "trainPassRate": 0.0,
+      "validationPassRate": 1.0,
+      "metricBreakdown": {
+        "final_response_avg_score": 1.0
+      },
+      "accepted": true,
+      "acceptanceReason": "GEPA accepted proposal (val_score=1.0000)",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 1,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 1870,
+        "completion": 644,
+        "total": 2514
+      },
+      "startedAt": "2026-07-30T09:26:45.418102+00:00",
+      "durationSeconds": 19.586581,
+      "kind": "reflective",
+      "trainMinibatchSize": 3,
+      "trainSubsampleParentScore": 0.0,
+      "trainSubsampleCandidateScore": 0.6666666666666666,
+      "skipReason": null,
+      "errorMessage": null,
+      "budgetUsed": 18,
+      "budgetTotal": 60,
+      "extras": {}
+    }
+  ],
+  "totalReflectionLmCalls": 1,
+  "totalJudgeModelCalls": 0,
+  "totalLlmCost": 0.0,
+  "totalTokenUsage": {
+    "prompt": 1870,
+    "completion": 644,
+    "total": 2514
+  },
+  "durationSeconds": 26.166276,
+  "startedAt": "2026-07-30T09:26:38.841009+00:00",
+  "finishedAt": "2026-07-30T09:27:05.007285+00:00",
+  "extras": {
+    "total_metric_calls": 18
+  }
+}

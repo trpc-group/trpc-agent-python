@@ -1,0 +1,19 @@
+Optimization complete  |  status=FAILED  |  algorithm=gepa_reflective
+
+pass_rate     : 0.0000 -> 0.0000   (+0.0000, no improvement)
+rounds        : 0 accepted / 0 total
+duration      : 0.02s
+started_at    : 2026-07-30T09:25:41.748195+00:00
+finished_at   : 2026-07-30T09:25:41.772227+00:00
+error_message : frontier_type='objective' requires objective_scores to be provided by the evaluator, but none were found. Use an evaluator that returns objective_scores or use frontier_type='instance'.
+update_source : false
+output_dir    : /Users/lvjiajia/Desktop/trpc-agent-python-main/examples/optimization/advanced_strategies/runs/advanced_2026-07-30T17-25-41
+
+metric breakdown (threshold | baseline -> best):
+  - final_response_avg_score                 threshold 1.0000   nan -> nan
+
+best prompts:
+  - system_prompt                            63 chars   (best_prompts/system_prompt.md)
+
+artifacts directory: /Users/lvjiajia/Desktop/trpc-agent-python-main/examples/optimization/advanced_strategies/runs/advanced_2026-07-30T17-25-41
+  result.json   summary.txt   rounds/   run.log   baseline_prompts/   best_prompts/   config.snapshot.json

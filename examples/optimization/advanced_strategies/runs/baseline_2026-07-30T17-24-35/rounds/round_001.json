@@ -1,0 +1,33 @@
+{
+  "round": 1,
+  "optimizedFieldNames": [
+    "system_prompt"
+  ],
+  "candidatePrompts": {},
+  "trainPassRate": 0.0,
+  "validationPassRate": 0.0,
+  "metricBreakdown": {},
+  "accepted": false,
+  "acceptanceReason": "no candidate produced this round",
+  "failedCaseIds": [],
+  "failedCasesTruncated": 0,
+  "perFieldDiagnosis": {},
+  "reflectionLmCalls": 1,
+  "roundLlmCost": 0.0,
+  "roundTokenUsage": {
+    "prompt": 0,
+    "completion": 0,
+    "total": 0
+  },
+  "startedAt": "2026-07-30T09:24:35.716809+00:00",
+  "durationSeconds": 0.410745,
+  "kind": "reflective",
+  "trainMinibatchSize": 3,
+  "trainSubsampleParentScore": 0.0,
+  "trainSubsampleCandidateScore": 0.0,
+  "skipReason": "reflect-LM produced no usable new prompt",
+  "errorMessage": null,
+  "budgetUsed": 12,
+  "budgetTotal": 60,
+  "extras": {}
+}

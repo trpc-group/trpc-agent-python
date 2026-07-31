@@ -1,0 +1,20 @@
+Optimization complete  |  status=SUCCEEDED  |  algorithm=gepa_reflective
+
+pass_rate     : 0.0000 -> 0.0000   (+0.0000, no improvement)
+rounds        : 0 accepted / 4 total
+duration      : 40.53s
+started_at    : 2026-07-30T09:42:38.132794+00:00
+finished_at   : 2026-07-30T09:43:18.663827+00:00
+stop_reason   : budget_exhausted
+update_source : false
+output_dir    : /Users/lvjiajia/Desktop/trpc-agent-python-main/examples/optimization/blackbox_cli/runs/2026-07-30T17-42-38
+
+metric breakdown (threshold | baseline -> best):
+  - final_response_avg_score                 threshold 1.0000   nan -> nan
+
+best prompts:
+  - claude_md                                13 chars   (best_prompts/claude_md.md)
+  - skill_md                                 54 chars   (best_prompts/skill_md.md)
+
+artifacts directory: /Users/lvjiajia/Desktop/trpc-agent-python-main/examples/optimization/blackbox_cli/runs/2026-07-30T17-42-38
+  result.json   summary.txt   rounds/   run.log   baseline_prompts/   best_prompts/   config.snapshot.json

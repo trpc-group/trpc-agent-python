@@ -36,6 +36,13 @@ class TestTextCriterionRegex:
         c = TextCriterion(match="regex", case_insensitive=True)
         assert c.matches("Hello World", r"hello") is True
 
+    def test_regex_case_insensitive_keeps_character_classes(self):
+        r"""case_insensitive must not mangle \S in the pattern ([\s\S]* -> [\s\s]*)."""
+        c = TextCriterion(match="regex", case_insensitive=True)
+        pat = r"found\ 2\ headphones[\s\S]*Sony\ WH\-1000XM6\ 售价\ ¥2,499"
+        assert c.matches("Found 2 headphones：Sony WH-1000XM6 售价 ¥2,499", pat) is True
+        assert c.matches("found 2 headphones, no brands", pat) is False
+
 
 class TestTextCriterionCompare:
     """Test suite for TextCriterion custom compare."""
