@@ -246,3 +246,50 @@ def test_ast_sensitive_credentials(tmp_path):
     cred_finding = [f for f in all_findings if f["category"] == "Sensitive Information Leak"][0]
     assert "sk-proj-secret-123456789" not in cred_finding["evidence"]
     assert "[REDACTED]" in cred_finding["evidence"]
+
+def test_real_git_diff_hunk_context(tmp_path):
+    diff_content = """diff --git a/src/app.py b/src/app.py
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,2 +1,2 @@ def foo():
+-    pass
++    subprocess.run("echo", shell=True)
+"""
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "parse_diff",
+        str(Path(__file__).parent / "skills" / "code-review" / "scripts" / "parse_diff.py")
+    )
+    parse_diff_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parse_diff_module)
+    parse_diff = parse_diff_module.parse_diff
+    parsed = parse_diff(diff_content)
+    assert "src/app.py" in parsed
+    added_lines = parsed["src/app.py"]
+    assert len(added_lines) == 1
+    assert added_lines[0]["line"] == 1
+    assert added_lines[0]["type"] == "added"
+
+def test_metacharacter_path_handling(tmp_path):
+    # Path containing shell metacharacters like $ and ;
+    special_dir = tmp_path / "my$project;dir"
+    special_dir.mkdir(parents=True, exist_ok=True)
+    
+    diff_file = special_dir / "test.diff"
+    diff_file.write_text("""diff --git a/src/app.py b/src/app.py
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,1 +1,1 @@
++print("Hello World")
+""", encoding="utf-8")
+
+    from examples.skills_code_review_agent.agent import CodeReviewAgent
+    # Instantiate pointing to the path with special characters
+    agent = CodeReviewAgent(db_url="sqlite:///:memory:", runtime_mode="local", repo_path=str(special_dir))
+    task_id = f"task_{uuid.uuid4().hex[:8]}"
+    
+    report_json, report_md = agent.run_review(task_id, str(diff_file), fake_model=True)
+    
+    # Must NOT be INTERCEPTED due to shell metacharacters in paths since shell=False is used
+    assert report_json["status"] == "COMPLETED"

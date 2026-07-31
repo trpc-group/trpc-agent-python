@@ -30,5 +30,5 @@
 - **Recommendation**: Use json or safer deserialization methods instead of pickle to prevent arbitrary code execution.
 
 ## Sandbox Execution Details
-- **Command**: `python D:\my_document\project\others\trpc-agent-python\examples\skills_code_review_agent\skills\code-review\scripts/parse_diff.py --diff examples/skills_code_review_agent/fixtures/fixture_security.diff --output examples\skills_code_review_agent\fixtures\parsed_task_a8c95fe3.json` (SUCCESS in 194 ms)
-- **Command**: `python D:\my_document\project\others\trpc-agent-python\examples\skills_code_review_agent\skills\code-review\scripts/run_checks.py --parsed-diff examples\skills_code_review_agent\fixtures\parsed_task_a8c95fe3.json --output examples\skills_code_review_agent\fixtures\findings_task_a8c95fe3.json` (SUCCESS in 192 ms)
+- **Command**: `python skills/code-review/scripts/parse_diff.py --diff examples/skills_code_review_agent/fixtures/fixture_security.diff --output parsed_task_a8c95fe3.json` (SUCCESS in 194 ms)
+- **Command**: `python skills/code-review/scripts/run_checks.py --parsed-diff parsed_task_a8c95fe3.json --output findings_task_a8c95fe3.json` (SUCCESS in 192 ms)

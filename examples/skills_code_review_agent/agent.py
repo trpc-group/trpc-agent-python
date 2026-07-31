@@ -37,15 +37,12 @@ class FilterGovernance:
                     if forbidden in element or forbidden in cmd_str:
                         return False, f"Denied: Command contains forbidden high-risk execution pattern: '{forbidden}'"
         
-        # Rule 2: Forbidden paths and shell injection character checks
+        # Rule 2: Forbidden paths checks
         all_checks = (inputs or []) + cmd_elements
-        shell_injection_pattern = r'[;&|`$]'
         for inp in all_checks:
             for forbidden_path in self.forbidden_paths:
                 if forbidden_path in inp:
                     return False, f"Denied: Access to forbidden path '{forbidden_path}' is blocked"
-            if re.search(shell_injection_pattern, inp):
-                return False, f"Denied: Shell metacharacter injection detected in: '{inp}'"
 
         # Rule 3: Budget limit check
         if len(cmd_str) > 5000:
@@ -110,8 +107,17 @@ class CodeReviewAgent:
         import tempfile
         abs_temp_dir = os.path.abspath(tempfile.gettempdir())
         
-        import re
-        if (not abs_diff_path.startswith(abs_repo_path) and not abs_diff_path.startswith(abs_temp_dir)) or re.search(r'[;&|`$]', diff_file_path):
+        try:
+            is_under_repo = os.path.commonpath([abs_diff_path, abs_repo_path]) == abs_repo_path
+        except ValueError:
+            is_under_repo = False
+            
+        try:
+            is_under_temp = os.path.commonpath([abs_diff_path, abs_temp_dir]) == abs_temp_dir
+        except ValueError:
+            is_under_temp = False
+            
+        if not is_under_repo and not is_under_temp:
             self.db.update_task_status(task_id, "INTERCEPTED")
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time, status="INTERCEPTED")
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
@@ -450,7 +456,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Code Review Agent CLI")
     parser.add_argument("--diff-file", help="Path to unified diff file")
     parser.add_argument("--repo-path", help="Path to local repository")
-    parser.add_argument("--fake-model", action="store_true", default=True, help="Use dry-run/fake model mode")
+    parser.add_argument("--fake-model", action="store_true", help="Use dry-run/fake model mode")
     parser.add_argument("--runtime", default="local", choices=["local", "container"], help="Sandbox runtime mode")
     parser.add_argument("--db-url", default="sqlite:///review_agent.db", help="Database connection URL")
     args = parser.parse_args()

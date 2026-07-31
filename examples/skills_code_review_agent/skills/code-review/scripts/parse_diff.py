@@ -34,10 +34,10 @@ def parse_diff(diff_content):
                 # Remove possible quotes or trailing garbage
                 current_file = current_file.strip().strip('"')
                 files[current_file] = []
-        elif line.startswith('@@'):
+        elif line.startswith('@@') or '@@' in line:
             # Hunk header: @@ -1,4 +1,5 @@
             # We care about the + part: starting line number
-            m = re.match(r'^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@', line)
+            m = re.search(r'@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@', line)
             if m:
                 current_line_num = int(m.group(1))
         elif current_file is not None:
