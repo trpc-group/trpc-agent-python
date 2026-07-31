@@ -6,7 +6,7 @@ import uuid
 import argparse
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Union
 
 # Import db repository
 from examples.skills_code_review_agent.db import ReviewDbRepository
@@ -20,20 +20,25 @@ class FilterGovernance:
         self.forbidden_paths = ["/etc", "/var/run", "C:\\Windows"]
         self.whitelisted_domains = ["github.com", "pypi.org"]
 
-    def check(self, command: str, inputs: List[str] = None) -> Tuple[bool, str]:
-        # Rule 1: High-risk scripts/commands check
+    def check(self, command: Union[str, List[str]], inputs: List[str] = None) -> Tuple[bool, str]:
         import re
+        cmd_elements = command if isinstance(command, list) else [command]
+        cmd_str = " ".join(cmd_elements)
+        
+        # Rule 1: High-risk scripts/commands check
         for forbidden in self.forbidden_commands:
             if len(forbidden) <= 4:
                 pattern = rf"\b{re.escape(forbidden)}\b"
-                if re.search(pattern, command):
-                    return False, f"Denied: Command contains forbidden high-risk execution pattern: '{forbidden}'"
+                for element in cmd_elements:
+                    if re.search(pattern, element) or re.search(pattern, cmd_str):
+                        return False, f"Denied: Command contains forbidden high-risk execution pattern: '{forbidden}'"
             else:
-                if forbidden in command:
-                    return False, f"Denied: Command contains forbidden high-risk execution pattern: '{forbidden}'"
+                for element in cmd_elements:
+                    if forbidden in element or forbidden in cmd_str:
+                        return False, f"Denied: Command contains forbidden high-risk execution pattern: '{forbidden}'"
         
         # Rule 2: Forbidden paths and shell injection character checks
-        all_checks = (inputs or []) + [command]
+        all_checks = (inputs or []) + cmd_elements
         shell_injection_pattern = r'[;&|`$]'
         for inp in all_checks:
             for forbidden_path in self.forbidden_paths:
@@ -42,8 +47,8 @@ class FilterGovernance:
             if re.search(shell_injection_pattern, inp):
                 return False, f"Denied: Shell metacharacter injection detected in: '{inp}'"
 
-        # Rule 3: Budget limit check (example: command length limit)
-        if len(command) > 5000:
+        # Rule 3: Budget limit check
+        if len(cmd_str) > 5000:
             return False, "Denied: Command exceeds budget safety length limit (5000 characters)"
 
         return True, "Allowed"
@@ -104,6 +109,26 @@ class CodeReviewAgent:
                     current_line_num += 1
         return files
 
+    def redact_secrets(self, text: str) -> str:
+        if not text:
+            return text
+        import re
+        cred_patterns = [
+            r'(?i)(api_key|password|token|secret|passwd)\s*=\s*["\']([^"\']+)["\']',
+            r'(?i)(sk-proj-[a-zA-Z0-9-_]{20,})',
+        ]
+        redacted = text
+        for pat in cred_patterns:
+            matches = re.findall(pat, redacted)
+            for m in matches:
+                if isinstance(m, tuple):
+                    val = m[1]
+                else:
+                    val = m
+                if len(val) > 4 and not val.startswith("os.environ") and not val.startswith("YOUR_") and "[REDACTED]" not in val:
+                    redacted = redacted.replace(val, "[REDACTED]")
+        return redacted
+
     def run_review(self, task_id: str, diff_file_path: str, fake_model: bool = True) -> Tuple[Dict[str, Any], str]:
         start_time = time.time()
         sandbox_time_ms = 0
@@ -112,16 +137,25 @@ class CodeReviewAgent:
         sandbox_runs = []
         exception_types = {}
 
+        # Save task start first to prevent missing task row on failure paths
+        self.db.create_task(task_id, f"Diff File: {diff_file_path}")
+        self.db.update_task_status(task_id, "IN_PROGRESS")
+
         # Load diff content
         if not os.path.exists(diff_file_path):
             self.db.update_task_status(task_id, "FAILED")
-            raise FileNotFoundError(f"Diff file not found: {diff_file_path}")
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time, status="FAILED", exception_types={"FileNotFoundError": 1})
+            self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            return report_json, report_md
 
-        # Validate input path to prevent injection
+        # Validate input path to prevent injection and directory traversal
         import re
-        if re.search(r'[;&|`$]', diff_file_path):
+        # Restrict parent traversal
+        if ".." in diff_file_path or re.search(r'[;&|`$]', diff_file_path):
             self.db.update_task_status(task_id, "INTERCEPTED")
-            raise ValueError(f"Invalid characters in diff file path: {diff_file_path}")
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time, status="INTERCEPTED")
+            self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            return report_json, report_md
 
         with open(diff_file_path, "r", encoding="utf-8", errors="ignore") as f:
             diff_content = f.read()
@@ -129,22 +163,19 @@ class CodeReviewAgent:
         # Parse diff
         parsed_diff = self.parse_diff(diff_content)
         
-        # Save task start
-        self.db.create_task(task_id, diff_content[:500])
-        self.db.update_task_status(task_id, "IN_PROGRESS")
-
-        # Set up sandbox files
-        scripts_dir = Path(__file__).parent / "skills" / "code-review" / "scripts"
+        # Set up sandbox files under a safe system temp directory to prevent directory traversal
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir())
+        parsed_diff_temp = temp_dir / f"parsed_{task_id}.json"
+        raw_findings_temp = temp_dir / f"findings_{task_id}.json"
         
-        # Prepare run command arguments (list style, shell=False to prevent command injection)
-        parsed_diff_temp = Path(diff_file_path).parent / f"parsed_{task_id}.json"
-        raw_findings_temp = Path(diff_file_path).parent / f"findings_{task_id}.json"
+        scripts_dir = Path(__file__).parent / "skills" / "code-review" / "scripts"
         
         parse_args = [sys.executable, str(scripts_dir / "parse_diff.py"), "--diff", str(diff_file_path), "--output", str(parsed_diff_temp)]
         parse_cmd_str = " ".join(parse_args)
         
-        # Filter Governance check before execution - pass inputs correctly
-        allowed, reason = self.filter.check(parse_cmd_str, inputs=[str(diff_file_path), str(parsed_diff_temp)])
+        # Filter Governance check before execution - directly check parse_args list elements
+        allowed, reason = self.filter.check(parse_args, inputs=[str(diff_file_path), str(parsed_diff_temp)])
         self.db.add_filter_log(task_id, "command_execution_filter", "ALLOW" if allowed else "DENY", reason)
         filter_logs.append({"rule_name": "command_execution_filter", "action": "ALLOW" if allowed else "DENY", "reason": reason})
         
@@ -159,26 +190,37 @@ class CodeReviewAgent:
         sb_start = time.time()
         try:
             self.tool_call_count += 1
-            # Run with shell=False using argument list
             res = subprocess.run(parse_args, shell=False, capture_output=True, text=True, timeout=15)
             sb_duration = int((time.time() - sb_start) * 1000)
             sandbox_time_ms += sb_duration
             
-            stdout_limited = res.stdout[:5000]
-            stderr_limited = res.stderr[:5000]
+            stdout_limited = self.redact_secrets(res.stdout[:5000])
+            stderr_limited = self.redact_secrets(res.stderr[:5000])
             status = "SUCCESS" if res.returncode == 0 else "FAILED"
             self.db.add_sandbox_run(task_id, parse_cmd_str, status, sb_duration, stdout_limited, stderr_limited)
             sandbox_runs.append({"command": parse_cmd_str, "status": status, "duration_ms": sb_duration, "stdout": stdout_limited, "stderr": stderr_limited})
             
             if res.returncode != 0:
                 raise subprocess.SubprocessError(f"parse_diff script failed with exit code {res.returncode}: {stderr_limited}")
+        except subprocess.TimeoutExpired as e:
+            self.db.update_task_status(task_id, "TIMEOUT")
+            sb_duration = int((time.time() - sb_start) * 1000)
+            status = "TIMEOUT"
+            cmd_str_redacted = self.redact_secrets(parse_cmd_str)
+            self.db.add_sandbox_run(task_id, cmd_str_redacted, status, sb_duration, "", "Command timed out after 15 seconds")
+            sandbox_runs.append({"command": cmd_str_redacted, "status": status, "duration_ms": sb_duration, "stdout": "", "stderr": "TIMEOUT"})
+            
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="TIMEOUT", exception_types={"TimeoutExpired": 1})
+            self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            return report_json, report_md
         except Exception as e:
             exception_name = type(e).__name__
             exception_types[exception_name] = exception_types.get(exception_name, 0) + 1
             self.db.update_task_status(task_id, "FAILED")
+            err_msg_redacted = self.redact_secrets(str(e))
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="FAILED", exception_types=exception_types)
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
-            # Cleanup temp files if they exist
             if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
             return report_json, report_md
 
@@ -186,7 +228,7 @@ class CodeReviewAgent:
         check_args = [sys.executable, str(scripts_dir / "run_checks.py"), "--parsed-diff", str(parsed_diff_temp), "--output", str(raw_findings_temp)]
         check_cmd_str = " ".join(check_args)
             
-        allowed, reason = self.filter.check(check_cmd_str, inputs=[str(parsed_diff_temp), str(raw_findings_temp)])
+        allowed, reason = self.filter.check(check_args, inputs=[str(parsed_diff_temp), str(raw_findings_temp)])
         self.db.add_filter_log(task_id, "command_execution_filter", "ALLOW" if allowed else "DENY", reason)
         filter_logs.append({"rule_name": "command_execution_filter", "action": "ALLOW" if allowed else "DENY", "reason": reason})
 
@@ -205,8 +247,8 @@ class CodeReviewAgent:
             sb_duration = int((time.time() - sb_start) * 1000)
             sandbox_time_ms += sb_duration
             
-            stdout_limited = res.stdout[:5000]
-            stderr_limited = res.stderr[:5000]
+            stdout_limited = self.redact_secrets(res.stdout[:5000])
+            stderr_limited = self.redact_secrets(res.stderr[:5000])
             status = "SUCCESS" if res.returncode == 0 else "FAILED"
             self.db.add_sandbox_run(task_id, check_cmd_str, status, sb_duration, stdout_limited, stderr_limited)
             sandbox_runs.append({"command": check_cmd_str, "status": status, "duration_ms": sb_duration, "stdout": stdout_limited, "stderr": stderr_limited})
@@ -216,10 +258,23 @@ class CodeReviewAgent:
                     raw_findings = json.load(f)
             else:
                 raise subprocess.SubprocessError(f"run_checks script failed with exit code {res.returncode}: {stderr_limited}")
+        except subprocess.TimeoutExpired as e:
+            self.db.update_task_status(task_id, "TIMEOUT")
+            sb_duration = int((time.time() - sb_start) * 1000)
+            status = "TIMEOUT"
+            cmd_str_redacted = self.redact_secrets(check_cmd_str)
+            self.db.add_sandbox_run(task_id, cmd_str_redacted, status, sb_duration, "", "Command timed out after 15 seconds")
+            sandbox_runs.append({"command": cmd_str_redacted, "status": status, "duration_ms": sb_duration, "stdout": "", "stderr": "TIMEOUT"})
+            
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="TIMEOUT", exception_types={"TimeoutExpired": 1})
+            self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            return report_json, report_md
         except Exception as e:
             exception_name = type(e).__name__
             exception_types[exception_name] = exception_types.get(exception_name, 0) + 1
             self.db.update_task_status(task_id, "FAILED")
+            err_msg_redacted = self.redact_secrets(str(e))
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="FAILED", exception_types=exception_types)
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)

@@ -19,6 +19,13 @@ fi
 
 # Run the agent in fake-model (dry-run) mode
 python3 -m examples.skills_code_review_agent.agent --diff-file "$TEMP_DIFF"
+AGENT_EXIT_CODE=$?
+if [ $AGENT_EXIT_CODE -ne 0 ]; then
+    echo "❌ [BLOCK] Code Review Agent execution failed (Exit code: $AGENT_EXIT_CODE)."
+    echo "Please resolve runtime/syntax errors before committing."
+    rm -f "$TEMP_DIFF"
+    exit 1
+fi
 
 # Check the generated JSON report for any high/critical findings
 if [ -f "review_report.json" ]; then
