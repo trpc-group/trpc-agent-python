@@ -13,6 +13,10 @@
 聚类结果用于识别主要失败模式，为 Stage 3 优化提供数据支持。
 
 调用方式：
+    # 推荐：直接从 Stage 1 报告的 per_case 派生（不依赖 SDK 内部结构）
+    attribution_report = FailureAttributor.cluster_from_per_case(per_case)
+
+    # 兼容旧路径：从 SDK EvalCaseResult 派生
     attribution_report = FailureAttributor.cluster(results_by_eval_id)
 """
 
@@ -23,13 +27,14 @@ from collections import defaultdict
 from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
 from trpc_agent_sdk.evaluation._eval_result import EvalCaseResult
 
-from pipeline._models import FailureAttributionReport
+from pipeline._models import FailureAttributionReport, PerCaseScore
 
 
 class FailureAttributor:
     """失败归因器：分类并聚类评测中的失败 case。
 
     核心方法：
+      - cluster_from_per_case(): 从 Stage 1 报告的 per_case 聚类（推荐，无 SDK 依赖）
       - classify(): 对单个 EvalCaseResult 按 metric 状态分类
       - cluster(): 对一批 case 按类别聚类，生成 FailureAttributionReport
 
@@ -41,6 +46,80 @@ class FailureAttributor:
       3. 检查 LLM rubric metric（llm_rubric_response / llm_rubric_knowledge_recall）
       4. 无任何已知 metric 失败 → unknown
     """
+
+    @staticmethod
+    def cluster_from_per_case(
+        per_case: dict[str, PerCaseScore],
+    ) -> FailureAttributionReport:
+        """从 Stage 1 报告的 per_case 派生失败归因（不依赖 SDK EvalCaseResult）。
+
+        与 cluster() 的分类逻辑等价，但输入是 Stage 1 已产出的 PerCaseScore，
+        使 Stage 2 完全自给，不再耦合 SDK 内部数据结构。
+
+        Args:
+            per_case: eval_id → PerCaseScore 的映射（来自 EvalSetReport.per_case）。
+
+        Returns:
+            FailureAttributionReport: 包含聚类结果、逐 case 类别和摘要。
+        """
+        clusters: dict[str, list[str]] = defaultdict(list)
+        per_case_cats: dict[str, list[str]] = {}
+        total = len(per_case)
+        total_failed = 0
+
+        for eval_id, score in per_case.items():
+            if score.overall_status != "FAILED":
+                # 通过 / 未评测的 case 不需要归因
+                per_case_cats[eval_id] = []
+                continue
+
+            total_failed += 1
+            categories: list[str] = []
+            statuses = score.metric_statuses
+
+            # 确定性 metric：回复匹配与工具轨迹匹配
+            final_resp_failed = (
+                statuses.get("final_response_avg_score") == "FAILED"
+            )
+            tool_traj_failed = (
+                statuses.get("tool_trajectory_avg_score") == "FAILED"
+            )
+
+            if final_resp_failed and tool_traj_failed:
+                # 两个核心 metric 同时失败，说明行为层面出现根本偏差
+                categories.append("both_metrics_failed")
+            else:
+                if final_resp_failed:
+                    categories.append("final_response_mismatch")
+                if tool_traj_failed:
+                    categories.append("tool_trajectory_mismatch")
+
+            # LLM rubric metric（软性评估）
+            if statuses.get("llm_rubric_response") == "FAILED":
+                categories.append("llm_rubric_fail")
+
+            if statuses.get("llm_rubric_knowledge_recall") == "FAILED":
+                categories.append("knowledge_recall_insufficient")
+
+            # 兜底：无已知 metric 失败
+            if not categories:
+                categories.append("unknown")
+
+            for category in categories:
+                clusters[category].append(eval_id)
+            per_case_cats[eval_id] = categories
+
+        summary = FailureAttributor._build_summary(
+            total, total_failed, dict(clusters)
+        )
+
+        return FailureAttributionReport(
+            total_cases_evaluated=total,
+            total_failed=total_failed,
+            clusters=dict(clusters),
+            per_case_categories=per_case_cats,
+            summary=summary,
+        )
 
     @staticmethod
     def classify(case_result: EvalCaseResult) -> list[str]:
