@@ -9,6 +9,8 @@ from datetime import datetime
 from datetime import timezone
 from typing import Any
 
+from .redaction import redact_text
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -88,7 +90,23 @@ class Finding:
         return (self.file, self.line, self.category)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "finding_id": self.finding_id,
+            "schema_version": self.schema_version,
+            "severity": self.severity,
+            "category": self.category,
+            "file": _redact(self.file),
+            "line": self.line,
+            "title": _redact(self.title),
+            "evidence": _redact(self.evidence),
+            "recommendation": _redact(self.recommendation),
+            "confidence": self.confidence,
+            "source": self.source,
+            "rule_id": self.rule_id,
+            "hunk_header": _redact(self.hunk_header),
+            "context_before": [_redact(item) for item in self.context_before],
+            "context_after": [_redact(item) for item in self.context_after],
+        }
 
 
 @dataclass(slots=True)
@@ -102,6 +120,10 @@ class FilterDecision:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _redact(value: str) -> str:
+    return redact_text(value).text
 
 
 @dataclass(slots=True)

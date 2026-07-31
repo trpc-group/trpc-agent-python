@@ -7,10 +7,11 @@ import sys
 
 
 def main() -> int:
-    text = sys.stdin.read()
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], "r", encoding="utf-8") as fh:
-            text = fh.read()
+    try:
+        text = _read_diff_input(sys.argv[1:])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     files = [line[6:].strip() for line in text.splitlines() if line.startswith("+++ b/")]
     source = [
         path for path in files
@@ -27,6 +28,15 @@ def main() -> int:
             sort_keys=True,
         ))
     return 0
+
+
+def _read_diff_input(args: list[str]) -> str:
+    if not args:
+        return sys.stdin.read()
+    if args != ["work/input.diff"]:
+        raise ValueError("test_probe only accepts the sandbox-provided work/input.diff path")
+    with open(args[0], "r", encoding="utf-8") as fh:
+        return fh.read()
 
 
 if __name__ == "__main__":

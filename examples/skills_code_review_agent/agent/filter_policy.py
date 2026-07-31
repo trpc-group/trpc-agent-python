@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -33,6 +35,7 @@ HIGH_RISK_COMMAND_PATTERNS = (
     r"\bmkfs(?:\.[A-Za-z0-9_+-]+)?\b",
     r"\bsudo\b",
     r"^\s*(sh|bash|zsh|fish|dash|ksh)\b",
+    r"\bpython(?:3)?(?:\.exe)?\s+-c\b",
     r"[;&|`<>]",
     r"\$\(",
     r":\(\)\s*\{",
@@ -46,6 +49,9 @@ NETWORK_COMMAND_PATTERNS = (
     r"\b(ssh|scp|sftp|rsync)\b",
     r"\b(apt-get|apt|apk|yum|dnf|brew)\s+(install|update|upgrade)\b",
 )
+
+SAFE_TEST_MODULES = {"pytest", "unittest"}
+UNSAFE_PYTHON_OPTIONS = {"-c", "-W"}
 
 
 @dataclass(slots=True)
@@ -290,6 +296,17 @@ class ReviewFilterPolicy:
                 policy="network-command-implicit",
                 severity="high",
             )
+        if "CR_TEST_COMMAND" in request.env:
+            test_command_error = _test_command_safety_error(command_to_check, self.forbidden_path_markers)
+            if test_command_error:
+                return self._decision(
+                    decision="deny",
+                    reason=test_command_error,
+                    command=command_to_check,
+                    path=request.script_path,
+                    policy="test-command-safety",
+                    severity="high",
+                )
         return self._decision(
             decision="allow",
             reason=(
@@ -346,6 +363,59 @@ def _network_domains_in_command(command: str) -> tuple[str, ...]:
 
 def _is_network_command(command: str, patterns: tuple[str, ...] = NETWORK_COMMAND_PATTERNS) -> bool:
     return any(re.search(pattern, command, re.IGNORECASE) for pattern in patterns)
+
+
+def _test_command_safety_error(command: str, forbidden_path_markers: tuple[str, ...]) -> str | None:
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return f"Test command cannot be parsed safely: {exc}."
+    if not argv:
+        return "Test command is empty."
+    if not _is_python_executable_name(argv[0]):
+        return "Test command must use a Python interpreter."
+    for arg in argv[1:]:
+        if any(arg == option or arg.startswith(option) for option in UNSAFE_PYTHON_OPTIONS):
+            return f"Python option {arg!r} is not allowed for sandbox test commands."
+    try:
+        module_index = argv.index("-m")
+    except ValueError:
+        return "Test command must run an allowed Python module with -m."
+    if module_index + 1 >= len(argv):
+        return "Test command is missing a Python module after -m."
+    module = argv[module_index + 1]
+    if module not in SAFE_TEST_MODULES:
+        return f"Python module {module!r} is not allowed for sandbox test commands."
+    for arg in argv[module_index + 2:]:
+        if _is_unsafe_test_path_arg(arg, forbidden_path_markers):
+            return f"Test path argument {arg!r} is not allowed for sandbox test commands."
+    return None
+
+
+def _is_python_executable_name(executable: str) -> bool:
+    name = os.path.basename(executable).lower()
+    return name in {"python", "python.exe"} or re.fullmatch(r"python3(?:\.\d+)?(?:\.exe)?", name) is not None
+
+
+def _is_unsafe_test_path_arg(arg: str, forbidden_path_markers: tuple[str, ...]) -> bool:
+    normalized = arg.replace("\\", "/")
+    lowered = normalized.lower()
+    if lowered.startswith(("http://", "https://")):
+        return False
+    candidates = [normalized]
+    if "=" in normalized:
+        candidates.append(normalized.split("=", 1)[1])
+    for candidate in candidates:
+        candidate_lowered = candidate.lower()
+        if candidate_lowered.startswith(("http://", "https://")):
+            continue
+        if candidate.startswith("/") or re.match(r"^[A-Za-z]:/", candidate):
+            return True
+        if ".." in Path(candidate).parts:
+            return True
+        if any(marker in candidate_lowered for marker in forbidden_path_markers):
+            return True
+    return False
 
 
 def _path_is_allowed(path: str, allowlist: tuple[str, ...]) -> bool:

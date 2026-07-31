@@ -16,6 +16,7 @@ from .models import Finding
 from .models import MonitoringSummary
 from .models import ReviewReport
 from .models import SandboxRun
+from .redaction import redact_text
 
 SCHEMA_VERSION = 4
 
@@ -157,7 +158,7 @@ class ReviewStore(ABC):
             path = unquote(parsed.path)
             if not path:
                 raise ValueError("sqlite URL requires a database path")
-            if len(path) >= 3 and path[0] == "/" and path[2] == ":":
+            if _looks_like_file_url_windows_drive(path):
                 path = path[1:]
             return SQLiteReviewStore(Path(path))
         if parsed.scheme in {"postgresql", "postgres", "mysql"}:
@@ -297,17 +298,17 @@ class SQLiteReviewStore(ReviewStore):
                     f.schema_version,
                     f.severity,
                     f.category,
-                    f.file,
+                    _redact(f.file),
                     f.line,
-                    f.title,
-                    f.evidence,
-                    f.recommendation,
+                    _redact(f.title),
+                    _redact(f.evidence),
+                    _redact(f.recommendation),
                     f.confidence,
                     f.source,
                     f.rule_id,
-                    f.hunk_header,
-                    json.dumps(f.context_before),
-                    json.dumps(f.context_after),
+                    _redact(f.hunk_header),
+                    json.dumps([_redact(item) for item in f.context_before]),
+                    json.dumps([_redact(item) for item in f.context_after]),
                 ) for f in findings],
             )
 
@@ -372,3 +373,11 @@ def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     return {key: row[key] for key in row.keys()}
+
+
+def _redact(value: str) -> str:
+    return redact_text(value).text
+
+
+def _looks_like_file_url_windows_drive(path: str) -> bool:
+    return len(path) >= 4 and path[0] == "/" and path[2] == ":" and path[1].isalpha() and path[3] in {"/", "\\"}

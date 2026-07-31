@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import math
+from collections import Counter
 from dataclasses import dataclass
 
 
@@ -48,6 +49,7 @@ HEX_IDENTIFIER_PATTERN = re.compile(r"(?i)^[0-9a-f]{32,64}$")
 BASE64_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9+/_-]{32,64}={0,2}$")
 HYPHENATED_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9]{4,}(?:-[A-Za-z0-9]{4,}){2,}$")
 BASE64_CONTEXT_PATTERN = re.compile(r"(?i)\b(base64|fixture|blob|encoded)\b")
+TRACE_IDENTIFIER_CONTEXT_PATTERN = re.compile(r"(?i)(trace|request|correlation)[_-]?id\b")
 SENSITIVE_LITERAL_CONTEXT_PATTERN = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key(?:[_-]?id)?|key[_-]?id|secret|token|password|passwd|pwd|"
     r"private[_-]?key|signing[_-]?key|session[_-]?key)")
@@ -113,7 +115,8 @@ def _looks_like_high_entropy_secret(value: str, *, context: str = "") -> bool:
     alphabet = set(value)
     if len(alphabet) < 12:
         return False
-    entropy = -sum((value.count(ch) / len(value)) * math.log2(value.count(ch) / len(value)) for ch in alphabet)
+    counts = Counter(value)
+    entropy = -sum((count / len(value)) * math.log2(count / len(value)) for count in counts.values())
     if sensitive_context:
         return entropy >= 4.0
     return entropy >= 4.6
@@ -127,10 +130,10 @@ def _looks_like_allowed_identifier(value: str, *, context: str = "") -> bool:
         return True
     if BASE64_IDENTIFIER_PATTERN.fullmatch(value):
         base64_value = value.rstrip("=")
-        has_base64_specific_character = any(character in base64_value for character in "+/_-")
         has_base64_context = bool(BASE64_CONTEXT_PATTERN.search(context))
+        has_trace_identifier_context = bool(TRACE_IDENTIFIER_CONTEXT_PATTERN.search(context))
         has_known_secret_prefix = base64_value.startswith(("sk", "rk", "xox", "AIza"))
-        if (has_base64_specific_character or "=" in value or has_base64_context) and not has_known_secret_prefix:
+        if (has_base64_context or has_trace_identifier_context) and not has_known_secret_prefix:
             return True
     if 28 <= len(value) <= 80 and HYPHENATED_IDENTIFIER_PATTERN.fullmatch(value):
         return True

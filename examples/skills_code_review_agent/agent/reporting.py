@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .models import Finding
 from .models import ReviewReport
+from .redaction import redact_text
 
 
 def write_reports(report: ReviewReport, output_dir: Path) -> tuple[Path, Path, str]:
@@ -132,14 +133,18 @@ def _finding_lines(findings: list[Finding]) -> list[str]:
     for finding in findings:
         lines.extend([
             f"- `{finding.severity}` `{finding.category}` `{finding.finding_id}` "
-            f"{finding.file}:{finding.line} - {finding.title}",
-            f"  Evidence: `{finding.evidence}`",
-            f"  Recommendation: {finding.recommendation}",
+            f"{_redact(finding.file)}:{finding.line} - {_redact(finding.title)}",
+            f"  Evidence: `{_redact(finding.evidence)}`",
+            f"  Recommendation: {_redact(finding.recommendation)}",
             f"  Confidence: {finding.confidence:.2f}; Source: `{finding.source}`",
         ])
         if finding.hunk_header:
-            lines.append(f"  Hunk: `{finding.hunk_header}`")
+            lines.append(f"  Hunk: `{_redact(finding.hunk_header)}`")
         if finding.context_before or finding.context_after:
-            lines.append(f"  Context before: `{finding.context_before}`")
-            lines.append(f"  Context after: `{finding.context_after}`")
+            lines.append(f"  Context before: `{[_redact(item) for item in finding.context_before]}`")
+            lines.append(f"  Context after: `{[_redact(item) for item in finding.context_after]}`")
     return lines
+
+
+def _redact(value: str) -> str:
+    return redact_text(value).text

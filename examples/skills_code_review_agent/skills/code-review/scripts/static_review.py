@@ -22,13 +22,27 @@ def main() -> int:
     if "--force-failure" in sys.argv:
         print("forced failure requested", file=sys.stderr)
         return 2
-    text = sys.stdin.read()
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], "r", encoding="utf-8") as fh:
-            text = fh.read()
+    try:
+        text = _read_diff_input(sys.argv[1:])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     hits = [{"pattern": name, "count": text.count(token)} for name, token in PATTERNS.items() if token in text]
     print(json.dumps({"static_hits": hits}, sort_keys=True))
     return 0
+
+
+def _read_diff_input(args: list[str]) -> str:
+    diff_paths = [arg for arg in args if not arg.startswith("--")]
+    unknown_flags = [arg for arg in args if arg.startswith("--") and arg != "--force-failure"]
+    if unknown_flags:
+        raise ValueError(f"unsupported static_review flags: {', '.join(unknown_flags)}")
+    if not diff_paths:
+        return sys.stdin.read()
+    if diff_paths != ["work/input.diff"]:
+        raise ValueError("static_review only accepts the sandbox-provided work/input.diff path")
+    with open(diff_paths[0], "r", encoding="utf-8") as fh:
+        return fh.read()
 
 
 if __name__ == "__main__":

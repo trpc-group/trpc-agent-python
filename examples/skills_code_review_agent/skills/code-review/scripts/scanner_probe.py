@@ -22,9 +22,11 @@ NETWORK_SCANNERS = {
 
 
 def main() -> int:
-    diff_text = sys.stdin.read()
-    if len(sys.argv) > 1:
-        diff_text = Path(sys.argv[1]).read_text(encoding="utf-8")
+    try:
+        diff_text = _read_diff_input(sys.argv[1:])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     work_dir = Path("work")
     work_dir.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cr-scan-", dir=work_dir) as tmp:
@@ -38,6 +40,19 @@ def main() -> int:
             runs.append(_run_scanner(name, command_template, root))
     print(json.dumps({"scanner_runs": runs}, sort_keys=True))
     return 0
+
+
+def _read_diff_input(args: list[str]) -> str:
+    diff_paths = [arg for arg in args if not arg.startswith("--")]
+    allowed_flags = {"--semgrep-auto"}
+    unknown_flags = [arg for arg in args if arg.startswith("--") and arg not in allowed_flags]
+    if unknown_flags:
+        raise ValueError(f"unsupported scanner_probe flags: {', '.join(unknown_flags)}")
+    if not diff_paths:
+        return sys.stdin.read()
+    if diff_paths != ["work/input.diff"]:
+        raise ValueError("scanner_probe only accepts the sandbox-provided work/input.diff path")
+    return Path(diff_paths[0]).read_text(encoding="utf-8")
 
 
 def _run_scanner(name: str, command_template: list[str], root: Path) -> dict[str, object]:

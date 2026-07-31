@@ -788,7 +788,13 @@ def _validate_custom_rule_script(script_path: str) -> str:
         raise ValueError("custom rule script must live under the code-review Skill scripts/ directory")
     if not normalized.endswith(".py"):
         raise ValueError("custom rule script must be a Python script")
-    if not (SKILL_DIR / normalized).exists():
+    scripts_root = (SKILL_DIR / "scripts").resolve()
+    candidate = (SKILL_DIR / normalized).resolve(strict=True)
+    try:
+        candidate.relative_to(scripts_root)
+    except ValueError as exc:
+        raise ValueError("custom rule script must stay under the code-review Skill scripts/ directory") from exc
+    if not candidate.is_file():
         raise FileNotFoundError(f"custom rule script not found: {normalized}")
     return normalized
 

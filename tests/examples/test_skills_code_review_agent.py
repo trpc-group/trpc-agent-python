@@ -33,6 +33,7 @@ from examples.skills_code_review_agent.agent.pipeline import run_review  # noqa:
 from examples.skills_code_review_agent.agent.pipeline import SKILL_DIR  # noqa: E402
 from examples.skills_code_review_agent.agent.redaction import contains_unredacted_secret  # noqa: E402
 from examples.skills_code_review_agent.agent.redaction import redact_text  # noqa: E402
+from examples.skills_code_review_agent.agent.models import Finding  # noqa: E402
 from examples.skills_code_review_agent.agent.models import SandboxRun  # noqa: E402
 from examples.skills_code_review_agent.agent.rule_engine import RuleEngine  # noqa: E402
 from examples.skills_code_review_agent.agent.skill_smoke import run_code_review_skill_smoke  # noqa: E402
@@ -305,14 +306,101 @@ async def test_unquoted_and_multiline_secrets_are_redacted_in_report_and_databas
     assert "[REDACTED]" in db_text
 
 
+def test_finding_serialization_reporting_and_storage_redact_secret_fields(tmp_path: Path) -> None:
+    from examples.skills_code_review_agent.agent.reporting import render_markdown
+    from examples.skills_code_review_agent.agent.storage import SQLiteReviewStore
+
+    raw_secret = "sk-not-a-real-key-abcdefghijklmnopqrstuvwxyz"
+    finding = Finding(
+        finding_id="finding-secret",
+        schema_version=1,
+        severity="critical",
+        category="secret_leak",
+        file="app/secrets.py",
+        line=10,
+        title=f"Secret {raw_secret}",
+        evidence=f"TOKEN={raw_secret}",
+        recommendation=f"Rotate {raw_secret}",
+        confidence=0.99,
+        source="test",
+        rule_id="security.secret.material",
+        hunk_header=f"@@ token={raw_secret} @@",
+        context_before=[f"API_TOKEN = {raw_secret}"],
+        context_after=[f"print({raw_secret!r})"],
+    )
+    report = SimpleNamespace(
+        task_id="cr_secret",
+        status="completed",
+        conclusion="ok",
+        finding_schema_version=1,
+        confidence_thresholds={},
+        sandbox_policy={},
+        filter_policy={},
+        input={
+            "summary": {}
+        },
+        findings=[finding],
+        warnings=[],
+        needs_human_review=[],
+        filter_decisions=[],
+        sandbox_runs=[],
+        monitoring=SimpleNamespace(
+            severity_distribution={},
+            filter_decision_distribution={},
+            total_duration_ms=0,
+            sandbox_duration_ms=0,
+            stage_durations_ms={},
+            risk_level="critical",
+            tool_call_count=0,
+            filter_decision_count=0,
+            interception_count=0,
+            redaction_count=0,
+            deduped_finding_count=0,
+            ignored_finding_count=0,
+            exception_distribution={},
+        ),
+        skill_audit={},
+    )
+
+    markdown = render_markdown(report)
+    serialized = json.dumps(finding.to_dict(), sort_keys=True)
+    store = SQLiteReviewStore(tmp_path / "reviews.sqlite")
+    store.create_task("cr_secret", source="inline", created_at="now", diff_summary={}, diff_text="")
+    store.save_findings("cr_secret", "finding", [finding])
+    bundle = store.get_task_bundle("cr_secret")
+    stored_text = json.dumps(bundle["findings"], sort_keys=True)
+
+    assert raw_secret not in markdown
+    assert raw_secret not in serialized
+    assert raw_secret not in stored_text
+    assert "[REDACTED]" in markdown
+    assert "[REDACTED]" in serialized
+    assert "[REDACTED]" in stored_text
+
+
 async def test_unit_test_command_failure_is_recorded_without_crashing_review(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_fail.py").write_text(
+        "import unittest\n\n"
+        "class FailingTest(unittest.TestCase):\n"
+        "    def test_fail(self):\n"
+        "        self.fail('boom')\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "-N", "app.py", "tests/test_fail.py"], cwd=repo, check=True, capture_output=True,
+                   text=True)
+
     report = await run_review(
-        fixture="clean",
+        repo_path=repo,
         output_dir=tmp_path / "out",
         db_path=tmp_path / "reviews.sqlite",
         sandbox="local",
         dry_run=False,
-        test_command="python -c 'raise SystemExit(1)'",
+        test_command="python -m unittest discover -s tests -p test_fail.py",
     )
 
     unit_runs = [run for run in report.sandbox_runs if run.name == "unit_tests"]
@@ -384,6 +472,71 @@ async def test_destructive_test_commands_are_denied_before_execution(tmp_path: P
     assert any(decision.decision == "deny" and decision.policy == "high-risk-command"
                for decision in report.filter_decisions)
     assert not any(run.name == "unit_tests" for run in report.sandbox_runs)
+
+
+@pytest.mark.parametrize("command", ["python -c 'print(1)'", "python3 -c 'print(1)'"])
+async def test_python_inline_test_commands_are_denied_before_execution(tmp_path: Path, command: str) -> None:
+    report = await run_review(
+        fixture="clean",
+        output_dir=tmp_path / "out",
+        db_path=tmp_path / "reviews.sqlite",
+        sandbox="fake",
+        dry_run=True,
+        test_command=command,
+    )
+
+    assert report.status == "completed"
+    assert any(decision.decision == "deny" and decision.policy == "high-risk-command"
+               for decision in report.filter_decisions)
+    assert not any(run.name == "unit_tests" for run in report.sandbox_runs)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pytest -q",
+        "python -m pytest /etc/passwd",
+        "python -m pytest ../outside",
+        "python -m pytest --rootdir=/etc",
+    ],
+)
+async def test_unsafe_test_commands_are_denied_before_execution(tmp_path: Path, command: str) -> None:
+    report = await run_review(
+        fixture="clean",
+        output_dir=tmp_path / "out",
+        db_path=tmp_path / "reviews.sqlite",
+        sandbox="fake",
+        dry_run=True,
+        test_command=command,
+    )
+
+    assert report.status == "completed"
+    assert any(decision.decision == "deny" and decision.policy == "test-command-safety"
+               for decision in report.filter_decisions)
+    assert not any(run.name == "unit_tests" for run in report.sandbox_runs)
+
+
+def test_unit_test_probe_rejects_inline_and_non_python_commands() -> None:
+    spec = importlib.util.spec_from_file_location("unit_test_probe", SKILL_DIR / "scripts" / "unit_test_probe.py")
+    assert spec is not None
+    assert spec.loader is not None
+    unit_test_probe = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(unit_test_probe)
+
+    with pytest.raises(ValueError, match="not allowed"):
+        unit_test_probe._safe_command_argv("python -c 'print(1)'")
+    with pytest.raises(ValueError, match="Python interpreter"):
+        unit_test_probe._safe_command_argv("pytest -q")
+    with pytest.raises(ValueError, match="test path"):
+        unit_test_probe._safe_command_argv("python -m pytest /etc/passwd")
+    with pytest.raises(ValueError, match="test path"):
+        unit_test_probe._safe_command_argv("python -m pytest ../outside")
+    with pytest.raises(ValueError, match="test path"):
+        unit_test_probe._safe_command_argv("python -m pytest --rootdir=/etc")
+    assert unit_test_probe._safe_command_argv("python -m pytest -q")[1:3] == ["-m", "pytest"]
+    assert unit_test_probe._safe_command_argv(
+        "python -m unittest discover -s tests -p test_*.py"
+    )[1:3] == ["-m", "unittest"]
 
 
 async def test_filter_decisions_are_redacted_in_report_and_database(tmp_path: Path) -> None:
@@ -640,7 +793,7 @@ async def test_pipeline_blocks_test_command_with_network_url_before_execution(tm
         db_path=tmp_path / "reviews.sqlite",
         sandbox="fake",
         dry_run=True,
-        test_command='python -c \'import urllib.request\nurllib.request.urlopen("https://evil.example/path")\'',
+        test_command="python -m pytest -q https://evil.example/path",
     )
 
     assert report.status == "completed"
@@ -689,7 +842,7 @@ async def test_pipeline_allows_test_command_with_allowlisted_network_url(tmp_pat
         sandbox="fake",
         dry_run=True,
         network_policy="allowlist",
-        test_command='python -c \'print("https://semgrep.dev/rules")\'',
+        test_command="python -m pytest -q https://semgrep.dev/rules",
     )
 
     assert report.status == "completed"
@@ -697,7 +850,7 @@ async def test_pipeline_allows_test_command_with_allowlisted_network_url(tmp_pat
     assert not any(decision.policy == "network-command" for decision in report.filter_decisions)
 
 
-async def test_pipeline_allows_test_command_with_allowlisted_url_even_when_install_like(tmp_path: Path) -> None:
+async def test_pipeline_denies_non_test_module_even_with_allowlisted_url(tmp_path: Path) -> None:
     report = await run_review(
         fixture="clean",
         output_dir=tmp_path / "out",
@@ -709,8 +862,9 @@ async def test_pipeline_allows_test_command_with_allowlisted_url_even_when_insta
     )
 
     assert report.status == "completed"
-    assert any(run.name == "unit_tests" for run in report.sandbox_runs)
-    assert not any(decision.policy.startswith("network-command") for decision in report.filter_decisions)
+    assert any(decision.decision == "deny" and decision.policy == "test-command-safety"
+               for decision in report.filter_decisions)
+    assert not any(run.name == "unit_tests" for run in report.sandbox_runs)
 
 
 async def test_pipeline_merges_allowed_network_scanner_findings(tmp_path: Path) -> None:
@@ -927,13 +1081,28 @@ async def test_workspace_sandbox_adapter_uploads_diff_and_runs_script() -> None:
 
 
 async def test_local_sandbox_output_cap_stops_large_stdout(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_big_output.py").write_text(
+        "import unittest\n\n"
+        "class BigOutputTest(unittest.TestCase):\n"
+        "    def test_big_output(self):\n"
+        "        print('x' * 100000)\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "-N", "app.py", "tests/test_big_output.py"], cwd=repo, check=True,
+                   capture_output=True, text=True)
+
     report = await run_review(
-        fixture="clean",
+        repo_path=repo,
         output_dir=tmp_path / "out",
         db_path=tmp_path / "reviews.sqlite",
         sandbox="local",
         dry_run=False,
-        test_command="python -c 'print(\"x\" * 100000)'",
+        test_command="python -m unittest discover -s tests -p test_big_output.py",
         max_output_bytes=128,
     )
 
@@ -944,13 +1113,30 @@ async def test_local_sandbox_output_cap_stops_large_stdout(tmp_path: Path) -> No
 
 
 async def test_local_sandbox_output_cap_is_combined_for_stdout_and_stderr(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_streams.py").write_text(
+        "import sys\n"
+        "import unittest\n\n"
+        "class StreamsTest(unittest.TestCase):\n"
+        "    def test_streams(self):\n"
+        "        sys.stdout.write('o' * 1000)\n"
+        "        sys.stderr.write('e' * 1000)\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "-N", "app.py", "tests/test_streams.py"], cwd=repo, check=True,
+                   capture_output=True, text=True)
+
     report = await run_review(
-        fixture="clean",
+        repo_path=repo,
         output_dir=tmp_path / "out",
         db_path=tmp_path / "reviews.sqlite",
         sandbox="local",
         dry_run=False,
-        test_command='python -c \'import sys\nsys.stdout.write("o" * 1000)\nsys.stderr.write("e" * 1000)\'',
+        test_command="python -m unittest discover -s tests -p test_streams.py",
         max_output_bytes=128,
     )
 
@@ -966,7 +1152,17 @@ async def test_local_sandbox_runs_tests_in_staged_repo_snapshot(tmp_path: Path) 
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
     (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
-    subprocess.run(["git", "add", "-N", "app.py"], cwd=repo, check=True, capture_output=True, text=True)
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_write.py").write_text(
+        "from pathlib import Path\n\n"
+        "import unittest\n\n"
+        "class WriteTest(unittest.TestCase):\n"
+        "    def test_write_marker(self):\n"
+        "        Path('created-by-test').write_text('x', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "-N", "app.py", "tests/test_write.py"], cwd=repo, check=True,
+                   capture_output=True, text=True)
 
     report = await run_review(
         repo_path=repo,
@@ -974,7 +1170,7 @@ async def test_local_sandbox_runs_tests_in_staged_repo_snapshot(tmp_path: Path) 
         db_path=tmp_path / "reviews.sqlite",
         sandbox="local",
         dry_run=False,
-        test_command="python -c 'open(\"created-by-test\", \"w\").write(\"x\")'",
+        test_command="python -m unittest discover -s tests -p test_write.py",
     )
 
     unit_runs = [run for run in report.sandbox_runs if run.name == "unit_tests"]
@@ -1062,6 +1258,22 @@ async def test_workspace_sandbox_adapter_preserves_audited_command_args_and_clea
     ]
     assert len(runtime.manager_instance.cleaned) == 1
     assert runtime.manager_instance.cleaned[0].startswith("semgrep_network_probe-")
+
+
+def test_workspace_sandbox_adapter_rejects_unapproved_script_arguments() -> None:
+    from examples.skills_code_review_agent.agent.sandbox import _workspace_script_args
+
+    request = SandboxRequest(
+        name="scanner_probe",
+        command="python scripts/scanner_probe.py /etc/passwd",
+        script_path="scripts/scanner_probe.py",
+        timeout_sec=3,
+        max_output_bytes=100,
+        env={},
+    )
+
+    with pytest.raises(ValueError, match="not allowed"):
+        _workspace_script_args(request)
 
 
 async def test_workspace_sandbox_adapter_stages_repo_snapshot_for_tests(tmp_path: Path) -> None:
@@ -1272,6 +1484,28 @@ def test_scanner_probe_does_not_materialize_paths_outside_scan_root(tmp_path: Pa
     payload = json.loads(result.stdout)
     assert "scanner_runs" in payload
     assert not (tmp_path / "escape.txt").exists()
+
+
+def test_scanner_probe_rejects_unapproved_diff_file_argument(tmp_path: Path) -> None:
+    secret_file = tmp_path / "secret.txt"
+    secret_file.write_text("not-a-real-openai-key-abcdefghijklmnopqrstuvwxyz\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SKILL_DIR / "scripts" / "scanner_probe.py"),
+            str(secret_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "only accepts the sandbox-provided work/input.diff" in result.stderr
+    assert "not-a-real-openai-key-abcdefghijklmnopqrstuvwxyz" not in result.stdout
+    assert "not-a-real-openai-key-abcdefghijklmnopqrstuvwxyz" not in result.stderr
 
 
 @pytest.mark.skipif(not _docker_smoke_enabled(), reason="set CR_AGENT_RUN_DOCKER_SMOKE=1 with Docker to run")

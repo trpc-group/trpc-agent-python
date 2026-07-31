@@ -134,7 +134,7 @@ class LocalSandboxRunner(SandboxRunner):
     runtime_name = "local"
 
     async def run(self, request: SandboxRequest, diff: DiffInput, *, skill_dir: Path) -> SandboxRun:
-        argv = _normalize_python_argv(request.command)
+        argv = _validated_python_script_argv(request)
         start = time.monotonic()
         temp_dir: tempfile.TemporaryDirectory[str] | None = None
         try:
@@ -503,17 +503,50 @@ def _request_env(request_env: dict[str, str]) -> dict[str, str]:
 
 def _workspace_script_args(request: SandboxRequest) -> list[str]:
     """Translate an audited request command into workspace-local script args."""
+    _, script_token, extra_args = _validated_python_script_tokens(request)
+    return [f"work/{Path(script_token).name}", "work/input.diff", *extra_args]
+
+
+def _validated_python_script_argv(request: SandboxRequest) -> list[str]:
+    interpreter, script_token, extra_args = _validated_python_script_tokens(request)
+    if _is_python_interpreter_name(Path(interpreter).name) or interpreter == sys.executable:
+        interpreter = sys.executable
+    return [interpreter, script_token, *extra_args]
+
+
+def _validated_python_script_tokens(request: SandboxRequest) -> tuple[str, str, list[str]]:
     tokens = shlex.split(request.command)
     if len(tokens) < 2:
         raise ValueError(f"Sandbox command must invoke a Python skill script: {request.command}")
     interpreter = Path(tokens[0]).name
-    if interpreter not in {"python", "python3"} and tokens[0] != sys.executable:
+    if not _is_python_interpreter_name(interpreter) and tokens[0] != sys.executable:
         raise ValueError(f"Workspace sandbox only supports Python skill scripts, got: {tokens[0]}")
     script_token = tokens[1].replace("\\", "/").lstrip("/")
     expected_script = request.script_path.replace("\\", "/").lstrip("/")
     if script_token != expected_script:
         raise ValueError(f"Sandbox command script {script_token!r} does not match request script {expected_script!r}")
-    return [f"work/{Path(request.script_path).name}", "work/input.diff", *tokens[2:]]
+    if ".." in Path(script_token).parts:
+        raise ValueError(f"Sandbox command script must not contain '..': {script_token}")
+    extra_args = _allowed_script_extra_args(expected_script, tokens[2:])
+    return tokens[0], script_token, extra_args
+
+
+def _allowed_script_extra_args(script_path: str, args: list[str]) -> list[str]:
+    allowed_flags = {
+        "scripts/scanner_probe.py": {"--semgrep-auto"},
+        "scripts/static_review.py": {"--force-failure"},
+    }.get(script_path, set())
+    extra_args = []
+    for arg in args:
+        if arg not in allowed_flags:
+            raise ValueError(f"Sandbox command argument {arg!r} is not allowed for {script_path}")
+        extra_args.append(arg)
+    return extra_args
+
+
+def _is_python_interpreter_name(name: str) -> bool:
+    suffix = name.removeprefix("python3.")
+    return name in {"python", "python3"} or (suffix != name and suffix.replace(".", "").isdigit())
 
 
 def _workspace_capped_script_args(request: SandboxRequest) -> list[str]:
@@ -531,15 +564,6 @@ def _normalize_python_command(command: str) -> str:
     if command.startswith("python "):
         return f"{shlex.quote(sys.executable)} {command.removeprefix('python ')}"
     return command
-
-
-def _normalize_python_argv(command: str) -> list[str]:
-    argv = shlex.split(command)
-    if not argv:
-        raise ValueError("empty sandbox command")
-    if Path(argv[0]).name == "python":
-        argv[0] = sys.executable
-    return argv
 
 
 _OUTPUT_CAP_RUNNER = r'''from __future__ import annotations
