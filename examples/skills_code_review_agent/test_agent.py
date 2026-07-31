@@ -186,3 +186,63 @@ def test_ast_path_coverage(tmp_path):
     assert len(security_findings) >= 1
     finding = security_findings[0]
     assert "shell=True" in finding["evidence"]
+
+def test_sensitive_and_shell_same_line(tmp_path):
+    diff_file = tmp_path / "same_line.diff"
+    diff_file.write_text("""diff --git a/src/same_line.py b/src/same_line.py
+--- a/src/same_line.py
++++ b/src/same_line.py
+@@ -1,1 +1,1 @@
++subprocess.run("echo hello", shell=True) # api_key="sk-proj-secret-123456789"
+""", encoding="utf-8")
+
+    from examples.skills_code_review_agent.agent import CodeReviewAgent
+    agent = CodeReviewAgent(db_url="sqlite:///:memory:", runtime_mode="local", repo_path=str(tmp_path))
+    task_id = f"task_{uuid.uuid4().hex[:8]}"
+    
+    report_json, report_md = agent.run_review(task_id, str(diff_file), fake_model=True)
+    
+    assert report_json["status"] == "COMPLETED"
+    
+    # Verify that all findings have evidence redacted and do not leak cleartext credentials
+    all_findings = report_json["findings"] + report_json["needs_human_review"]
+    assert len(all_findings) >= 1
+    for f in all_findings:
+        assert "sk-proj-secret-123456789" not in f["evidence"]
+        if f["category"] in ("Security Risk", "Sensitive Information Leak"):
+            assert "[REDACTED]" in f["evidence"]
+        
+    # Check DB
+    task_details = agent.db.get_task_details(task_id)
+    for f in task_details["findings"]:
+        assert "sk-proj-secret-123456789" not in f["evidence"]
+
+def test_ast_sensitive_credentials(tmp_path):
+    src_dir = tmp_path / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Write Python file with hardcoded key
+    py_file = src_dir / "secret.py"
+    py_file.write_text("""api_key = "sk-proj-secret-123456789"
+""", encoding="utf-8")
+
+    diff_file = tmp_path / "secret.diff"
+    diff_file.write_text("""diff --git a/src/secret.py b/src/secret.py
+--- a/src/secret.py
++++ b/src/secret.py
+@@ -1,1 +1,1 @@
++api_key = "sk-proj-secret-123456789"
+""", encoding="utf-8")
+
+    from examples.skills_code_review_agent.agent import CodeReviewAgent
+    agent = CodeReviewAgent(db_url="sqlite:///:memory:", runtime_mode="local", repo_path=str(tmp_path))
+    task_id = f"task_{uuid.uuid4().hex[:8]}"
+    
+    report_json, report_md = agent.run_review(task_id, str(diff_file), fake_model=True)
+    
+    # Findings must include the sensitive key warning, and evidence must be redacted
+    all_findings = report_json["findings"] + report_json["needs_human_review"]
+    assert len(all_findings) >= 1
+    cred_finding = [f for f in all_findings if f["category"] == "Sensitive Information Leak"][0]
+    assert "sk-proj-secret-123456789" not in cred_finding["evidence"]
+    assert "[REDACTED]" in cred_finding["evidence"]

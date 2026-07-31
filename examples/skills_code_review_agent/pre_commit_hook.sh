@@ -34,7 +34,7 @@ if [ -f "review_report.json" ]; then
 import json, sys
 try:
     data = json.load(open('review_report.json'))
-    findings = data.get('findings', [])
+    findings = data.get('findings', []) + data.get('needs_human_review', [])
     high_critical = [f for f in findings if f.get('severity', '').lower() in ('critical', 'high')]
     if len(high_critical) > 0:
         print(f'❌ [BLOCK] Code Review Agent found {len(high_critical)} critical/high issues.')

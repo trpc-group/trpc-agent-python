@@ -242,28 +242,7 @@ def run_checks(parsed_diff, src_dir):
                         "source": "static_analyzer"
                     })
 
-                # Sensitive information check with redaction
-                cred_patterns = [
-                    r'(?i)(api_key|password|token|secret|passwd)\s*=\s*["\']([^"\']+)["\']',
-                ]
-                for pat in cred_patterns:
-                    m = re.search(pat, content)
-                    if m:
-                        key_name = m.group(1)
-                        raw_val = m.group(2)
-                        if len(raw_val) > 4 and not raw_val.startswith("os.environ") and not raw_val.startswith("YOUR_"):
-                            redacted_evidence = content.replace(raw_val, "[REDACTED]").strip()
-                            findings.append({
-                                "severity": "critical",
-                                "category": CAT_SENSITIVE,
-                                "file": filename,
-                                "line": line_num,
-                                "title": "Potential hardcoded sensitive credential",
-                                "evidence": redacted_evidence,
-                                "recommendation": f"Remove the hardcoded credential for '{key_name}' and load it from environment variables or a configuration vault.",
-                                "confidence": "high",
-                                "source": "static_analyzer"
-                            })
+
 
                 # Async Checks
                 if "time.sleep(" in content:
@@ -319,11 +298,35 @@ def run_checks(parsed_diff, src_dir):
                         "confidence": "high",
                         "source": "static_analyzer"
                     })
-        else:
-            # Still check for TRIGGER_SANDBOX_CRASH even if AST succeeded
-            for item in lines:
-                if "TRIGGER_SANDBOX_CRASH" in item["content"]:
-                    raise ValueError("Simulated sandbox crash triggered by diff content")
+        # Unconditionally check for TRIGGER_SANDBOX_CRASH and sensitive credentials
+        for item in lines:
+            line_num = item["line"]
+            content = item["content"]
+            
+            if "TRIGGER_SANDBOX_CRASH" in content:
+                raise ValueError("Simulated sandbox crash triggered by diff content")
+                
+            cred_patterns = [
+                r'(?i)(api_key|password|token|secret|passwd)\s*=\s*["\']([^"\']+)["\']',
+            ]
+            for pat in cred_patterns:
+                m = re.search(pat, content)
+                if m:
+                    key_name = m.group(1)
+                    raw_val = m.group(2)
+                    if len(raw_val) > 4 and not raw_val.startswith("os.environ") and not raw_val.startswith("YOUR_"):
+                        redacted_evidence = content.replace(raw_val, "[REDACTED]").strip()
+                        findings.append({
+                            "severity": "critical",
+                            "category": CAT_SENSITIVE,
+                            "file": filename,
+                            "line": line_num,
+                            "title": "Potential hardcoded sensitive credential",
+                            "evidence": redacted_evidence,
+                            "recommendation": f"Remove the hardcoded credential for '{key_name}' and load it from environment variables or a configuration vault.",
+                            "confidence": "high",
+                            "source": "static_analyzer"
+                        })
 
     return findings
 

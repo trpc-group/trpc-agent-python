@@ -65,51 +65,6 @@ class CodeReviewAgent:
         self.tool_call_count = 0
         self.block_count = 0
 
-    def parse_diff(self, diff_content: str) -> Dict[str, Any]:
-        """
-        Parses diff content into files and lines.
-        """
-        self.tool_call_count += 1
-        # Simple inline diff parser
-        files = {}
-        current_file = None
-        current_line_num = 0
-
-        for line in diff_content.splitlines():
-            if line.startswith('diff --git'):
-                current_file = None
-            elif line.startswith('--- ') or line.startswith('+++ '):
-                if line.startswith('+++ '):
-                    parts = line.split(' ')
-                    if len(parts) >= 2:
-                        path = parts[1].replace('b/', '').strip().strip('"')
-                        current_file = path
-                        files[current_file] = []
-            elif line.startswith('@@'):
-                # @@ -1,4 +1,5 @@
-                import re
-                m = re.match(r'^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@', line)
-                if m:
-                    current_line_num = int(m.group(1))
-            elif current_file is not None:
-                if line.startswith('+'):
-                    files[current_file].append({
-                        'line': current_line_num,
-                        'type': 'added',
-                        'content': line[1:]
-                    })
-                    current_line_num += 1
-                elif line.startswith('-'):
-                    pass
-                else:
-                    files[current_file].append({
-                        'line': current_line_num,
-                        'type': 'context',
-                        'content': line[1:] if len(line) > 0 else ''
-                    })
-                    current_line_num += 1
-        return files
-
     def redact_secrets(self, text: str) -> str:
         if not text:
             return text
@@ -149,10 +104,14 @@ class CodeReviewAgent:
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             return report_json, report_md
 
-        # Validate input path to prevent injection and directory traversal
+        # Validate input path using absolute path containment to prevent directory traversal
+        abs_diff_path = os.path.abspath(diff_file_path)
+        abs_repo_path = os.path.abspath(self.repo_path or ".")
+        import tempfile
+        abs_temp_dir = os.path.abspath(tempfile.gettempdir())
+        
         import re
-        # Restrict parent traversal
-        if ".." in diff_file_path or re.search(r'[;&|`$]', diff_file_path):
+        if (not abs_diff_path.startswith(abs_repo_path) and not abs_diff_path.startswith(abs_temp_dir)) or re.search(r'[;&|`$]', diff_file_path):
             self.db.update_task_status(task_id, "INTERCEPTED")
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time, status="INTERCEPTED")
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
@@ -161,11 +120,7 @@ class CodeReviewAgent:
         with open(diff_file_path, "r", encoding="utf-8", errors="ignore") as f:
             diff_content = f.read()
 
-        # Parse diff
-        parsed_diff = self.parse_diff(diff_content)
-        
         # Set up sandbox files under a safe system temp directory to prevent directory traversal
-        import tempfile
         temp_dir = Path(tempfile.gettempdir())
         parsed_diff_temp = temp_dir / f"parsed_{task_id}.json"
         raw_findings_temp = temp_dir / f"findings_{task_id}.json"
@@ -185,6 +140,8 @@ class CodeReviewAgent:
             self.db.update_task_status(task_id, "INTERCEPTED")
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time, status="INTERCEPTED")
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            if os.path.exists(raw_findings_temp): os.remove(raw_findings_temp)
             return report_json, report_md
 
         # Sandbox run execution
@@ -214,6 +171,7 @@ class CodeReviewAgent:
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="TIMEOUT", exception_types={"TimeoutExpired": 1})
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            if os.path.exists(raw_findings_temp): os.remove(raw_findings_temp)
             return report_json, report_md
         except Exception as e:
             exception_name = type(e).__name__
@@ -223,6 +181,7 @@ class CodeReviewAgent:
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="FAILED", exception_types=exception_types)
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            if os.path.exists(raw_findings_temp): os.remove(raw_findings_temp)
             return report_json, report_md
 
         # Execute run_checks in sandbox
@@ -238,9 +197,10 @@ class CodeReviewAgent:
         if not allowed:
             self.block_count += 1
             self.db.update_task_status(task_id, "INTERCEPTED")
-            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="INTERCEPTED")
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            if os.path.exists(raw_findings_temp): os.remove(raw_findings_temp)
             return report_json, report_md
 
         sb_start = time.time()
@@ -272,6 +232,7 @@ class CodeReviewAgent:
             report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="TIMEOUT", exception_types={"TimeoutExpired": 1})
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            if os.path.exists(raw_findings_temp): os.remove(raw_findings_temp)
             return report_json, report_md
         except Exception as e:
             exception_name = type(e).__name__
@@ -288,9 +249,14 @@ class CodeReviewAgent:
         seen = set()
         deduped_findings = []
         for f in raw_findings:
-            key = (f["file"], f["line"], f["category"])
+            # Expand de-duplication key to include title to preserve multiple different issues on the same line
+            key = (f["file"], f["line"], f["category"], f.get("title", ""))
             if key not in seen:
                 seen.add(key)
+                # Proactively redact sensitive secrets in finding content before storage/report
+                f["evidence"] = self.redact_secrets(f.get("evidence", ""))
+                f["title"] = self.redact_secrets(f.get("title", ""))
+                f["recommendation"] = self.redact_secrets(f.get("recommendation", ""))
                 deduped_findings.append(f)
 
         # Store findings in db
