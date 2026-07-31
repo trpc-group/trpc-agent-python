@@ -34,32 +34,32 @@ def parse_diff(diff_content):
                 # Remove possible quotes or trailing garbage
                 current_file = current_file.strip().strip('"')
                 files[current_file] = []
-        elif line.startswith('@@') or '@@' in line:
-            # Hunk header: @@ -1,4 +1,5 @@
-            # We care about the + part: starting line number
-            m = re.search(r'@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@', line)
-            if m:
-                current_line_num = int(m.group(1))
-        elif current_file is not None:
-            if line.startswith('+'):
-                # Added/Modified line
-                files[current_file].append({
-                    'line': current_line_num,
-                    'type': 'added',
-                    'content': line[1:]
-                })
-                current_line_num += 1
-            elif line.startswith('-'):
-                # Deleted line, doesn't increment current_line_num for new file
-                pass
-            else:
-                # Context line
-                files[current_file].append({
-                    'line': current_line_num,
-                    'type': 'context',
-                    'content': line[1:] if (line and line[0] == ' ') else line
-                })
-                current_line_num += 1
+        else:
+            hunk_match = None
+            if line.startswith('@@') or '@@' in line:
+                hunk_match = re.search(r'@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@', line)
+            if hunk_match:
+                current_line_num = int(hunk_match.group(1))
+            elif current_file is not None:
+                if line.startswith('+'):
+                    # Added/Modified line
+                    files[current_file].append({
+                        'line': current_line_num,
+                        'type': 'added',
+                        'content': line[1:]
+                    })
+                    current_line_num += 1
+                elif line.startswith('-'):
+                    # Deleted line, doesn't increment current_line_num for new file
+                    pass
+                else:
+                    # Context line
+                    files[current_file].append({
+                        'line': current_line_num,
+                        'type': 'context',
+                        'content': line[1:] if (line and line[0] == ' ') else line
+                    })
+                    current_line_num += 1
 
     return files
 

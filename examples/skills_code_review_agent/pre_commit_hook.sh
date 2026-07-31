@@ -8,12 +8,12 @@ echo "🔍 Running Automated Code Review Agent on staged changes..."
 
 # Create a temporary diff file
 TEMP_DIFF=$(mktemp)
+trap 'rm -f "$TEMP_DIFF" review_report.json review_report.md' EXIT
 git diff --cached > "$TEMP_DIFF"
 
 # If diff is empty, exit early
 if [ ! -s "$TEMP_DIFF" ]; then
     echo "✅ No staged changes found. Skipping code review."
-    rm -f "$TEMP_DIFF"
     exit 0
 fi
 
@@ -23,7 +23,6 @@ AGENT_EXIT_CODE=$?
 if [ $AGENT_EXIT_CODE -ne 0 ]; then
     echo "❌ [BLOCK] Code Review Agent execution failed (Exit code: $AGENT_EXIT_CODE)."
     echo "Please resolve runtime/syntax errors before committing."
-    rm -f "$TEMP_DIFF"
     exit 1
 fi
 
@@ -45,13 +44,9 @@ except Exception as e:
 "
     if [ $? -ne 0 ]; then
         echo "Please review the suggestions in review_report.md before committing."
-        rm -f "$TEMP_DIFF"
         exit 1
     fi
-    # Clean up output files on success to prevent pollution
-    rm -f review_report.json review_report.md
 fi
 
 echo "✅ Code review completed successfully. Committing..."
-rm -f "$TEMP_DIFF"
 exit 0

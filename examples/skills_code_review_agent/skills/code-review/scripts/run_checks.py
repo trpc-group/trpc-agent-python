@@ -179,9 +179,14 @@ def run_checks(parsed_diff, src_dir):
         # Resolve and validate path to prevent directory traversal
         if src_dir:
             normalized_src = os.path.abspath(src_dir)
+            if os.path.isabs(filename) or ".." in filename:
+                continue
             local_path = os.path.abspath(os.path.join(normalized_src, filename))
-            if not local_path.startswith(normalized_src) or ".." in filename:
-                # Path traversal detected, skip reading file from disk
+            try:
+                is_under = os.path.commonpath([local_path, normalized_src]) == normalized_src
+            except ValueError:
+                is_under = False
+            if not is_under:
                 continue
         else:
             if ".." in filename or os.path.isabs(filename):

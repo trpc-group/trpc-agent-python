@@ -32,5 +32,5 @@ pyrightconfig.json
 # Code review agent database and outputs
 /review_agent.db
 /test_temp.db
-/review_report.json
-/review_report.md
+**/review_report.json
+**/review_report.md

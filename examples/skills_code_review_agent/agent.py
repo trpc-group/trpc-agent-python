@@ -14,6 +14,11 @@ from examples.skills_code_review_agent.db import ReviewDbRepository
 class FilterGovernance:
     """
     Filter Governance policy checker for code review agent.
+
+    NOTE: This is a demonstration filter policy and is NOT intended to serve
+    as a complete, production-grade security boundary. In production, commands
+    should be sandboxed in containerized runtimes (e.g., Docker or gVisor)
+    rather than relying on command string blacklisting.
     """
     def __init__(self):
         self.forbidden_commands = ["rm -rf /", "curl", "wget", "nc", "bash -i", "sh -i"]

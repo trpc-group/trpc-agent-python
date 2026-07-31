@@ -293,3 +293,60 @@ def test_metacharacter_path_handling(tmp_path):
     
     # Must NOT be INTERCEPTED due to shell metacharacters in paths since shell=False is used
     assert report_json["status"] == "COMPLETED"
+
+def test_absolute_path_traversal_prevention(tmp_path):
+    # Place a target file outside the temporary workspace directory
+    outside_file = tmp_path / "outside.py"
+    outside_file.write_text("secret_key = 'unreachable'", encoding="utf-8")
+    
+    # workspace directory
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    
+    # Malicious diff that sets filename to absolute path of outside_file
+    diff_file = workspace_dir / "malicious.diff"
+    diff_file.write_text(f"""diff --git a/src/app.py b{outside_file.as_posix()}
+--- a/src/app.py
++++ b{outside_file.as_posix()}
+@@ -1,1 +1,1 @@
++secret_key = 'unreachable'
+""", encoding="utf-8")
+
+    from examples.skills_code_review_agent.agent import CodeReviewAgent
+    agent = CodeReviewAgent(db_url="sqlite:///:memory:", runtime_mode="local", repo_path=str(workspace_dir))
+    task_id = f"task_{uuid.uuid4().hex[:8]}"
+    
+    report_json, report_md = agent.run_review(task_id, str(diff_file), fake_model=True)
+    
+    # Must run to completion successfully but should not find the sensitive information because the file was skipped and not read
+    assert report_json["status"] == "COMPLETED"
+    findings = report_json["findings"]
+    for f in findings:
+        assert f["category"] != "Sensitive Information Leak"
+
+def test_diff_code_contains_hunk_marker(tmp_path):
+    diff_content = """diff --git a/src/app.py b/src/app.py
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,2 +1,2 @@
+ def foo():
++    pat = re.compile('@@')
+"""
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "parse_diff",
+        str(Path(__file__).parent / "skills" / "code-review" / "scripts" / "parse_diff.py")
+    )
+    parse_diff_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parse_diff_module)
+    parse_diff = parse_diff_module.parse_diff
+    parsed = parse_diff(diff_content)
+    
+    # Verify app.py has the added line and it is not consumed/skipped as hunk header
+    assert "src/app.py" in parsed
+    added_lines = parsed["src/app.py"]
+    # 1 context line (def foo():) and 1 added line (pat = re.compile('@@'))
+    assert len(added_lines) == 2
+    assert added_lines[1]["type"] == "added"
+    assert "re.compile('@@')" in added_lines[1]["content"]
