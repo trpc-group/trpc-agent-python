@@ -1,12 +1,12 @@
 """全流水线集成测试（demo/fake 模式）。
 
-本测试模块在 demo 模式下运行完整的 6 阶段流水线，验证：
+本测试模块在 demo 模式下运行完整的 6 阶段流水线,验证:
   1. 流水线能否正常完成
   2. 各阶段产出是否符合预期
   3. 门控决策是否正确拒绝退化
   4. 报告文件是否正确写入
 
-所有测试使用预录制的 trace evalset 数据，无需 API key。
+所有测试使用预录制的 trace evalset 数据,无需 API key。
 """
 
 import json
@@ -16,61 +16,36 @@ from pathlib import Path
 
 import pytest
 
+from pipeline._eval_backend import TraceBackend
 from pipeline._models import AcceptanceGateConfig, PipelineReport
 from pipeline._runner import PipelineRunner
+from run_pipeline import derive_scenario
 
 # ---- 测试数据路径 ----
 DATA_DIR = Path(__file__).parent.parent / "data"
+TRACE_DIR = DATA_DIR / "trace"
 PROMPT_PATH = Path(__file__).parent.parent / "agent" / "prompts" / "system.md"
 
-# ---- 场景映射表（与 run_pipeline.py 保持一致）----
-SCENARIO_MAP = {
-    "train_001_optimizable": "optimizable_success",
-    "train_002_ineffective": "optimization_ineffective",
-    "train_003_working": "optimization_regression",
-    "train_004_optimizable": "optimizable_success",
-    "train_005_ineffective": "optimization_ineffective",
-    "train_006_working": "optimization_regression",
-    "train_007_optimizable": "optimizable_success",
-    "train_008_optimizable": "optimizable_success",
-    "train_009_ineffective": "optimization_ineffective",
-    "train_010_working": "optimization_regression",
-    "train_011_optimizable": "optimizable_success",
-    "train_012_ineffective": "optimization_ineffective",
-    "train_013_working": "optimization_regression",
-    "train_014_optimizable": "optimizable_success",
-    "train_015_optimizable": "optimizable_success",
-    "train_016_ineffective": "optimization_ineffective",
-    "train_017_working": "optimization_regression",
-    "train_018_optimizable": "optimizable_success",
-    "train_019_ineffective": "optimization_ineffective",
-    "train_020_optimizable": "optimizable_success",
-    "val_001_optimizable": "optimizable_success",
-    "val_002_ineffective": "optimization_ineffective",
-    "val_003_regression": "optimization_regression",
-    "val_004_optimizable": "optimizable_success",
-    "val_005_regression": "optimization_regression",
-    "val_006_optimizable": "optimizable_success",
-    "val_007_ineffective": "optimization_ineffective",
-    "val_008_optimizable": "optimizable_success",
-    "val_009_regression": "optimization_regression",
-    "val_010_optimizable": "optimizable_success",
-    "val_011_ineffective": "optimization_ineffective",
-    "val_012_optimizable": "optimizable_success",
-    "val_013_regression": "optimization_regression",
-    "val_014_optimizable": "optimizable_success",
-    "val_015_ineffective": "optimization_ineffective",
-    "val_016_optimizable": "optimizable_success",
-    "val_017_optimizable": "optimizable_success",
-    "val_018_ineffective": "optimization_ineffective",
-    "val_019_regression": "optimization_regression",
-    "val_020_optimizable": "optimizable_success",
-}
+
+def _build_scenario_map_from_eval(eval_path: Path) -> dict[str, str]:
+    """读取 evalset.json, 用真实 derive_scenario() 推导每个 case 的场景。
+
+    替代旧的本地 40 条 SCENARIO_MAP 副本 — 现在它直接跟踪 run_pipeline 的实现,
+    派生规则变化时测试随之更新。
+    """
+    cases = json.loads(eval_path.read_text(encoding="utf-8"))["eval_cases"]
+    return {c["eval_id"]: derive_scenario(c["eval_id"]) for c in cases}
+
+
+@pytest.fixture
+def trace_scenario_map() -> dict[str, str]:
+    """用真实 derive_scenario() 从 val_baseline.evalset.json 推导的场景映射。"""
+    return _build_scenario_map_from_eval(TRACE_DIR / "val_baseline.evalset.json")
 
 
 @pytest.fixture
 def gate_config():
-    """默认门控配置：禁止回归，提升阈值=0。"""
+    """默认门控配置:禁止回归,提升阈值=0。"""
     return AcceptanceGateConfig(
         min_improvement_threshold=0.0,
         no_new_hard_failures=True,
@@ -81,32 +56,33 @@ def gate_config():
 
 
 @pytest.fixture
-def pipeline_runner(tmp_path, gate_config):
+def pipeline_runner(tmp_path, gate_config, trace_scenario_map):
     """创建 demo 模式的 PipelineRunner 实例。
 
-    使用 tmp_path 作为输出目录，测试结束后自动清理。
+    使用 tmp_path 作为输出目录,测试结束后自动清理。
     """
     return PipelineRunner(
-        train_eval_path=str(DATA_DIR / "train_baseline.evalset.json"),
-        val_baseline_eval_path=str(DATA_DIR / "val_baseline.evalset.json"),
-        val_optimized_eval_path=str(DATA_DIR / "val_optimized.evalset.json"),
-        metrics_config_path=str(DATA_DIR / "test_config.json"),
+        train_eval_path=str(TRACE_DIR / "train.evalset.json"),
+        val_baseline_eval_path=str(TRACE_DIR / "val_baseline.evalset.json"),
+        val_candidate_eval_path=str(TRACE_DIR / "val_optimized.evalset.json"),
+        gate_metrics_config_path=str(DATA_DIR / "gate_metrics.json"),
         optimizer_config_path=str(DATA_DIR / "optimizer.json"),
         prompt_source_path=str(PROMPT_PATH),
         prompt_field_name="system_prompt",
         gate_config=gate_config,
-        demo_optimize_result_path=str(DATA_DIR / "demo_optimize_result.json"),
-        output_dir=str(tmp_path),
+        backend=TraceBackend(),
         demo_mode=True,
-        scenario_map=SCENARIO_MAP,
+        output_dir=str(tmp_path),
+        scenario_map=trace_scenario_map,
+        demo_optimize_result_path=str(DATA_DIR / "demo_optimize_result.json"),
     )
 
 
 class TestPipelineFakeMode:
-    """全流水线集成测试（demo 模式）。
+    """全流水线集成测试(demo 模式)。
 
-    验证完整的 6 阶段流水线在 demo 模式下正确运行，
-    各阶段产出符合预期，门控决策正确。
+    验证完整的 6 阶段流水线在 demo 模式下正确运行,
+    各阶段产出符合预期,门控决策正确。
     """
 
     async def test_full_pipeline_completes(self, pipeline_runner):
@@ -123,8 +99,8 @@ class TestPipelineFakeMode:
         """基线评测应为训练集和验证集生成结果。
 
         预期:
-        - 训练集 20 cases: 15 失败（9 optimizable + 6 ineffective）, 5 通过
-        - 验证集 20 cases: 15 失败（10 optimizable + 5 ineffective）, 5 通过
+        - 训练集 20 cases: 15 失败(9 optimizable + 6 ineffective),5 通过
+        - 验证集 20 cases: 15 失败(10 optimizable + 5 ineffective),5 通过
         """
         report = await pipeline_runner.run()
 
@@ -142,7 +118,7 @@ class TestPipelineFakeMode:
     async def test_failure_attribution_generated(self, pipeline_runner):
         """失败归因应正确识别失败类别并聚类。
 
-        预期: 40 个 case 中 30 个失败，分布在多个类别中。
+        预期:40 个 case 中 30 个失败,分布在多个类别中。
         """
         report = await pipeline_runner.run()
 
@@ -169,9 +145,9 @@ class TestPipelineFakeMode:
 
         预期:
         - 20 个 case delta
-        - 10 个 FAILED→PASSED（optimizable 场景）
-        - 5 个 FAILED→FAILED（ineffective 场景）
-        - 5 个 PASSED→FAILED（regression 场景）
+        - 10 个 FAILED->PASSED(optimizable 场景)
+        - 5 个 FAILED->FAILED(ineffective 场景)
+        - 5 个 PASSED->FAILED(regression 场景)
         """
         report = await pipeline_runner.run()
 
@@ -203,7 +179,7 @@ class TestPipelineFakeMode:
     async def test_gate_rejects_regression(self, pipeline_runner):
         """门控应因检测到回归而拒绝候选 prompt。
 
-        由于 val_003_regression 等回归 case 的存在，候选应被拒绝。
+        由于 val_003_regression 等回归 case 的存在,候选应被拒绝。
         """
         report = await pipeline_runner.run()
 
@@ -229,8 +205,12 @@ class TestPipelineFakeMode:
         """JSON 和 Markdown 报告应写入输出目录。"""
         await pipeline_runner.run()
 
-        json_path = os.path.join(str(tmp_path), "optimization_report.json")
-        md_path = os.path.join(str(tmp_path), "optimization_report.md")
+        # PipelineRunner.run() 在 output_dir 下创建 <UTC-timestamp>/ 子目录,
+        # 报告位于 runner.run_dir。
+        assert pipeline_runner.run_dir is not None
+        run_dir = str(pipeline_runner.run_dir)
+        json_path = os.path.join(run_dir, "optimization_report.json")
+        md_path = os.path.join(run_dir, "optimization_report.md")
 
         assert os.path.exists(json_path)
         assert os.path.exists(md_path)
@@ -247,18 +227,24 @@ class TestPipelineFakeMode:
         assert "# 优化报告" in content
         assert "## 总体判决" in content
 
-    async def test_gate_accepts_when_allow_regressions(self, pipeline_runner, tmp_path):
-        """当允许回归时，回归检查应通过。
+        # 兼容原始约定:旧版本把报告直接写在 tmp_path 下。
+        # 这里仅作健全性检查(子目录结构需要存在)。
+        assert str(tmp_path) in run_dir
 
-        创建独立的 runner 实例，关闭 no_new_hard_failures 并允许大量回归。
-        注意：由于 demo 数据中 pass rate 无改善，整体仍可能被拒绝，
+    async def test_gate_accepts_when_allow_regressions(
+        self, pipeline_runner, tmp_path, trace_scenario_map
+    ):
+        """当允许回归时,回归检查应通过。
+
+        创建独立的 runner 实例,关闭 no_new_hard_failures 并允许大量回归。
+        注意:由于 demo 数据中 pass rate 无改善,整体仍可能被拒绝,
         但回归检查本身应通过。
         """
         runner = PipelineRunner(
-            train_eval_path=str(DATA_DIR / "train_baseline.evalset.json"),
-            val_baseline_eval_path=str(DATA_DIR / "val_baseline.evalset.json"),
-            val_optimized_eval_path=str(DATA_DIR / "val_optimized.evalset.json"),
-            metrics_config_path=str(DATA_DIR / "test_config.json"),
+            train_eval_path=str(TRACE_DIR / "train.evalset.json"),
+            val_baseline_eval_path=str(TRACE_DIR / "val_baseline.evalset.json"),
+            val_candidate_eval_path=str(TRACE_DIR / "val_optimized.evalset.json"),
+            gate_metrics_config_path=str(DATA_DIR / "gate_metrics.json"),
             optimizer_config_path=str(DATA_DIR / "optimizer.json"),
             prompt_source_path=str(PROMPT_PATH),
             prompt_field_name="system_prompt",
@@ -269,15 +255,16 @@ class TestPipelineFakeMode:
                 critical_case_ids=[],
                 max_cost_budget=0.0,
             ),
-            demo_optimize_result_path=str(DATA_DIR / "demo_optimize_result.json"),
-            output_dir=str(tmp_path),
+            backend=TraceBackend(),
             demo_mode=True,
-            scenario_map=SCENARIO_MAP,
+            output_dir=str(tmp_path),
+            scenario_map=trace_scenario_map,
+            demo_optimize_result_path=str(DATA_DIR / "demo_optimize_result.json"),
         )
 
         report = await runner.run()
 
-        # 回归检查应通过（允许回归）
+        # 回归检查应通过(允许回归)
         regression_check = next(
             c for c in report.gate_decision.checks
             if c.check_name == "regression_check"
