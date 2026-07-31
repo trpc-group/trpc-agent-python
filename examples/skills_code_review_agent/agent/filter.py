@@ -46,8 +46,6 @@ REVIEW_PATTERNS = [
     'wget ',
     'nc ',
     'netcat ',
-    'chmod ',
-    'chown ',
 ]
 
 FORBIDDEN_PATHS = [

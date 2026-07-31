@@ -215,7 +215,8 @@ if __name__ == '__main__':
         input_data = json.load(sys.stdin)
     else:
         input_path = sys.argv[1]
-        input_data = json.loads(open(input_path, encoding='utf-8').read())
+        with open(input_path, encoding='utf-8') as f:
+            input_data = json.loads(f.read())
 
     findings = run_checks(input_data)
     print(json.dumps({'findings': findings, 'count': len(findings)}, indent=2))

@@ -81,8 +81,8 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
 
     store = ReviewStore(db_path)
     input_source = (f"diff:{args.diff_file}" if args.diff_file
-                    else f"repo:{args.repo_path}" if hasattr(args, 'repo_path') and args.repo_path
-                    else f"files:{len(args.files)}" if hasattr(args, 'files') and args.files
+                    else f"repo:{args.repo_path}" if args.repo_path
+                    else f"files:{len(args.files)}" if args.files
                     else "unknown")
     store.create_task(task_id, input_type='diff',
                       diff_summary=f'{len(diff_text)} bytes from {input_source}')
@@ -132,7 +132,7 @@ def run_sync_pipeline(args, task_id: str, diff_text: str):
         parse_diff_script = active_scripts_dir / 'parse_diff.py'
         if parse_diff_script.exists():
             print(f"[sandbox] Running: parse_diff.py <diff>")
-            result = runner.run_script(str(parse_diff_script), args=[str(diff_tmp)])
+            result = runner.run_script(str(parse_diff_script), stdin_input=diff_text)
             result['stdout'] = redact_text(result.get('stdout', ''))
             result['stderr'] = redact_text(result.get('stderr', ''))
             if result.get('exception_type'):
@@ -255,8 +255,8 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
 
     store = ReviewStore(db_path)
     input_source = (f"diff:{args.diff_file}" if args.diff_file
-                    else f"repo:{args.repo_path}" if hasattr(args, 'repo_path') and args.repo_path
-                    else f"files:{len(args.files)}" if hasattr(args, 'files') and args.files
+                    else f"repo:{args.repo_path}" if args.repo_path
+                    else f"files:{len(args.files)}" if args.files
                     else "unknown")
     store.create_task(task_id, input_type='agent',
                       diff_summary=f'{len(diff_text)} bytes from {input_source}')
@@ -342,6 +342,14 @@ async def run_agent_pipeline_async(args, task_id: str, diff_text: str):
                             if err and err != 'success':
                                 exc_key = f"Agent:{err}" if isinstance(err, str) else "Agent:error"
                                 exception_dist[exc_key] = exception_dist.get(exc_key, 0) + 1
+                        store.save_sandbox_run(task_id, {
+                            'script': f"agent_{event.author or 'tool'}",
+                            'exit_code': 0,
+                            'stdout': redact_text(resp),
+                            'stderr': '',
+                            'duration_ms': 0,
+                            'timed_out': False,
+                        })
                         print(f"[agent] ← {resp}")
                     elif part.text and not event.partial:
                         print(f"[agent]   {part.text[:200]}")

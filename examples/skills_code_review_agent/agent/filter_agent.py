@@ -57,6 +57,10 @@ class CodeReviewSafetyFilter(BaseFilter):
                                     blocked_reason = f'Forbidden pattern in command: {pattern}'
                                     block_level = 'deny'
                                     break
+                                elif level == 'ask':
+                                    blocked_reason = f'Confirmation required for: {pattern}'
+                                    block_level = 'ask'
+                                    break
                                 elif level in ('ask', 'needs_human_review'):
                                     # Log for audit but don't block — the sync pipeline
                                     # handles ask/needs_human_review via the bulk API.
@@ -64,7 +68,7 @@ class CodeReviewSafetyFilter(BaseFilter):
                                     # post-processing filter check.
                                     pass
 
-        if block_level == 'deny' and blocked_reason and rsp is not None:
+        if blocked_reason and rsp is not None:
             rsp.is_continue = False
-            rsp.error = Exception(f'[filter] {blocked_reason}')
+            rsp.error = Exception(f'[filter:{block_level}] {blocked_reason}')
         return None

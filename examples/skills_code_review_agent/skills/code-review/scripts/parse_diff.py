@@ -79,15 +79,18 @@ def parse_diff(diff_text: str) -> dict:
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print(json.dumps({'error': 'Usage: parse_diff.py <diff_file>'}))
+    if len(sys.argv) >= 2:
+        diff_path = Path(sys.argv[1])
+        if not diff_path.exists():
+            print(json.dumps({'error': f'File not found: {diff_path}'}))
+            sys.exit(1)
+        diff_text = diff_path.read_text(encoding='utf-8')
+    else:
+        diff_text = sys.stdin.read()
+
+    if not diff_text.strip():
+        print(json.dumps({'error': 'No diff content provided'}))
         sys.exit(1)
 
-    diff_path = Path(sys.argv[1])
-    if not diff_path.exists():
-        print(json.dumps({'error': f'File not found: {diff_path}'}))
-        sys.exit(1)
-
-    diff_text = diff_path.read_text(encoding='utf-8')
     result = parse_diff(diff_text)
     print(json.dumps(result, indent=2))

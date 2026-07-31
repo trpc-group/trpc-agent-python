@@ -94,7 +94,11 @@ class SandboxRunner:
 
     def _run_docker(self, script_path: str, args: list[str] | None,
                     stdin_input: str | None, timeout: float) -> dict[str, Any]:
-        """Run script in an isolated Docker container."""
+        """Run script in an isolated Docker container.
+
+        Uses the GNU timeout command to enforce the per-script timeout inside the
+        container. Diff data is passed via stdin to avoid needing to mount host paths.
+        """
         args = args or []
         start = time.time()
         script_name = Path(script_path).name
@@ -105,8 +109,8 @@ class SandboxRunner:
             "--network=none",
             f"--memory={self.memory_mb}m",
             "-v", f"{script_dir}:/scripts:ro",
-            f"--timeout={int(timeout)}",
             "python:3.12-slim",
+            "timeout", str(int(timeout)),
             "python", f"/scripts/{script_name}",
         ] + args
 
