@@ -127,6 +127,38 @@ class TestAcceptanceGate:
         # 1 个回归（val_003），在允许范围内
         assert decision.accepted is True
 
+    def test_accept_when_max_regressions_overrides_no_new_hard_failures(self, gate):
+        """max_regressions_allowed > 0 时应覆盖 no_new_hard_failures 的严格限制（_models.py 契约）。"""
+        config = self.build_gate_config(no_new_hard_failures=True, max_regressions_allowed=2)
+        gate_instance = gate(config)
+
+        decision = gate_instance.evaluate(
+            baseline_pass_rate=0.33,
+            candidate_pass_rate=0.66,
+            baseline_case_statuses={"val_001": "FAILED", "val_002": "FAILED", "val_003": "PASSED", "val_004": "PASSED", "val_005": "PASSED"},
+            candidate_case_statuses={"val_001": "PASSED", "val_002": "FAILED", "val_003": "FAILED", "val_004": "PASSED", "val_005": "PASSED"},  # 1 个回归
+            total_cost=0.0,
+        )
+
+        # 1 个回归 ≤ 上限 2，即使 no_new_hard_failures=True 也应接受
+        assert decision.accepted is True
+
+    def test_reject_when_regressions_exceed_overridden_limit(self, gate):
+        """max_regressions_allowed > 0 时，回归数超过上限仍应拒绝。"""
+        config = self.build_gate_config(no_new_hard_failures=True, max_regressions_allowed=2)
+        gate_instance = gate(config)
+
+        decision = gate_instance.evaluate(
+            baseline_pass_rate=0.33,
+            candidate_pass_rate=0.66,
+            baseline_case_statuses={"val_001": "FAILED", "val_002": "PASSED", "val_003": "PASSED", "val_004": "PASSED", "val_005": "PASSED"},
+            candidate_case_statuses={"val_001": "PASSED", "val_002": "FAILED", "val_003": "FAILED", "val_004": "FAILED", "val_005": "PASSED"},  # 3 个回归
+            total_cost=0.0,
+        )
+
+        assert decision.accepted is False
+        assert len(decision.regressed_case_ids) == 3
+
     def test_reject_when_regressions_exceed_limit(self, gate):
         """回归数量超过上限时，候选应被拒绝。"""
         config = self.build_gate_config(no_new_hard_failures=False, max_regressions_allowed=0)

@@ -27,6 +27,8 @@ demo 模式下 ``best_prompts`` 为空 dict —— 无 prompt 可写回，直接
 
 from __future__ import annotations
 
+import contextlib
+
 from trpc_agent_sdk.evaluation._target_prompt import TargetPrompt
 
 from pipeline._eval_backend import EvalBackend, applied_prompts
@@ -66,15 +68,13 @@ class ValidationComparator:
         if scenario_map is None:
             scenario_map = {}
 
-        # demo 模式下 best_prompts 为空 → 不写回
-        if best_prompts:
-            async with applied_prompts(target_prompt, best_prompts):
-                _, candidate_report = await backend.evaluate(
-                    eval_set_path=val_eval_path,
-                    metrics_config_path=metrics_config_path,
-                    num_runs=num_runs,
-                )
-        else:
+        # demo 模式下 best_prompts 为空 → 不写回（nullcontext）
+        ctx = (
+            applied_prompts(target_prompt, best_prompts)
+            if best_prompts
+            else contextlib.nullcontext()
+        )
+        async with ctx:
             _, candidate_report = await backend.evaluate(
                 eval_set_path=val_eval_path,
                 metrics_config_path=metrics_config_path,

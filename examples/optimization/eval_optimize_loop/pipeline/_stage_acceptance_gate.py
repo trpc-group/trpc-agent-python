@@ -129,25 +129,29 @@ class AcceptanceGate:
     ) -> None:
         """检查回归数量是否在允许范围内。
 
-        逻辑：
-        - 如果 no_new_hard_failures=True 且存在回归 → 失败
-        - 如果回归数超过 max_regressions_allowed → 失败
+        逻辑（max_regressions_allowed > 0 时覆盖 no_new_hard_failures 的
+        严格限制，见 _models.py 字段契约）：
+        - 回归数超过 max_regressions_allowed → 失败
+        - 严格模式（no_new_hard_failures=True 且 max_regressions_allowed==0）
+          下存在任何回归 → 失败
         - 否则 → 通过
         """
         num_regressions = len(regressed_ids)
 
-        if self._config.no_new_hard_failures and num_regressions > 0:
-            checks.append(GateCheckResult(
-                check_name="no_new_hard_failures",
-                passed=False,
-                detail=f"{num_regressions} 个 case 退化: {', '.join(regressed_ids)}",
-            ))
-        elif num_regressions > self._config.max_regressions_allowed:
-            checks.append(GateCheckResult(
-                check_name="regression_limit",
-                passed=False,
-                detail=f"{num_regressions} 个退化超过上限 {self._config.max_regressions_allowed}",
-            ))
+        if num_regressions > self._config.max_regressions_allowed:
+            if self._config.max_regressions_allowed == 0 and self._config.no_new_hard_failures:
+                # 严格模式（上限 0 = 未配置放宽）: 报告为 no_new_hard_failures
+                checks.append(GateCheckResult(
+                    check_name="no_new_hard_failures",
+                    passed=False,
+                    detail=f"{num_regressions} 个 case 退化: {', '.join(regressed_ids)}",
+                ))
+            else:
+                checks.append(GateCheckResult(
+                    check_name="regression_limit",
+                    passed=False,
+                    detail=f"{num_regressions} 个退化超过上限 {self._config.max_regressions_allowed}",
+                ))
         else:
             checks.append(GateCheckResult(
                 check_name="regression_check",

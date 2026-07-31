@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Protocol, runtime_checkable
 
 from trpc_agent_sdk.evaluation._agent_evaluator import AgentEvaluator
+from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
 from trpc_agent_sdk.evaluation._eval_config import EvalConfig
 from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
 from trpc_agent_sdk.evaluation._eval_result import EvaluateResult
@@ -53,19 +54,22 @@ class TraceBackend:
 
         # demo/trace 模式不能调用 LLM judge: 把剔除 llm_* 后的配置写到临时
         # 文件再传路径（get_executer 只接受路径），用后即删。
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
-            json.dump(config_data, tf, ensure_ascii=False, indent=2)
-            tmp_metrics_path = tf.name
+        tmp_metrics_path: str | None = None
         try:
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+                tmp_metrics_path = tf.name
+                json.dump(config_data, tf, ensure_ascii=False, indent=2)
             executer = AgentEvaluator.get_executer(
                 eval_dataset_file_path_or_dir=eval_set_path,
                 eval_metrics_file_path_or_dir=tmp_metrics_path,
                 num_runs=num_runs,
             )
-            # 只吞 AssertionError — 基线本来就该有失败 case
+            # 只吞 _EvaluationCasesFailed（case 失败是基线场景的预期信号）;
+            # 无关 AssertionError（如第三方库断言）必须传播，否则半成品结果
+            # 会被 _build_report 当成真实报告送入门控。
             try:
                 await executer.evaluate()
-            except AssertionError:
+            except _EvaluationCasesFailed:
                 pass
 
             raw: EvaluateResult | None = executer.get_result()
@@ -73,7 +77,8 @@ class TraceBackend:
                 raise RuntimeError(f"评测失败 ({eval_set_path}): 无返回结果")
             return raw, _build_report(raw)
         finally:
-            os.unlink(tmp_metrics_path)
+            if tmp_metrics_path is not None:
+                os.unlink(tmp_metrics_path)
 
 
 class LiveBackend:
@@ -119,10 +124,10 @@ class LiveBackend:
             num_runs=num_runs,
             runner=runner,
         )
-        # 只吞 AssertionError — 基线本来就该有失败 case
+        # 只吞 _EvaluationCasesFailed — 基线本来就该有失败 case
         try:
             await executer.evaluate()
-        except AssertionError:
+        except _EvaluationCasesFailed:
             pass
 
         raw: EvaluateResult | None = executer.get_result()
