@@ -28,3 +28,9 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+# Code review agent database and outputs
+/review_agent.db
+/test_temp.db
+/review_report.json
+/review_report.md

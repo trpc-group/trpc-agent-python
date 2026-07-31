@@ -5,5 +5,4 @@ index a543ef8..b210cd4 100644
 @@ -1,4 +1,4 @@
  def test_dup():
 -    pass
-+    subprocess.run("echo hello", shell=True)
-+    subprocess.run("echo hello", shell=True)
++    subprocess.run("echo hello", shell=True); data = pickle.loads(x)

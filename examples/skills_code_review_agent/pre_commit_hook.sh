@@ -22,15 +22,27 @@ python3 -m examples.skills_code_review_agent.agent --diff-file "$TEMP_DIFF"
 
 # Check the generated JSON report for any high/critical findings
 if [ -f "review_report.json" ]; then
-    CRITICAL_COUNT=$(grep -o '"severity": "critical"' review_report.json | wc -l)
-    HIGH_COUNT=$(grep -o '"severity": "high"' review_report.json | wc -l)
-    
-    if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
-        echo "❌ [BLOCK] Code Review Agent found $CRITICAL_COUNT critical and $HIGH_COUNT high issues."
+    # Use python to parse JSON and check for high/critical severities
+    python3 -c "
+import json, sys
+try:
+    data = json.load(open('review_report.json'))
+    findings = data.get('findings', [])
+    high_critical = [f for f in findings if f.get('severity', '').lower() in ('critical', 'high')]
+    if len(high_critical) > 0:
+        print(f'❌ [BLOCK] Code Review Agent found {len(high_critical)} critical/high issues.')
+        sys.exit(1)
+except Exception as e:
+    print('Failed to parse code review report:', e)
+    sys.exit(1)
+"
+    if [ $? -ne 0 ]; then
         echo "Please review the suggestions in review_report.md before committing."
         rm -f "$TEMP_DIFF"
         exit 1
     fi
+    # Clean up output files on success to prevent pollution
+    rm -f review_report.json review_report.md
 fi
 
 echo "✅ Code review completed successfully. Committing..."

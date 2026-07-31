@@ -89,24 +89,9 @@ def test_duplicate_findings(agent):
     assert report_json["status"] == "COMPLETED"
     findings = report_json["findings"]
     
-    # We have two duplicate subprocess shell=True lines on lines 4 and 5.
-    # Since they are on different lines, they are not deduplicated (dedup uses file, line, category).
-    # But let's check if the de-duplication logic works on exact duplicates.
-    # Let's insert a duplicate in raw findings to verify.
-    raw_findings = [
-        {"file": "duplicate.py", "line": 4, "category": "Security Risk", "title": "Subprocess shell=True", "evidence": "run(..., shell=True)", "recommendation": "Use list"},
-        {"file": "duplicate.py", "line": 4, "category": "Security Risk", "title": "Subprocess shell=True", "evidence": "run(..., shell=True)", "recommendation": "Use list"},
-    ]
-    
-    seen = set()
-    deduped = []
-    for f in raw_findings:
-        key = (f["file"], f["line"], f["category"])
-        if key not in seen:
-            seen.add(key)
-            deduped.append(f)
-            
-    assert len(deduped) == 1
+    # Check that there is exactly 1 'Security Risk' finding
+    security_findings = [f for f in findings if f["category"] == "Security Risk"]
+    assert len(security_findings) == 1
 
 def test_sandbox_failure(agent):
     task_id = f"task_{uuid.uuid4().hex[:8]}"
@@ -115,7 +100,7 @@ def test_sandbox_failure(agent):
     # Run review. A sandbox failure shouldn't crash the whole task process.
     report_json, report_md = agent.run_review(task_id, str(diff_file), fake_model=True)
     
-    assert report_json["status"] == "COMPLETED"
+    assert report_json["status"] == "FAILED"
     
     # Verify sandbox runs table has FAILED state
     task_details = agent.db.get_task_details(task_id)

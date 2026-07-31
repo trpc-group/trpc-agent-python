@@ -11,8 +11,8 @@ class ReviewTask(Base):
     id = Column(String(64), primary_key=True)
     status = Column(String(32), default='PENDING')  # PENDING, IN_PROGRESS, COMPLETED, FAILED, INTERCEPTED
     diff_summary = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     # Relationships
     sandbox_runs = relationship("SandboxRun", back_populates="task", cascade="all, delete-orphan")
@@ -30,7 +30,7 @@ class SandboxRun(Base):
     duration_ms = Column(Integer, default=0)
     stdout = Column(Text, nullable=True)
     stderr = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     task = relationship("ReviewTask", back_populates="sandbox_runs")
 
@@ -48,7 +48,7 @@ class Finding(Base):
     recommendation = Column(Text)
     confidence = Column(String(16))  # high, medium, low
     source = Column(String(64))      # static_analyzer, llm, rule_engine
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     task = relationship("ReviewTask", back_populates="findings")
 
@@ -60,7 +60,7 @@ class ReviewReport(Base):
     json_content = Column(Text, nullable=False)
     md_content = Column(Text, nullable=False)
     total_duration_ms = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     task = relationship("ReviewTask", back_populates="reports")
 
@@ -72,7 +72,7 @@ class FilterLog(Base):
     rule_name = Column(String(64))
     action = Column(String(16))  # ALLOW, DENY
     reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     task = relationship("ReviewTask", back_populates="filter_logs")
 

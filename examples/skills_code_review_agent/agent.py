@@ -32,12 +32,15 @@ class FilterGovernance:
                 if forbidden in command:
                     return False, f"Denied: Command contains forbidden high-risk execution pattern: '{forbidden}'"
         
-        # Rule 2: Forbidden paths check
-        if inputs:
-            for inp in inputs:
-                for forbidden_path in self.forbidden_paths:
-                    if forbidden_path in inp:
-                        return False, f"Denied: Access to forbidden path '{forbidden_path}' is blocked"
+        # Rule 2: Forbidden paths and shell injection character checks
+        all_checks = (inputs or []) + [command]
+        shell_injection_pattern = r'[;&|`$]'
+        for inp in all_checks:
+            for forbidden_path in self.forbidden_paths:
+                if forbidden_path in inp:
+                    return False, f"Denied: Access to forbidden path '{forbidden_path}' is blocked"
+            if re.search(shell_injection_pattern, inp):
+                return False, f"Denied: Shell metacharacter injection detected in: '{inp}'"
 
         # Rule 3: Budget limit check (example: command length limit)
         if len(command) > 5000:
@@ -114,6 +117,12 @@ class CodeReviewAgent:
             self.db.update_task_status(task_id, "FAILED")
             raise FileNotFoundError(f"Diff file not found: {diff_file_path}")
 
+        # Validate input path to prevent injection
+        import re
+        if re.search(r'[;&|`$]', diff_file_path):
+            self.db.update_task_status(task_id, "INTERCEPTED")
+            raise ValueError(f"Invalid characters in diff file path: {diff_file_path}")
+
         with open(diff_file_path, "r", encoding="utf-8", errors="ignore") as f:
             diff_content = f.read()
 
@@ -125,26 +134,24 @@ class CodeReviewAgent:
         self.db.update_task_status(task_id, "IN_PROGRESS")
 
         # Set up sandbox files
-        # We simulate sandboxed execution scripts and sandbox directories.
-        # We execute parse_diff.py and run_checks.py in the sandbox.
         scripts_dir = Path(__file__).parent / "skills" / "code-review" / "scripts"
         
-        # Prepare run command
+        # Prepare run command arguments (list style, shell=False to prevent command injection)
         parsed_diff_temp = Path(diff_file_path).parent / f"parsed_{task_id}.json"
         raw_findings_temp = Path(diff_file_path).parent / f"findings_{task_id}.json"
         
-        # Execute parse_diff in sandbox (or simulated execution)
-        parse_cmd = f"python {scripts_dir}/parse_diff.py --diff {diff_file_path} --output {parsed_diff_temp}"
+        parse_args = [sys.executable, str(scripts_dir / "parse_diff.py"), "--diff", str(diff_file_path), "--output", str(parsed_diff_temp)]
+        parse_cmd_str = " ".join(parse_args)
         
-        # Filter Governance check before execution
-        allowed, reason = self.filter.check(parse_cmd)
+        # Filter Governance check before execution - pass inputs correctly
+        allowed, reason = self.filter.check(parse_cmd_str, inputs=[str(diff_file_path), str(parsed_diff_temp)])
         self.db.add_filter_log(task_id, "command_execution_filter", "ALLOW" if allowed else "DENY", reason)
         filter_logs.append({"rule_name": "command_execution_filter", "action": "ALLOW" if allowed else "DENY", "reason": reason})
         
         if not allowed:
             self.block_count += 1
             self.db.update_task_status(task_id, "INTERCEPTED")
-            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time)
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, 0, start_time, status="INTERCEPTED")
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             return report_json, report_md
 
@@ -152,74 +159,72 @@ class CodeReviewAgent:
         sb_start = time.time()
         try:
             self.tool_call_count += 1
-            # Run with timeout and output limits
-            res = subprocess.run(parse_cmd, shell=True, capture_output=True, text=True, timeout=15)
+            # Run with shell=False using argument list
+            res = subprocess.run(parse_args, shell=False, capture_output=True, text=True, timeout=15)
             sb_duration = int((time.time() - sb_start) * 1000)
             sandbox_time_ms += sb_duration
             
             stdout_limited = res.stdout[:5000]
             stderr_limited = res.stderr[:5000]
             status = "SUCCESS" if res.returncode == 0 else "FAILED"
-            self.db.add_sandbox_run(task_id, parse_cmd, status, sb_duration, stdout_limited, stderr_limited)
-            sandbox_runs.append({"command": parse_cmd, "status": status, "duration_ms": sb_duration, "stdout": stdout_limited, "stderr": stderr_limited})
+            self.db.add_sandbox_run(task_id, parse_cmd_str, status, sb_duration, stdout_limited, stderr_limited)
+            sandbox_runs.append({"command": parse_cmd_str, "status": status, "duration_ms": sb_duration, "stdout": stdout_limited, "stderr": stderr_limited})
             
             if res.returncode != 0:
-                # If command fails, exit code is not 0
-                raise subprocess.SubprocessError(f"parse_diff script failed with exit code {res.returncode}")
+                raise subprocess.SubprocessError(f"parse_diff script failed with exit code {res.returncode}: {stderr_limited}")
         except Exception as e:
             exception_name = type(e).__name__
             exception_types[exception_name] = exception_types.get(exception_name, 0) + 1
-            status = "FAILED"
-            self.db.add_sandbox_run(task_id, parse_cmd, status, int((time.time() - sb_start) * 1000), "", str(e))
-            sandbox_runs.append({"command": parse_cmd, "status": status, "duration_ms": int((time.time() - sb_start) * 1000), "stdout": "", "stderr": str(e)})
+            self.db.update_task_status(task_id, "FAILED")
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="FAILED", exception_types=exception_types)
+            self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            # Cleanup temp files if they exist
+            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            return report_json, report_md
 
-        # Execute run_checks in sandbox (or simulated execution)
-        check_cmd = f"python {scripts_dir}/run_checks.py --parsed-diff {parsed_diff_temp} --output {raw_findings_temp}"
-        
-        # Check if the command has high risk strings to test sandbox failures / filters
-        if "rm -rf" in diff_content:
-            check_cmd += " && rm -rf /"
+        # Execute run_checks in sandbox
+        check_args = [sys.executable, str(scripts_dir / "run_checks.py"), "--parsed-diff", str(parsed_diff_temp), "--output", str(raw_findings_temp)]
+        check_cmd_str = " ".join(check_args)
             
-        allowed, reason = self.filter.check(check_cmd)
+        allowed, reason = self.filter.check(check_cmd_str, inputs=[str(parsed_diff_temp), str(raw_findings_temp)])
         self.db.add_filter_log(task_id, "command_execution_filter", "ALLOW" if allowed else "DENY", reason)
         filter_logs.append({"rule_name": "command_execution_filter", "action": "ALLOW" if allowed else "DENY", "reason": reason})
 
         if not allowed:
             self.block_count += 1
             self.db.update_task_status(task_id, "INTERCEPTED")
-            # Cleanup temp files if they exist
             if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
-            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time)
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="INTERCEPTED")
             self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
             return report_json, report_md
 
         sb_start = time.time()
         try:
             self.tool_call_count += 1
-            res = subprocess.run(check_cmd, shell=True, capture_output=True, text=True, timeout=15)
+            res = subprocess.run(check_args, shell=False, capture_output=True, text=True, timeout=15)
             sb_duration = int((time.time() - sb_start) * 1000)
             sandbox_time_ms += sb_duration
             
             stdout_limited = res.stdout[:5000]
             stderr_limited = res.stderr[:5000]
             status = "SUCCESS" if res.returncode == 0 else "FAILED"
-            self.db.add_sandbox_run(task_id, check_cmd, status, sb_duration, stdout_limited, stderr_limited)
-            sandbox_runs.append({"command": check_cmd, "status": status, "duration_ms": sb_duration, "stdout": stdout_limited, "stderr": stderr_limited})
+            self.db.add_sandbox_run(task_id, check_cmd_str, status, sb_duration, stdout_limited, stderr_limited)
+            sandbox_runs.append({"command": check_cmd_str, "status": status, "duration_ms": sb_duration, "stdout": stdout_limited, "stderr": stderr_limited})
             
             if res.returncode == 0 and os.path.exists(raw_findings_temp):
                 with open(raw_findings_temp, "r", encoding="utf-8") as f:
                     raw_findings = json.load(f)
             else:
-                raw_findings = []
-                if res.returncode != 0:
-                    raise subprocess.SubprocessError(f"run_checks script failed with exit code {res.returncode}")
+                raise subprocess.SubprocessError(f"run_checks script failed with exit code {res.returncode}: {stderr_limited}")
         except Exception as e:
             exception_name = type(e).__name__
             exception_types[exception_name] = exception_types.get(exception_name, 0) + 1
-            status = "FAILED"
-            self.db.add_sandbox_run(task_id, check_cmd, status, int((time.time() - sb_start) * 1000), "", str(e))
-            sandbox_runs.append({"command": check_cmd, "status": status, "duration_ms": int((time.time() - sb_start) * 1000), "stdout": "", "stderr": str(e)})
-            raw_findings = []
+            self.db.update_task_status(task_id, "FAILED")
+            report_json, report_md = self.generate_reports(task_id, [], filter_logs, sandbox_runs, sandbox_time_ms, start_time, status="FAILED", exception_types=exception_types)
+            self.db.add_report(task_id, json.dumps(report_json), report_md, int((time.time() - start_time) * 1000))
+            if os.path.exists(parsed_diff_temp): os.remove(parsed_diff_temp)
+            if os.path.exists(raw_findings_temp): os.remove(raw_findings_temp)
+            return report_json, report_md
 
         # Deduplication and noise reduction
         seen = set()
@@ -228,8 +233,6 @@ class CodeReviewAgent:
             key = (f["file"], f["line"], f["category"])
             if key not in seen:
                 seen.add(key)
-                # Ensure no sensitive information is leaked/re-printed in findings/recs
-                # If finding recommendation contains sensitive words, redact it.
                 deduped_findings.append(f)
 
         # Store findings in db
@@ -263,7 +266,8 @@ class CodeReviewAgent:
                          sandbox_runs: List[Dict[str, Any]], 
                          sandbox_time_ms: int, 
                          start_time: float,
-                         exception_types: Dict[str, int] = None) -> Tuple[Dict[str, Any], str]:
+                         exception_types: Dict[str, int] = None,
+                         status: str = None) -> Tuple[Dict[str, Any], str]:
         total_time_ms = int((time.time() - start_time) * 1000)
         
         # Deduplication noise reduction: split high vs low confidence
@@ -279,9 +283,12 @@ class CodeReviewAgent:
                 severity_dist[sev] = severity_dist.get(sev, 0) + 1
 
         # Build json report
+        if status is None:
+            status = "COMPLETED" if not any(l["action"] == "DENY" for l in filter_logs) else "INTERCEPTED"
+            
         report_json = {
             "task_id": task_id,
-            "status": "COMPLETED" if not any(l["action"] == "DENY" for l in filter_logs) else "INTERCEPTED",
+            "status": status,
             "findings": high_conf_findings,
             "needs_human_review": low_conf_findings,
             "filter_intercept_summary": [l for l in filter_logs if l["action"] == "DENY"],

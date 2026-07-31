@@ -203,7 +203,7 @@ def run_checks(parsed_diff, src_dir):
                 
                 # TRIGGER_SANDBOX_CRASH
                 if "TRIGGER_SANDBOX_CRASH" in content:
-                    sys.exit(1)
+                    raise ValueError("Simulated sandbox crash triggered by diff content")
 
                 # Security checks
                 if "shell=True" in content and ("subprocess" in content or "run(" in content or "Popen" in content):
@@ -313,7 +313,7 @@ def run_checks(parsed_diff, src_dir):
             # Still check for TRIGGER_SANDBOX_CRASH even if AST succeeded
             for item in lines:
                 if "TRIGGER_SANDBOX_CRASH" in item["content"]:
-                    sys.exit(1)
+                    raise ValueError("Simulated sandbox crash triggered by diff content")
 
     return findings
 
