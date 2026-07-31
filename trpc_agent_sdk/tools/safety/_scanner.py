@@ -17,9 +17,11 @@
   allowed.
 
 Network findings receive a domain-aware second pass (:meth:`_refine_network`):
-egress to an allow-listed domain is dropped, egress to a non-listed domain is
-kept as high, and egress whose destination cannot be determined statically is
-downgraded to *review* rather than blindly blocked or allowed.
+egress to an allow-listed domain is downgraded to a low, non-blocking advisory
+(kept in the report so the permitted call stays auditable), egress to a
+non-listed domain is kept as high, and egress whose destination cannot be
+determined statically is downgraded to *review* rather than blindly blocked or
+allowed.
 """
 
 from __future__ import annotations
@@ -171,13 +173,14 @@ class SafetyScanner:
 
     # -- network domain awareness ---------------------------------------------
     def _refine_network(self, hits: list[RuleHit], script: str) -> list[RuleHit]:
-        """Downgrade or drop generic network hits using the domain allow-list.
+        """Downgrade generic network hits using the domain allow-list.
 
         The destination is resolved **per hit line** rather than across the
         whole script, so a whitelisted URL on one line can no longer mask a
         risky egress on another:
 
-        - Every destination on the hit's line allow-listed -> drop (allowed).
+        - Every destination on the hit's line allow-listed -> downgrade to low
+          (advisory), keeping an audit trace of the permitted egress.
         - A non-listed destination on the line -> keep as high (deny).
         - No destination statically determinable on the line -> downgrade to
           medium (review), honouring "uncertain is never silently allowed".
@@ -214,7 +217,18 @@ class SafetyScanner:
                             "risk_level": RiskLevel.HIGH,
                             "evidence": f"{hit.evidence} -> {', '.join(sorted(set(non_whitelisted)))}",
                         }))
-            # else: every domain on the line is allow-listed -> drop the hit.
+            else:
+                # Every destination on the line is allow-listed. Rather than
+                # dropping the hit outright -- which would erase the egress from
+                # the report entirely -- keep a LOW, non-blocking trace so the
+                # permitted network call stays visible in the audit trail.
+                allowed = ", ".join(sorted(set(domains)))
+                permitted = f" Destination(s) allow-listed ({allowed}); egress permitted."
+                refined.append(
+                    hit.model_copy(update={
+                        "risk_level": RiskLevel.LOW,
+                        "recommendation": hit.recommendation + permitted,
+                    }))
         return refined
 
     @staticmethod

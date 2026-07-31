@@ -30,40 +30,6 @@ _URL_RE = re.compile(r"https?://([^/\s'\"]+)", re.IGNORECASE)
 _HOST_ARG_RE = re.compile(r"\b([a-z0-9.-]+\.[a-z]{2,})\b", re.IGNORECASE)
 
 
-def _is_token_char(ch: str) -> bool:
-    """Whether ``ch`` extends an identifier-like token (letters/digits/_).
-
-    Path separators (``/``, ``.``, ``-``, ``~``), whitespace, quotes and the
-    empty string (start/end of line) are treated as token boundaries.
-    """
-    return ch.isalnum() or ch == "_"
-
-
-def _forbidden_fragment_present(fragment: str, lowered: str) -> bool:
-    """Whether ``fragment`` appears in ``lowered`` at token boundaries.
-
-    A bare substring test flags harmless tokens that merely embed a forbidden
-    fragment (``config.env`` hitting ``.env``; ``id_rsa_note`` hitting
-    ``id_rsa``). Requiring the character on each side of the match to be a
-    token boundary keeps real paths (``/app/.env``, ``~/.ssh/id_rsa``) matched
-    while dropping those false positives. This only refines the L2 SH030 hit;
-    the mandatory L1 credential rules (CR001/CR002/CR003) are unchanged.
-    """
-    if not fragment:
-        return False
-    flen = len(fragment)
-    start = 0
-    while True:
-        idx = lowered.find(fragment, start)
-        if idx == -1:
-            return False
-        before = lowered[idx - 1] if idx > 0 else ""
-        after = lowered[idx + flen] if idx + flen < len(lowered) else ""
-        if not _is_token_char(before) and not _is_token_char(after):
-            return True
-        start = idx + 1
-
-
 class _BashSafetyAnalyzer:
     """Structural analyser for a single shell script."""
 
@@ -134,8 +100,7 @@ class _BashSafetyAnalyzer:
                           "Destination is not on the allowed_domains list; blocked.")
 
     def _check_forbidden_path(self, line: str, lineno: int) -> None:
-        lowered = line.lower()
-        matched = [f for f in self._policy.forbidden_paths if _forbidden_fragment_present(f.lower(), lowered)]
+        matched = self._policy.forbidden_path_matches(line)
         if not matched:
             return
         # A single line can reference several forbidden paths (e.g.

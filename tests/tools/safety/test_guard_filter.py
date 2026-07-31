@@ -27,6 +27,17 @@ class _Recorder:
         return FilterResult(rsp={"success": True, "stdout": "ran"})
 
 
+class _StreamRecorder:
+    """A streaming handle (async generator) recording whether it was reached."""
+
+    def __init__(self) -> None:
+        self.called = False
+
+    async def __call__(self):
+        self.called = True
+        yield FilterResult(rsp={"success": True, "stdout": "streamed"})
+
+
 async def test_dangerous_command_blocked_before_execution() -> None:
     """A destructive command is blocked and the tool handle is never called."""
     guard = ToolSafetyGuardFilter()
@@ -60,6 +71,7 @@ async def test_non_script_request_passes_through() -> None:
     result = await guard.run(None, {"foo": "bar"}, handle)
 
     assert handle.called is True
+    assert result.is_continue is True
 
 
 async def test_review_blocks_when_block_on_review_true() -> None:
@@ -82,6 +94,7 @@ async def test_review_allowed_when_block_on_review_false() -> None:
     result = await guard.run(None, {"command": "pip install requests"}, handle)
 
     assert handle.called is True
+    assert result.is_continue is True
 
 
 async def test_block_writes_audit_event(tmp_path: Path) -> None:
@@ -100,6 +113,37 @@ async def test_block_writes_audit_event(tmp_path: Path) -> None:
     assert event["blocked"] is True
     assert "FS001" in event["rule_ids"]
     assert "duration_ms" in event
+
+
+async def test_streaming_path_blocks_dangerous_command() -> None:
+    """The streaming path (run_stream) must scan too: a deny blocks the tool.
+
+    Regression for the streaming bypass: the guard scans in ``_before`` so the
+    base filter applies it to ``run_stream`` as well. A destructive command must
+    be blocked and the streaming tool handle never reached.
+    """
+    guard = ToolSafetyGuardFilter()
+    handle = _StreamRecorder()
+
+    events = [event async for event in guard.run_stream(None, {"command": "rm -rf /"}, handle)]
+
+    assert handle.called is False
+    assert events
+    last = events[-1]
+    assert last.is_continue is False
+    assert last.rsp["success"] is False
+    assert last.rsp["safety_decision"] == "deny"
+
+
+async def test_streaming_path_passes_safe_command() -> None:
+    """A benign command streams through: the streaming handle is invoked."""
+    guard = ToolSafetyGuardFilter()
+    handle = _StreamRecorder()
+
+    events = [event async for event in guard.run_stream(None, {"command": "ls -la"}, handle)]
+
+    assert handle.called is True
+    assert events[-1].rsp == {"success": True, "stdout": "streamed"}
 
 
 async def test_scanner_property_exposes_underlying_scanner() -> None:

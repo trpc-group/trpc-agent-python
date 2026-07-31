@@ -8,8 +8,11 @@
 ``ToolSafetyGuardFilter`` plugs into the framework's existing filter chain
 (``@register_tool_filter``) with zero core intrusion. Attach it to any tool
 whose arguments carry a script/command (e.g. ``BashTool``) via ``filters_name``
-or ``filters``. On a blocking verdict it short-circuits the chain by returning
-``FilterResult(is_continue=False)`` so the underlying tool never runs.
+or ``filters``. The scan runs in ``_before`` so the base filter lifecycle
+applies it on **both** the blocking (``run``) and streaming (``run_stream``)
+paths -- a streaming tool must not bypass the guard. On a blocking verdict it
+short-circuits the chain (``FilterResult(is_continue=False)``) so the
+underlying tool never runs.
 
 Registered under the name ``"tool_safety_guard"``, so it can be attached as::
 
@@ -23,7 +26,6 @@ from typing import Optional
 
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.filter import BaseFilter
-from trpc_agent_sdk.filter import FilterHandleType
 from trpc_agent_sdk.filter import FilterResult
 from trpc_agent_sdk.filter import register_tool_filter
 from trpc_agent_sdk.tools import get_tool_var
@@ -73,20 +75,27 @@ class ToolSafetyGuardFilter(BaseFilter):
         """Return the underlying scanner."""
         return self._scanner
 
-    async def run(self, ctx: AgentContext, req: Any, handle: FilterHandleType) -> FilterResult:
-        """Scan the request; block or pass through to the wrapped tool."""
+    async def _before(self, ctx: AgentContext, req: Any, rsp: FilterResult) -> None:
+        """Scan the request before execution; block by short-circuiting the chain.
+
+        Implemented as ``_before`` (rather than overriding ``run``) so the base
+        filter runs it for both ``run`` and ``run_stream``: neither the blocking
+        nor the streaming invocation path can slip past the guard. A blocking
+        verdict sets ``rsp.is_continue = False`` and stores the deny response,
+        which both base lifecycles honour by returning without calling the tool.
+        """
         scan_input = self._build_scan_input(req)
         if scan_input is None or not scan_input.script.strip():
             # Nothing scriptable to inspect; let the tool run.
-            return await handle()
+            return
 
         report = self._scanner.scan(scan_input)
         blocked = self._is_blocking(report.decision)
         await self._audit.arecord(report, blocked=blocked)
 
         if blocked:
-            return FilterResult(rsp=self._deny_response(report), is_continue=False)
-        return await handle()
+            rsp.rsp = self._deny_response(report)
+            rsp.is_continue = False
 
     # -- helpers ---------------------------------------------------------------
     def _is_blocking(self, decision: SafetyDecision) -> bool:

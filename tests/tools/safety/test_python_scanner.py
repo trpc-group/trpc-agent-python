@@ -138,6 +138,20 @@ def test_open_without_arguments_is_ignored() -> None:
     assert "AST003" not in _ids("open()\n")
 
 
+def test_open_forbidden_path_requires_token_boundary() -> None:
+    """Forbidden-path matching is token-boundary aware, shared with the bash layer.
+
+    A literal that merely embeds a fragment (``config.env`` for ``.env``;
+    ``id_rsa_note`` for ``id_rsa``) is not a critical AST003 hit, while genuine
+    sensitive paths still match. This keeps the Python (L2) layer consistent with
+    the bash (L2) layer instead of raising a false critical on a substring.
+    """
+    assert "AST003" not in _ids('open("config.env")\n')
+    assert "AST003" not in _ids('open("id_rsa_note")\n')
+    assert "AST003" in _ids('open("/app/.env")\n')
+    assert "AST003" in _ids('open("/home/me/.ssh/id_rsa")\n')
+
+
 def test_deeply_nested_attribute_call_resolves() -> None:
     """A 3+ level dotted call is walked without error and stays benign."""
     assert _ids("import os\nos.path.join('a', 'b')\n") == set()

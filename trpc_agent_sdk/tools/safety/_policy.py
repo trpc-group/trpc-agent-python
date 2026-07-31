@@ -33,6 +33,37 @@ from ._types import ScriptLanguage
 _DEFAULT_POLICY_PATH = Path(__file__).with_name("_default_policy.yaml")
 
 
+def _is_path_token_char(ch: str) -> bool:
+    """Whether ``ch`` extends an identifier-like token (letters/digits/_).
+
+    Path separators (``/``, ``.``, ``-``, ``~``), whitespace, quotes and the
+    empty string (start/end of text) are treated as token boundaries.
+    """
+    return ch.isalnum() or ch == "_"
+
+
+def _forbidden_fragment_present(fragment: str, lowered: str) -> bool:
+    """Whether ``fragment`` appears in ``lowered`` at token boundaries.
+
+    A bare substring test flags harmless tokens that merely embed a forbidden
+    fragment; requiring the character on each side of the match to be a token
+    boundary keeps real paths matched while dropping those false positives.
+    """
+    if not fragment:
+        return False
+    flen = len(fragment)
+    start = 0
+    while True:
+        idx = lowered.find(fragment, start)
+        if idx == -1:
+            return False
+        before = lowered[idx - 1] if idx > 0 else ""
+        after = lowered[idx + flen] if idx + flen < len(lowered) else ""
+        if not _is_path_token_char(before) and not _is_path_token_char(after):
+            return True
+        start = idx + 1
+
+
 class RegexRule(BaseModel):
     """A single L1 regex rule declared in the policy file."""
 
@@ -104,6 +135,18 @@ class SafetyPolicy(BaseModel):
             if domain == allowed or domain.endswith("." + allowed):
                 return True
         return False
+
+    def forbidden_path_matches(self, text: str) -> list[str]:
+        """Return the forbidden-path fragments ``text`` references.
+
+        Matching is token-boundary aware so a harmless token that merely embeds
+        a fragment (``config.env`` for ``.env``; ``id_rsa_note`` for ``id_rsa``)
+        is not treated as sensitive-path access, while genuine paths
+        (``/app/.env``, ``~/.ssh/id_rsa``) still match. Both the Bash (L2) and
+        Python (L2) layers share this so the two stay consistent.
+        """
+        lowered = text.lower()
+        return [f for f in self.forbidden_paths if _forbidden_fragment_present(f.lower(), lowered)]
 
     def rules_for(self, language: ScriptLanguage) -> list[RegexRule]:
         """Return the subset of regex rules applicable to ``language``."""

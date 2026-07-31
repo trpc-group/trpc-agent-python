@@ -158,9 +158,10 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     # ``requests.post(exfil_url, ...)``). A whitelisted URL
                     # literal elsewhere on the same line -- say inside
                     # ``headers={...}`` -- would let the scanner's domain-aware
-                    # pass drop the high AST004/NET001 hits and silently allow
-                    # the egress. This medium hit is deliberately NOT refinable,
-                    # so it survives that pass and forces human review: an
+                    # pass downgrade the high AST004/NET001 hits to a low
+                    # advisory, which on its own would let the egress through.
+                    # This medium hit is deliberately NOT refinable, so it
+                    # survives that pass and forces human review: an
                     # unverifiable destination is never silently allowed.
                     self._add(
                         "AST009",
@@ -198,18 +199,21 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
         first = node.args[0]
         if isinstance(first, ast.Constant) and isinstance(first.value, str):
             path = first.value
-            for forbidden in self._policy.forbidden_paths:
-                if forbidden.lower() in path.lower():
-                    self._add(
-                        "AST003",
-                        RiskCategory.SENSITIVE_INFO_LEAK,
-                        RiskLevel.CRITICAL,
-                        "Access to a forbidden/sensitive path",
-                        path,
-                        node.lineno,
-                        f"Path matches forbidden entry '{forbidden}'; remove the access.",
-                    )
-                    return
+            # Token-boundary matching (shared with the bash layer) so a literal
+            # that merely embeds a fragment -- ``open("config.env")`` or
+            # ``open("id_rsa_note")`` -- is not a false critical hit, while real
+            # sensitive paths still match.
+            matched = self._policy.forbidden_path_matches(path)
+            if matched:
+                self._add(
+                    "AST003",
+                    RiskCategory.SENSITIVE_INFO_LEAK,
+                    RiskLevel.CRITICAL,
+                    "Access to a forbidden/sensitive path",
+                    path,
+                    node.lineno,
+                    f"Path matches forbidden entry '{matched[0]}'; remove the access.",
+                )
 
     def _resolve_dotted(self, func: ast.AST) -> Optional[str]:
         """Return the dotted call name, e.g. 'subprocess.Popen' or 'open'."""

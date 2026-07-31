@@ -159,6 +159,21 @@ def test_non_url_whitelisted_literal_egress_allowed() -> None:
     assert report.decision is SafetyDecision.ALLOW
 
 
+def test_whitelisted_egress_stays_visible_as_low_trace() -> None:
+    """A whitelisted egress is allowed but stays visible as a low advisory trace.
+
+    Refinement must not erase an allow-listed network call from the report: the
+    hit is downgraded to LOW (advisory, non-blocking) rather than dropped, so the
+    permitted egress remains observable in the audit trail.
+    """
+    report = _scan('import requests\nrequests.get("api.openai.com")\n', ScriptLanguage.PYTHON)
+    assert report.decision is SafetyDecision.ALLOW
+    assert report.risk_level.value == "low"
+    net_hits = [h for h in report.hits if h.category is RiskCategory.NETWORK_EXFILTRATION]
+    assert net_hits, "the permitted egress must remain visible in the report"
+    assert any("allow-listed" in h.recommendation for h in net_hits)
+
+
 def test_overlapping_regex_hit_is_deduped() -> None:
     """A coarse regex hit is dropped when a stronger ast hit covers the same line."""
     report = _scan("import subprocess\nsubprocess.run('ls')\n", ScriptLanguage.PYTHON)
