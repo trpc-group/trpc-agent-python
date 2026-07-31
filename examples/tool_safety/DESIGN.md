@@ -272,7 +272,7 @@ export TRPC_AGENT_MODEL_NAME=...
 | `tool_review` | `BashTool` | `echo review > safety_review.txt` | `needs_human_review` | 默认执行并返回 `safety_report` |
 | `tool_deny` | `BashTool` | `rm -rf /` | `deny` | shell 启动前阻断 |
 | `code_allow` | `UnsafeLocalCodeExecutor` | `print(sum([1, 2, 3]))` | `allow` | 真实执行代码 |
-| `code_review` | `UnsafeLocalCodeExecutor` | `subprocess.run(['python', '--version'], check=False)` | `needs_human_review` | 默认执行；`--block-on-review` 阻断 |
+| `code_review` | `UnsafeLocalCodeExecutor` | `subprocess.run([sys.executable, '--version'], check=False)` | `needs_human_review` | 默认执行；`--block-on-review` 阻断 |
 | `skill_allow` | `SkillToolSet` / `skill_run` | `python --version` | `allow` | 真实执行 skill workspace 命令 |
 | `skill_review` | `SkillToolSet` / `skill_run` | `python -c "print(1)"` | `needs_human_review` | 默认执行；`--block-on-review` 阻断 |
 | `skill_deny` | `SkillToolSet` / `skill_run` | `cat .env` | `deny` | skill workspace 执行前阻断 |

@@ -25,7 +25,7 @@ python run_agent.py
 | `tool_review` | `Bash` | `echo review > safety_review.txt` | `needs_human_review` | `false` | Shell executed and wrote the file |
 | `tool_deny` | `Bash` | `rm -rf /` | `deny` | `true` | Blocked before shell execution |
 | `code_allow` | `CodeExecutor` | `print(sum([1, 2, 3]))` | `allow` | `false` | Code executed and printed `6` |
-| `code_review` | `CodeExecutor` | `subprocess.run(['python', '--version'], check=False)` | `needs_human_review` | `false` | Code executed by default and printed Python version |
+| `code_review` | `CodeExecutor` | `subprocess.run([sys.executable, '--version'], check=False)` | `needs_human_review` | `false` | Code executed by default and printed Python version |
 | `skill_allow` | `skill_run` | `python --version` | `allow` | `false` | Skill workspace command executed and printed Python version |
 | `skill_review` | `skill_run` | `python -c "print(1)"` | `needs_human_review` | `false` | Skill workspace command executed by default and printed `1` |
 | `skill_deny` | `skill_run` | `cat .env` | `deny` | `true` | Blocked before `skill_run` handler execution |
@@ -63,7 +63,8 @@ Safety: decision=deny blocked=True risk=critical rules=BASH_RECURSIVE_DELETE
 === code_review ===
 Executable code:
 import subprocess
-subprocess.run(['python', '--version'], check=False)
+import sys
+subprocess.run([sys.executable, '--version'], check=False)
 Code result:
 Code execution result:
 Python 3.12.0
