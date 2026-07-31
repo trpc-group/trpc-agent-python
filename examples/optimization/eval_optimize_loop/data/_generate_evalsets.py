@@ -12,10 +12,33 @@ from __future__ import annotations
 
 import json
 import copy
+import os
 
 # ============================================================
 # 辅助函数
 # ============================================================
+
+
+def _expected_turn_body(user_text: str, tool_name: str, tool_args: dict,
+                        expected_response: str, tool_id: str) -> dict:
+    """trace 与 live 共享的期望轮次体：user_content + intermediate_data + final_response."""
+    return {
+        "user_content": {"parts": [{"text": user_text}], "role": "user"},
+        "intermediate_data": {
+            "tool_uses": [{"id": tool_id, "name": tool_name, "args": tool_args}]
+        },
+        "final_response": {"parts": [{"text": expected_response}], "role": "model"},
+    }
+
+
+def _with_invocation_id(turn: dict, invocation_id: str) -> dict:
+    """trace 专用：在 intermediate_data 与 final_response 之间插入 invocation_id."""
+    return {
+        "user_content": turn["user_content"],
+        "intermediate_data": turn["intermediate_data"],
+        "invocation_id": invocation_id,
+        "final_response": turn["final_response"],
+    }
 
 
 def _make_turn(inv_id: str, user_text: str, actual_response: str, expected_response: str,
@@ -33,9 +56,8 @@ def _make_turn(inv_id: str, user_text: str, actual_response: str, expected_respo
     actual["invocation_id"] = f"{inv_id}-act"
     actual["final_response"] = {"parts": [{"text": actual_response}], "role": "model"}
 
-    expected = copy.deepcopy(base)
-    expected["invocation_id"] = f"{inv_id}-exp"
-    expected["final_response"] = {"parts": [{"text": expected_response}], "role": "model"}
+    expected_body = _expected_turn_body(user_text, tool_name, tool_args, expected_response, inv_id)
+    expected = _with_invocation_id(expected_body, f"{inv_id}-exp")
 
     return actual, expected
 
@@ -334,7 +356,7 @@ def generate_evalset(eval_set_id: str, name: str, description: str, cases: list)
     }
 
 
-def generate_optimized_evalset(val_cases: list, scenario_map: dict) -> dict:
+def generate_optimized_evalset(val_cases: list) -> dict:
     """生成优化后的验证集 evalset。
 
     规则：
@@ -354,7 +376,6 @@ def generate_optimized_evalset(val_cases: list, scenario_map: dict) -> dict:
     eval_cases = []
     for case_def in val_cases:
         eval_id, user_text, tool_name, tool_args, base_actual, expected_resp = case_def[:6]
-        # 从 eval_id 中提取场景类型
         if "_optimizable" in eval_id:
             scenario = "optimizable_success"
         elif "_ineffective" in eval_id:
@@ -362,7 +383,7 @@ def generate_optimized_evalset(val_cases: list, scenario_map: dict) -> dict:
         elif "_regression" in eval_id:
             scenario = "optimization_regression"
         else:
-            scenario = "optimization_regression"  # working cases treated as regression-risk
+            raise ValueError(f"Unknown scenario suffix in eval_id: {eval_id}")
 
         actual_turn, expected_turn = _make_turn(
             inv_id=eval_id.replace("val_", "o"),
@@ -379,8 +400,7 @@ def generate_optimized_evalset(val_cases: list, scenario_map: dict) -> dict:
             actual_turn["final_response"] = {"parts": [{"text": expected_resp}], "role": "model"}
         elif scenario == "optimization_regression":
             # 过拟合退化：actual 改为退化版本（FAILED）
-            reg_resp = regression_responses.get(eval_id, base_actual)
-            actual_turn["final_response"] = {"parts": [{"text": reg_resp}], "role": "model"}
+            actual_turn["final_response"] = {"parts": [{"text": regression_responses[eval_id]}], "role": "model"}
         # ineffective: 保持不变
 
         eval_cases.append(_make_case(
@@ -402,14 +422,13 @@ def generate_live_evalset(eval_set_id: str, name: str, description: str, cases: 
     eval_cases = []
     for case_def in cases:
         eval_id, user_text, tool_name, tool_args, _actual, expected_resp = case_def[:6]
-        expected_turn = {
-            "user_content": {"parts": [{"text": user_text}], "role": "user"},
-            "intermediate_data": {
-                "tool_uses": [{"id": eval_id.replace("train_", "lt").replace("val_", "lv"),
-                               "name": tool_name, "args": tool_args}]
-            },
-            "final_response": {"parts": [{"text": expected_resp}], "role": "model"},
-        }
+        expected_turn = _expected_turn_body(
+            user_text=user_text,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            expected_response=expected_resp,
+            tool_id=eval_id.replace("train_", "lt").replace("val_", "lv"),
+        )
         eval_cases.append({
             "eval_id": eval_id,
             "eval_mode": "non-trace",
@@ -425,7 +444,6 @@ def generate_live_evalset(eval_set_id: str, name: str, description: str, cases: 
 
 
 def main():
-    import os
     data_dir = os.path.dirname(os.path.abspath(__file__))
 
     # ---- trace 三件套 ----
@@ -434,7 +452,7 @@ def main():
 
     train = generate_evalset("shopping_assistant_train", "Training Set", "20 training cases.", TRAIN_CASES)
     val_base = generate_evalset("shopping_assistant_val", "Validation Baseline", "20 validation cases.", VAL_CASES)
-    val_opt = generate_optimized_evalset(VAL_CASES, {})
+    val_opt = generate_optimized_evalset(VAL_CASES)
 
     for name, payload in [("train.evalset.json", train), ("val_baseline.evalset.json", val_base), ("val_optimized.evalset.json", val_opt)]:
         p = os.path.join(trace_dir, name)
