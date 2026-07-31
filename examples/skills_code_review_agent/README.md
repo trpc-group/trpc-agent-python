@@ -35,6 +35,7 @@ CLI 支持四种互斥输入：
 
 - `--output-dir PATH`：输出目录，默认 `output`。
 - `--db-path PATH`：SQLite 路径；未显式设置时跟随 `--output-dir`，使用 `review.sqlite3`。
+- `--dry-run`：显式选择默认的进程内 dry-run runtime；不能与其他 runtime 同时使用。
 - `--runtime {dry-run,container,cube,local-dev}`：规则执行 runtime，默认 `dry-run`。
 - `--allow-local`：允许无隔离的 `local-dev` runtime。
 - `--timeout-sec SECONDS`：规则执行超时，默认 `30`。
@@ -44,7 +45,7 @@ CLI 支持四种互斥输入：
 
 ## Runtime 策略
 
-- `dry-run`：默认路径，进程内执行规则脚本，不依赖外部服务。
+- `dry-run`：默认路径，进程内执行规则脚本，不依赖外部服务；`--dry-run` 可显式确认该选择。
 - `local-dev`：本地 subprocess fallback，没有隔离能力，必须显式传入 `--allow-local`。
 - `container`：通过 SDK Container workspace runtime 执行规则脚本，默认镜像为 `python:3-slim`，默认关闭网络；Docker 不可用时不会崩溃，而是记录为 `needs_human_review`。
 - `cube`：通过 SDK Cube/E2B workspace runtime 执行规则脚本；需要环境变量 `CUBE_TEMPLATE_ID`、`E2B_API_URL`、`E2B_API_KEY`。缺少依赖、配置或后端不可达时记录为 `needs_human_review`。
@@ -66,7 +67,9 @@ Container/Cube 执行时只上传 rule runner 所需的最小 Python bundle 和�
 - `review_report.md`：人工可读 Markdown 报告。
 - `review.sqlite3`：SQLite 数据库，保存 task、input summary、finding、filter event、sandbox run、metrics 和 report。
 
-`sample_outputs/review_report.json` 和 `sample_outputs/review_report.md` 是基于 `secret` fixture 整理的脱敏样例输出，路径相对于本示例目录。
+`sample_outputs/review_report.json` 和 `sample_outputs/review_report.md` 是通过真实 pipeline
+运行 `secret` fixture 后规范化动态 task id、时间、耗时和本机路径得到的脱敏样例输出。
+其中 finding evidence 和 fingerprint 来自实际规则逻辑，路径相对于本示例目录。
 
 ## SQLite 查询示例
 

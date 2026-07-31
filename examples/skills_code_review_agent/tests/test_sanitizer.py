@@ -39,6 +39,12 @@ def test_redacts_private_key_blocks():
     assert redact_text(text) == "[REDACTED]"
 
 
+def test_redaction_is_idempotent_for_existing_redacted_assignments():
+    text = "API_KEY = [REDACTED]\nPASSWORD = [REDACTED]"
+
+    assert redact_text(redact_text(text)) == text
+
+
 def test_redacts_nested_json_like_payloads():
     payload = {
         "headers": [f"Bearer {bearer_like_token()}"],

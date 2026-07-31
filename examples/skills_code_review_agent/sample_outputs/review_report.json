@@ -4,9 +4,9 @@
     {
       "category": "secret",
       "confidence": 0.95,
-      "evidence": "API key assignment = [REDACTED]",
+      "evidence": "API_KEY = [REDACTED]",
       "file": "config.py",
-      "fingerprint": "9b84f43c60e40c43c1ac575c8f7905bf8cf8fa31b92c65c77448a29555854d30",
+      "fingerprint": "e1f456643416568b0f3f9b07a3b16deb93fbc853517f126ca2049e6ece0b96a6",
       "line": 3,
       "recommendation": "Move secrets to a managed secret store or environment configuration.",
       "severity": "critical",
@@ -16,9 +16,9 @@
     {
       "category": "secret",
       "confidence": 0.95,
-      "evidence": "secret assignment = [REDACTED]",
+      "evidence": "PASSWORD = [REDACTED]",
       "file": "config.py",
-      "fingerprint": "c9c7b48e03948431aad61c539c4c531c7c332a9e65b153b531574525b76e369a",
+      "fingerprint": "d4c6c78cbd559108b08cab42da5efefcbb17d2339dc3ad4d8636b5b65be9c993",
       "line": 4,
       "recommendation": "Move secrets to a managed secret store or environment configuration.",
       "severity": "critical",
@@ -86,7 +86,7 @@
       "status": "success",
       "stderr": "",
       "stderr_truncated": false,
-      "stdout": "{\"schema_version\": \"code-review.rules.v1\", \"skill_name\": \"code-review\", \"findings\": [{\"severity\": \"critical\", \"category\": \"secret\", \"file\": \"config.py\", \"title\": \"Hard-coded secret in changed code\", \"evidence\": \"API key assignment = [REDACTED]\", \"recommendation\": \"Move secrets to a managed secret store or environment configuration.\", \"confidence\": 0.95, \"source\": \"rule\", \"line\": 3}, {\"severity\": \"critical\", \"category\": \"secret\", \"file\": \"config.py\", \"title\": \"Hard-coded secret in changed code\", \"evidence\": \"secret assignment = [REDACTED]\", \"recommendation\": \"Move secrets to a managed secret store or environment configuration.\", \"confidence\": 0.95, \"source\": \"rule\", \"line\": 4}], \"diagnostics\": []}",
+      "stdout": "{\"schema_version\": \"code-review.rules.v1\", \"skill_name\": \"code-review\", \"findings\": [{\"severity\": \"critical\", \"category\": \"secret\", \"file\": \"config.py\", \"title\": \"Hard-coded secret in changed code\", \"evidence\": \"API_KEY = [REDACTED]\", \"recommendation\": \"Move secrets to a managed secret store or environment configuration.\", \"confidence\": 0.95, \"source\": \"rule\", \"line\": 3, \"fingerprint\": \"e1f456643416568b0f3f9b07a3b16deb93fbc853517f126ca2049e6ece0b96a6\"}, {\"severity\": \"critical\", \"category\": \"secret\", \"file\": \"config.py\", \"title\": \"Hard-coded secret in changed code\", \"evidence\": \"PASSWORD = [REDACTED]\", \"recommendation\": \"Move secrets to a managed secret store or environment configuration.\", \"confidence\": 0.95, \"source\": \"rule\", \"line\": 4, \"fingerprint\": \"d4c6c78cbd559108b08cab42da5efefcbb17d2339dc3ad4d8636b5b65be9c993\"}, {\"severity\": \"low\", \"category\": \"test\", \"file\": \"config.py\", \"title\": \"Source change has no matching test update\", \"evidence\": \"1 of 1 source file(s) changed without a matching test or fixture change.\", \"recommendation\": \"Add or update focused tests or fixtures for the changed behavior.\", \"confidence\": 0.65, \"source\": \"rule\", \"line\": 3, \"fingerprint\": \"76730d280c24ac82c79a31750d044662efb5274603ebe47bde3282bbbdbcd70b\"}], \"diagnostics\": []}",
       "stdout_truncated": false,
       "task_id": "review-sample-secret",
       "timeout_sec": 30.0
@@ -124,19 +124,19 @@
                   "old_line": 2
                 },
                 {
-                  "content": "API key assignment = [REDACTED]",
+                  "content": "API_KEY = [REDACTED]",
                   "line_type": "added",
                   "new_line": 3,
                   "old_line": null
                 },
                 {
-                  "content": "secret assignment = [REDACTED]",
+                  "content": "PASSWORD = [REDACTED]",
                   "line_type": "added",
                   "new_line": 4,
                   "old_line": null
                 },
                 {
-                  "content": "authorization header = Bearer [REDACTED]",
+                  "content": "AUTHORIZATION = \"Bearer [REDACTED]\"",
                   "line_type": "added",
                   "new_line": 5,
                   "old_line": null
@@ -162,7 +162,7 @@
       "input_ref": "fixtures/secret.diff",
       "input_type": "fixture",
       "parser_version": "code-review.input.v1",
-      "raw_diff_sha256": "c7443e7d240ce96931d892af90208017be68d994bdb5d084fbfca67ee2d891bb",
+      "raw_diff_sha256": "b9753e180fd9a2fe9257bed084d8e17318be1b4976ee684eb3992d35a4c8b07e",
       "summary": "1 file(s), 1 hunk(s), 3 added, 0 deleted",
       "task_id": "review-sample-secret",
       "warnings": []
@@ -173,9 +173,9 @@
     {
       "category": "test",
       "confidence": 0.65,
-      "evidence": "1 source file(s) changed without a test or fixture change.",
+      "evidence": "1 of 1 source file(s) changed without a matching test or fixture change.",
       "file": "config.py",
-      "fingerprint": "fa5be8a7a785151d5b1476b5a590d7c6a88a66c0b22ae51e71a3b96f82d94d7e",
+      "fingerprint": "76730d280c24ac82c79a31750d044662efb5274603ebe47bde3282bbbdbcd70b",
       "line": 3,
       "recommendation": "Add or update focused tests or fixtures for the changed behavior.",
       "severity": "low",

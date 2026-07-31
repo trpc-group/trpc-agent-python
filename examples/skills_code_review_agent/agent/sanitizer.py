@@ -20,6 +20,7 @@ _ASSIGNMENT_RE = re.compile(
     r"(?i)\b(?P<key>[A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd)[A-Za-z0-9_.-]*)"
     r"(?P<sep>\s*[:=]\s*)"
     r"(?P<quote>['\"]?)"
+    r"(?!\[REDACTED\])"
     r"(?P<value>[^'\"\s,;)}\]]{4,})"
     r"(?P=quote)")
 _URL_PASSWORD_RE = re.compile(r"(?P<prefix>[a-z][a-z0-9+.-]*://[^:\s/@]+:)(?P<password>[^@\s/]+)(?P<suffix>@)",

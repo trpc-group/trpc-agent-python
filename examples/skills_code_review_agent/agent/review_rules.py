@@ -23,7 +23,9 @@ from .models import InputSummary
 from .sanitizer import redact_text
 
 _SECRET_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(api[_-]?key|secret|token|password|passwd|pwd)\b\s*[:=]\s*(?:\[REDACTED\]|['\"][^'\"]{4,}['\"])")
+    r"(?i)\b[A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd)[A-Za-z0-9_.-]*\b"
+    r"\s*[:=]\s*(?:\[REDACTED\]|['\"][^'\"]{4,}['\"]|"
+    r"(?!(?:none|true|false|null|undefined)\b)[A-Za-z0-9_./+=:-]{4,})")
 _SECRET_LITERAL_RE = re.compile(
     r"\b(?:sk-[A-Za-z0-9_-]{8,}|pk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9_]{8,}|gho_[A-Za-z0-9_]{8,}|"
     r"github_pat_[A-Za-z0-9_]{8,}|xox[bp]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})\b")

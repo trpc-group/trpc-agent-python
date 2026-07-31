@@ -43,8 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="SQLite path. Default follows --output-dir as review.sqlite3 unless explicitly set.")
     parser.add_argument("--dry-run",
                         action="store_true",
-                        default=True,
-                        help="Keep execution in non-sandbox dry-run mode.")
+                        help="Explicitly select the default non-sandbox dry-run runtime.")
     parser.add_argument(
         "--runtime",
         choices=[runtime.value for runtime in RuntimeKind],
@@ -80,7 +79,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         input_ref=input_ref,
         output_dir=args.output_dir,
         db_path=_resolve_db_path(args),
-        runtime=RuntimeKind(args.runtime),
+        runtime=RuntimeKind.DRY_RUN if args.dry_run else RuntimeKind(args.runtime),
         allow_local=args.allow_local,
         timeout_sec=args.timeout_sec,
         output_limit_bytes=args.output_limit_bytes,
@@ -125,6 +124,8 @@ def _resolve_input(args: argparse.Namespace) -> tuple[InputType, str]:
 
 
 def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.dry_run and args.runtime != RuntimeKind.DRY_RUN.value:
+        parser.error("--dry-run cannot be combined with a non-dry-run --runtime")
     if args.runtime == RuntimeKind.LOCAL_DEV.value and not args.allow_local:
         parser.error("--runtime local-dev requires --allow-local")
     if not str(args.output_dir).strip():

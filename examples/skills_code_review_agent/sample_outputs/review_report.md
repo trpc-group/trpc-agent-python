@@ -19,18 +19,18 @@
 
 - **Hard-coded secret in changed code** `critical` `secret`
   - Location: `config.py:3`
-  - Evidence: API key assignment = [REDACTED]
+  - Evidence: API_KEY = [REDACTED]
   - Recommendation: Move secrets to a managed secret store or environment configuration.
 - **Hard-coded secret in changed code** `critical` `secret`
   - Location: `config.py:4`
-  - Evidence: secret assignment = [REDACTED]
+  - Evidence: PASSWORD = [REDACTED]
   - Recommendation: Move secrets to a managed secret store or environment configuration.
 
 ## Warnings
 
 - **Source change has no matching test update** `low` `test`
   - Location: `config.py:3`
-  - Evidence: 1 source file(s) changed without a test or fixture change.
+  - Evidence: 1 of 1 source file(s) changed without a matching test or fixture change.
   - Recommendation: Add or update focused tests or fixtures for the changed behavior.
 
 ## Needs Human Review

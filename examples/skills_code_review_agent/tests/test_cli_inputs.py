@@ -51,6 +51,31 @@ def test_fixture_input_writes_normalized_intermediate_artifacts(tmp_path: Path):
     assert "files=2" in result.stdout
 
 
+def test_explicit_dry_run_uses_dry_run_runtime(tmp_path: Path):
+    output = tmp_path / "dry-run"
+
+    result = _run_cli("--fixture", "clean", "--dry-run", "--output-dir", str(output))
+
+    assert result.returncode == 0, result.stderr
+    assert "runtime=dry-run" in result.stdout
+    assert _read_report(output)["sandbox_runs"][0]["runtime"] == "dry-run"
+
+
+def test_dry_run_rejects_non_dry_runtime(tmp_path: Path):
+    result = _run_cli(
+        "--fixture",
+        "clean",
+        "--dry-run",
+        "--runtime",
+        "container",
+        "--output-dir",
+        str(tmp_path / "out"),
+    )
+
+    assert result.returncode != 0
+    assert "--dry-run cannot be combined with a non-dry-run --runtime" in result.stderr
+
+
 def test_file_list_input_reviews_text_files(tmp_path: Path):
     source = tmp_path / "listed.py"
     source.write_text("eval(user_input)\n", encoding="utf-8")

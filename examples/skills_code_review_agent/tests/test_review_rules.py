@@ -11,7 +11,10 @@ from examples.skills_code_review_agent.agent import FindingCategory
 from examples.skills_code_review_agent.agent import FindingSeverity
 from examples.skills_code_review_agent.agent import parse_unified_diff
 from examples.skills_code_review_agent.agent import run_review_rules
+from examples.skills_code_review_agent.tests.secret_samples import client_secret_like_value
+from examples.skills_code_review_agent.tests.secret_samples import generic_password_value
 from examples.skills_code_review_agent.tests.secret_samples import openai_like_token
+from examples.skills_code_review_agent.tests.secret_samples import refresh_token_like_value
 
 
 def test_hard_coded_secret_is_reported_and_redacted():
@@ -21,6 +24,36 @@ def test_hard_coded_secret_is_reported_and_redacted():
     assert secret.severity is FindingSeverity.CRITICAL
     assert "abcdefghijklmnop" not in secret.evidence
     assert "[REDACTED]" in secret.evidence
+
+
+def test_unquoted_secret_assignments_are_reported_and_redacted():
+    values = [
+        openai_like_token(),
+        generic_password_value(),
+        client_secret_like_value(),
+        refresh_token_like_value(),
+    ]
+    findings = _findings("\n".join([
+        f"+API_KEY = {values[0]}",
+        f"+password: {values[1]}",
+        f"+client_secret = {values[2]}",
+        f"+refresh-token: {values[3]}",
+    ]) + "\n")
+    secrets = [item for item in findings if item.category is FindingCategory.SECRET]
+
+    assert len(secrets) == len(values)
+    assert all(item.severity is FindingSeverity.CRITICAL for item in secrets)
+    assert all(value not in item.evidence for value in values for item in secrets)
+    assert all("[REDACTED]" in item.evidence for item in secrets)
+
+
+def test_non_secret_assignments_are_not_reported_as_secrets():
+    findings = _findings("+message = 'token bucket rate limiter'\n"
+                         "+value = None\n"
+                         "+get_token()\n"
+                         "+token_count = 1\n")
+
+    assert all(item.category is not FindingCategory.SECRET for item in findings)
 
 
 def test_skill_words_are_not_secret_findings():
