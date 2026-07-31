@@ -1,0 +1,8 @@
+diff --git a/src/fail.py b/src/fail.py
+index a543ef8..b210cd4 100644
+--- a/src/fail.py
++++ b/src/fail.py
+@@ -1,3 +1,3 @@
+ def fail():
+-    pass
++    TRIGGER_SANDBOX_CRASH

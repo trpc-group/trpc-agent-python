@@ -1,0 +1,11 @@
+diff --git a/src/client.py b/src/client.py
+index a543ef8..b210cd4 100644
+--- a/src/client.py
++++ b/src/client.py
+@@ -1,4 +1,6 @@
++import time
++import asyncio
+ async def process():
+-    pass
++    time.sleep(5)
++    fetch_data_async()

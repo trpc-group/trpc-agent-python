@@ -1,0 +1,9 @@
+diff --git a/src/db_util.py b/src/db_util.py
+index a543ef8..b210cd4 100644
+--- a/src/db_util.py
++++ b/src/db_util.py
+@@ -1,4 +1,5 @@
+ def query():
+-    pass
++    conn = db.connect("localhost")
++    return conn.execute("SELECT 1")

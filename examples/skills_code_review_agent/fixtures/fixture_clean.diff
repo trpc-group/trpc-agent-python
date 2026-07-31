@@ -1,0 +1,17 @@
+diff --git a/src/math.py b/src/math.py
+index a543ef8..b210cd4 100644
+--- a/src/math.py
++++ b/src/math.py
+@@ -1,4 +1,5 @@
+ def add(a, b):
+-    return a - b
++    # Correct addition function
++    return a + b
+diff --git a/tests/test_math.py b/tests/test_math.py
+index b345edf..c456fed 100644
+--- a/tests/test_math.py
++++ b/tests/test_math.py
+@@ -1,3 +1,4 @@
+ def test_add():
+-    assert add(1, 1) == 0
++    assert add(1, 1) == 2

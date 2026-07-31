@@ -1,0 +1,8 @@
+diff --git a/src/calculator.py b/src/calculator.py
+index a543ef8..b210cd4 100644
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -1,4 +1,4 @@
+ def mult(a, b):
+-    pass
++    return a * b

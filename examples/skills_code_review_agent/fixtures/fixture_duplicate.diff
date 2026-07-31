@@ -1,0 +1,9 @@
+diff --git a/src/duplicate.py b/src/duplicate.py
+index a543ef8..b210cd4 100644
+--- a/src/duplicate.py
++++ b/src/duplicate.py
+@@ -1,4 +1,4 @@
+ def test_dup():
+-    pass
++    subprocess.run("echo hello", shell=True)
++    subprocess.run("echo hello", shell=True)

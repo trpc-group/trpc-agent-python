@@ -1,0 +1,11 @@
+diff --git a/src/utils.py b/src/utils.py
+index a543ef8..b210cd4 100644
+--- a/src/utils.py
++++ b/src/utils.py
+@@ -1,4 +1,5 @@
++import subprocess
++import pickle
+ def run_command(user_input):
+-    pass
++    subprocess.run(f"echo {user_input}", shell=True)
++    data = pickle.loads(user_input)

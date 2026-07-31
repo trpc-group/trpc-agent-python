@@ -1,0 +1,11 @@
+diff --git a/src/config.py b/src/config.py
+index a543ef8..b210cd4 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -1,4 +1,4 @@
+ def setup():
+-    # Config loading
+-    api_key = None
++    # Config loading with hardcoded key
++    api_key = "sk-proj-super-secret-key-12345"
+     password = "admin_password_9876"
