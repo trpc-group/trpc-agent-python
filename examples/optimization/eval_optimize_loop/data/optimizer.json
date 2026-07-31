@@ -33,12 +33,13 @@
           "temperature": 0.6
         }
       },
-      "candidate_selection_strategy": "current_best",
+      "candidate_selection_strategy": "pareto",
       "module_selector": "round_robin",
       "reflection_minibatch_size": 3,
-      "skip_perfect_score": false,
-      "max_metric_calls": 30,
+      "skip_perfect_score": true,
+      "max_metric_calls": 150,
       "max_iterations_without_improvement": 5
-    }
+    },
+    "timeout_seconds": 1800
   }
 }
