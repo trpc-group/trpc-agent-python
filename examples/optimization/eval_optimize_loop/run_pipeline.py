@@ -214,9 +214,8 @@ async def main() -> None:
         val_baseline_eval_path = DATA_DIR / "live" / "val.evalset.json"
         val_candidate_eval_path = DATA_DIR / "live" / "val.evalset.json"
         train_eval_path = str(DATA_DIR / "live" / "train.evalset.json")
-        # LiveBackend 接收 agent factory, 而非 agent 实例 — 每次评估重建以重读 system.md.
-        # 这里懒加载 factory 只在 real 模式下触发, 避免 demo 模式无谓校验 API key.
-        backend = LiveBackend(agent_factory=_agent_factory_lazy())
+        # LiveBackend 默认 agent_factory=create_agent; 每次评估重建 agent 以重读 system.md.
+        backend = LiveBackend()
         demo_optimize_result_path = None
         train_eval_path_real = str(DATA_DIR / "live" / "train.evalset.json")
 
@@ -253,17 +252,10 @@ async def main() -> None:
             status = "通过" if check.passed else "失败"
             print(f"  [{status}] {check.check_name}: {check.detail}")
 
-    # runner 在 output_dir 下创建 <UTC-timestamp>/ 子目录; 父目录 args.output_dir
-    # 仅作为入口, 真正的写入位置是其中最新修改的那个子目录.
-    print(f"\n报告父目录: {args.output_dir} (内部按 UTC 时间戳分子目录)")
+    # runner 在 output_dir 下创建 <UTC-timestamp>/ 子目录; PipelineRunner 暴露
+    # 该路径以便此处准确告知用户报告位置.
+    print(f"\n报告已写入: {runner.run_dir}")
     print("=" * 60)
-
-
-def _agent_factory_lazy():
-    """惰性返回 create_agent — 仅在 real 模式被 LiveBackend 真正调用时才导入 agent.agent."""
-    from agent.agent import create_agent
-
-    return create_agent
 
 
 if __name__ == "__main__":

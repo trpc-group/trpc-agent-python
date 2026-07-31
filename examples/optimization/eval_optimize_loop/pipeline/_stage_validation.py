@@ -10,6 +10,10 @@ demo 模式下 ``best_prompts`` 为空 dict —— 无 prompt 可写回，直接
 从预录制轨迹算分，与 prompt 无关）。
 
 调用方式：
+    # CLI 入口由 run_pipeline.derive_scenario(eval_id) 按 eval_id 后缀推导场景,
+    # 在调用本方法前构造好 scenario_map dict 并传入.
+    from run_pipeline import derive_scenario
+    scenario_map = {eid: derive_scenario(eid) for eid in val_ids}
     candidate_report, deltas = await ValidationComparator.evaluate_and_compare(
         backend=backend,
         val_eval_path="data/val.evalset.json",
@@ -17,7 +21,7 @@ demo 模式下 ``best_prompts`` 为空 dict —— 无 prompt 可写回，直接
         target_prompt=target_prompt,
         best_prompts=opt_report.best_prompts,
         baseline_report=val_report,
-        scenario_map=SCENARIO_MAP,
+        scenario_map=scenario_map,
     )
 """
 

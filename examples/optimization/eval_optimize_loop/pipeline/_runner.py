@@ -56,6 +56,7 @@ class PipelineRunner:
         self._output_dir = output_dir
         self._scenario_map = scenario_map or {}
         self._demo_result_path = demo_optimize_result_path
+        self.run_dir: Path | None = None  # 在 run() 中按 UTC 时间戳创建并赋值.
 
     def set_scenario_map(self, scenario_map: dict[str, str]) -> None:
         """Public setter for scenario_map — Task 14 uses this to avoid direct
@@ -67,6 +68,7 @@ class PipelineRunner:
         run_ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         run_dir = Path(self._output_dir) / run_ts
         run_dir.mkdir(parents=True, exist_ok=True)
+        self.run_dir = run_dir
 
         report = PipelineReport(
             pipeline_version="1.0.0",
