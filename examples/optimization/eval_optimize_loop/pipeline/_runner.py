@@ -29,6 +29,7 @@ class PipelineRunner:
         *,
         train_eval_path: str,
         val_baseline_eval_path: str,
+        val_candidate_eval_path: str,
         gate_metrics_config_path: str,
         optimizer_config_path: str,
         prompt_source_path: str,
@@ -43,6 +44,7 @@ class PipelineRunner:
     ) -> None:
         self._train_path = train_eval_path
         self._val_baseline_path = val_baseline_eval_path
+        self._val_candidate_path = val_candidate_eval_path
         self._train_path_real = train_eval_path_real
         self._gate_metrics_path = gate_metrics_config_path
         self._optimizer_config_path = optimizer_config_path
@@ -132,12 +134,15 @@ class PipelineRunner:
         # ---- Stage 4: 候选验证 ----
         print("[Stage 4/6] 候选验证...")
         target_prompt_obj = TargetPrompt().add_path(self._prompt_field_name, self._prompt_source_path)
+        # demo 的候选是另一份预录制 evalset，重放时读不到 prompt；写回只会污染源文件，
+        # 故传空 best_prompts 让 applied_prompts 退化为 no-op。
+        candidate_prompts = {} if self._demo_mode else opt_report.best_prompts
         candidate_report, deltas = await ValidationComparator.evaluate_and_compare(
             backend=self._backend,
-            val_eval_path=self._val_baseline_path,
+            val_eval_path=self._val_candidate_path,
             metrics_config_path=self._gate_metrics_path,
             target_prompt=target_prompt_obj,
-            best_prompts=opt_report.best_prompts,
+            best_prompts=candidate_prompts,
             baseline_report=val_report,
             scenario_map=self._scenario_map,
         )
