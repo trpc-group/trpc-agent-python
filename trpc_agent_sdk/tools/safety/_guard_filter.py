@@ -32,6 +32,7 @@ from trpc_agent_sdk.tools import get_tool_var
 
 from ._audit import SafetyAuditLogger
 from ._scanner import SafetyScanner
+from ._scanner import _mask_secrets
 from ._types import SafetyDecision
 from ._types import ScanInput
 from ._types import ScanReport
@@ -41,6 +42,27 @@ from ._types import ScriptLanguage
 _SCRIPT_ARG_KEYS = ("command", "cmd", "script", "code")
 # Argument keys that imply a shell command rather than a Python script.
 _SHELL_ARG_KEYS = ("command", "cmd")
+
+
+def _coerce_script(value: Any) -> Optional[str]:
+    """Coerce a script-carrying argument to scannable text.
+
+    A tool may pass a command as a plain string or as an argv-style
+    ``list``/``tuple`` (e.g. ``["rm", "-rf", "/"]``). The latter must not slip
+    past the gate unscanned, so it is joined into a command line. Any other
+    non-empty value is still stringified and scanned rather than silently
+    allowed, so a command smuggled inside a container (``{"real": "rm -rf /"}``)
+    is still surfaced to the regex layer. ``None`` / empty means "no script".
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value if value.strip() else None
+    if isinstance(value, (list, tuple)):
+        joined = " ".join(str(part) for part in value)
+        return joined if joined.strip() else None
+    text = str(value)
+    return text if text.strip() else None
 
 
 @register_tool_filter("tool_safety_guard")
@@ -114,9 +136,9 @@ class ToolSafetyGuardFilter(BaseFilter):
         script: Optional[str] = None
         used_key: Optional[str] = None
         for key in _SCRIPT_ARG_KEYS:
-            value = req.get(key)
-            if isinstance(value, str) and value.strip():
-                script = value
+            coerced = _coerce_script(req.get(key))
+            if coerced is not None:
+                script = coerced
                 used_key = key
                 break
         if script is None:
@@ -139,11 +161,20 @@ class ToolSafetyGuardFilter(BaseFilter):
     def _deny_response(report: ScanReport) -> dict[str, Any]:
         """Build the tool-style response returned when execution is blocked."""
         rule_ids = ", ".join(report.rule_ids()) or "<none>"
+        safety_report = report.model_dump(mode="json")
+        # Defence in depth: this response is echoed back to the caller/model, so
+        # secret-looking evidence is always masked here even when the operator
+        # has disabled the policy's global redaction -- a blocked script must
+        # never leak a credential through this channel.
+        for hit in safety_report.get("hits", []):
+            evidence = hit.get("evidence")
+            if isinstance(evidence, str):
+                hit["evidence"] = _mask_secrets(evidence)
         return {
             "success": False,
             "error": (f"SAFETY_BLOCKED [{report.decision.value}]: {report.summary} "
                       f"Triggered rules: {rule_ids}."),
             "safety_decision": report.decision.value,
             "safety_risk_level": report.risk_level.value,
-            "safety_report": report.model_dump(mode="json"),
+            "safety_report": safety_report,
         }

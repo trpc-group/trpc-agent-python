@@ -24,6 +24,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import PrivateAttr
 from pydantic import field_validator
 
 from ._types import RiskCategory
@@ -77,6 +78,11 @@ class RegexRule(BaseModel):
     recommendation: str = Field(default="", description="Suggested remediation.")
     flags_ignorecase: bool = Field(default=True, description="Whether the regex is case-insensitive.")
 
+    # Lazily-built, per-instance compiled pattern. Policies are loaded once and
+    # reused across scans, so caching here avoids recompiling every rule on
+    # every scan while honouring the "millisecond fast path" goal.
+    _compiled: Optional[re.Pattern[str]] = PrivateAttr(default=None)
+
     @field_validator("pattern")
     @classmethod
     def _validate_pattern(cls, value: str) -> str:
@@ -88,8 +94,14 @@ class RegexRule(BaseModel):
         return value
 
     def compiled(self) -> re.Pattern[str]:
-        """Return the compiled pattern honouring the ignorecase flag."""
-        return re.compile(self.pattern, re.IGNORECASE if self.flags_ignorecase else 0)
+        """Return the compiled pattern honouring the ignorecase flag.
+
+        The result is cached on first use so repeated scans reuse one compiled
+        object instead of rebuilding it each time.
+        """
+        if self._compiled is None:
+            self._compiled = re.compile(self.pattern, re.IGNORECASE if self.flags_ignorecase else 0)
+        return self._compiled
 
     def applies_to(self, language: ScriptLanguage) -> bool:
         """Whether this rule should run for the given script language."""
