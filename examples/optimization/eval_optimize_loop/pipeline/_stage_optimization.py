@@ -18,7 +18,7 @@
         target_prompt=target_prompt,
         train_dataset_path="data/train_baseline.evalset.json",
         validation_dataset_path="data/val_baseline.evalset.json",
-        output_dir="output/",
+        output_dir="output/20260730_120000/",   # SDK 产物落在 .../optimizer/
     )
 """
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 from trpc_agent_sdk.evaluation._optimize_result import OptimizeResult
 
@@ -61,12 +61,16 @@ class OptimizationExecutor:
             target_prompt: TargetPrompt 注册表，指定优化目标字段。
             train_dataset_path: 训练集 evalset 路径。
             validation_dataset_path: 验证集 evalset 路径。
-            output_dir: 优化产物输出目录。
+            output_dir: 本次运行的时间戳目录；SDK 产物会落到其下的
+                ``optimizer/`` 子目录，避免与流水线报告混在一起。
 
         Returns:
             OptimizationExecutionReport: 包含算法、轮次、pass rate 和成本信息。
         """
         from trpc_agent_sdk.evaluation._agent_optimizer import AgentOptimizer
+
+        optimizer_subdir = Path(output_dir) / "optimizer"
+        optimizer_subdir.mkdir(parents=True, exist_ok=True)
 
         result: OptimizeResult = await AgentOptimizer.optimize(
             config_path=config_path,
@@ -74,9 +78,9 @@ class OptimizationExecutor:
             target_prompt=target_prompt,
             train_dataset_path=train_dataset_path,
             validation_dataset_path=validation_dataset_path,
-            output_dir=output_dir,
+            output_dir=str(optimizer_subdir),
             update_source=False,
-            verbose=0,
+            verbose=1,  # 实时打印每轮进度，避免长时间盲等。
         )
 
         return OptimizationExecutor._from_optimize_result(result)
@@ -100,6 +104,9 @@ class OptimizationExecutor:
     def _from_optimize_result(result: OptimizeResult) -> OptimizationExecutionReport:
         """将 SDK OptimizeResult 转换为流水线内部的报告格式。
 
+        同时透传审计字段（stop_reason / finish_reason / token 用量 /
+        metric 调用次数 / 逐轮记录），供 Stage 6 审计轨迹消费。
+
         Args:
             result: SDK 返回的 OptimizeResult 实例。
 
@@ -116,4 +123,46 @@ class OptimizationExecutor:
             duration_seconds=result.duration_seconds,
             total_llm_cost=result.total_llm_cost,
             best_prompts=dict(result.best_prompts),
+            stop_reason=getattr(result, "stop_reason", "") or "",
+            finish_reason=getattr(result, "finish_reason", "") or "",
+            total_token_usage=OptimizationExecutor._as_dict(
+                getattr(result, "total_token_usage", None)
+            ),
+            total_metric_calls=OptimizationExecutor._metric_calls(result),
+            rounds=[
+                OptimizationExecutor._as_dict(r)
+                for r in (getattr(result, "rounds", None) or [])
+            ],
         )
+
+    @staticmethod
+    def _as_dict(value: Any) -> dict[str, Any]:
+        """把 SDK 对象（Pydantic 模型 / dict / 其它）统一转成 dict。
+
+        Pydantic 模型使用 ``by_alias=True`` 输出 camelCase 键，与 SDK
+        JSON 产物保持一致；非模型对象退化为 JSON 可序列化形式。
+        """
+        if value is None:
+            return {}
+        if hasattr(value, "model_dump"):
+            return value.model_dump(by_alias=True)
+        if isinstance(value, dict):
+            return dict(value)
+        if hasattr(value, "__dict__"):
+            return dict(vars(value))
+        return json.loads(json.dumps(value, default=str))
+
+    @staticmethod
+    def _metric_calls(result: OptimizeResult) -> int:
+        """读取 metric 调用总次数。
+
+        新版 SDK 直接暴露 ``total_metric_calls``；当前版本把它放在
+        ``extras`` 里（由 gepa 回填），再退化到 judge model 调用次数。
+        """
+        direct = getattr(result, "total_metric_calls", None)
+        if direct is not None:
+            return int(direct)
+        extras = getattr(result, "extras", None) or {}
+        if isinstance(extras, dict) and extras.get("total_metric_calls") is not None:
+            return int(extras["total_metric_calls"])
+        return int(getattr(result, "total_judge_model_calls", 0) or 0)
