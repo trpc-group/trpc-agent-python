@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -762,6 +763,57 @@ async def test_live_generator_forces_update_source_false(monkeypatch, tmp_path) 
     assert captured["validation_dataset_path"] == "inner-selection.json"
 
 
+@pytest.mark.parametrize("error_type", (KeyboardInterrupt, SystemExit))
+def test_optimizer_worker_rethrows_process_control(monkeypatch, tmp_path, error_type) -> None:
+    output_dir = tmp_path / "optimizer-output"
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps({
+            "outputDir": str(output_dir)
+        }),
+        encoding="utf-8",
+    )
+    control = error_type("stop worker")
+
+    async def fail(_request_path):
+        raise control
+
+    monkeypatch.setattr(optimizer_worker_module, "_run", fail)
+    monkeypatch.setattr(sys, "argv", ["optimizer_worker", str(request_path)])
+
+    with pytest.raises(error_type) as raised:
+        optimizer_worker_module.main()
+
+    assert raised.value is control
+    assert not (output_dir / "worker_error.json").exists()
+
+
+def test_optimizer_worker_error_artifact_is_bounded_and_redacted(monkeypatch, tmp_path) -> None:
+    output_dir = tmp_path / "optimizer-output"
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps({
+            "outputDir": str(output_dir)
+        }),
+        encoding="utf-8",
+    )
+
+    async def fail(_request_path):
+        raise RuntimeError(
+            "Authorization: Bearer worker-token; api_key=worker-key; " + "context" * 1000)
+
+    monkeypatch.setattr(optimizer_worker_module, "_run", fail)
+    monkeypatch.setattr(sys, "argv", ["optimizer_worker", str(request_path)])
+
+    assert optimizer_worker_module.main() == 1
+    payload = json.loads((output_dir / "worker_error.json").read_text(encoding="utf-8"))
+    assert payload["errorType"] == "RuntimeError"
+    assert len(payload["message"]) <= 4000
+    assert "worker-token" not in payload["message"]
+    assert "worker-key" not in payload["message"]
+    assert payload["message"].count("[REDACTED]") == 2
+
+
 @pytest.mark.asyncio
 async def test_live_generator_accepts_sdk_skipped_round(monkeypatch, tmp_path) -> None:
     async def fake_optimize(**kwargs):
@@ -928,18 +980,23 @@ async def test_live_generator_rejects_invalid_success_contract(
 
 
 @pytest.mark.asyncio
-async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop(monkeypatch, tmp_path) -> None:
+async def test_live_worker_is_reaped_after_repeated_parent_cancellation(monkeypatch, tmp_path) -> None:
     class StuckProcess:
 
         def __init__(self) -> None:
             self.returncode = None
             self.waiting = asyncio.Event()
+            self.cleanup_waiting = asyncio.Event()
             self.finished = asyncio.Event()
+            self.wait_calls = 0
             self.terminated = False
             self.killed = False
 
         async def wait(self):
+            self.wait_calls += 1
             self.waiting.set()
+            if self.wait_calls >= 2:
+                self.cleanup_waiting.set()
             await self.finished.wait()
             return self.returncode
 
@@ -965,7 +1022,7 @@ async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop
     task = asyncio.create_task(
         LiveCandidateGenerator(
             _live_adapter(),
-            shutdown_timeout_seconds=0.01,
+            shutdown_timeout_seconds=0.1,
         ).generate(
             target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
             baseline_prompts={"system": "baseline"},
@@ -977,11 +1034,76 @@ async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop
         ))
     await process.waiting.wait()
     task.cancel()
-    with pytest.raises(asyncio.CancelledError):
+    await process.cleanup_waiting.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError) as raised:
         await task
     assert (output_dir / "optimize.stop").read_text(encoding="utf-8") == "cancel requested\n"
     assert process.terminated is True
     assert process.returncode in {-15, -9}
+    assert any("additional cancellation" in note for note in raised.value.__notes__)
+
+
+@pytest.mark.asyncio
+async def test_live_worker_cleanup_escalates_after_wait_and_terminate_errors(monkeypatch, tmp_path) -> None:
+    class KillOnlyProcess:
+
+        def __init__(self) -> None:
+            self.returncode = None
+            self.waiting = asyncio.Event()
+            self.finished = asyncio.Event()
+            self.wait_calls = 0
+            self.killed = False
+
+        async def wait(self):
+            self.wait_calls += 1
+            self.waiting.set()
+            if self.wait_calls == 2:
+                raise OSError("Authorization: Bearer wait-secret")
+            await self.finished.wait()
+            return self.returncode
+
+        def terminate(self):
+            raise PermissionError("api_key=terminate-secret")
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+            self.finished.set()
+
+    process = KillOnlyProcess()
+
+    async def fake_subprocess(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    task = asyncio.create_task(
+        LiveCandidateGenerator(
+            _live_adapter(),
+            shutdown_timeout_seconds=0.01,
+        ).generate(
+            target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
+            baseline_prompts={"system": "baseline"},
+            train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
+            inner_train_path="inner-train.json",
+            inner_selection_path="inner-selection.json",
+            config_path="optimizer.json",
+            output_dir=str(tmp_path / "optimizer-output"),
+        ))
+    await process.waiting.wait()
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError) as raised:
+        await task
+
+    diagnostics = "\n".join(raised.value.__notes__)
+    assert process.killed is True
+    assert process.returncode == -9
+    assert "wait-secret" not in diagnostics
+    assert "terminate-secret" not in diagnostics
+    assert diagnostics.count("[REDACTED]") == 2
 
 
 @pytest.mark.asyncio

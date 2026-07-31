@@ -140,8 +140,9 @@ def build_reproducibility(
         reason = "live_callback_not_importable"
     elif reason is None and mode == "trace" and (not trace_fixture or not trace_hash):
         reason = "trace_fixture_not_pinned"
+    elif reason is None and git_root is None:
+        reason = "git_root_unavailable"
     if reason is None:
-        assert git_root is not None
         for input_path in input_paths:
             resolved = Path(input_path).resolve()
             try:
@@ -163,7 +164,8 @@ def build_reproducibility(
     reproducible = reason is None
     command = None
     if reproducible:
-        assert git_root is not None
+        if git_root is None:
+            raise RuntimeError("reproducible replay requires a resolved Git root")
 
         def replay_path(path: str | Path) -> str:
             resolved = Path(path).resolve()
@@ -173,6 +175,8 @@ def build_reproducibility(
                 return str(resolved)
 
         args = [
+            # Keep the report portable across checkouts; environment metadata
+            # records the interpreter version used for the original run.
             "python",
             replay_path(Path(repo_root) / "run_pipeline.py"),
             "--mode",

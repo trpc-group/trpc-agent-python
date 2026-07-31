@@ -90,7 +90,7 @@ with prompt_set_lock(validated.prompt_paths):
     terminal = configured_gate(regression, cost, current_duration)
     restore_verified_baseline() if terminal rejects an applied candidate
     persist_terminal_audit_once_or_raise()
-on cancel: request_stop -> bounded_wait -> terminate -> bounded_wait -> kill
+on cancel: shielded_reaper(request_stop -> bounded_wait -> terminate -> bounded_wait -> kill) -> re-raise cancel
 ```
 
 1. Preflight strictly parses config and datasets, rejects duplicate JSON keys,
@@ -147,9 +147,10 @@ Default live evaluation and optimization resolve one importable callback through
 fingerprint to the run, and the worker verifies all three after re-importing it. A
 different callback object, source, cached code version, or source version is
 rejected before optimization. Live optimization always uses
-`optimizer_worker.py`. Cancellation
-writes the SDK stop signal, waits for the configured bound, then terminates and
-finally kills a worker that still does not exit. Programmatically injected
+`optimizer_worker.py`. Cancellation starts an independent reaper that reuses one
+observed wait task, writes the SDK stop signal, waits for the configured bound,
+then terminates and finally kills a worker that still does not exit. Repeated
+parent cancellation cannot interrupt this bounded cleanup. Programmatically injected
 backends and generators remain trusted in-process components and make the report
 non-reproducible. A successful SDK result must report the exact workspace
 baseline and registered best-prompt keys before it can enter regression. Failed

@@ -10,7 +10,7 @@ from pathlib import Path
 from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
 from .live_adapter import load_verified_callback
-from .schema import parse_strict_json, sanitize
+from .schema import parse_strict_json, sanitize, sanitized_exception_message
 
 
 async def _run(request_path: Path) -> None:
@@ -48,6 +48,8 @@ def main() -> int:
     request_path = Path(parser.parse_args().request).resolve()
     try:
         asyncio.run(_run(request_path))
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except BaseException as error:
         try:
             request = parse_strict_json(request_path.read_text(encoding="utf-8"))
@@ -56,15 +58,18 @@ def main() -> int:
             payload = sanitize(
                 {
                     "errorType": type(error).__name__,
-                    "message": str(error),
+                    "message": sanitized_exception_message(
+                        error,
+                        max_text_chars=4000,
+                    ),
                 },
-                max_text_chars=4000,
+                max_text_chars=None,
             )
             (output_dir / "worker_error.json").write_text(
                 json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
                 encoding="utf-8",
             )
-        except BaseException:
+        except Exception:
             pass
         return 1
     return 0

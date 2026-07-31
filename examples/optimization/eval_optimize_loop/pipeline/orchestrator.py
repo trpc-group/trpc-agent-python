@@ -244,7 +244,9 @@ async def _run_validated_pipeline(
         baseline_validation = baseline_pair.validation
         baseline_train_attr = baseline_attribution_pair.train
         baseline_val_attr = baseline_attribution_pair.validation
-        assert baseline_train and baseline_validation and baseline_train_attr and baseline_val_attr
+        if (baseline_train is None or baseline_validation is None or baseline_train_attr is None
+                or baseline_val_attr is None):
+            raise RuntimeError("baseline evaluation did not produce complete snapshots and attribution")
 
         enter_stage("inner_split")
         inner, inner_train_attr, inner_train_path, inner_selection_path = prepare_candidate_inputs(
@@ -302,7 +304,9 @@ async def _run_validated_pipeline(
         candidate_validation = candidate_pair.validation
         candidate_train_attr = candidate_attribution_pair.train
         candidate_val_attr = candidate_attribution_pair.validation
-        assert candidate_train and candidate_validation and candidate_train_attr and candidate_val_attr
+        if (candidate_train is None or candidate_validation is None or candidate_train_attr is None
+                or candidate_val_attr is None):
+            raise RuntimeError("candidate evaluation did not produce complete snapshots and attribution")
 
         enter_stage("comparison")
         train_comparison = compare_snapshots(

@@ -241,6 +241,16 @@ def _pipeline_imports(path: Path) -> set[str]:
     return imports
 
 
+def test_production_pipeline_has_no_optimizable_assertions() -> None:
+    paths = [*PIPELINE_DIR.glob("*.py"), EXAMPLE_DIR / "run_pipeline.py"]
+    violations = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        violations.extend(
+            f"{path.name}:{node.lineno}" for node in ast.walk(tree) if isinstance(node, ast.Assert))
+    assert violations == []
+
+
 def test_pipeline_import_boundaries() -> None:
     allowed = {
         "artifacts": {"models", "schema"},

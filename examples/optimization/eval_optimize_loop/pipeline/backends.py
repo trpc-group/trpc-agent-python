@@ -39,7 +39,7 @@ from .models import (
     Split,
 )
 from .offline_evaluation import prepare_offline_evaluation
-from .schema import add_exception_note, parse_strict_json
+from .schema import add_exception_note, parse_strict_json, sanitized_text
 from .trace_fixture import TraceFixture
 
 CallAgent = Callable[[str], Awaitable[str]]
@@ -342,6 +342,53 @@ class LiveCandidateGenerator:
         except OSError as stop_error:
             add_exception_note(cancellation, f"could not request optimizer stop: {stop_error}")
 
+    async def _wait_for_worker(
+        self,
+        process: asyncio.subprocess.Process,
+        cancellation: BaseException,
+        wait_task: Optional[asyncio.Task[int]],
+    ) -> tuple[bool, Optional[asyncio.Task[int]]]:
+        if wait_task is None:
+            wait_task = asyncio.create_task(process.wait())
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(wait_task),
+                timeout=self._shutdown_timeout_seconds,
+            )
+            return True, None
+        except asyncio.TimeoutError:
+            return False, wait_task
+        except asyncio.CancelledError:
+            raise
+        except Exception as wait_error:
+            detail = sanitized_text(wait_error, max_text_chars=1000)
+            add_exception_note(
+                cancellation,
+                f"optimizer worker wait failed with {type(wait_error).__name__}: {detail}",
+            )
+            return process.returncode is not None, None
+
+    @staticmethod
+    def _signal_worker(
+        process: asyncio.subprocess.Process,
+        signal_name: str,
+        cancellation: BaseException,
+    ) -> bool:
+        if process.returncode is not None:
+            return False
+        try:
+            getattr(process, signal_name)()
+            return True
+        except ProcessLookupError:
+            return False
+        except OSError as signal_error:
+            detail = sanitized_text(signal_error, max_text_chars=1000)
+            add_exception_note(
+                cancellation,
+                f"optimizer worker {signal_name} failed with {type(signal_error).__name__}: {detail}",
+            )
+            return False
+
     async def _stop_worker(
         self,
         process: asyncio.subprocess.Process,
@@ -350,37 +397,72 @@ class LiveCandidateGenerator:
         cancellation: BaseException,
     ) -> None:
         self._request_stop(output_dir, cancellation)
+        wait_task: Optional[asyncio.Task[int]] = None
+        forced = False
         try:
-            await asyncio.wait_for(
-                asyncio.shield(process.wait()),
-                timeout=self._shutdown_timeout_seconds,
-            )
-            return
-        except asyncio.TimeoutError:
-            if process.returncode is None:
-                try:
-                    process.terminate()
-                except ProcessLookupError:
-                    pass
-        try:
-            await asyncio.wait_for(
-                asyncio.shield(process.wait()),
-                timeout=self._shutdown_timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            if process.returncode is None:
-                try:
-                    process.kill()
-                except ProcessLookupError:
-                    pass
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(process.wait()),
-                    timeout=self._shutdown_timeout_seconds,
-                )
-            except asyncio.TimeoutError:
+            exited, wait_task = await self._wait_for_worker(process, cancellation, wait_task)
+            if exited:
+                return
+            forced = self._signal_worker(process, "terminate", cancellation)
+            exited, wait_task = await self._wait_for_worker(process, cancellation, wait_task)
+            if exited:
+                if forced:
+                    add_exception_note(cancellation, "optimizer worker required forced termination")
+                return
+            forced = self._signal_worker(process, "kill", cancellation) or forced
+            exited, wait_task = await self._wait_for_worker(process, cancellation, wait_task)
+            if not exited:
                 add_exception_note(cancellation, "optimizer worker did not report exit after kill")
-        add_exception_note(cancellation, "optimizer worker required forced termination")
+            if forced:
+                add_exception_note(cancellation, "optimizer worker required forced termination")
+        finally:
+            if wait_task is not None:
+                wait_task.cancel()
+                try:
+                    await wait_task
+                except BaseException:
+                    pass
+
+    async def _complete_worker_stop(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        output_dir: str,
+        cancellation: BaseException,
+    ) -> None:
+        """Finish bounded child cleanup even if the parent task is canceled again."""
+
+        cleanup = asyncio.create_task(
+            self._stop_worker(
+                process,
+                output_dir=output_dir,
+                cancellation=cancellation,
+            ))
+        repeated_cancellations = 0
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                repeated_cancellations += 1
+                continue
+            except BaseException:
+                break
+        if repeated_cancellations:
+            add_exception_note(
+                cancellation,
+                f"worker cleanup resisted {repeated_cancellations} additional cancellation request(s)",
+            )
+        if cleanup.cancelled():
+            add_exception_note(cancellation, "optimizer worker cleanup task was canceled before completion")
+            return
+        try:
+            cleanup.result()
+        except BaseException as cleanup_error:
+            detail = sanitized_text(cleanup_error, max_text_chars=1000)
+            add_exception_note(
+                cancellation,
+                f"optimizer worker cleanup failed with {type(cleanup_error).__name__}: {detail}",
+            )
 
     async def _optimize_in_worker(self, **kwargs) -> OptimizeResult:
         output_dir = kwargs["output_dir"]
@@ -417,7 +499,7 @@ class LiveCandidateGenerator:
         try:
             return_code = await process.wait()
         except asyncio.CancelledError as cancellation:
-            await self._stop_worker(
+            await self._complete_worker_stop(
                 process,
                 output_dir=output_dir,
                 cancellation=cancellation,
