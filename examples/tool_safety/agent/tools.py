@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import os
 import sys
 from pathlib import Path
 
@@ -34,6 +35,16 @@ POLICY_PATH = DEMO_DIR / "tool_safety_policy.yaml"
 AUDIT_LOG_PATH = DEMO_DIR / "real_agent_safety_audit.jsonl"
 SKILL_ROOT = DEMO_DIR / "skills"
 MCP_SERVER_PATH = DEMO_DIR / "mcp_server.py"
+
+
+def _mcp_server_environment() -> dict[str, str] | None:
+    """Preserve dynamic-library lookup paths without leaking the full env."""
+    env = {
+        name: value
+        for name in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")
+        if (value := os.environ.get(name))
+    }
+    return env or None
 
 
 def deny_internal_admin_rule(
@@ -154,9 +165,9 @@ def create_skill_toolset(safety_filter: ToolSafetyFilter) -> SkillToolSet:
 def create_mcp_toolset(safety_filter: ToolSafetyFilter) -> MCPToolset:
     """Create a local stdio MCP toolset guarded before MCP tool execution."""
     server_params = StdioServerParameters(
-        command=sys.executable,
-        args=[str(MCP_SERVER_PATH)],
-        env=None,
+        command=os.path.abspath(sys.executable),
+        args=[str(MCP_SERVER_PATH.resolve())],
+        env=_mcp_server_environment(),
     )
     return MCPToolset(
         connection_params=StdioConnectionParams(server_params=server_params, timeout=5),
