@@ -33,6 +33,7 @@ from examples.skills_code_review_agent.agent.pipeline import run_review  # noqa:
 from examples.skills_code_review_agent.agent.pipeline import SKILL_DIR  # noqa: E402
 from examples.skills_code_review_agent.agent.redaction import contains_unredacted_secret  # noqa: E402
 from examples.skills_code_review_agent.agent.redaction import redact_text  # noqa: E402
+from examples.skills_code_review_agent.agent.models import SandboxRun  # noqa: E402
 from examples.skills_code_review_agent.agent.rule_engine import RuleEngine  # noqa: E402
 from examples.skills_code_review_agent.agent.skill_smoke import run_code_review_skill_smoke  # noqa: E402
 from examples.skills_code_review_agent.agent.storage import ReviewStore  # noqa: E402
@@ -224,7 +225,8 @@ async def test_extended_secret_redaction_patterns_are_not_persisted(tmp_path: Pa
     for raw_secret in (
             "not-a-real-aws-key-abcdefghijklmnop",
             "not-a-real-slack-token-abcdefghijklmnopqrstuv",
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0."
+            "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
             "service-token-value-123",
             "stripe-restricted-value-123",
             "AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz123456",
@@ -2122,6 +2124,52 @@ async def test_external_scanner_findings_are_merged_into_report_and_database(tmp
     assert any(row["rule_id"] == "scanner.bandit.B602" for row in bundle["findings"])
     report_json = json.loads((tmp_path / "out" / "review_report.json").read_text(encoding="utf-8"))
     assert any(item["source"] == "scanner:bandit" for item in report_json["findings"])
+
+
+def test_malformed_external_scanner_finding_is_skipped() -> None:
+    from examples.skills_code_review_agent.agent.pipeline import _findings_from_scanner_runs
+
+    payload = {
+        "scanner_runs": [{
+            "name": "bandit",
+            "findings": [
+                {
+                    "file": "app/bad.py",
+                    "line": "abc",
+                    "confidence": "high",
+                    "title": "Malformed scanner finding",
+                    "evidence": "bad scanner output",
+                },
+                {
+                    "file": "app/good.py",
+                    "line": "7",
+                    "confidence": "0.9",
+                    "title": "Valid scanner finding",
+                    "evidence": "subprocess.run(cmd, shell=True)",
+                    "rule_id": "scanner.bandit.B602",
+                },
+            ],
+        }]
+    }
+    run = SandboxRun(
+        name="scanner_probe",
+        runtime="fake",
+        command="python scripts/scanner_probe.py",
+        status="completed",
+        exit_code=0,
+        duration_ms=1,
+        stdout=json.dumps(payload),
+    )
+
+    findings, warnings, needs_human_review, _ = _findings_from_scanner_runs([run], RuleEngine())
+
+    assert not warnings
+    assert not needs_human_review
+    assert len(findings) == 1
+    assert findings[0].file == "app/good.py"
+    assert findings[0].line == 7
+    assert findings[0].rule_id == "scanner.bandit.B602"
+    assert findings[0].confidence >= 0.8
 
 
 async def test_native_skill_tool_set_exposes_skill_load_and_skill_run() -> None:

@@ -928,19 +928,22 @@ def _findings_from_scanner_runs(sandbox_runs,
                 evidence = str(item.get("evidence", ""))
                 redacted = redact_text(evidence)
                 redactions += redacted.count
-                finding = build_finding(
-                    severity=str(item.get("severity", "medium")),
-                    category="secret_leak" if str(item.get("severity")) == "critical"
-                    and "secret" in str(item.get("rule_id", "")) else "security",
-                    file=_normalize_scanner_file(str(item.get("file", ""))),
-                    line=int(item.get("line") or 1),
-                    title=str(item.get("title", "External scanner finding")),
-                    evidence=redacted.text,
-                    recommendation=str(item.get("recommendation", "Review and fix the external scanner finding.")),
-                    confidence=float(item.get("confidence", 0.75)),
-                    source=f"scanner:{scanner_run.get('name', item.get('scanner', 'unknown'))}",
-                    rule_id=str(item.get("rule_id", "scanner.issue")),
-                )
+                try:
+                    finding = build_finding(
+                        severity=str(item.get("severity", "medium")),
+                        category="secret_leak" if str(item.get("severity")) == "critical"
+                        and "secret" in str(item.get("rule_id", "")) else "security",
+                        file=_normalize_scanner_file(str(item.get("file", ""))),
+                        line=int(item.get("line") or 1),
+                        title=str(item.get("title", "External scanner finding")),
+                        evidence=redacted.text,
+                        recommendation=str(item.get("recommendation", "Review and fix the external scanner finding.")),
+                        confidence=float(item.get("confidence", 0.75)),
+                        source=f"scanner:{scanner_run.get('name', item.get('scanner', 'unknown'))}",
+                        rule_id=str(item.get("rule_id", "scanner.issue")),
+                    )
+                except (TypeError, ValueError):
+                    continue
                 configured = rule_engine.rule_config.apply(finding)
                 if configured is None:
                     rule_engine.ignored_count += 1
