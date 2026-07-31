@@ -523,10 +523,10 @@ class AgentEvaluator:
             raise ValueError("call_agent is mutually exclusive with runner.")
 
         trace_only = AgentEvaluator._is_trace_only(eval_set)
-        if call_agent is None and agent_module is None and not trace_only:
+        if call_agent is None and agent_module is None and runner is None and not trace_only:
             non_trace_ids = [case.eval_id for case in eval_set.eval_cases if case.eval_mode != EvalModeTrace]
-            raise ValueError("`agent_module` is required unless every case in eval_set uses "
-                             "eval_mode='trace'. Non-trace case ids: "
+            raise ValueError("`agent_module`, `call_agent`, or `runner` is required unless every "
+                             "case in eval_set uses eval_mode='trace'. Non-trace case ids: "
                              f"{non_trace_ids}")
 
         agent_for_eval: Optional[BaseAgent] = None

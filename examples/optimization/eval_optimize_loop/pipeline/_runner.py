@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -114,14 +115,41 @@ class PipelineRunner:
             target_prompt = TargetPrompt().add_path(self._prompt_field_name, self._prompt_source_path)
 
             async def call_agent(input_text: str) -> str:
+                from trpc_agent_sdk.context import (
+                    InvocationContext,
+                    create_agent_context,
+                    new_invocation_context_id,
+                )
+                from trpc_agent_sdk.sessions import InMemorySessionService
                 from trpc_agent_sdk.types import Content, Part
                 # agent 每次重建以重读 system.md
                 agent = create_agent(demo_mode=False)
-                user_content = Content(parts=[Part.from_text(text=input_text)])
-                response = await agent.generate_content(user_content)
-                if response.candidates and response.candidates[0].content:
-                    return "".join(p.text or "" for p in response.candidates[0].content.parts)
-                return ""
+                user_content = Content(role="user", parts=[Part.from_text(text=input_text)])
+                agent_context = create_agent_context()
+                session_service = InMemorySessionService()
+                session = await session_service.create_session(
+                    app_name="optimizer",
+                    user_id="optimize_model",
+                    session_id=str(uuid.uuid4()),
+                    agent_context=agent_context,
+                )
+                ctx = InvocationContext(
+                    session_service=session_service,
+                    invocation_id=new_invocation_context_id(),
+                    agent=agent,
+                    session=session,
+                    agent_context=agent_context,
+                    user_content=user_content,
+                    override_messages=[user_content],
+                )
+                last_text = ""
+                async for event in agent.run_async(ctx):
+                    if event.is_final_response():
+                        if event.content and event.content.parts:
+                            for p in event.content.parts:
+                                if p.text and not getattr(p, "thought", False):
+                                    last_text += p.text
+                return last_text.strip()
 
             opt_report = await OptimizationExecutor.run_real(
                 config_path=self._optimizer_config_path,

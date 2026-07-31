@@ -1,7 +1,7 @@
 {
   "eval_set_id": "shopping_assistant_train",
-  "name": "Training Set",
-  "description": "20 training cases.",
+  "name": "训练集",
+  "description": "20 个训练用例。",
   "eval_cases": [
     {
       "eval_id": "train_001_optimizable",
@@ -11,7 +11,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for wireless headphones."
+                "text": "帮我搜索无线耳机。"
               }
             ],
             "role": "user"
@@ -31,7 +31,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found 2 results."
+                "text": "找到 2 个结果。"
               }
             ],
             "role": "model"
@@ -43,7 +43,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for wireless headphones."
+                "text": "帮我搜索无线耳机。"
               }
             ],
             "role": "user"
@@ -63,7 +63,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found 2 wireless headphones: Sony WH-1000XM6 at ¥2,499 (rating 4.9, 15 in stock) and Wireless Bluetooth Headphones at ¥299 (rating 4.5, 120 in stock)."
+                "text": "找到 2 款无线耳机：Sony WH-1000XM6 售价 ¥2,499（评分 4.9，库存 15 件），Wireless Bluetooth Headphones 售价 ¥299（评分 4.5，库存 120 件）。"
               }
             ],
             "role": "model"
@@ -84,7 +84,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Check my order ORD-99999."
+                "text": "查询我的订单 ORD-99999。"
               }
             ],
             "role": "user"
@@ -104,7 +104,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your order ORD-99999 is on the way and will arrive tomorrow."
+                "text": "您的订单 ORD-99999 正在运输途中，明天送达。"
               }
             ],
             "role": "model"
@@ -116,7 +116,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Check my order ORD-99999."
+                "text": "查询我的订单 ORD-99999。"
               }
             ],
             "role": "user"
@@ -136,7 +136,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-99999 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+                "text": "订单 ORD-99999 不存在，请核实订单 ID。有效订单：ORD-12345、ORD-12346、ORD-12347。"
               }
             ],
             "role": "model"
@@ -157,7 +157,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add 2 iPhone 15 Pro to my cart."
+                "text": "往我的购物车里加 2 个 iPhone 15 Pro。"
               }
             ],
             "role": "user"
@@ -178,7 +178,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added 2x iPhone 15 Pro to your cart, totaling ¥15,998.00."
+                "text": "已将 2 个 iPhone 15 Pro 加入购物车，合计 ¥15,998.00。"
               }
             ],
             "role": "model"
@@ -190,7 +190,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add 2 iPhone 15 Pro to my cart."
+                "text": "往我的购物车里加 2 个 iPhone 15 Pro。"
               }
             ],
             "role": "user"
@@ -211,7 +211,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added 2x iPhone 15 Pro to your cart, totaling ¥15,998.00."
+                "text": "已将 2 个 iPhone 15 Pro 加入购物车，合计 ¥15,998.00。"
               }
             ],
             "role": "model"
@@ -232,7 +232,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the MacBook Pro 14."
+                "text": "介绍一下 MacBook Pro 14。"
               }
             ],
             "role": "user"
@@ -252,7 +252,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "It's a laptop."
+                "text": "它是一台笔记本电脑。"
               }
             ],
             "role": "model"
@@ -264,7 +264,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the MacBook Pro 14."
+                "text": "介绍一下 MacBook Pro 14。"
               }
             ],
             "role": "user"
@@ -284,7 +284,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "MacBook Pro 14 (P003) by Apple: M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display. Price: ¥14,999, rating 4.7/5, 30 units in stock."
+                "text": "MacBook Pro 14（P003）苹果出品：M3 Pro 芯片，18GB 内存，512GB 固态硬盘，Liquid Retina XDR 显示屏。售价 ¥14,999，评分 4.7/5，库存 30 件。"
               }
             ],
             "role": "model"
@@ -305,7 +305,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply coupon code INVALID99."
+                "text": "帮我用优惠券 INVALID99。"
               }
             ],
             "role": "user"
@@ -325,7 +325,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon INVALID99 applied! You saved ¥99."
+                "text": "优惠券 INVALID99 已使用！为您节省 ¥99。"
               }
             ],
             "role": "model"
@@ -337,7 +337,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply coupon code INVALID99."
+                "text": "帮我用优惠券 INVALID99。"
               }
             ],
             "role": "user"
@@ -357,7 +357,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon INVALID99 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+                "text": "优惠券 INVALID99 无效或已过期。有效优惠券：SAVE50（满 ¥200 减 ¥50）、VIP10（9 折）、NEWUSER（满 ¥100 减 ¥30）。"
               }
             ],
             "role": "model"
@@ -378,7 +378,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Check the status of order ORD-12345."
+                "text": "查询订单 ORD-12345 的状态。"
               }
             ],
             "role": "user"
@@ -398,7 +398,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-12345 has been shipped on 2026-07-25 and is estimated to arrive by 2026-08-02. Total: ¥7,999."
+                "text": "订单 ORD-12345 已于 2026-07-25 发货，预计 2026-08-02 送达。总金额 ¥7,999。"
               }
             ],
             "role": "model"
@@ -410,7 +410,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Check the status of order ORD-12345."
+                "text": "查询订单 ORD-12345 的状态。"
               }
             ],
             "role": "user"
@@ -430,7 +430,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-12345 has been shipped on 2026-07-25 and is estimated to arrive by 2026-08-02. Total: ¥7,999."
+                "text": "订单 ORD-12345 已于 2026-07-25 发货，预计 2026-08-02 送达。总金额 ¥7,999。"
               }
             ],
             "role": "model"
@@ -451,7 +451,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for running shoes."
+                "text": "搜索跑步鞋。"
               }
             ],
             "role": "user"
@@ -471,7 +471,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found 1 result."
+                "text": "找到 1 个结果。"
               }
             ],
             "role": "model"
@@ -483,7 +483,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for running shoes."
+                "text": "搜索跑步鞋。"
               }
             ],
             "role": "user"
@@ -503,7 +503,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found Men's Running Shoes (P004) by Nike at ¥599, rating 4.3/5, 200 units in stock. Lightweight mesh upper with responsive cushioning."
+                "text": "找到 Men's Running Shoes（P004）耐克出品，售价 ¥599，评分 4.3/5，库存 200 件。轻量网面鞋身，缓震回弹良好。"
               }
             ],
             "role": "model"
@@ -524,7 +524,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Find coffee makers."
+                "text": "找找咖啡机。"
               }
             ],
             "role": "user"
@@ -544,7 +544,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "1 product found."
+                "text": "找到 1 件商品。"
               }
             ],
             "role": "model"
@@ -556,7 +556,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Find coffee makers."
+                "text": "找找咖啡机。"
               }
             ],
             "role": "user"
@@ -576,7 +576,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found Coffee Maker (P005) by BrewMaster at ¥1,299, rating 4.6/5, 80 units in stock. Programmable drip coffee maker with 12-cup capacity and built-in grinder."
+                "text": "找到 Coffee Maker（P005）BrewMaster 出品，售价 ¥1,299，评分 4.6/5，库存 80 件。12 杯容量可编程滴漏咖啡机，内置研磨器。"
               }
             ],
             "role": "model"
@@ -597,7 +597,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add product P999 to cart."
+                "text": "把商品 P999 加入购物车。"
               }
             ],
             "role": "user"
@@ -618,7 +618,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added product P999 to your cart successfully."
+                "text": "商品 P999 已成功加入购物车。"
               }
             ],
             "role": "model"
@@ -630,7 +630,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add product P999 to cart."
+                "text": "把商品 P999 加入购物车。"
               }
             ],
             "role": "user"
@@ -651,7 +651,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Product P999 does not exist. Please check the product ID. Valid products include P001 through P010."
+                "text": "商品 P999 不存在，请检查商品 ID。有效商品：P001 至 P010。"
               }
             ],
             "role": "model"
@@ -672,7 +672,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "What's in my shopping cart?"
+                "text": "我的购物车里有什么？"
               }
             ],
             "role": "user"
@@ -690,7 +690,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."
+                "text": "您的购物车有 3 件商品：iPhone 15 Pro x1（¥7,999）、Men's Running Shoes x2（¥1,198），合计 ¥9,197 CNY。"
               }
             ],
             "role": "model"
@@ -702,7 +702,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "What's in my shopping cart?"
+                "text": "我的购物车里有什么？"
               }
             ],
             "role": "user"
@@ -720,7 +720,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."
+                "text": "您的购物车有 3 件商品：iPhone 15 Pro x1（¥7,999）、Men's Running Shoes x2（¥1,198），合计 ¥9,197 CNY。"
               }
             ],
             "role": "model"
@@ -741,7 +741,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for vacuum cleaners."
+                "text": "搜索吸尘器。"
               }
             ],
             "role": "user"
@@ -761,7 +761,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "1 result."
+                "text": "1 个结果。"
               }
             ],
             "role": "model"
@@ -773,7 +773,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for vacuum cleaners."
+                "text": "搜索吸尘器。"
               }
             ],
             "role": "user"
@@ -793,7 +793,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found Dyson V15 Vacuum (P009) by Dyson at ¥4,599, rating 4.8/5, 25 units in stock. Cordless stick vacuum with laser dust detection and LCD screen."
+                "text": "找到 Dyson V15 Vacuum（P009）戴森出品，售价 ¥4,599，评分 4.8/5，库存 25 件。无线手持吸尘器，配备激光探测和 LCD 屏幕。"
               }
             ],
             "role": "model"
@@ -814,7 +814,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Where is my order ORD-88888?"
+                "text": "我的订单 ORD-88888 到哪了？"
               }
             ],
             "role": "user"
@@ -834,7 +834,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your order ORD-88888 is being processed and will ship soon."
+                "text": "您的订单 ORD-88888 正在处理中，很快就会发货。"
               }
             ],
             "role": "model"
@@ -846,7 +846,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Where is my order ORD-88888?"
+                "text": "我的订单 ORD-88888 到哪了？"
               }
             ],
             "role": "user"
@@ -866,7 +866,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-88888 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+                "text": "订单 ORD-88888 不存在，请核实订单 ID。有效订单：ORD-12345、ORD-12346、ORD-12347。"
               }
             ],
             "role": "model"
@@ -887,7 +887,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply coupon SAVE50 to my order."
+                "text": "给我的订单用优惠券 SAVE50。"
               }
             ],
             "role": "user"
@@ -907,7 +907,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon SAVE50 applied! You save ¥50.00 on orders over ¥200."
+                "text": "优惠券 SAVE50 已使用！订单满 ¥200 立减 ¥50.00。"
               }
             ],
             "role": "model"
@@ -919,7 +919,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply coupon SAVE50 to my order."
+                "text": "给我的订单用优惠券 SAVE50。"
               }
             ],
             "role": "user"
@@ -939,7 +939,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon SAVE50 applied! You save ¥50.00 on orders over ¥200."
+                "text": "优惠券 SAVE50 已使用！订单满 ¥200 立减 ¥50.00。"
               }
             ],
             "role": "model"
@@ -960,7 +960,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the Samsung Galaxy S25."
+                "text": "介绍一下 Samsung Galaxy S25。"
               }
             ],
             "role": "user"
@@ -980,7 +980,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "It's a phone from Samsung."
+                "text": "它是三星的一款手机。"
               }
             ],
             "role": "model"
@@ -992,7 +992,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the Samsung Galaxy S25."
+                "text": "介绍一下 Samsung Galaxy S25。"
               }
             ],
             "role": "user"
@@ -1012,7 +1012,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Samsung Galaxy S25 (P007) by Samsung: Snapdragon 8 Gen 4, 200MP camera, Dynamic AMOLED 2X display. Price: ¥6,999, rating 4.6/5, 60 units in stock."
+                "text": "Samsung Galaxy S25（P007）三星出品：Snapdragon 8 Gen 4 芯片，200MP 摄像头，Dynamic AMOLED 2X 显示屏。售价 ¥6,999，评分 4.6/5，库存 60 件。"
               }
             ],
             "role": "model"
@@ -1033,7 +1033,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Details of Sony WH-1000XM6 headphones."
+                "text": "Sony WH-1000XM6 耳机的详情。"
               }
             ],
             "role": "user"
@@ -1053,7 +1053,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Those are headphones."
+                "text": "那些是耳机。"
               }
             ],
             "role": "model"
@@ -1065,7 +1065,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Details of Sony WH-1000XM6 headphones."
+                "text": "Sony WH-1000XM6 耳机的详情。"
               }
             ],
             "role": "user"
@@ -1085,7 +1085,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Sony WH-1000XM6 (P006) by Sony: Industry-leading noise cancellation, 40h battery life, LDAC support. Price: ¥2,499, rating 4.9/5, 15 units in stock."
+                "text": "Sony WH-1000XM6（P006）索尼出品：业界领先的降噪技术，40 小时续航，支持 LDAC。售价 ¥2,499，评分 4.9/5，库存 15 件。"
               }
             ],
             "role": "model"
@@ -1106,7 +1106,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add 200 MacBook Pro 14 to cart."
+                "text": "往购物车加 200 个 MacBook Pro 14。"
               }
             ],
             "role": "user"
@@ -1127,7 +1127,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added 200 MacBook Pro 14 to your cart."
+                "text": "已将 200 个 MacBook Pro 14 加入购物车。"
               }
             ],
             "role": "model"
@@ -1139,7 +1139,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add 200 MacBook Pro 14 to cart."
+                "text": "往购物车加 200 个 MacBook Pro 14。"
               }
             ],
             "role": "user"
@@ -1160,7 +1160,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Insufficient stock. Only 30 units of MacBook Pro 14 available. Cannot add 200 units to cart."
+                "text": "库存不足。MacBook Pro 14 仅有 30 件库存，无法添加 200 件。"
               }
             ],
             "role": "model"
@@ -1181,7 +1181,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Check my order ORD-12347 status."
+                "text": "查询我的订单 ORD-12347 状态。"
               }
             ],
             "role": "user"
@@ -1201,7 +1201,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-12347 was delivered on 2026-07-26. Contains Men's Running Shoes x1, total ¥599."
+                "text": "订单 ORD-12347 已于 2026-07-26 交付。商品：Men's Running Shoes x1，总金额 ¥599。"
               }
             ],
             "role": "model"
@@ -1213,7 +1213,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Check my order ORD-12347 status."
+                "text": "查询我的订单 ORD-12347 状态。"
               }
             ],
             "role": "user"
@@ -1233,7 +1233,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-12347 was delivered on 2026-07-26. Contains Men's Running Shoes x1, total ¥599."
+                "text": "订单 ORD-12347 已于 2026-07-26 交付。商品：Men's Running Shoes x1，总金额 ¥599。"
               }
             ],
             "role": "model"
@@ -1254,7 +1254,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about Dyson V15."
+                "text": "介绍一下 Dyson V15。"
               }
             ],
             "role": "user"
@@ -1274,7 +1274,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "A vacuum cleaner."
+                "text": "一台吸尘器。"
               }
             ],
             "role": "model"
@@ -1286,7 +1286,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about Dyson V15."
+                "text": "介绍一下 Dyson V15。"
               }
             ],
             "role": "user"
@@ -1306,7 +1306,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Dyson V15 Vacuum (P009) by Dyson: Cordless stick vacuum with laser dust detection and LCD screen. Price: ¥4,599, rating 4.8/5, 25 units in stock."
+                "text": "Dyson V15 Vacuum（P009）戴森出品：无线手持吸尘器，配备激光探测和 LCD 屏幕。售价 ¥4,599，评分 4.8/5，库存 25 件。"
               }
             ],
             "role": "model"
@@ -1327,7 +1327,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Use promo code SUPER50."
+                "text": "使用促销码 SUPER50。"
               }
             ],
             "role": "user"
@@ -1347,7 +1347,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Promo code SUPER50 accepted! 50% off applied."
+                "text": "促销码 SUPER50 已接受！为您打 5 折。"
               }
             ],
             "role": "model"
@@ -1359,7 +1359,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Use promo code SUPER50."
+                "text": "使用促销码 SUPER50。"
               }
             ],
             "role": "user"
@@ -1379,7 +1379,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon SUPER50 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+                "text": "优惠券 SUPER50 无效或已过期。有效优惠券：SAVE50（满 ¥200 减 ¥50）、VIP10（9 折）、NEWUSER（满 ¥100 减 ¥30）。"
               }
             ],
             "role": "model"
@@ -1400,7 +1400,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for jeans."
+                "text": "搜索牛仔裤。"
               }
             ],
             "role": "user"
@@ -1420,7 +1420,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "1 pair found."
+                "text": "找到 1 条。"
               }
             ],
             "role": "model"
@@ -1432,7 +1432,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Search for jeans."
+                "text": "搜索牛仔裤。"
               }
             ],
             "role": "user"
@@ -1452,7 +1452,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found Levi's 501 Jeans (P008) by Levi's at ¥499, rating 4.4/5, 300 units in stock. Original fit, non-stretch denim, straight leg."
+                "text": "找到 Levi's 501 Jeans（P008）Levi's 出品，售价 ¥499，评分 4.4/5，库存 300 件。原版剪裁，非弹力牛仔布，直筒裤型。"
               }
             ],
             "role": "model"

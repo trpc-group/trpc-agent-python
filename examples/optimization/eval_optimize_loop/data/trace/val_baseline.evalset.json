@@ -1,7 +1,7 @@
 {
   "eval_set_id": "shopping_assistant_val",
-  "name": "Validation Baseline",
-  "description": "20 validation cases.",
+  "name": "验证集基线",
+  "description": "20 个验证用例。",
   "eval_cases": [
     {
       "eval_id": "val_001_optimizable",
@@ -11,7 +11,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the MacBook Pro 14."
+                "text": "介绍一下 MacBook Pro 14。"
               }
             ],
             "role": "user"
@@ -31,7 +31,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "It's a laptop."
+                "text": "它是一台笔记本电脑。"
               }
             ],
             "role": "model"
@@ -43,7 +43,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the MacBook Pro 14."
+                "text": "介绍一下 MacBook Pro 14。"
               }
             ],
             "role": "user"
@@ -63,7 +63,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "MacBook Pro 14 (P003) by Apple: M3 Pro chip, 18GB RAM, 512GB SSD, Liquid Retina XDR display. Price: ¥14,999, rating 4.7/5, 30 units in stock."
+                "text": "MacBook Pro 14（P003）苹果出品：M3 Pro 芯片，18GB 内存，512GB 固态硬盘，Liquid Retina XDR 显示屏。售价 ¥14,999，评分 4.7/5，库存 30 件。"
               }
             ],
             "role": "model"
@@ -84,7 +84,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply coupon code INVALID99."
+                "text": "帮我用优惠券 INVALID99。"
               }
             ],
             "role": "user"
@@ -104,7 +104,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon INVALID99 applied! You saved ¥99."
+                "text": "优惠券 INVALID99 已使用！为您节省 ¥99。"
               }
             ],
             "role": "model"
@@ -116,7 +116,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply coupon code INVALID99."
+                "text": "帮我用优惠券 INVALID99。"
               }
             ],
             "role": "user"
@@ -136,7 +136,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon INVALID99 is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+                "text": "优惠券 INVALID99 无效或已过期。有效优惠券：SAVE50（满 ¥200 减 ¥50）、VIP10（9 折）、NEWUSER（满 ¥100 减 ¥30）。"
               }
             ],
             "role": "model"
@@ -157,7 +157,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "What's in my shopping cart?"
+                "text": "我的购物车里有什么？"
               }
             ],
             "role": "user"
@@ -175,7 +175,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."
+                "text": "您的购物车有 3 件商品：iPhone 15 Pro x1（¥7,999）、Men's Running Shoes x2（¥1,198），合计 ¥9,197 CNY。"
               }
             ],
             "role": "model"
@@ -187,7 +187,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "What's in my shopping cart?"
+                "text": "我的购物车里有什么？"
               }
             ],
             "role": "user"
@@ -205,7 +205,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your cart has 3 items: iPhone 15 Pro x1 (¥7,999), Men's Running Shoes x2 (¥1,198). Total: ¥9,197 CNY."
+                "text": "您的购物车有 3 件商品：iPhone 15 Pro x1（¥7,999）、Men's Running Shoes x2（¥1,198），合计 ¥9,197 CNY。"
               }
             ],
             "role": "model"
@@ -226,7 +226,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Find wireless headphones for me."
+                "text": "帮我找找无线耳机。"
               }
             ],
             "role": "user"
@@ -246,7 +246,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Here are the results."
+                "text": "这是结果。"
               }
             ],
             "role": "model"
@@ -258,7 +258,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Find wireless headphones for me."
+                "text": "帮我找找无线耳机。"
               }
             ],
             "role": "user"
@@ -278,7 +278,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found 2 wireless headphones: Sony WH-1000XM6 at ¥2,499 (rating 4.9, 15 in stock) and Wireless Bluetooth Headphones at ¥299 (rating 4.5, 120 in stock)."
+                "text": "找到 2 款无线耳机：Sony WH-1000XM6 售价 ¥2,499（评分 4.9，库存 15 件），Wireless Bluetooth Headphones 售价 ¥299（评分 4.5，库存 120 件）。"
               }
             ],
             "role": "model"
@@ -299,7 +299,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Where is my order ORD-12346?"
+                "text": "我的订单 ORD-12346 到哪了？"
               }
             ],
             "role": "user"
@@ -319,7 +319,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-12346 is processing. Items: Coffee Maker x1, Air Fryer XL x1. Total: ¥2,198. Estimated delivery: 2026-08-05."
+                "text": "订单 ORD-12346 正在处理中。商品：Coffee Maker x1、Air Fryer XL x1，总金额 ¥2,198，预计 2026-08-05 送达。"
               }
             ],
             "role": "model"
@@ -331,7 +331,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Where is my order ORD-12346?"
+                "text": "我的订单 ORD-12346 到哪了？"
               }
             ],
             "role": "user"
@@ -351,7 +351,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-12346 is processing. Items: Coffee Maker x1, Air Fryer XL x1. Total: ¥2,198. Estimated delivery: 2026-08-05."
+                "text": "订单 ORD-12346 正在处理中。商品：Coffee Maker x1、Air Fryer XL x1，总金额 ¥2,198，预计 2026-08-05 送达。"
               }
             ],
             "role": "model"
@@ -372,7 +372,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Show me details of iPhone 15 Pro."
+                "text": "给我看看 iPhone 15 Pro 的详情。"
               }
             ],
             "role": "user"
@@ -392,7 +392,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "iPhone."
+                "text": "iPhone。"
               }
             ],
             "role": "model"
@@ -404,7 +404,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Show me details of iPhone 15 Pro."
+                "text": "给我看看 iPhone 15 Pro 的详情。"
               }
             ],
             "role": "user"
@@ -424,7 +424,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "iPhone 15 Pro (P002) by Apple: A17 Pro chip, 48MP camera, titanium design, USB-C. Price: ¥7,999, rating 4.8/5, 50 units in stock."
+                "text": "iPhone 15 Pro（P002）苹果出品：A17 Pro 芯片，48MP 摄像头，钛金属设计，支持 USB-C。售价 ¥7,999，评分 4.8/5，库存 50 件。"
               }
             ],
             "role": "model"
@@ -445,7 +445,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Track my order ORD-77777."
+                "text": "帮我追踪订单 ORD-77777。"
               }
             ],
             "role": "user"
@@ -465,7 +465,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Your order ORD-77777 is out for delivery today."
+                "text": "您的订单 ORD-77777 今天正在派送中。"
               }
             ],
             "role": "model"
@@ -477,7 +477,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Track my order ORD-77777."
+                "text": "帮我追踪订单 ORD-77777。"
               }
             ],
             "role": "user"
@@ -497,7 +497,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-77777 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+                "text": "订单 ORD-77777 不存在，请核实订单 ID。有效订单：ORD-12345、ORD-12346、ORD-12347。"
               }
             ],
             "role": "model"
@@ -518,7 +518,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Find air fryers."
+                "text": "找找空气炸锅。"
               }
             ],
             "role": "user"
@@ -538,7 +538,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found it."
+                "text": "找到了。"
               }
             ],
             "role": "model"
@@ -550,7 +550,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Find air fryers."
+                "text": "找找空气炸锅。"
               }
             ],
             "role": "user"
@@ -570,7 +570,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found Air Fryer XL (P010) by KitchenPro at ¥899, rating 4.2/5, 100 units in stock. 7L capacity with 12 cooking presets and rapid air circulation."
+                "text": "找到 Air Fryer XL（P010）KitchenPro 出品，售价 ¥899，评分 4.2/5，库存 100 件。7L 容量，12 种烹饪预设，快速热风循环。"
               }
             ],
             "role": "model"
@@ -591,7 +591,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add a pair of running shoes to my cart."
+                "text": "往我的购物车加一双跑步鞋。"
               }
             ],
             "role": "user"
@@ -612,7 +612,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added 1x Men's Running Shoes to your cart, totaling ¥599.00."
+                "text": "已将 1 双 Men's Running Shoes 加入购物车，合计 ¥599.00。"
               }
             ],
             "role": "model"
@@ -624,7 +624,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add a pair of running shoes to my cart."
+                "text": "往我的购物车加一双跑步鞋。"
               }
             ],
             "role": "user"
@@ -645,7 +645,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added 1x Men's Running Shoes to your cart, totaling ¥599.00."
+                "text": "已将 1 双 Men's Running Shoes 加入购物车，合计 ¥599.00。"
               }
             ],
             "role": "model"
@@ -666,7 +666,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about Levi's 501 Jeans."
+                "text": "介绍一下 Levi's 501 Jeans。"
               }
             ],
             "role": "user"
@@ -686,7 +686,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Jeans by Levi's."
+                "text": "Levi's 的牛仔裤。"
               }
             ],
             "role": "model"
@@ -698,7 +698,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about Levi's 501 Jeans."
+                "text": "介绍一下 Levi's 501 Jeans。"
               }
             ],
             "role": "user"
@@ -718,7 +718,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Levi's 501 Jeans (P008) by Levi's: Original fit, non-stretch denim, straight leg. Price: ¥499, rating 4.4/5, 300 units in stock."
+                "text": "Levi's 501 Jeans（P008）Levi's 出品：原版剪裁，非弹力牛仔布，直筒裤型。售价 ¥499，评分 4.4/5，库存 300 件。"
               }
             ],
             "role": "model"
@@ -739,7 +739,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Redeem coupon FREEDELIVERY."
+                "text": "兑换优惠券 FREEDELIVERY。"
               }
             ],
             "role": "user"
@@ -759,7 +759,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "FREEDELIVERY coupon activated! Free shipping on your order."
+                "text": "FREEDELIVERY 优惠券已激活！您的订单免运费。"
               }
             ],
             "role": "model"
@@ -771,7 +771,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Redeem coupon FREEDELIVERY."
+                "text": "兑换优惠券 FREEDELIVERY。"
               }
             ],
             "role": "user"
@@ -791,7 +791,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon FREEDELIVERY is invalid or expired. Valid coupons: SAVE50 (¥50 off orders over ¥200), VIP10 (10% off), NEWUSER (¥30 off, min ¥100)."
+                "text": "优惠券 FREEDELIVERY 无效或已过期。有效优惠券：SAVE50（满 ¥200 减 ¥50）、VIP10（9 折）、NEWUSER（满 ¥100 减 ¥30）。"
               }
             ],
             "role": "model"
@@ -812,7 +812,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Show me electronics under ¥1000."
+                "text": "给我看看 ¥1000 以下的电子产品。"
               }
             ],
             "role": "user"
@@ -833,7 +833,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "No results."
+                "text": "没有结果。"
               }
             ],
             "role": "model"
@@ -845,7 +845,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Show me electronics under ¥1000."
+                "text": "给我看看 ¥1000 以下的电子产品。"
               }
             ],
             "role": "user"
@@ -866,7 +866,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found Wireless Bluetooth Headphones (P001) at ¥299, rating 4.5/5, 120 in stock. Other electronics start from ¥2,499+."
+                "text": "找到 Wireless Bluetooth Headphones（P001）售价 ¥299，评分 4.5/5，库存 120 件。其他电子产品起价 ¥2,499 以上。"
               }
             ],
             "role": "model"
@@ -887,7 +887,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply VIP10 coupon code."
+                "text": "使用 VIP10 优惠券。"
               }
             ],
             "role": "user"
@@ -907,7 +907,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon VIP10 applied! 10% off for VIP members has been applied to your order."
+                "text": "优惠券 VIP10 已使用！已为您的订单应用 VIP 会员 9 折优惠。"
               }
             ],
             "role": "model"
@@ -919,7 +919,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Apply VIP10 coupon code."
+                "text": "使用 VIP10 优惠券。"
               }
             ],
             "role": "user"
@@ -939,7 +939,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon VIP10 applied! 10% off for VIP members has been applied to your order."
+                "text": "优惠券 VIP10 已使用！已为您的订单应用 VIP 会员 9 折优惠。"
               }
             ],
             "role": "model"
@@ -960,7 +960,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Give me details on the Coffee Maker."
+                "text": "给我 Coffee Maker 的详细信息。"
               }
             ],
             "role": "user"
@@ -980,7 +980,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "A coffee machine."
+                "text": "一台咖啡机。"
               }
             ],
             "role": "model"
@@ -992,7 +992,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Give me details on the Coffee Maker."
+                "text": "给我 Coffee Maker 的详细信息。"
               }
             ],
             "role": "user"
@@ -1012,7 +1012,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coffee Maker (P005) by BrewMaster: Programmable drip coffee maker, 12-cup capacity, built-in grinder. Price: ¥1,299, rating 4.6/5, 80 units in stock."
+                "text": "Coffee Maker（P005）BrewMaster 出品：可编程滴漏咖啡机，12 杯容量，内置研磨器。售价 ¥1,299，评分 4.6/5，库存 80 件。"
               }
             ],
             "role": "model"
@@ -1033,7 +1033,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add product P888 to my cart."
+                "text": "把商品 P888 加入购物车。"
               }
             ],
             "role": "user"
@@ -1054,7 +1054,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Added P888 to cart."
+                "text": "P888 已加入购物车。"
               }
             ],
             "role": "model"
@@ -1066,7 +1066,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Add product P888 to my cart."
+                "text": "把商品 P888 加入购物车。"
               }
             ],
             "role": "user"
@@ -1087,7 +1087,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Product P888 does not exist. Please check the product ID. Valid products include P001 through P010."
+                "text": "商品 P888 不存在，请检查商品 ID。有效商品：P001 至 P010。"
               }
             ],
             "role": "model"
@@ -1108,7 +1108,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "What can you tell me about Sony WH-1000XM6?"
+                "text": "跟我说说 Sony WH-1000XM6。"
               }
             ],
             "role": "user"
@@ -1128,7 +1128,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Headphones."
+                "text": "耳机。"
               }
             ],
             "role": "model"
@@ -1140,7 +1140,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "What can you tell me about Sony WH-1000XM6?"
+                "text": "跟我说说 Sony WH-1000XM6。"
               }
             ],
             "role": "user"
@@ -1160,7 +1160,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Sony WH-1000XM6 (P006) by Sony: Industry-leading noise cancellation, 40h battery life, LDAC support. Price: ¥2,499, rating 4.9/5, 15 units in stock."
+                "text": "Sony WH-1000XM6（P006）索尼出品：业界领先的降噪技术，40 小时续航，支持 LDAC。售价 ¥2,499，评分 4.9/5，库存 15 件。"
               }
             ],
             "role": "model"
@@ -1181,7 +1181,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "I need a new phone. What do you have?"
+                "text": "我需要一部新手机，你们有什么？"
               }
             ],
             "role": "user"
@@ -1201,7 +1201,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "2 phones available."
+                "text": "有 2 款手机可选。"
               }
             ],
             "role": "model"
@@ -1213,7 +1213,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "I need a new phone. What do you have?"
+                "text": "我需要一部新手机，你们有什么？"
               }
             ],
             "role": "user"
@@ -1233,7 +1233,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Found 2 phones: iPhone 15 Pro (P002) at ¥7,999 (rating 4.8) and Samsung Galaxy S25 (P007) at ¥6,999 (rating 4.6). Both are great options with different features."
+                "text": "找到 2 款手机：iPhone 15 Pro（P002）售价 ¥7,999（评分 4.8），Samsung Galaxy S25（P007）售价 ¥6,999（评分 4.6）。两款都很不错，各有特色。"
               }
             ],
             "role": "model"
@@ -1254,7 +1254,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Order ORD-00001 status please."
+                "text": "查询订单 ORD-00001 的状态。"
               }
             ],
             "role": "user"
@@ -1274,7 +1274,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "ORD-00001 is pending shipment."
+                "text": "ORD-00001 等待发货中。"
               }
             ],
             "role": "model"
@@ -1286,7 +1286,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Order ORD-00001 status please."
+                "text": "查询订单 ORD-00001 的状态。"
               }
             ],
             "role": "user"
@@ -1306,7 +1306,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Order ORD-00001 not found. Please verify the order ID. Valid orders include ORD-12345, ORD-12346, ORD-12347."
+                "text": "订单 ORD-00001 不存在，请核实订单 ID。有效订单：ORD-12345、ORD-12346、ORD-12347。"
               }
             ],
             "role": "model"
@@ -1327,7 +1327,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Use my NEWUSER coupon."
+                "text": "使用我的 NEWUSER 优惠券。"
               }
             ],
             "role": "user"
@@ -1347,7 +1347,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon NEWUSER applied! ¥30 off, valid for new users with minimum ¥100 purchase."
+                "text": "优惠券 NEWUSER 已使用！新用户满 ¥100 立减 ¥30。"
               }
             ],
             "role": "model"
@@ -1359,7 +1359,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Use my NEWUSER coupon."
+                "text": "使用我的 NEWUSER 优惠券。"
               }
             ],
             "role": "user"
@@ -1379,7 +1379,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Coupon NEWUSER applied! ¥30 off, valid for new users with minimum ¥100 purchase."
+                "text": "优惠券 NEWUSER 已使用！新用户满 ¥100 立减 ¥30。"
               }
             ],
             "role": "model"
@@ -1400,7 +1400,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the Air Fryer XL."
+                "text": "介绍一下 Air Fryer XL。"
               }
             ],
             "role": "user"
@@ -1420,7 +1420,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "A kitchen appliance."
+                "text": "一件厨房电器。"
               }
             ],
             "role": "model"
@@ -1432,7 +1432,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Tell me about the Air Fryer XL."
+                "text": "介绍一下 Air Fryer XL。"
               }
             ],
             "role": "user"
@@ -1452,7 +1452,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Air Fryer XL (P010) by KitchenPro: 7L capacity, 12 cooking presets, rapid air circulation. Price: ¥899, rating 4.2/5, 100 units in stock."
+                "text": "Air Fryer XL（P010）KitchenPro 出品：7L 容量，12 种烹饪预设，快速热风循环。售价 ¥899，评分 4.2/5，库存 100 件。"
               }
             ],
             "role": "model"

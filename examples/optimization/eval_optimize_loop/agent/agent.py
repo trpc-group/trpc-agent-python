@@ -1,7 +1,7 @@
 """电商购物助手 agent 定义。
 
-创建配备了 6 个电商工具（搜索商品、查看详情、添加到购物车、查询订单、
-查看购物车、应用优惠券）的 LlmAgent 实例。
+创建配备了 7 个电商工具（搜索商品、查看详情、添加到购物车、查看购物车、
+结算、查询订单、应用优惠券）的 LlmAgent 实例。
 
 Agent 的 system prompt 从磁盘动态读取，支持 AgentOptimizer 热更新——
 优化后的 prompt 写入 agent/prompts/system.md 后，agent 自动使用新 prompt。
@@ -33,6 +33,7 @@ from .config import get_model_config
 from .tools import (
     add_to_cart,
     apply_coupon,
+    checkout,
     check_order_status,
     get_cart,
     get_product_details,
@@ -56,7 +57,7 @@ def create_agent(demo_mode: bool = True) -> LlmAgent:
 
     Args:
         demo_mode: True 时使用空凭证（配合 trace 模式评测，无需 API key）；
-                   False 时从环境变量读取 API key/base_url/model_name。
+        False 时从环境变量读取 API key/base_url/model_name。
 
     Returns:
         LlmAgent 实例，可直接用于评测和优化。
@@ -78,8 +79,9 @@ def create_agent(demo_mode: bool = True) -> LlmAgent:
             FunctionTool(search_products),
             FunctionTool(get_product_details),
             FunctionTool(add_to_cart),
-            FunctionTool(check_order_status),
             FunctionTool(get_cart),
+            FunctionTool(checkout),
+            FunctionTool(check_order_status),
             FunctionTool(apply_coupon),
         ],
         generate_content_config=GenerateContentConfig(
@@ -88,7 +90,6 @@ def create_agent(demo_mode: bool = True) -> LlmAgent:
             max_output_tokens=1024,
         ),
     )
-
 
 # 模块级 agent 实例，默认 demo 模式（向后兼容）
 root_agent = create_agent(demo_mode=True)

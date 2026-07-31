@@ -1,103 +1,161 @@
 {
-  "schema_version": "v1",
+  "schemaVersion": "v1",
   "algorithm": "gepa_reflective",
   "status": "SUCCEEDED",
-  "finish_reason": "completed",
-  "stop_reason": "no_improvement",
-  "error_message": "",
-  "baseline_pass_rate": 0.3333,
-  "best_pass_rate": 0.3333,
-  "pass_rate_improvement": 0.0,
-  "baseline_metric_breakdown": {
-    "final_response_avg_score": 0.3333,
-    "tool_trajectory_avg_score": 0.6667
-  },
-  "best_metric_breakdown": {
-    "final_response_avg_score": 0.3333,
-    "tool_trajectory_avg_score": 0.6667
-  },
-  "metric_thresholds": {
-    "final_response_avg_score": 1.0,
+  "finishReason": "completed",
+  "stopReason": "required_metrics_passing",
+  "errorMessage": "",
+  "baselinePassRate": 0.25,
+  "bestPassRate": 0.75,
+  "passRateImprovement": 0.5,
+  "baselineMetricBreakdown": {
+    "final_response_avg_score": 0.38,
     "tool_trajectory_avg_score": 1.0
   },
-  "per_metric_best_candidates": {},
-  "baseline_prompts": {
-    "system_prompt": "You are an e-commerce shopping assistant. Answer questions briefly."
+  "bestMetricBreakdown": {
+    "final_response_avg_score": 0.79,
+    "tool_trajectory_avg_score": 1.0
   },
-  "best_prompts": {
-    "system_prompt": "You are an e-commerce shopping assistant. Always provide detailed product information including price, rating, brand, and stock when answering product queries. When a product or order is not found, clearly state the error and list available alternatives. For cart operations, confirm the action with item names, quantities, and totals. Never fabricate order or coupon statuses — always relay exactly what the tool returns."
+  "metricThresholds": {
+    "final_response_avg_score": 0.6,
+    "tool_trajectory_avg_score": 0.75
   },
-  "total_rounds": 2,
+  "perMetricBestCandidates": {},
+  "baselinePrompts": {
+    "system_prompt": "你是电商购物助手，用中文与用户交流。你的职责是帮助用户搜索商品、查看商品详情、管理购物车、结算下单、查询订单和套用优惠券。\n\n你可以使用以下 7 个工具：\n\n1. `search_products(query, category)` — 按关键词搜索商品，可选按分类过滤（electronics/clothing/home）。\n2. `get_product_details(product_id)` — 获取商品详情（价格、评分、库存、描述、品牌）。\n3. `add_to_cart(product_id, quantity)` — 把商品加入购物车，默认数量 1。\n4. `get_cart()` — 查看当前购物车内容（商品、数量、总价）。\n5. `checkout()` — 结算购物车并生成订单号，结算成功后购物车自动清空。\n6. `check_order_status(order_id)` — 用订单号查询订单状态（processing/shipped/delivered）。\n7. `apply_coupon(code)` — 校验并应用优惠券（SAVE50/VIP10/NEWUSER）。\n\n典型购物流程：\n\n- 用户想买商品 → 先用 `search_products` 搜索，再视情况用 `get_product_details` 查看详情。\n- 用户要加入购物车 → 调用 `add_to_cart`，并告诉用户已添加的数量和金额。\n- 用户要查看购物车 → 调用 `get_cart`，逐项列出商品、数量和总价。\n- 用户要结算/支付/下单 → 调用 `checkout`，把生成的订单号告诉用户。\n- 用户要查订单 → 调用 `check_order_status`，需要用户提供订单号。\n- 用户要用优惠券 → 调用 `apply_coupon` 校验后再确认折扣。\n\n回答规范：\n\n- 必须基于工具的**真实返回结果**回答，绝不允许编造或猜测不存在的商品、订单、库存或优惠券。\n- 工具返回失败（商品不存在、库存不足、订单不存在、优惠券无效）时，如实转述失败原因，并给出可行的替代建议。\n- 回复要完整具体：包含商品名称、价格、数量、评分、库存等关键信息，不要只回复\"找到 2 个结果\"这类过短的回答。\n- 金额使用人民币（¥）表示。\n"
+  },
+  "bestPrompts": {
+    "system_prompt": "你是电商购物助手，用中文与用户交流。你必须基于工具的真实返回结果回答，绝不编造不存在的商品、订单、库存或优惠券。回复要完整具体：包含商品名称、价格、数量、评分、库存等关键信息，不要只回复\"找到 2 个结果\"这类过短回答。典型流程：搜索(search_products) → 详情(get_product_details) → 加购(add_to_cart) → 确认(get_cart) → 结算(checkout 生成订单号) → 查询订单(check_order_status)；优惠券(apply_coupon)先校验再确认。"
+  },
+  "totalRounds": 3,
   "rounds": [
     {
       "round": 1,
-      "optimized_field_names": ["system_prompt"],
-      "candidate_prompts": {
-        "system_prompt": "You are a helpful e-commerce shopping assistant. When answering product questions, always include price, rating, brand, and stock availability. For cart actions, confirm with item details and totals. When a product or order is not found, clearly state the error and suggest alternatives."
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {
+        "system_prompt": "你是电商购物助手，用中文与用户交流。你必须基于工具的真实返回结果回答，绝不编造不存在的商品、订单、库存或优惠券。回复要完整具体：包含商品名称、价格、数量、评分、库存等关键信息，不要只回复\"找到 2 个结果\"这类过短回答。典型流程：搜索(search_products) → 详情(get_product_details) → 加购(add_to_cart) → 确认(get_cart) → 结算(checkout 生成订单号) → 查询订单(check_order_status)；优惠券(apply_coupon)先校验再确认。"
       },
-      "train_pass_rate": 0.0,
-      "validation_pass_rate": 0.3333,
-      "metric_breakdown": {
-        "final_response_avg_score": 0.3333,
-        "tool_trajectory_avg_score": 0.6667
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.3,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.42,
+        "tool_trajectory_avg_score": 1.0
       },
-      "accepted": false,
-      "acceptance_reason": "No improvement in validation pass rate; val_003 regression detected.",
-      "failed_case_ids": ["val_001_optimizable", "val_002_ineffective"],
-      "failed_cases_truncated": 0,
-      "per_field_diagnosis": {
-        "system_prompt": "The candidate prompt adds product detail requirements but does not fix the coupon hallucination issue. val_001 now passes but val_002 still fails due to the agent ignoring tool output for invalid coupons."
+      "accepted": true,
+      "acceptanceReason": "prompt 更明确要求详细回答，多数 optimizable 用例通过",
+      "failedCaseIds": [
+        "train_001_optimizable"
+      ],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 0,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
       },
-      "reflection_lm_calls": 1,
-      "round_llm_cost": 0.001,
-      "round_token_usage": {"prompt": 500, "completion": 200, "total": 700},
-      "started_at": "2026-07-30T10:00:00Z",
-      "duration_seconds": 5.0,
+      "startedAt": "2026-07-31T07:00:00+00:00",
+      "durationSeconds": 38.5,
       "kind": "reflective",
-      "train_minibatch_size": 3,
-      "train_subsample_parent_score": 0.3,
-      "train_subsample_candidate_score": 0.4,
-      "budget_used": 6,
-      "budget_total": 30
+      "trainMinibatchSize": 0,
+      "trainSubsampleParentScore": null,
+      "trainSubsampleCandidateScore": null,
+      "skipReason": null,
+      "errorMessage": null,
+      "budgetUsed": null,
+      "budgetTotal": null,
+      "extras": {}
     },
     {
       "round": 2,
-      "optimized_field_names": ["system_prompt"],
-      "candidate_prompts": {
-        "system_prompt": "You are an e-commerce shopping assistant. Always provide detailed product information including price, rating, brand, and stock when answering product queries. When a product or order is not found, clearly state the error and list available alternatives. For cart operations, confirm the action with item names, quantities, and totals. Never fabricate order or coupon statuses — always relay exactly what the tool returns."
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {
+        "system_prompt": "你是电商购物助手，用中文与用户交流。你必须基于工具的真实返回结果回答，绝不编造不存在的商品、订单、库存或优惠券。回复要完整具体：包含商品名称、价格、数量、评分、库存等关键信息，不要只回复\"找到 2 个结果\"这类过短回答。典型流程：搜索(search_products) → 详情(get_product_details) → 加购(add_to_cart) → 确认(get_cart) → 结算(checkout 生成订单号) → 查询订单(check_order_status)；优惠券(apply_coupon)先校验再确认。"
       },
-      "train_pass_rate": 0.0,
-      "validation_pass_rate": 0.3333,
-      "metric_breakdown": {
-        "final_response_avg_score": 0.3333,
-        "tool_trajectory_avg_score": 0.6667
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.55,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.61,
+        "tool_trajectory_avg_score": 1.0
       },
       "accepted": true,
-      "acceptance_reason": "Pass rate unchanged but no new regressions; this is the best candidate.",
-      "failed_case_ids": ["val_002_ineffective", "val_003_regression"],
-      "failed_cases_truncated": 0,
-      "per_field_diagnosis": {
-        "system_prompt": "This candidate adds anti-fabrication instructions but the agent still ignores tool output for invalid coupons (val_002) and now incorrectly responds to cart queries with product suggestions instead of showing cart contents (val_003 regression). Training cases improved but validation shows overfitting."
+      "acceptanceReason": "进一步强调工具数据真实性，减少幻觉",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 0,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
       },
-      "reflection_lm_calls": 1,
-      "round_llm_cost": 0.001,
-      "round_token_usage": {"prompt": 600, "completion": 250, "total": 850},
-      "started_at": "2026-07-30T10:00:10Z",
-      "duration_seconds": 6.0,
+      "startedAt": "2026-07-31T07:00:00+00:00",
+      "durationSeconds": 38.5,
       "kind": "reflective",
-      "train_minibatch_size": 3,
-      "train_subsample_parent_score": 0.4,
-      "train_subsample_candidate_score": 0.5,
-      "budget_used": 12,
-      "budget_total": 30
+      "trainMinibatchSize": 0,
+      "trainSubsampleParentScore": null,
+      "trainSubsampleCandidateScore": null,
+      "skipReason": null,
+      "errorMessage": null,
+      "budgetUsed": null,
+      "budgetTotal": null,
+      "extras": {}
+    },
+    {
+      "round": 3,
+      "optimizedFieldNames": [
+        "system_prompt"
+      ],
+      "candidatePrompts": {
+        "system_prompt": "你是电商购物助手，用中文与用户交流。你必须基于工具的真实返回结果回答，绝不编造不存在的商品、订单、库存或优惠券。回复要完整具体：包含商品名称、价格、数量、评分、库存等关键信息，不要只回复\"找到 2 个结果\"这类过短回答。典型流程：搜索(search_products) → 详情(get_product_details) → 加购(add_to_cart) → 确认(get_cart) → 结算(checkout 生成订单号) → 查询订单(check_order_status)；优惠券(apply_coupon)先校验再确认。"
+      },
+      "trainPassRate": 0.0,
+      "validationPassRate": 0.75,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.79,
+        "tool_trajectory_avg_score": 1.0
+      },
+      "accepted": true,
+      "acceptanceReason": "要求完整呈现价格/库存等细节，全部 optimizable 用例通过",
+      "failedCaseIds": [],
+      "failedCasesTruncated": 0,
+      "perFieldDiagnosis": {},
+      "reflectionLmCalls": 0,
+      "roundLlmCost": 0.0,
+      "roundTokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "startedAt": "2026-07-31T07:00:00+00:00",
+      "durationSeconds": 38.5,
+      "kind": "reflective",
+      "trainMinibatchSize": 0,
+      "trainSubsampleParentScore": null,
+      "trainSubsampleCandidateScore": null,
+      "skipReason": null,
+      "errorMessage": null,
+      "budgetUsed": null,
+      "budgetTotal": null,
+      "extras": {}
     }
   ],
-  "total_reflection_lm_calls": 2,
-  "total_judge_model_calls": 0,
-  "total_llm_cost": 0.002,
-  "total_token_usage": {"prompt": 1100, "completion": 450, "total": 1550},
-  "duration_seconds": 15.0,
-  "started_at": "2026-07-30T09:59:55Z",
-  "finished_at": "2026-07-30T10:00:10Z",
+  "totalReflectionLmCalls": 6,
+  "totalJudgeModelCalls": 0,
+  "totalLlmCost": 0.0,
+  "totalTokenUsage": {
+    "prompt": 0,
+    "completion": 0,
+    "total": 0
+  },
+  "durationSeconds": 120.0,
+  "startedAt": "2026-07-31T07:00:00+00:00",
+  "finishedAt": "2026-07-31T07:00:01+00:00",
   "extras": {}
 }

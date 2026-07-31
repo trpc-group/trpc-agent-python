@@ -181,7 +181,7 @@ async def main() -> None:
             print("  python run_pipeline.py --demo-mode")
             sys.exit(1)
         model_name = os.environ.get("TRPC_AGENT_MODEL_NAME", "gpt-4o-mini")
-        print(f"[Real 模式] API Key: {'*' * 8}... | Base URL: {os.environ['TRPC_AGENT_BASE_URL']} | Model: {model_name}")
+        print(f"[Real 模式] API Key: sk-{'*' * 10}... | Base URL: {os.environ['TRPC_AGENT_BASE_URL']} | Model: {model_name}")
     else:
         print("[Demo 模式] 使用预录制 trace 数据，无需 API key")
 

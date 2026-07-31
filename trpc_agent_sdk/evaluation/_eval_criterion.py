@@ -75,18 +75,23 @@ class TextCriterion(EvalBaseModel):
         e = expected if expected is not None else ""
         if self.compare is not None:
             return self.compare(a, e)
+        if self.match == "regex":
+            import re
+            # Use IGNORECASE instead of lower()ing the pattern: lower() breaks
+            # character-class escapes, e.g. [\s\S]* becomes [\s\s]* so only
+            # whitespace can be skipped and punctuation-separated key facts
+            # never match.
+            flags = re.IGNORECASE if self.case_insensitive else 0
+            try:
+                return bool(re.search(e, a, flags))
+            except re.error:
+                return False
         if self.case_insensitive:
             a, e = a.lower(), e.lower()
         if self.match == "exact":
             return a == e
         if self.match == "contains":
             return e in a
-        if self.match == "regex":
-            import re
-            try:
-                return bool(re.search(e, a))
-            except re.error:
-                return False
         return a == e
 
     @classmethod

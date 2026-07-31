@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Protocol, runtime_checkable
 
@@ -46,23 +48,32 @@ class TraceBackend:
     ) -> tuple[EvaluateResult, EvalSetReport]:
         with open(metrics_config_path, "r") as f:
             config_data = json.load(f)
+        config_data = _strip_llm_metrics(config_data)
         EvalConfig(**config_data)  # 校验
 
-        executer = AgentEvaluator.get_executer(
-            eval_dataset_file_path_or_dir=eval_set_path,
-            eval_metrics_file_path_or_dir=metrics_config_path,
-            num_runs=num_runs,
-        )
-        # 只吞 AssertionError — 基线本来就该有失败 case
+        # demo/trace 模式不能调用 LLM judge: 把剔除 llm_* 后的配置写到临时
+        # 文件再传路径（get_executer 只接受路径），用后即删。
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            json.dump(config_data, tf, ensure_ascii=False, indent=2)
+            tmp_metrics_path = tf.name
         try:
-            await executer.evaluate()
-        except AssertionError:
-            pass
+            executer = AgentEvaluator.get_executer(
+                eval_dataset_file_path_or_dir=eval_set_path,
+                eval_metrics_file_path_or_dir=tmp_metrics_path,
+                num_runs=num_runs,
+            )
+            # 只吞 AssertionError — 基线本来就该有失败 case
+            try:
+                await executer.evaluate()
+            except AssertionError:
+                pass
 
-        raw: EvaluateResult | None = executer.get_result()
-        if raw is None:
-            raise RuntimeError(f"评测失败 ({eval_set_path}): 无返回结果")
-        return raw, _build_report(raw)
+            raw: EvaluateResult | None = executer.get_result()
+            if raw is None:
+                raise RuntimeError(f"评测失败 ({eval_set_path}): 无返回结果")
+            return raw, _build_report(raw)
+        finally:
+            os.unlink(tmp_metrics_path)
 
 
 class LiveBackend:
@@ -143,6 +154,19 @@ async def applied_prompts(
         yield
     finally:
         await target_prompt.write_all(baseline)
+
+
+def _strip_llm_metrics(config_data: dict) -> dict:
+    """剔除 llm_* 指标（如 llm_rubric_response）。
+
+    trace 模式用录制好的轨迹重放，无法调用 LLM judge；保留这些指标会让
+    demo 流水线去请求外部模型。live 模式不经过这里，指标原样生效。
+    """
+    metrics = config_data.get("metrics")
+    if not isinstance(metrics, list):
+        return config_data
+    kept = [m for m in metrics if not str(m.get("metric_name", "")).startswith("llm_")]
+    return {**config_data, "metrics": kept}
 
 
 def _build_report(raw: EvaluateResult) -> EvalSetReport:

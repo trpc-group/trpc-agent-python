@@ -2,19 +2,62 @@
   "metrics": [
     {
       "metric_name": "final_response_avg_score",
-      "threshold": 1.0,
+      "threshold": 0.6,
       "criterion": {
         "final_response": {
           "text": {
-            "match": "contains",
+            "match": "regex",
             "case_insensitive": true
           }
         }
       }
     },
     {
+      "metric_name": "llm_rubric_response",
+      "threshold": 0.6,
+      "criterion": {
+        "llmJudge": {
+          "judge_model": {
+            "model_name": "${TRPC_AGENT_MODEL_NAME}",
+            "api_key": "${TRPC_AGENT_API_KEY}",
+            "base_url": "${TRPC_AGENT_BASE_URL}",
+            "generation_config": {
+              "max_tokens": 2048,
+              "temperature": 0
+            }
+          },
+          "rubrics": [
+            {
+              "id": "fact_accuracy",
+              "description": "事实准确性",
+              "type": "FACT_ACCURACY",
+              "content": {
+                "text": "回答中提到的商品名称、价格、评分、库存数量、订单号等事实信息必须与工具返回结果一致，不得编造或臆测。只要出现一处关键事实错误或凭空捏造，本项判否。"
+              }
+            },
+            {
+              "id": "completeness",
+              "description": "完整性",
+              "type": "COMPLETENESS",
+              "content": {
+                "text": "回答应覆盖任务要求的关键信息：商品搜索或推荐场景需包含商品名称与价格（若工具提供，还应包含评分、库存）；详情、购物车、结算、订单查询等场景需包含对应关键字段（价格、数量、评分、库存、订单号、状态等）。仅回复「已找到 N 个结果」这类缺少关键信息的过短回答，本项判否。"
+              }
+            },
+            {
+              "id": "failure_handling",
+              "description": "失败处理",
+              "type": "FAILURE_HANDLING",
+              "content": {
+                "text": "若工具调用失败或结果为空（商品不存在、库存不足、订单不存在、优惠券无效等），回答必须如实转述失败原因，并给出可行的替代建议。若任务实际成功完成，本项直接判是；若回答隐瞒失败或编造成功结果，本项判否。"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
       "metric_name": "tool_trajectory_avg_score",
-      "threshold": 1.0,
+      "threshold": 0.75,
       "criterion": {
         "tool_trajectory": {
           "default": {

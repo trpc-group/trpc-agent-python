@@ -1,0 +1,5 @@
+order_id,status,date,items,total,estimated_delivery
+ORD-12345,shipped,2026-07-25,"[{""name"": ""iPhone 15 Pro"", ""qty"": 1, ""price"": 7999.0}]",7999.00,2026-08-02
+ORD-12346,processing,2026-07-29,"[{""name"": ""Coffee Maker"", ""qty"": 1, ""price"": 1299.0}, {""name"": ""Air Fryer XL"", ""qty"": 1, ""price"": 899.0}]",2198.00,2026-08-05
+ORD-12347,delivered,2026-07-20,"[{""name"": ""Men's Running Shoes"", ""qty"": 1, ""price"": 599.0}]",599.00,2026-07-26
+ORD-20260731-A69A,processing,2026-07-31,"[{""name"": ""Wireless Bluetooth Headphones"", ""qty"": 2, ""price"": 299.0}]",598.0,2026-08-07

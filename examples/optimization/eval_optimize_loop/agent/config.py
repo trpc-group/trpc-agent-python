@@ -5,9 +5,7 @@
     - TRPC_AGENT_API_KEY: API 密钥
     - TRPC_AGENT_BASE_URL: API 基础 URL
     - TRPC_AGENT_MODEL_NAME: 模型名称（默认 gpt-4o-mini）
-
   Demo 模式（--demo-mode，默认）：不需要任何环境变量，使用预录制 trace 数据
-
 调用方式:
     api_key, base_url, model_name = get_model_config(demo_mode=True)
 """
@@ -20,10 +18,8 @@ def get_model_config(demo_mode: bool = True) -> tuple[str, str, str]:
 
     Args:
         demo_mode: 是否为 demo 模式。demo 模式下不需要 API key。
-
     Returns:
         (api_key, base_url, model_name) 元组。
-
     Raises:
         ValueError: Real 模式下缺少必需的环境变量时抛出。
     """

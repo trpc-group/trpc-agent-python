@@ -108,7 +108,8 @@ eval_optimize_loop/
 ├── agent/
 │   ├── agent.py                       # 购物助手 Agent + 工具注册
 │   ├── config.py
-│   ├── tools.py
+│   ├── tools.py                       # 7 个电商工具（CSV 共享数据层）
+│   ├── data/                          # 工具共享数据：products.csv / cart.csv / orders.csv
 │   └── prompts/system.md              # 优化目标
 ├── tests/
 └── output/
@@ -289,9 +290,12 @@ python data/_generate_evalsets.py     # 一次生成 trace/ 和 live/ 两套
 | `search_products(query, category)` | 搜索商品，支持按分类过滤 |
 | `get_product_details(product_id)` | 获取商品详情（价格、评分、库存等） |
 | `add_to_cart(product_id, quantity)` | 添加商品到购物车 |
-| `check_order_status(order_id)` | 查询订单状态 |
 | `get_cart()` | 查看购物车内容 |
+| `checkout()` | 结算购物车，生成订单号并清空购物车 |
+| `check_order_status(order_id)` | 查询订单状态 |
 | `apply_coupon(code)` | 应用优惠券 |
+
+工具数据通过 `agent/data/` 下的 CSV 文件共享（`products.csv` 商品目录、`cart.csv` 购物车、`orders.csv` 订单记录），保证商品页、购物车、订单之间的数据一致性。
 
 ---
 
