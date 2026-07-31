@@ -1,0 +1,64 @@
+schema_version: "1"
+policy_version: "example-v1"
+whitelisted_domains:
+  - api.example.com
+  - localhost
+  - 127.0.0.1
+  - "::1"
+forbidden_paths:
+  - /
+  - /etc
+  - /root
+  - /boot
+  - /dev
+  - /proc
+  - /sys
+sensitive_paths:
+  - /home/<user>/.ssh
+  - /home/<user>/.aws
+  - /home/<user>/.config/gcloud
+  - .env
+  - credentials
+allowed_paths:
+  - workspace
+allowed_commands:
+  - echo
+  - printf
+  - pwd
+  - ls
+denied_commands:
+  - mkfs
+  - shutdown
+  - reboot
+rules: {}
+deny_threshold: high
+review_threshold: medium
+failures:
+  parse_failure: needs_human_review
+  unsupported_language: needs_human_review
+  unknown: needs_human_review
+  budget_exceeded: needs_human_review
+  scanner_internal_error: deny
+block_on_review: true
+nested:
+  max_depth: 3
+  max_total_bytes: 512000
+  max_base64_decode_bytes: 64000
+  max_children: 32
+max_findings: 128
+max_evidence_length: 512
+redaction:
+  enabled: true
+  max_depth: 6
+  max_items: 64
+  max_string_length: 512
+  max_fields: 64
+audit:
+  enabled: false
+runtime_limits:
+  enforcement: declaration_only
+  timeout_seconds: 30
+  cpu_percent: 100
+  memory_mb: 512
+  max_pids: 64
+  network_allowed: false

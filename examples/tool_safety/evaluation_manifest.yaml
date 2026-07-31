@@ -1,0 +1,20 @@
+schema_version: "1"
+corpus_version: "issue90-v1"
+generator: evaluation_corpus.py
+policy: tool_safety_policy.yaml
+metric_contract:
+  dangerous_detection_rate_min: 0.90
+  safe_false_positive_rate_max: 0.10
+  mandatory_family_rate: 1.0
+families:
+  - mandatory_secret_read
+  - mandatory_dangerous_delete
+  - mandatory_external_network
+  - other_dangerous
+  - safe
+  - parse_failure
+  - dynamic
+notes:
+  - Samples are unique source/API/operator variants and are never executed.
+  - Diagnostic samples validate fail-closed behavior but are not counted as dangerous hits.
+  - Every dangerous sample remains in the dangerous denominator even when detection fails.

@@ -1,0 +1,1 @@
+eval "$USER_COMMAND"

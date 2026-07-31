@@ -1,0 +1,86 @@
+schema_version: "1"
+samples:
+  - name: safe_python
+    file: samples/safe_python.py
+    language: python
+    expected_decision: allow
+    expected_risk: null
+    required_rules: []
+    expected_blocked: false
+  - name: dangerous_delete
+    file: samples/dangerous_delete.sh
+    language: shell
+    expected_decision: deny
+    expected_risk: critical
+    required_rules: [SH.FILESYSTEM.DESTRUCTIVE_DELETE]
+    expected_blocked: true
+  - name: read_secret_key
+    file: samples/read_secret_key.py
+    language: python
+    expected_decision: deny
+    expected_risk: high
+    required_rules: [PY.SECRET.SENSITIVE_PATH_READ]
+    expected_blocked: true
+  - name: external_network
+    file: samples/external_network.py
+    language: python
+    expected_decision: deny
+    expected_risk: high
+    required_rules: [PY.NETWORK.NON_WHITELISTED]
+    expected_blocked: true
+  - name: allowed_network
+    file: samples/allowed_network.py
+    language: python
+    expected_decision: allow
+    expected_risk: null
+    required_rules: []
+    expected_blocked: false
+  - name: subprocess_call
+    file: samples/subprocess_call.py
+    language: python
+    expected_decision: deny
+    expected_risk: high
+    required_rules: [PY.PROCESS.SPAWN]
+    expected_blocked: true
+  - name: shell_injection
+    file: samples/shell_injection.sh
+    language: shell
+    expected_decision: needs_human_review
+    expected_risk: medium
+    required_rules: [SH.DYNAMIC.EVAL_OR_SOURCE]
+    expected_blocked: true
+  - name: dependency_install
+    file: samples/dependency_install.sh
+    language: shell
+    expected_decision: deny
+    expected_risk: high
+    required_rules: [SH.DEPENDENCY.INSTALL]
+    expected_blocked: true
+  - name: infinite_loop
+    file: samples/infinite_loop.py
+    language: python
+    expected_decision: deny
+    expected_risk: high
+    required_rules: [PY.RESOURCE.INFINITE_LOOP]
+    expected_blocked: true
+  - name: secret_output
+    file: samples/secret_output.py
+    language: python
+    expected_decision: deny
+    expected_risk: high
+    required_rules: [PY.SECRET.OUTPUT]
+    expected_blocked: true
+  - name: bash_pipe
+    file: samples/bash_pipe.sh
+    language: shell
+    expected_decision: deny
+    expected_risk: critical
+    required_rules: [SH.NESTED.DOWNLOAD_EXECUTE]
+    expected_blocked: true
+  - name: human_review
+    file: samples/human_review.py
+    language: python
+    expected_decision: needs_human_review
+    expected_risk: medium
+    required_rules: [PY.NETWORK.DYNAMIC_TARGET]
+    expected_blocked: true
