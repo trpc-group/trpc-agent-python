@@ -12,6 +12,7 @@ from trpc_agent_sdk.evaluation._target_prompt import TargetPrompt
 from pipeline._eval_backend import EvalBackend
 from pipeline._models import (
     AcceptanceGateConfig,
+    PerCaseScore,
     PipelineReport,
 )
 from pipeline._stage_acceptance_gate import AcceptanceGate
@@ -91,7 +92,7 @@ class PipelineRunner:
         # ---- Stage 2: 失败归因 ----
         print("[Stage 2/6] 失败归因...")
         # 合并 train + val 的 per_case 为 dict[eval_id, PerCaseScore]
-        combined: dict[str, object] = {}
+        combined: dict[str, PerCaseScore] = {}
         for c in train_report.per_case:
             combined[c.eval_id] = c
         for c in val_report.per_case:
@@ -107,13 +108,11 @@ class PipelineRunner:
             from agent.agent import create_agent
 
             target_prompt = TargetPrompt().add_path(self._prompt_field_name, self._prompt_source_path)
-            counter = {"calls": 0}
 
             async def call_agent(input_text: str) -> str:
                 from trpc_agent_sdk.types import Content, Part
                 # agent 每次重建以重读 system.md
                 agent = create_agent(demo_mode=False)
-                counter["calls"] += 1
                 user_content = Content(parts=[Part.from_text(text=input_text)])
                 response = await agent.generate_content(user_content)
                 if response.candidates and response.candidates[0].content:
@@ -162,6 +161,6 @@ class PipelineRunner:
         # ---- Stage 6: 报告 ----
         print("[Stage 6/6] 审计落盘...")
         report.pipeline_duration_seconds = time.time() - start
-        json_path = ReportGenerator.generate_json(report, str(run_dir))
-        md_path = ReportGenerator.generate_markdown(report, str(run_dir))
+        ReportGenerator.generate_json(report, str(run_dir))
+        ReportGenerator.generate_markdown(report, str(run_dir))
         return report
