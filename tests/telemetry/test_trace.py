@@ -23,6 +23,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry import trace
 
 from trpc_agent_sdk.telemetry._trace import (
     _build_llm_request_for_trace,
@@ -883,10 +884,12 @@ class TestTraceCallLlm:
         req.config.model_dump = MagicMock(return_value={"temperature": 0.7})
         return req
 
-    def _make_llm_response(self, content=None, usage=None, error_message=None):
+    def _make_llm_response(self, content=None, usage=None, error_code=None, error_message=None, custom_metadata=None):
         resp = MagicMock()
         resp.content = content
+        resp.error_code = error_code
         resp.error_message = error_message
+        resp.custom_metadata = custom_metadata
         resp.model_dump_json = MagicMock(return_value='{"content": "response"}')
         resp.usage_metadata = usage
         return resp
@@ -908,6 +911,35 @@ class TestTraceCallLlm:
         span.set_attribute.assert_any_call("trpc.python.agent.invocation_id", "inv-1")
         span.set_attribute.assert_any_call("trpc.python.agent.session_id", "sess-1")
         span.set_attribute.assert_any_call("trpc.python.agent.event_id", "e-1")
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_error_response_marks_span_and_records_exception(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        req = self._make_llm_request()
+        resp = self._make_llm_response(
+            error_code="STREAMING_ERROR",
+            error_message="rate limit exceeded",
+            custom_metadata={"error_type": "RateLimitError"},
+        )
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        span.set_status.assert_called_once_with(trace.StatusCode.ERROR, "rate limit exceeded")
+        span.set_attribute.assert_any_call("error.type", "RateLimitError")
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.llm.error_code",
+            "STREAMING_ERROR",
+        )
+        span.add_event.assert_called_once_with(
+            "exception",
+            {
+                "exception.type": "RateLimitError",
+                "exception.message": "rate limit exceeded",
+            },
+        )
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_usage_metadata(self, mock_get_span):
