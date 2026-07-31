@@ -1,0 +1,19 @@
+diff --git a/check.py b/check.py
+index 1111111..2222222 100644
+--- a/check.py
++++ b/check.py
+@@ -1,2 +1,4 @@
+ def check(value):
+     return value > 0
+ 
++result = check(1)
+diff --git a/tests/test_check.py b/tests/test_check.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_check.py
+@@ -0,0 +1,4 @@
++from check import check
++
++
++def test_check():
++    assert check(1)

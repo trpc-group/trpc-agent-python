@@ -1,0 +1,11 @@
+diff --git a/app.py b/app.py
+index 1111111..2222222 100644
+--- a/app.py
++++ b/app.py
+@@ -1,2 +1,5 @@
+ import subprocess
+ 
++def run_user_code(user_input):
++    return eval(user_input)
++
++subprocess.run(user_input, shell=True)

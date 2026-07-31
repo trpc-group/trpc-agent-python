@@ -1,0 +1,10 @@
+diff --git a/storage.py b/storage.py
+index 1111111..2222222 100644
+--- a/storage.py
++++ b/storage.py
+@@ -1,2 +1,5 @@
+ import sqlite3
+ 
++def load_user(path, query):
++    connection = sqlite3.connect(path)
++    return connection.execute(query).fetchall()

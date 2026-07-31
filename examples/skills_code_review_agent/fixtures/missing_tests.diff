@@ -1,0 +1,10 @@
+diff --git a/payment.py b/payment.py
+index 1111111..2222222 100644
+--- a/payment.py
++++ b/payment.py
+@@ -1,2 +1,5 @@
+ def charge(amount):
+     return amount
+ 
++def refund(amount):
++    return -amount

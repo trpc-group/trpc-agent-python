@@ -1,0 +1,186 @@
+{
+  "conclusion": "High risk findings require changes before merge.",
+  "findings": [
+    {
+      "category": "secret",
+      "confidence": 0.95,
+      "evidence": "API key assignment = [REDACTED]",
+      "file": "config.py",
+      "fingerprint": "9b84f43c60e40c43c1ac575c8f7905bf8cf8fa31b92c65c77448a29555854d30",
+      "line": 3,
+      "recommendation": "Move secrets to a managed secret store or environment configuration.",
+      "severity": "critical",
+      "source": "rule",
+      "title": "Hard-coded secret in changed code"
+    },
+    {
+      "category": "secret",
+      "confidence": 0.95,
+      "evidence": "secret assignment = [REDACTED]",
+      "file": "config.py",
+      "fingerprint": "c9c7b48e03948431aad61c539c4c531c7c332a9e65b153b531574525b76e369a",
+      "line": 4,
+      "recommendation": "Move secrets to a managed secret store or environment configuration.",
+      "severity": "critical",
+      "source": "rule",
+      "title": "Hard-coded secret in changed code"
+    }
+  ],
+  "interceptions": [
+    {
+      "budget_ms": null,
+      "command": "python skills/code-review/scripts/rule_runner.py --input output/parsed_input.json --manifest output/skill_manifest.json --output output/rule_result.json",
+      "created_at": "2026-07-31T03:00:58.023030+00:00",
+      "cwd": ".",
+      "decision": "allow",
+      "id": "filter-event-sample",
+      "metadata": {
+        "input": "output/parsed_input.json",
+        "manifest": "output/skill_manifest.json",
+        "output": "output/rule_result.json"
+      },
+      "network_host": "",
+      "output_limit_bytes": 65536,
+      "path": "",
+      "reason": "execution request allowed by example policy",
+      "reason_code": "unknown",
+      "runtime": "dry-run",
+      "script_path": "skills/code-review/scripts/rule_runner.py",
+      "skill_name": "",
+      "target": "python skills/code-review/scripts/rule_runner.py --input output/parsed_input.json --manifest output/skill_manifest.json --output output/rule_result.json",
+      "target_type": "command",
+      "task_id": "review-sample-secret",
+      "timeout_sec": 30.0,
+      "tool_name": ""
+    }
+  ],
+  "metrics": {
+    "category_distribution": {
+      "secret": 2,
+      "test": 1
+    },
+    "exception_distribution": {},
+    "finding_count": 2,
+    "interception_count": 0,
+    "needs_human_review_count": 0,
+    "sandbox_duration_ms": 1,
+    "severity_distribution": {
+      "critical": 2,
+      "low": 1
+    },
+    "tool_call_count": 1,
+    "total_duration_ms": 21,
+    "warning_count": 1
+  },
+  "needs_human_review": [],
+  "sandbox_runs": [
+    {
+      "command": "python skills/code-review/scripts/rule_runner.py --input output/parsed_input.json --manifest output/skill_manifest.json --output output/rule_result.json",
+      "created_at": "2026-07-31T03:00:58.023040+00:00",
+      "duration_ms": 1,
+      "error_type": "",
+      "exit_code": 0,
+      "id": "sandbox-run-sample",
+      "output_limit_bytes": 65536,
+      "runtime": "dry-run",
+      "status": "success",
+      "stderr": "",
+      "stderr_truncated": false,
+      "stdout": "{\"schema_version\": \"code-review.rules.v1\", \"skill_name\": \"code-review\", \"findings\": [{\"severity\": \"critical\", \"category\": \"secret\", \"file\": \"config.py\", \"title\": \"Hard-coded secret in changed code\", \"evidence\": \"API key assignment = [REDACTED]\", \"recommendation\": \"Move secrets to a managed secret store or environment configuration.\", \"confidence\": 0.95, \"source\": \"rule\", \"line\": 3}, {\"severity\": \"critical\", \"category\": \"secret\", \"file\": \"config.py\", \"title\": \"Hard-coded secret in changed code\", \"evidence\": \"secret assignment = [REDACTED]\", \"recommendation\": \"Move secrets to a managed secret store or environment configuration.\", \"confidence\": 0.95, \"source\": \"rule\", \"line\": 4}], \"diagnostics\": []}",
+      "stdout_truncated": false,
+      "task_id": "review-sample-secret",
+      "timeout_sec": 30.0
+    }
+  ],
+  "stats": {
+    "added_lines": 3,
+    "deleted_lines": 0,
+    "files": 1,
+    "hunks": 1,
+    "input_summary": {
+      "added_lines": 3,
+      "changed_files": [
+        {
+          "added_lines": 3,
+          "candidate_lines": [
+            3,
+            4,
+            5
+          ],
+          "deleted_lines": 0,
+          "hunks": [
+            {
+              "lines": [
+                {
+                  "content": "import os",
+                  "line_type": "context",
+                  "new_line": 1,
+                  "old_line": 1
+                },
+                {
+                  "content": "",
+                  "line_type": "context",
+                  "new_line": 2,
+                  "old_line": 2
+                },
+                {
+                  "content": "API key assignment = [REDACTED]",
+                  "line_type": "added",
+                  "new_line": 3,
+                  "old_line": null
+                },
+                {
+                  "content": "secret assignment = [REDACTED]",
+                  "line_type": "added",
+                  "new_line": 4,
+                  "old_line": null
+                },
+                {
+                  "content": "authorization header = Bearer [REDACTED]",
+                  "line_type": "added",
+                  "new_line": 5,
+                  "old_line": null
+                }
+              ],
+              "new_count": 5,
+              "new_start": 1,
+              "old_count": 2,
+              "old_start": 1,
+              "section_header": ""
+            }
+          ],
+          "is_binary": false,
+          "old_path": "config.py",
+          "path": "config.py",
+          "status": "modified"
+        }
+      ],
+      "deleted_lines": 0,
+      "diagnostics": [],
+      "file_count": 1,
+      "hunk_count": 1,
+      "input_ref": "fixtures/secret.diff",
+      "input_type": "fixture",
+      "parser_version": "code-review.input.v1",
+      "raw_diff_sha256": "c7443e7d240ce96931d892af90208017be68d994bdb5d084fbfca67ee2d891bb",
+      "summary": "1 file(s), 1 hunk(s), 3 added, 0 deleted",
+      "task_id": "review-sample-secret",
+      "warnings": []
+    }
+  },
+  "task_id": "review-sample-secret",
+  "warnings": [
+    {
+      "category": "test",
+      "confidence": 0.65,
+      "evidence": "1 source file(s) changed without a test or fixture change.",
+      "file": "config.py",
+      "fingerprint": "fa5be8a7a785151d5b1476b5a590d7c6a88a66c0b22ae51e71a3b96f82d94d7e",
+      "line": 3,
+      "recommendation": "Add or update focused tests or fixtures for the changed behavior.",
+      "severity": "low",
+      "source": "rule",
+      "title": "Source change has no matching test update"
+    }
+  ]
+}

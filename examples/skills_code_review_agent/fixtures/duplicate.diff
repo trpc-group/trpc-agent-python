@@ -1,0 +1,14 @@
+diff --git a/app.py b/app.py
+index 1111111..2222222 100644
+--- a/app.py
++++ b/app.py
+@@ -1 +1,2 @@
+ old = True
++result = eval(user_input)
+diff --git a/app.py b/app.py
+index 1111111..2222222 100644
+--- a/app.py
++++ b/app.py
+@@ -1 +1,2 @@
+ old = True
++result = eval(user_input)
