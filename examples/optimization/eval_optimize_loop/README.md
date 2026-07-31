@@ -319,6 +319,7 @@ pytest examples/optimization/eval_optimize_loop/tests/ -v
 | `gate_metrics.json` ⊇ `optimizer.json` 的 metric | 两层策略的包含关系 |
 | `optimizer.json` 不含黑盒不兼容 metric | 启动期 fail-fast（比对 `_DISALLOWED_METRICS_IN_CALL_AGENT_MODE`） |
 | scenario 按 eval_id 后缀推导正确 | 场景标注 |
+| `TraceBackend` / `LiveBackend` 满足 `EvalBackend` Protocol | 运行时 `isinstance` 校验 |
 
 ---
 
