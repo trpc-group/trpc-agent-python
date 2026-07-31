@@ -9,7 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.evaluation import AgentEvaluator, EvalConfig, EvalSet, TargetPrompt
+from trpc_agent_sdk.evaluation import (
+    AgentEvaluator,
+    EvalConfig,
+    EvalSet,
+    EvalStatus,
+    TargetPrompt,
+)
 
 from examples.optimization.eval_optimize_loop.pipeline import backends as backends_module
 from examples.optimization.eval_optimize_loop.pipeline import optimizer_worker as optimizer_worker_module
@@ -25,6 +31,7 @@ from examples.optimization.eval_optimize_loop.pipeline.live_adapter import (
     LiveAdapterSpec,
     load_verified_callback,
 )
+from examples.optimization.eval_optimize_loop.pipeline.offline_evaluation import prepare_offline_evaluation
 from examples.optimization.eval_optimize_loop.pipeline.models import (
     AttributionSnapshot,
     Phase,
@@ -252,6 +259,36 @@ async def test_fake_llm_metric_uses_deterministic_offline_substitute(tmp_path, m
     }
     run_metrics = {metric.metric_name: metric for metric in snapshot.cases[0].runs[0].metrics}
     assert [rubric.id for rubric in run_metrics["llm_rubric_response"].rubrics] == ["response_quality"]
+
+
+def test_offline_rubric_empty_invocations_are_a_hard_failure() -> None:
+    config = EvalConfig(
+        metrics=[{
+            "metric_name": "llm_rubric_response",
+            "threshold": 1,
+            "criterion": {
+                "llm_judge": {
+                    "judge_model": {
+                        "model_name": "must-not-load"
+                    },
+                    "rubrics": [{
+                        "id": "response_quality",
+                        "type": "OFFLINE_RESPONSE_NON_EMPTY",
+                    }],
+                }
+            },
+        }],
+        num_runs=1,
+    )
+    offline_config, registry = prepare_offline_evaluation(config)
+    assert registry is not None
+    evaluator = registry.get_evaluator(offline_config.get_eval_metrics()[0])
+
+    result = evaluator.evaluate_invocations([], None)
+
+    assert result.overall_score == 0.0
+    assert result.overall_eval_status == EvalStatus.FAILED
+    assert result.per_invocation_results == []
 
 
 @pytest.mark.asyncio

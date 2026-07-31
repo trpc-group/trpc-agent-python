@@ -137,7 +137,11 @@ class _OfflineRubricEvaluator(Evaluator):
                     ],
                 ))
         if not per_invocation:
-            return EvaluationResult()
+            return EvaluationResult(
+                overall_score=0.0,
+                overall_eval_status=EvalStatus.FAILED,
+                per_invocation_results=[],
+            )
         overall_score = statistics.fmean(invocation_scores)
         return EvaluationResult(
             overall_score=overall_score,
