@@ -42,10 +42,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
 
+from pipeline._eval_backend import LiveBackend, TraceBackend
 from pipeline._models import AcceptanceGateConfig
 from pipeline._runner import PipelineRunner
 
@@ -55,50 +57,22 @@ DATA_DIR = _HERE / "data"                              # 数据目录（evalset�
 OUTPUT_DIR = _HERE / "output"                          # 默认输出目录
 PROMPT_PATH = _HERE / "agent" / "prompts" / "system.md"  # 系统 prompt 文件
 
-# ---- 场景映射表 ----
-# 将每个 eval case 映射到其场景类型，供 Stage 4 候选验证时标注 delta 使用
-SCENARIO_MAP = {
-    "train_001_optimizable": "optimizable_success",
-    "train_002_ineffective": "optimization_ineffective",
-    "train_003_working": "optimization_regression",
-    "train_004_optimizable": "optimizable_success",
-    "train_005_ineffective": "optimization_ineffective",
-    "train_006_working": "optimization_regression",
-    "train_007_optimizable": "optimizable_success",
-    "train_008_optimizable": "optimizable_success",
-    "train_009_ineffective": "optimization_ineffective",
-    "train_010_working": "optimization_regression",
-    "train_011_optimizable": "optimizable_success",
-    "train_012_ineffective": "optimization_ineffective",
-    "train_013_working": "optimization_regression",
-    "train_014_optimizable": "optimizable_success",
-    "train_015_optimizable": "optimizable_success",
-    "train_016_ineffective": "optimization_ineffective",
-    "train_017_working": "optimization_regression",
-    "train_018_optimizable": "optimizable_success",
-    "train_019_ineffective": "optimization_ineffective",
-    "train_020_optimizable": "optimizable_success",
-    "val_001_optimizable": "optimizable_success",
-    "val_002_ineffective": "optimization_ineffective",
-    "val_003_regression": "optimization_regression",
-    "val_004_optimizable": "optimizable_success",
-    "val_005_regression": "optimization_regression",
-    "val_006_optimizable": "optimizable_success",
-    "val_007_ineffective": "optimization_ineffective",
-    "val_008_optimizable": "optimizable_success",
-    "val_009_regression": "optimization_regression",
-    "val_010_optimizable": "optimizable_success",
-    "val_011_ineffective": "optimization_ineffective",
-    "val_012_optimizable": "optimizable_success",
-    "val_013_regression": "optimization_regression",
-    "val_014_optimizable": "optimizable_success",
-    "val_015_ineffective": "optimization_ineffective",
-    "val_016_optimizable": "optimizable_success",
-    "val_017_optimizable": "optimizable_success",
-    "val_018_ineffective": "optimization_ineffective",
-    "val_019_regression": "optimization_regression",
-    "val_020_optimizable": "optimizable_success",
-}
+
+def derive_scenario(eval_id: str) -> str:
+    """按 eval_id 后缀推导场景. 不维护映射表.
+
+    - ``_optimizable`` → ``optimizable_success``
+    - ``_ineffective`` → ``optimization_ineffective``
+    - ``_working`` / ``_regression`` → ``optimization_regression``
+    - 未知后缀 → ``"unknown"`` (调用方应显式处理)
+    """
+    if eval_id.endswith("_optimizable"):
+        return "optimizable_success"
+    if eval_id.endswith("_ineffective"):
+        return "optimization_ineffective"
+    if eval_id.endswith("_working") or eval_id.endswith("_regression"):
+        return "optimization_regression"
+    return "unknown"
 
 
 def build_gate_config(
@@ -127,6 +101,12 @@ def build_gate_config(
         critical_case_ids=critical_case_ids or [],
         max_cost_budget=max_cost_budget,
     )
+
+
+def _build_scenario_map(val_eval_path: Path) -> dict[str, str]:
+    """读取验证集 evalset.json, 推导出每个 case 的场景."""
+    cases = json.loads(val_eval_path.read_text())["eval_cases"]
+    return {c["eval_id"]: derive_scenario(c["eval_id"]) for c in cases}
 
 
 async def main() -> None:
@@ -222,20 +202,41 @@ async def main() -> None:
         max_cost_budget=args.max_cost,
     )
 
-    # 创建流水线运行器并执行
+    # 组装 backend 与路径 — demo/real 模式的唯一差异收敛于此.
+    if args.demo_mode:
+        val_baseline_eval_path = DATA_DIR / "trace" / "val_baseline.evalset.json"
+        val_candidate_eval_path = DATA_DIR / "trace" / "val_optimized.evalset.json"
+        train_eval_path = str(DATA_DIR / "trace" / "train.evalset.json")
+        backend = TraceBackend()
+        demo_optimize_result_path = str(DATA_DIR / "demo_optimize_result.json")
+        train_eval_path_real = None
+    else:
+        val_baseline_eval_path = DATA_DIR / "live" / "val.evalset.json"
+        val_candidate_eval_path = DATA_DIR / "live" / "val.evalset.json"
+        train_eval_path = str(DATA_DIR / "live" / "train.evalset.json")
+        # LiveBackend 接收 agent factory, 而非 agent 实例 — 每次评估重建以重读 system.md.
+        # 这里懒加载 factory 只在 real 模式下触发, 避免 demo 模式无谓校验 API key.
+        backend = LiveBackend(agent_factory=_agent_factory_lazy())
+        demo_optimize_result_path = None
+        train_eval_path_real = str(DATA_DIR / "live" / "train.evalset.json")
+
+    scenario_map = _build_scenario_map(val_baseline_eval_path)
+
     runner = PipelineRunner(
-        train_eval_path=str(DATA_DIR / "train_baseline.evalset.json"),
-        val_baseline_eval_path=str(DATA_DIR / "val_baseline.evalset.json"),
-        val_optimized_eval_path=str(DATA_DIR / "val_optimized.evalset.json"),
-        metrics_config_path=str(DATA_DIR / "test_config.json"),
+        train_eval_path=train_eval_path,
+        val_baseline_eval_path=str(val_baseline_eval_path),
+        val_candidate_eval_path=str(val_candidate_eval_path),
+        gate_metrics_config_path=str(DATA_DIR / "gate_metrics.json"),
         optimizer_config_path=str(DATA_DIR / "optimizer.json"),
         prompt_source_path=str(PROMPT_PATH),
         prompt_field_name="system_prompt",
         gate_config=gate_config,
-        demo_optimize_result_path=str(DATA_DIR / "demo_optimize_result.json"),
-        output_dir=args.output_dir,
+        backend=backend,
         demo_mode=args.demo_mode,
-        scenario_map=SCENARIO_MAP,
+        output_dir=args.output_dir,
+        scenario_map=scenario_map,
+        demo_optimize_result_path=demo_optimize_result_path,
+        train_eval_path_real=train_eval_path_real,
     )
 
     report = await runner.run()
@@ -252,8 +253,17 @@ async def main() -> None:
             status = "通过" if check.passed else "失败"
             print(f"  [{status}] {check.check_name}: {check.detail}")
 
-    print(f"\n报告已写入: {args.output_dir}")
+    # runner 在 output_dir 下创建 <UTC-timestamp>/ 子目录; 父目录 args.output_dir
+    # 仅作为入口, 真正的写入位置是其中最新修改的那个子目录.
+    print(f"\n报告父目录: {args.output_dir} (内部按 UTC 时间戳分子目录)")
     print("=" * 60)
+
+
+def _agent_factory_lazy():
+    """惰性返回 create_agent — 仅在 real 模式被 LiveBackend 真正调用时才导入 agent.agent."""
+    from agent.agent import create_agent
+
+    return create_agent
 
 
 if __name__ == "__main__":
