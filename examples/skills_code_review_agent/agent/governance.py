@@ -241,17 +241,36 @@ def _argv_is_dangerous(argv: tuple[str, ...]) -> bool:
         return False
     executable = Path(argv[0]).name.lower()
     arguments = [item.lower() for item in argv[1:]]
-    flags = {item for item in arguments if item.startswith("-")}
-    if executable == "rm" and ({"-rf", "-fr"} & flags or {"--recursive", "--force"} <= flags):
+    if executable == "rm" and _rm_is_recursive_force(arguments):
         return True
-    if executable == "chmod" and ("-R" in argv[1:] or "-r" in flags or "--recursive" in flags):
+    if executable == "chmod" and _has_recursive_flag(arguments):
         return True
-    if executable == "chown" and ("-R" in argv[1:] or "-r" in flags or "--recursive" in flags):
+    if executable == "chown" and _has_recursive_flag(arguments):
         return True
     if executable == "mkfs":
         return True
     if executable == "dd" and any(item.startswith("if=") for item in arguments):
         return True
+    return False
+
+
+def _rm_is_recursive_force(arguments: list[str]) -> bool:
+    long_flags = {item for item in arguments if item.startswith("--")}
+    if {"--recursive", "--force"} <= long_flags:
+        return True
+    short_flags: set[str] = set()
+    for item in arguments:
+        if item.startswith("-") and not item.startswith("--"):
+            short_flags.update(item[1:])
+    return "r" in short_flags and "f" in short_flags
+
+
+def _has_recursive_flag(arguments: list[str]) -> bool:
+    for item in arguments:
+        if item == "--recursive":
+            return True
+        if item.startswith("-") and not item.startswith("--") and "r" in item[1:]:
+            return True
     return False
 
 
@@ -271,13 +290,16 @@ def _payload_is_dangerous(payload: str) -> bool:
         redirect_markers = (f"> {root}", f">> {root}", f"> {trimmed_root}", f">> {trimmed_root}")
         if any(marker in lowered for marker in redirect_markers):
             return True
+    for command in re.split(r"[;&|]+", payload):
+        try:
+            argv = tuple(shlex.split(command))
+        except ValueError:
+            argv = tuple(command.split())
+        if _argv_is_dangerous(argv):
+            return True
     if re.search(r"(^|[;&|][&|]?\s*)mkfs(\s|$)", lowered):
         return True
     if re.search(r"(^|[;&|][&|]?\s*)dd\s+[^;&|]*\bif=", lowered):
-        return True
-    if re.search(r"(^|[;&|][&|]?\s*)rm\s+[^;&|]*(?:-rf|-fr)\b", lowered):
-        return True
-    if re.search(r"(^|[;&|][&|]?\s*)rm\s+[^;&|]*--recursive\b[^;&|]*--force\b", lowered):
         return True
     if re.search(r"(^|[;&|][&|]?\s*)chmod\s+[^;&|]*(?:-r\b|--recursive\b)", lowered):
         return True

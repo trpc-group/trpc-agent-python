@@ -19,6 +19,7 @@ from examples.skills_code_review_agent.agent import ReviewStore
 from examples.skills_code_review_agent.agent import RuntimeKind
 from examples.skills_code_review_agent.agent import SandboxStatus
 from examples.skills_code_review_agent.agent import run_review_pipeline
+from examples.skills_code_review_agent.tests.secret_samples import generic_password_value
 
 
 def test_dry_run_pipeline_writes_artifacts_database_and_reports(tmp_path: Path):
@@ -56,9 +57,10 @@ def test_container_pipeline_records_human_review_without_real_container(tmp_path
 
 
 def test_sandbox_timeout_does_not_crash_pipeline(tmp_path: Path, monkeypatch):
+    sensitive_value = generic_password_value()
 
     def raise_timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=["python"], timeout=1, output="password=plainsecret")
+        raise subprocess.TimeoutExpired(cmd=["python"], timeout=1, output=f"password={sensitive_value}")
 
     monkeypatch.setattr("examples.skills_code_review_agent.agent.sandbox.subprocess.run", raise_timeout)
     result = run_review_pipeline(
@@ -74,7 +76,7 @@ def test_sandbox_timeout_does_not_crash_pipeline(tmp_path: Path, monkeypatch):
 
     assert result.sandbox_runs[0].status is SandboxStatus.TIMEOUT
     report_text = json.dumps(result.report.to_dict())
-    assert "plainsecret" not in report_text
+    assert sensitive_value not in report_text
     with ReviewStore(tmp_path / "review.sqlite3") as store:
         assert store.get_metrics(result.task.id)["exception_distribution_json"]["TimeoutExpired"] == 1
         assert store.get_report(result.task.id)

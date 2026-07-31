@@ -24,6 +24,7 @@ from examples.skills_code_review_agent.agent import ReviewTask
 from examples.skills_code_review_agent.agent import RuntimeKind
 from examples.skills_code_review_agent.agent import SandboxRun
 from examples.skills_code_review_agent.agent import parse_unified_diff
+from examples.skills_code_review_agent.tests.secret_samples import generic_password_value
 
 
 def test_store_initializes_schema(tmp_path: Path):
@@ -85,7 +86,8 @@ def test_store_does_not_duplicate_same_fingerprint_route(tmp_path: Path):
 
 def test_store_redacts_sensitive_text(tmp_path: Path):
     task, input_summary, finding, event, sandbox, report = _review_objects()
-    finding.evidence = "password=plainsecret"
+    sensitive_value = generic_password_value()
+    finding.evidence = f"password={sensitive_value}"
 
     with ReviewStore(tmp_path / "review.sqlite3") as store:
         store.save_review(
@@ -100,7 +102,7 @@ def test_store_redacts_sensitive_text(tmp_path: Path):
             report_json_path=tmp_path / "review_report.json",
             report_md_path=tmp_path / "review_report.md",
         )
-        assert "plainsecret" not in store.list_findings(task.id)[0]["evidence"]
+        assert sensitive_value not in store.list_findings(task.id)[0]["evidence"]
 
 
 def _review_objects():

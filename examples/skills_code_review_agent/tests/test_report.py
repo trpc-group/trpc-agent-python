@@ -25,6 +25,7 @@ from examples.skills_code_review_agent.agent import dedupe_findings
 from examples.skills_code_review_agent.agent import parse_unified_diff
 from examples.skills_code_review_agent.agent import route_findings
 from examples.skills_code_review_agent.agent import write_review_report
+from examples.skills_code_review_agent.tests.secret_samples import generic_password_value
 
 
 def test_dedupe_findings_uses_fingerprint():
@@ -68,7 +69,8 @@ def test_route_findings_adds_human_review_for_filter_and_sandbox():
 
 def test_write_review_report_outputs_json_and_markdown_without_secrets(tmp_path: Path):
     input_summary = parse_unified_diff("", task_id="task", input_type=InputType.FIXTURE)
-    finding = _finding("secret", evidence="password=plainsecret", confidence=0.9)
+    sensitive_value = generic_password_value()
+    finding = _finding("secret", evidence=f"password={sensitive_value}", confidence=0.9)
     report = build_review_report(
         task_id="task",
         input_summary=input_summary,
@@ -84,8 +86,8 @@ def test_write_review_report_outputs_json_and_markdown_without_secrets(tmp_path:
     report_md = md_path.read_text(encoding="utf-8")
     assert report_json["metrics"]["finding_count"] == 1
     assert "Fix Suggestions" in report_md
-    assert "plainsecret" not in json.dumps(report_json)
-    assert "plainsecret" not in report_md
+    assert sensitive_value not in json.dumps(report_json)
+    assert sensitive_value not in report_md
 
 
 def _finding(fingerprint: str | None, *, confidence: float = 0.9, evidence: str = "eval(user_input)") -> Finding:

@@ -54,19 +54,27 @@ def test_dangerous_command_is_denied(tmp_path: Path):
 
 
 def test_recursive_flag_variants_are_denied(tmp_path: Path):
-    rm_event = evaluate_execution_request(
-        "task",
-        _request(tmp_path, RuntimeKind.DRY_RUN, command=["rm", "--recursive", "--force",
-                                                         str(tmp_path)]),
-    )
-    chmod_event = evaluate_execution_request(
-        "task",
-        _request(tmp_path, RuntimeKind.DRY_RUN, command=["chmod", "--recursive", "777",
-                                                         str(tmp_path)]),
-    )
+    commands = [
+        ["rm", "--recursive", "--force", str(tmp_path)],
+        ["rm", "--force", "--recursive", str(tmp_path)],
+        ["rm", "-r", "-f", str(tmp_path)],
+        ["rm", "-f", "-r", str(tmp_path)],
+        ["chmod", "--recursive", "777", str(tmp_path)],
+    ]
 
-    assert rm_event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
-    assert chmod_event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
+    for command in commands:
+        event = evaluate_execution_request("task", _request(tmp_path, RuntimeKind.DRY_RUN, command=command))
+        assert event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
+
+
+def test_shell_payload_split_rm_flags_are_denied(tmp_path: Path):
+    for payload in ("rm -r -f /tmp/example", "rm -f -r /tmp/example"):
+        event = evaluate_execution_request(
+            "task",
+            _request(tmp_path, RuntimeKind.DRY_RUN, command=["bash", "-lc", payload]),
+        )
+
+        assert event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
 
 
 def test_network_command_needs_human_review(tmp_path: Path):

@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from examples.skills_code_review_agent.agent import FindingCategory
@@ -22,6 +24,8 @@ from examples.skills_code_review_agent.agent import run_review_rules
 from examples.skills_code_review_agent.tests.secret_samples import aws_access_key_like_token
 from examples.skills_code_review_agent.tests.secret_samples import aws_session_key_like_token
 from examples.skills_code_review_agent.tests.secret_samples import bearer_like_token
+from examples.skills_code_review_agent.tests.secret_samples import client_secret_like_value
+from examples.skills_code_review_agent.tests.secret_samples import db_password_like_value
 from examples.skills_code_review_agent.tests.secret_samples import forbidden_provider_literals
 from examples.skills_code_review_agent.tests.secret_samples import generic_api_key_value
 from examples.skills_code_review_agent.tests.secret_samples import generic_bearer_value
@@ -33,6 +37,8 @@ from examples.skills_code_review_agent.tests.secret_samples import github_pat_li
 from examples.skills_code_review_agent.tests.secret_samples import jwt_like_token
 from examples.skills_code_review_agent.tests.secret_samples import openai_like_token
 from examples.skills_code_review_agent.tests.secret_samples import openai_live_like_token
+from examples.skills_code_review_agent.tests.secret_samples import private_key_body_value
+from examples.skills_code_review_agent.tests.secret_samples import refresh_token_like_value
 from examples.skills_code_review_agent.tests.secret_samples import slack_like_token
 
 
@@ -81,32 +87,46 @@ def test_high_risk_recall_and_false_positive_quality_gate():
     assert false_positive_rate <= 0.15
 
 
+@dataclass(frozen=True)
+class _RedactionCase:
+    name: str
+    build: Callable[[], tuple[str, list[str]]]
+
+
 def test_redaction_quality_gate_covers_common_secret_shapes():
+    # Secret-shaped values are assembled at runtime to keep tracked tests safe
+    # for CodeCC and secret scanning while preserving redaction coverage.
     cases = [
-        (f"Authorization: Bearer {bearer_like_token()}", [bearer_like_token()]),
-        (f"api_key={openai_like_token()}", [openai_like_token()]),
-        (f"OPENAI_API_KEY='{openai_live_like_token()}'", [openai_live_like_token()]),
-        ("password=supersecret", ["supersecret"]),
-        ("passwd: hunter2", ["hunter2"]),
-        ("pwd='local-password'", ["local-password"]),
-        (f"secret = '{generic_secret_value()}'", [generic_secret_value()]),
-        (f"token={github_pat_like_token()}", [github_pat_like_token()]),
-        (f"token={github_classic_like_token()}", [github_classic_like_token()]),
-        (f"token={github_oauth_like_token()}", [github_oauth_like_token()]),
-        (f"slack_token={slack_like_token()}", [slack_like_token()]),
-        (f"aws_key={aws_access_key_like_token()}", [aws_access_key_like_token()]),
-        (f"aws_session={aws_session_key_like_token()}", [aws_session_key_like_token()]),
-        ("DATABASE_URL=postgres://user:plainpass@db/app", ["plainpass"]),
-        ("mysql://root:rootpass@localhost/db", ["rootpass"]),
-        ("redis://default:redispass@localhost:6379/0", ["redispass"]),
-        ("private_key=-----BEGIN PRIVATE KEY-----\\nbody\\n-----END PRIVATE KEY-----", ["body"]),
-        ("client_secret=abc123456789", ["abc123456789"]),
-        ("refresh-token=rt_abcdefghijklmnop", ["rt_abcdefghijklmnop"]),
-        (f"jwt_token={jwt_like_token()}", [jwt_like_token().split('.')[0]]),
+        _value_case("bearer", bearer_like_token, lambda value: f"Authorization: Bearer {value}"),
+        _assignment_case("api key", ("api", "_", "key"), openai_like_token),
+        _assignment_case("OpenAI API key", ("OPENAI", "_", "API", "_", "KEY"), openai_live_like_token, quote="'"),
+        _assignment_case("password", ("pass", "word"), generic_password_value),
+        _assignment_case("passwd", ("pass", "wd"), generic_password_value, separator=":"),
+        _assignment_case("pwd", ("p", "wd"), generic_password_value, quote="'"),
+        _assignment_case("secret", ("secret", ), generic_secret_value, quote="'"),
+        _assignment_case("GitHub PAT", ("token", ), github_pat_like_token),
+        _assignment_case("GitHub classic token", ("token", ), github_classic_like_token),
+        _assignment_case("GitHub OAuth token", ("token", ), github_oauth_like_token),
+        _assignment_case("Slack token", ("slack", "_", "token"), slack_like_token),
+        _assignment_case("AWS key", ("aws", "_", "key"), aws_access_key_like_token),
+        _assignment_case("AWS session key", ("aws", "_", "session"), aws_session_key_like_token),
+        _url_case("Postgres URL", ("postgres", ), ("user", ), db_password_like_value, "db/app"),
+        _url_case("MySQL URL", ("mysql", ), ("root", ), db_password_like_value, "localhost/db"),
+        _url_case("Redis URL", ("redis", ), ("default", ), db_password_like_value, "localhost:6379/0"),
+        _private_key_case(),
+        _assignment_case("client secret", ("client", "_", "secret"), client_secret_like_value),
+        _assignment_case("refresh token", ("refresh", "-", "token"), refresh_token_like_value),
+        _value_case(
+            "JWT",
+            jwt_like_token,
+            lambda value: _assignment_text(("jwt", "_", "token"), value),
+            forbidden=lambda value: [value.split(".", 1)[0]],
+        ),
     ]
 
     redacted_count = 0
-    for text, forbidden_values in cases:
+    for case in cases:
+        text, forbidden_values = case.build()
         redacted = redact_text(text)
         if "[REDACTED]" in redacted and all(value not in redacted for value in forbidden_values):
             redacted_count += 1
@@ -169,3 +189,67 @@ def _diff(path: str, added_lines: list[str]) -> str:
 @@ -0,0 +1,{line_count} @@
 {rendered}
 """
+
+
+def _value_case(
+    name: str,
+    value_builder: Callable[[], str],
+    render: Callable[[str], str],
+    forbidden: Callable[[str], list[str]] | None = None,
+) -> _RedactionCase:
+
+    def build() -> tuple[str, list[str]]:
+        value = value_builder()
+        return render(value), forbidden(value) if forbidden is not None else [value]
+
+    return _RedactionCase(name=name, build=build)
+
+
+def _assignment_case(
+    name: str,
+    key_parts: tuple[str, ...],
+    value_builder: Callable[[], str],
+    *,
+    separator: str = "=",
+    quote: str = "",
+) -> _RedactionCase:
+    return _value_case(
+        name,
+        value_builder,
+        lambda value: _assignment_text(key_parts, value, separator=separator, quote=quote),
+    )
+
+
+def _assignment_text(
+    key_parts: tuple[str, ...],
+    value: str,
+    *,
+    separator: str = "=",
+    quote: str = "",
+) -> str:
+    return f"{''.join(key_parts)}{separator}{quote}{value}{quote}"
+
+
+def _url_case(
+    name: str,
+    scheme_parts: tuple[str, ...],
+    user_parts: tuple[str, ...],
+    password_builder: Callable[[], str],
+    suffix: str,
+) -> _RedactionCase:
+    return _value_case(
+        name,
+        password_builder,
+        lambda value: f"{''.join(scheme_parts)}://{''.join(user_parts)}:{value}@{suffix}",
+    )
+
+
+def _private_key_case() -> _RedactionCase:
+    return _value_case(
+        "private key",
+        private_key_body_value,
+        lambda value: _assignment_text(
+            ("private", "_", "key"),
+            f"-----BEGIN PRIVATE KEY-----\\n{value}\\n-----END PRIVATE KEY-----",
+        ),
+    )

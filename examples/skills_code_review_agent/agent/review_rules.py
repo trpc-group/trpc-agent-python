@@ -309,16 +309,24 @@ def _line_content(lines: list[tuple[int | None, str]], line: int | None) -> str:
 
 def _missing_tests_finding(input_summary: InputSummary) -> Finding | None:
     source_files = [item for item in input_summary.changed_files if _is_source_file(item.path)]
-    if not source_files or any(_is_test_file(item.path) for item in input_summary.changed_files):
+    if not source_files:
         return None
-    first = source_files[0]
+    test_paths = [item.path for item in input_summary.changed_files if _is_test_file(item.path)]
+    uncovered = [
+        item for item in source_files
+        if not any(_is_related_test_path(item.path, test_path) for test_path in test_paths)
+    ]
+    if not uncovered:
+        return None
+    first = uncovered[0]
     return _finding(
         severity=FindingSeverity.LOW,
         category=FindingCategory.TEST,
         file=first.path,
         line=first.candidate_lines[0] if first.candidate_lines else None,
         title="Source change has no matching test update",
-        evidence=f"{len(source_files)} source file(s) changed without a test or fixture change.",
+        evidence=(f"{len(uncovered)} of {len(source_files)} source file(s) changed without a matching test "
+                  "or fixture change."),
         recommendation="Add or update focused tests or fixtures for the changed behavior.",
         confidence=0.65,
     )
@@ -356,6 +364,68 @@ def _is_test_file(path: str) -> bool:
     name = lower.rsplit("/", 1)[-1]
     return ("/tests/" in f"/{lower}" or name.startswith("test_") or name.endswith("_test.py") or "fixture" in lower
             or lower.startswith("tests/"))
+
+
+def _is_related_test_path(source_path: str, test_path: str) -> bool:
+    source_parts = _path_parts(source_path)
+    test_parts = _path_parts(test_path)
+    if not source_parts or not test_parts or not _is_test_file(test_path):
+        return False
+
+    source_name = source_parts[-1]
+    source_stem, source_suffix = _split_name(source_name)
+    test_name = test_parts[-1]
+    test_stem, _test_suffix = _split_name(test_name)
+    source_parent = source_parts[:-1]
+    test_parent = _strip_test_roots(test_parts[:-1])
+
+    if "fixture" in "/".join(test_parts):
+        return _fixture_matches(source_stem, test_stem, test_parent, source_parent)
+
+    expected_names = _expected_test_names(source_stem, source_suffix)
+    if test_name not in expected_names:
+        return False
+    return test_parent == source_parent or not test_parent
+
+
+def _path_parts(path: str) -> tuple[str, ...]:
+    return tuple(part for part in path.lower().replace("\\", "/").split("/") if part)
+
+
+def _split_name(name: str) -> tuple[str, str]:
+    if "." not in name:
+        return name, ""
+    stem, suffix = name.rsplit(".", 1)
+    return stem, f".{suffix}"
+
+
+def _strip_test_roots(parts: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(part for part in parts if part not in {"test", "tests", "__tests__", "fixtures", "fixture"})
+
+
+def _expected_test_names(stem: str, suffix: str) -> set[str]:
+    if suffix in {".js", ".jsx", ".ts", ".tsx"}:
+        return {
+            f"{stem}.test{suffix}",
+            f"{stem}.spec{suffix}",
+            f"test_{stem}{suffix}",
+        }
+    return {
+        f"test_{stem}{suffix}",
+        f"{stem}_test{suffix}",
+    }
+
+
+def _fixture_matches(
+    source_stem: str,
+    fixture_stem: str,
+    fixture_parent: tuple[str, ...],
+    source_parent: tuple[str, ...],
+) -> bool:
+    if fixture_parent and fixture_parent != source_parent:
+        return False
+    tokens = {token for token in re.split(r"[^a-z0-9]+", fixture_stem) if token}
+    return fixture_stem == source_stem or source_stem in tokens
 
 
 def _finding(

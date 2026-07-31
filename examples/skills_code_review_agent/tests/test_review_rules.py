@@ -95,6 +95,64 @@ diff --git a/tests/test_app.py b/tests/test_app.py
     assert all(item.category is not FindingCategory.TEST for item in findings)
 
 
+def test_unrelated_test_update_does_not_suppress_missing_tests_finding():
+    diff = _diff_for_paths({
+        "app.py": ["new = 1"],
+        "tests/test_other.py": ["assert True"],
+    })
+
+    findings = run_review_rules(parse_unified_diff(diff, task_id="task-unrelated-test"))
+
+    assert _first(findings, FindingCategory.TEST).file == "app.py"
+
+
+def test_nested_related_test_update_suppresses_missing_tests_finding():
+    diff = _diff_for_paths({
+        "pkg/app.py": ["new = 1"],
+        "tests/pkg/test_app.py": ["assert new == 1"],
+    })
+
+    findings = run_review_rules(parse_unified_diff(diff, task_id="task-nested-test"))
+
+    assert all(item.category is not FindingCategory.TEST for item in findings)
+
+
+def test_partial_test_coverage_keeps_missing_tests_finding():
+    diff = _diff_for_paths({
+        "app.py": ["new = 1"],
+        "storage.py": ["new = 2"],
+        "tests/test_app.py": ["assert new == 1"],
+    })
+
+    findings = run_review_rules(parse_unified_diff(diff, task_id="task-partial-test"))
+    test_finding = _first(findings, FindingCategory.TEST)
+
+    assert test_finding.file == "storage.py"
+    assert "1 of 2" in test_finding.evidence
+
+
+def test_related_fixture_update_suppresses_missing_tests_finding():
+    diff = _diff_for_paths({
+        "payment.py": ["refund = True"],
+        "fixtures/payment.diff": ["fixture = True"],
+    })
+
+    findings = run_review_rules(parse_unified_diff(diff, task_id="task-related-fixture"))
+
+    assert all(item.category is not FindingCategory.TEST for item in findings)
+
+
+def test_unrelated_fixture_update_does_not_suppress_missing_tests_finding():
+    diff = _diff_for_paths({
+        "payment.py": ["refund = True"],
+        "fixtures/other.diff": ["fixture = True"],
+    })
+
+    findings = run_review_rules(parse_unified_diff(diff, task_id="task-unrelated-fixture"))
+
+    assert _first(findings, FindingCategory.TEST).file == "payment.py"
+
+
 def test_source_change_without_test_update_has_stable_fingerprint():
     diff = _diff_for_lines("+new = 1\n")
 
@@ -117,6 +175,19 @@ def _diff_for_lines(added_lines: str) -> str:
 @@ -1 +1,{max(1, added_lines.count(chr(10)))} @@
 -old
 {added_lines}"""
+
+
+def _diff_for_paths(files: dict[str, list[str]]) -> str:
+    blocks = []
+    for path, lines in files.items():
+        rendered = "\n".join(f"+{line}" for line in lines)
+        blocks.append(f"""diff --git a/{path} b/{path}
+--- a/{path}
++++ b/{path}
+@@ -1 +1,{max(1, len(lines))} @@
+-old
+{rendered}""")
+    return "\n".join(blocks) + "\n"
 
 
 def _first(findings, category: FindingCategory):

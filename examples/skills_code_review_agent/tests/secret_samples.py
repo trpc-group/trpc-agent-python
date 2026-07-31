@@ -56,6 +56,18 @@ def db_password_like_value() -> str:
     return _join("db", "-", "password", "-", "value")
 
 
+def client_secret_like_value() -> str:
+    return _join("example", "-", "client", "-", "secret", "-", "value")
+
+
+def refresh_token_like_value() -> str:
+    return _join("example", "-", "refresh", "-", "token", "-", "value")
+
+
+def private_key_body_value() -> str:
+    return _join("example", "-", "private", "-", "key", "-", "body")
+
+
 def generic_api_key_value() -> str:
     return _join("example", "-", "sensitive", "-", "api", "-", "key", "-", "value")
 
