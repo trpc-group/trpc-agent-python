@@ -79,8 +79,7 @@
       },
       "maxCostUsd": null,
       "maxDurationSeconds": 180.0,
-      "epsilon": 1e-09,
-      "overfitGuard": true
+      "epsilon": 1e-09
     }
   }
 }

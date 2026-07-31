@@ -53,7 +53,7 @@ def test_pipeline_policy_scalars_reject_string_coercion() -> None:
     with pytest.raises(ValidationError):
         GateConfig.model_validate({"maxNewHardFailures": "2"})
     with pytest.raises(ValidationError):
-        GateConfig.model_validate({"overfitGuard": "false"})
+        GateConfig.model_validate({"overfitGuard": False})
 
 
 def test_strict_json_and_path_components_reject_ambiguous_inputs() -> None:
@@ -228,7 +228,7 @@ def test_pipeline_import_boundaries() -> None:
     allowed = {
         "artifacts": {"models", "schema"},
         "attribution": {"configuration", "models", "schema"},
-        "backends": {"contracts", "models", "offline_evaluation", "schema", "trace_fixture"},
+        "backends": {"contracts", "live_adapter", "models", "offline_evaluation", "schema", "trace_fixture"},
         "candidate_runtime": {
             "artifacts",
             "attribution",
@@ -238,7 +238,7 @@ def test_pipeline_import_boundaries() -> None:
             "prompt_workspace",
             "schema",
         },
-        "configuration": {"models", "schema"},
+        "configuration": {"live_adapter", "models", "schema"},
         "contracts": {"models"},
         "costing": {"models"},
         "evaluation": {"models"},
@@ -251,9 +251,10 @@ def test_pipeline_import_boundaries() -> None:
             "models",
         },
         "gate": {"configuration", "models"},
+        "live_adapter": set(),
         "models": {"schema"},
         "offline_evaluation": set(),
-        "optimizer_worker": {"schema"},
+        "optimizer_worker": {"live_adapter", "schema"},
         "orchestrator": {
             "artifacts",
             "attribution",
@@ -275,6 +276,7 @@ def test_pipeline_import_boundaries() -> None:
             "artifacts",
             "configuration",
             "evaluation",
+            "live_adapter",
             "prompt_workspace",
             "schema",
             "trace_fixture",

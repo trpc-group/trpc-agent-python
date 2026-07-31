@@ -115,7 +115,7 @@ async def generate_candidate(
             raise
         else:
             sink.import_tree(optimizer_output, "candidate_generation/optimizer")
-    validated = CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
+    validated = CandidateProposal.model_validate(proposal)
     if validated.baseline_prompts != workspace.baseline:
         raise ValueError("candidate generator baseline prompts differ from the workspace baseline")
     for name, text in validated.prompts.items():

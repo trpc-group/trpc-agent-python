@@ -378,16 +378,26 @@ def test_overfit_guard_cannot_be_bypassed_by_permissive_thresholds() -> None:
             min_validation_score_delta=-0.2,
             min_validation_pass_rate_delta=-1,
             metric_max_regression={"quality": 1},
-            overfit_guard=True,
         ),
     )
     assert result.decision == Decision.REJECT
     assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" in result.reasons
 
 
-def test_overfit_guard_cannot_be_disabled() -> None:
-    with pytest.raises(ValidationError, match="mandatory safety invariant"):
-        GateConfig(overfit_guard=False)
+def test_overfit_guard_includes_train_pass_rate_improvement() -> None:
+    train = _comparison(Split.TRAIN, score_delta=0, pass_delta=1)
+    validation = _comparison(Split.VALIDATION, score_delta=-0.1, pass_delta=0)
+    result = _gate(
+        train=train,
+        validation=validation,
+        config=GateConfig(
+            min_validation_score_delta=-0.2,
+            min_validation_pass_rate_delta=-1,
+            metric_max_regression={"quality": 1},
+        ),
+    )
+    assert result.decision == Decision.REJECT
+    assert "OVERFIT_TRAIN_UP_VALIDATION_DOWN" in result.reasons
 
 
 def test_gate_fails_closed_when_enabled_cost_is_unknown() -> None:

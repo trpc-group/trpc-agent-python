@@ -12,6 +12,7 @@ import pytest
 from trpc_agent_sdk.evaluation import AgentEvaluator, EvalConfig, EvalSet, TargetPrompt
 
 from examples.optimization.eval_optimize_loop.pipeline import backends as backends_module
+from examples.optimization.eval_optimize_loop.pipeline import optimizer_worker as optimizer_worker_module
 from examples.optimization.eval_optimize_loop.pipeline.backends import (
     DeterministicCandidateGenerator,
     FakeEvaluationBackend,
@@ -20,6 +21,10 @@ from examples.optimization.eval_optimize_loop.pipeline.backends import (
     TraceEvaluationBackend,
 )
 from examples.optimization.eval_optimize_loop.pipeline.evaluation import normalize_result
+from examples.optimization.eval_optimize_loop.pipeline.live_adapter import (
+    LiveAdapterSpec,
+    load_verified_callback,
+)
 from examples.optimization.eval_optimize_loop.pipeline.models import (
     AttributionSnapshot,
     Phase,
@@ -72,6 +77,70 @@ def _config() -> EvalConfig:
             },
         }],
         num_runs=1,
+    )
+
+
+async def importable_call_agent(query: str) -> str:
+    return query
+
+
+def _live_adapter() -> LiveAdapterSpec:
+    return LiveAdapterSpec.resolve(f"{__name__}:importable_call_agent", importable_call_agent)
+
+
+def test_worker_callback_verification_rejects_source_drift(tmp_path) -> None:
+    adapter = _live_adapter()
+    assert load_verified_callback(
+        adapter.import_path,
+        expected_source_path=str(adapter.source_path),
+        expected_source_sha256=adapter.source_sha256,
+        expected_callable_sha256=adapter.callable_sha256,
+    ) is importable_call_agent
+    with pytest.raises(ValueError, match="source path differs"):
+        load_verified_callback(
+            adapter.import_path,
+            expected_source_path=str(tmp_path / "shadowed.py"),
+            expected_source_sha256=adapter.source_sha256,
+            expected_callable_sha256=adapter.callable_sha256,
+        )
+    with pytest.raises(ValueError, match="source hash differs"):
+        load_verified_callback(
+            adapter.import_path,
+            expected_source_path=str(adapter.source_path),
+            expected_source_sha256="0" * 64,
+            expected_callable_sha256=adapter.callable_sha256,
+        )
+    with pytest.raises(ValueError, match="callback code differs"):
+        load_verified_callback(
+            adapter.import_path,
+            expected_source_path=str(adapter.source_path),
+            expected_source_sha256=adapter.source_sha256,
+            expected_callable_sha256="0" * 64,
+        )
+
+
+def _install_worker_result(monkeypatch, result, captured=None) -> None:
+    class CompletedProcess:
+        returncode = 0
+
+        async def wait(self):
+            return self.returncode
+
+    async def fake_subprocess(*args, **kwargs):
+        request_path = Path(args[-1])
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        output_dir = Path(request["outputDir"])
+        output_dir.mkdir(parents=True)
+        (output_dir / "result.json").write_text("{}", encoding="utf-8")
+        if captured is not None:
+            captured.update({"args": args, "kwargs": kwargs, "request": request})
+        return CompletedProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    monkeypatch.setattr(
+        backends_module,
+        "OptimizeResult",
+        SimpleNamespace(from_file=lambda path: result),
     )
 
 
@@ -616,7 +685,6 @@ async def test_deterministic_generator_only_uses_failure_facts(tmp_path) -> None
 
 @pytest.mark.asyncio
 async def test_live_generator_forces_update_source_false(monkeypatch, tmp_path) -> None:
-
     async def call_agent(query: str) -> str:
         return query
 
@@ -624,69 +692,41 @@ async def test_live_generator_forces_update_source_false(monkeypatch, tmp_path) 
 
     async def fake_optimize(**kwargs):
         captured.update(kwargs)
-        round_ = SimpleNamespace(
-            round=1,
-            candidate_prompts={"system": "candidate"},
-            accepted=True,
-            validation_pass_rate=1,
-            kind="merge",
-            optimized_field_names=["system"],
-            metric_breakdown={"quality": 0.9},
-            acceptance_reason="accepted by optimizer",
-            skip_reason=None,
-            error_message=None,
-            round_llm_cost=0.035,
-            round_token_usage={"total": 0},
-            duration_seconds=0,
-        )
-        return SimpleNamespace(
-            status="SUCCEEDED",
-            error_message="",
-            rounds=[round_],
-            algorithm="gepa_reflective",
-            baseline_prompts={"system": "baseline"},
-            best_prompts={"system": "candidate"},
-            stop_reason="completed",
-            total_reflection_lm_calls=1,
-            total_llm_cost=0,
-            total_token_usage={"total": 0},
-            duration_seconds=0,
-        )
+        return SimpleNamespace(dump_to=lambda path: Path(path).write_text("{}", encoding="utf-8"))
 
     monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.pipeline.backends.AgentOptimizer.optimize",
-        fake_optimize,
+        optimizer_worker_module,
+        "load_verified_callback",
+        lambda spec, **kwargs: call_agent,
     )
+    monkeypatch.setattr(optimizer_worker_module.AgentOptimizer, "optimize", fake_optimize)
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text("baseline", encoding="utf-8")
-    target = TargetPrompt().add_path("system", str(prompt_path))
-    generator = LiveCandidateGenerator(call_agent)
-    proposal = await generator.generate(
-        target_prompt=target,
-        baseline_prompts={"system": "baseline"},
-        train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
-        inner_train_path="inner-train.json",
-        inner_selection_path="inner-selection.json",
-        config_path="optimizer.json",
-        output_dir="optimizer-output",
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps({
+            "callbackSpec": _live_adapter().import_path,
+            "callbackSourcePath": str(_live_adapter().source_path),
+            "callbackSourceSha256": _live_adapter().source_sha256,
+            "callbackCallableSha256": _live_adapter().callable_sha256,
+            "promptPaths": {
+                "system": str(prompt_path)
+            },
+            "configPath": "optimizer.json",
+            "trainPath": "inner-train.json",
+            "validationPath": "inner-selection.json",
+            "outputDir": str(tmp_path / "optimizer-output"),
+            "verbose": 0,
+        }),
+        encoding="utf-8",
     )
+    await optimizer_worker_module._run(request_path)
     assert captured["update_source"] is False
     assert captured["validation_dataset_path"] == "inner-selection.json"
-    assert proposal.prompts == {"system": "candidate"}
-    assert proposal.rounds[0].kind == "merge"
-    assert proposal.rounds[0].cost_usd == 0.035
-    assert proposal.rounds[0].metric_scores == {"quality": 0.9}
-    assert [(source.name, source.cost_usd, source.model_calls) for source in proposal.cost_sources] == [
-        ("optimizer_reported", 0, 1),
-    ]
 
 
 @pytest.mark.asyncio
 async def test_live_generator_accepts_sdk_skipped_round(monkeypatch, tmp_path) -> None:
-
-    async def call_agent(query: str) -> str:
-        return query
-
     async def fake_optimize(**kwargs):
         return SimpleNamespace(
             status="SUCCEEDED",
@@ -718,13 +758,10 @@ async def test_live_generator_accepts_sdk_skipped_round(monkeypatch, tmp_path) -
             duration_seconds=0.4,
         )
 
-    monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.pipeline.backends.AgentOptimizer.optimize",
-        fake_optimize,
-    )
+    _install_worker_result(monkeypatch, await fake_optimize())
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text("baseline", encoding="utf-8")
-    proposal = await LiveCandidateGenerator(call_agent).generate(
+    proposal = await LiveCandidateGenerator(_live_adapter()).generate(
         target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
         baseline_prompts={"system": "baseline"},
         train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
@@ -741,51 +778,120 @@ async def test_live_generator_accepts_sdk_skipped_round(monkeypatch, tmp_path) -
 
 
 @pytest.mark.asyncio
-async def test_live_generator_requests_cooperative_stop_before_propagating_cancel(monkeypatch, tmp_path) -> None:
-
-    async def call_agent(query: str) -> str:
-        return query
-
-    started = asyncio.Event()
-    stopped = asyncio.Event()
-
-    async def fake_optimize(**kwargs):
-        started.set()
-        stop_path = Path(kwargs["output_dir"]) / "optimize.stop"
-        while not stop_path.exists():
-            await asyncio.sleep(0)
-        stopped.set()
-        return SimpleNamespace(status="CANCELED", error_message="user stop")
-
-    monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.pipeline.backends.AgentOptimizer.optimize",
-        fake_optimize,
+async def test_live_generator_preserves_failed_sdk_result_facts(monkeypatch, tmp_path) -> None:
+    result = SimpleNamespace(
+        status="FAILED",
+        error_message="optimizer request failed",
+        rounds=[SimpleNamespace(
+            round=1,
+            candidate_prompts={},
+            accepted=False,
+            validation_pass_rate=0.0,
+            kind="reflective",
+            optimized_field_names=[],
+            metric_breakdown={},
+            acceptance_reason="",
+            skip_reason=None,
+            error_message="reflection request failed",
+            round_llm_cost=0.04,
+            round_token_usage={"total": 6},
+            duration_seconds=0.2,
+        )],
+        algorithm="gepa_reflective",
+        baseline_prompts={"system": "baseline"},
+        best_prompts={"system": "baseline"},
+        stop_reason=None,
+        total_reflection_lm_calls=1,
+        total_llm_cost=0.04,
+        total_token_usage={"total": 6},
+        duration_seconds=0.3,
     )
+    _install_worker_result(monkeypatch, result)
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text("baseline", encoding="utf-8")
-    task = asyncio.create_task(
-        LiveCandidateGenerator(call_agent).generate(
-            target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
-            baseline_prompts={"system": "baseline"},
-            train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
-            inner_train_path="inner-train.json",
-            inner_selection_path="inner-selection.json",
-            config_path="optimizer.json",
-            output_dir=str(tmp_path / "optimizer-output"),
-        ))
-    await started.wait()
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert stopped.is_set()
+
+    proposal = await LiveCandidateGenerator(_live_adapter()).generate(
+        target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
+        baseline_prompts={"system": "baseline"},
+        train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
+        inner_train_path="inner-train.json",
+        inner_selection_path="inner-selection.json",
+        config_path="optimizer.json",
+        output_dir=str(tmp_path / "optimizer-output"),
+    )
+
+    assert proposal.status == "FAILED"
+    assert proposal.error_message == "optimizer request failed"
+    assert proposal.rounds[0].error_message == "reflection request failed"
+    assert proposal.cost_sources[0].cost_usd == 0.04
+    assert proposal.duration_seconds == 0.3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reported_baseline", "best_prompts", "expected_error"),
+    (
+        ({"system": "stale"}, {"system": "candidate"}, "baseline prompts differ"),
+        ({"system": "baseline"}, {}, "best prompt keys differ"),
+    ),
+)
+async def test_live_generator_rejects_invalid_success_contract(
+    monkeypatch,
+    tmp_path,
+    reported_baseline,
+    best_prompts,
+    expected_error,
+) -> None:
+    result = SimpleNamespace(
+        status="SUCCEEDED",
+        error_message="",
+        rounds=[SimpleNamespace(
+            round=1,
+            candidate_prompts={"system": "candidate"},
+            accepted=True,
+            validation_pass_rate=0.9,
+            kind="reflective",
+            optimized_field_names=["system"],
+            metric_breakdown={"quality": 0.9},
+            acceptance_reason="improved",
+            skip_reason=None,
+            error_message=None,
+            round_llm_cost=0.02,
+            round_token_usage={"total": 4},
+            duration_seconds=0.1,
+        )],
+        algorithm="gepa_reflective",
+        baseline_prompts=reported_baseline,
+        best_prompts=best_prompts,
+        stop_reason="completed",
+        total_reflection_lm_calls=1,
+        total_llm_cost=0.02,
+        total_token_usage={"total": 4},
+        duration_seconds=0.2,
+    )
+    _install_worker_result(monkeypatch, result)
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    proposal = await LiveCandidateGenerator(_live_adapter()).generate(
+        target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
+        baseline_prompts={"system": "baseline"},
+        train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
+        inner_train_path="inner-train.json",
+        inner_selection_path="inner-selection.json",
+        config_path="optimizer.json",
+        output_dir=str(tmp_path / "optimizer-output"),
+    )
+
+    assert proposal.status == "SUCCEEDED"
+    assert expected_error in proposal.adapter_error
+    assert proposal.prompts == {"system": "baseline"}
+    assert proposal.changed is False
+    assert proposal.rounds[0].cost_usd == 0.02
 
 
 @pytest.mark.asyncio
 async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop(monkeypatch, tmp_path) -> None:
-
-    async def call_agent(query: str) -> str:
-        return query
-
     class StuckProcess:
 
         def __init__(self) -> None:
@@ -821,8 +927,7 @@ async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop
     output_dir = tmp_path / "optimizer-output"
     task = asyncio.create_task(
         LiveCandidateGenerator(
-            call_agent,
-            callback_spec="tests.agent:call_agent",
+            _live_adapter(),
             shutdown_timeout_seconds=0.01,
         ).generate(
             target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
@@ -844,10 +949,6 @@ async def test_live_worker_is_forcibly_terminated_after_bounded_cooperative_stop
 
 @pytest.mark.asyncio
 async def test_live_worker_success_is_loaded_through_the_strict_candidate_adapter(monkeypatch, tmp_path) -> None:
-
-    async def call_agent(query: str) -> str:
-        return query
-
     round_ = SimpleNamespace(
         round=1,
         candidate_prompts={"system": "candidate"},
@@ -877,34 +978,10 @@ async def test_live_worker_success_is_loaded_through_the_strict_candidate_adapte
         duration_seconds=0.2,
     )
     captured = {}
-
-    class CompletedProcess:
-        returncode = 0
-
-        async def wait(self):
-            return self.returncode
-
-    async def fake_subprocess(*args, **kwargs):
-        request_path = Path(args[-1])
-        request = json.loads(request_path.read_text(encoding="utf-8"))
-        output_dir = Path(request["outputDir"])
-        output_dir.mkdir(parents=True)
-        (output_dir / "result.json").write_text("{}", encoding="utf-8")
-        captured.update({"args": args, "kwargs": kwargs, "request": request})
-        return CompletedProcess()
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
-    monkeypatch.setattr(
-        backends_module,
-        "OptimizeResult",
-        SimpleNamespace(from_file=lambda path: result),
-    )
+    _install_worker_result(monkeypatch, result, captured)
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text("baseline", encoding="utf-8")
-    proposal = await LiveCandidateGenerator(
-        call_agent,
-        callback_spec="tests.agent:call_agent",
-    ).generate(
+    proposal = await LiveCandidateGenerator(_live_adapter()).generate(
         target_prompt=TargetPrompt().add_path("system", str(prompt_path)),
         baseline_prompts={"system": "baseline"},
         train_attribution=AttributionSnapshot(split=Split.TRAIN, phase=Phase.BASELINE, failures=()),
@@ -917,7 +994,10 @@ async def test_live_worker_success_is_loaded_through_the_strict_candidate_adapte
         "-m",
         "examples.optimization.eval_optimize_loop.pipeline.optimizer_worker",
     )
-    assert captured["request"]["callbackSpec"] == "tests.agent:call_agent"
+    assert captured["request"]["callbackSpec"] == _live_adapter().import_path
+    assert captured["request"]["callbackSourcePath"] == str(_live_adapter().source_path)
+    assert captured["request"]["callbackSourceSha256"] == _live_adapter().source_sha256
+    assert captured["request"]["callbackCallableSha256"] == _live_adapter().callable_sha256
     assert captured["request"]["promptPaths"] == {"system": str(prompt_path)}
     assert proposal.prompts == {"system": "candidate"}
     assert proposal.rounds[0].metric_scores == {"quality": 0.8}

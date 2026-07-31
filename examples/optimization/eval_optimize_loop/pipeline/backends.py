@@ -12,7 +12,6 @@ from typing import Awaitable, Callable, Optional
 
 from trpc_agent_sdk.evaluation import (
     AgentEvaluator,
-    AgentOptimizer,
     EvalConfig,
     EvalSet,
     EvalSetAggregateResult,
@@ -30,6 +29,7 @@ from trpc_agent_sdk.evaluation import (
 )
 
 from .contracts import CandidateGenerator, EvaluationBackend
+from .live_adapter import LiveAdapterSpec
 from .models import (
     AttributionSnapshot,
     CandidateProposal,
@@ -314,7 +314,7 @@ class DeterministicCandidateGenerator:
             cost_sources=(CostSource(name="deterministic", cost_usd=0, model_calls=0, metric_calls=0), ),
             duration_seconds=0,
         )
-        return CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
+        return proposal
 
 
 class LiveCandidateGenerator:
@@ -322,18 +322,14 @@ class LiveCandidateGenerator:
 
     def __init__(
         self,
-        call_agent: CallAgent,
+        live_adapter: LiveAdapterSpec,
         *,
-        callback_spec: Optional[str] = None,
         shutdown_timeout_seconds: float = 10.0,
         verbose: int = 0,
     ) -> None:
-        if not inspect.iscoroutinefunction(call_agent):
-            raise TypeError("live call_agent must be an async function")
         if shutdown_timeout_seconds <= 0:
             raise ValueError("optimizer shutdown timeout must be positive")
-        self._call_agent = call_agent
-        self._callback_spec = callback_spec
+        self._live_adapter = live_adapter
         self._shutdown_timeout_seconds = shutdown_timeout_seconds
         self._verbose = verbose
 
@@ -345,42 +341,6 @@ class LiveCandidateGenerator:
             stop_path.write_text("cancel requested\n", encoding="utf-8")
         except OSError as stop_error:
             add_exception_note(cancellation, f"could not request optimizer stop: {stop_error}")
-
-    async def _optimize_in_process(self, **kwargs) -> OptimizeResult:
-        optimize_task = asyncio.create_task(AgentOptimizer.optimize(
-            **kwargs,
-            call_agent=self._call_agent,
-        ))
-        try:
-            return await asyncio.shield(optimize_task)
-        except asyncio.CancelledError as cancellation:
-            self._request_stop(kwargs["output_dir"], cancellation)
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(optimize_task),
-                    timeout=self._shutdown_timeout_seconds,
-                )
-            except asyncio.TimeoutError:
-                add_exception_note(
-                    cancellation,
-                    "programmatic optimizer did not stop before its shutdown timeout; "
-                    "use an importable callback spec for process isolation",
-                )
-                optimize_task.add_done_callback(self._consume_task_result)
-            except BaseException as shutdown_error:
-                add_exception_note(
-                    cancellation,
-                    f"optimizer shutdown completed with {type(shutdown_error).__name__}: "
-                    f"{shutdown_error}",
-                )
-            raise
-
-    @staticmethod
-    def _consume_task_result(task: asyncio.Task) -> None:
-        try:
-            task.result()
-        except BaseException:
-            pass
 
     async def _stop_worker(
         self,
@@ -423,14 +383,16 @@ class LiveCandidateGenerator:
         add_exception_note(cancellation, "optimizer worker required forced termination")
 
     async def _optimize_in_worker(self, **kwargs) -> OptimizeResult:
-        assert self._callback_spec is not None
         output_dir = kwargs["output_dir"]
         request_path = Path(output_dir).parent / "optimizer-worker-request.json"
         prompt_paths = {name: kwargs["target_prompt"].describe_source(name) for name in kwargs["target_prompt"].names()}
         request_path.write_text(
             json.dumps(
                 {
-                    "callbackSpec": self._callback_spec,
+                    "callbackSpec": self._live_adapter.import_path,
+                    "callbackSourcePath": str(self._live_adapter.source_path),
+                    "callbackSourceSha256": self._live_adapter.source_sha256,
+                    "callbackCallableSha256": self._live_adapter.callable_sha256,
                     "promptPaths": prompt_paths,
                     "configPath": kwargs["config_path"],
                     "trainPath": kwargs["train_dataset_path"],
@@ -494,12 +456,17 @@ class LiveCandidateGenerator:
             "update_source": False,
             "verbose": self._verbose,
         }
-        result = (await self._optimize_in_worker(
-            **optimize_kwargs) if self._callback_spec else await self._optimize_in_process(**optimize_kwargs))
-        if result.status == "CANCELED":
-            raise asyncio.CancelledError(result.error_message or "AgentOptimizer canceled")
-        if result.status != "SUCCEEDED":
-            raise RuntimeError(f"AgentOptimizer candidate generation failed: {result.error_message}")
+        result = await self._optimize_in_worker(**optimize_kwargs)
+        reported_baseline = dict(result.baseline_prompts)
+        result_prompts = dict(result.best_prompts)
+        adapter_errors: list[str] = []
+        if result.status == "SUCCEEDED":
+            if reported_baseline != baseline_prompts:
+                adapter_errors.append("optimizer baseline prompts differ from the workspace baseline")
+            if set(result_prompts) != set(baseline_prompts):
+                adapter_errors.append("optimizer best prompt keys differ from the workspace schema")
+        if result.status != "SUCCEEDED" or adapter_errors:
+            result_prompts = dict(baseline_prompts)
         rounds = tuple(
             CandidateRound(
                 round=round_.round,
@@ -518,10 +485,13 @@ class LiveCandidateGenerator:
                 duration_seconds=round_.duration_seconds,
             ) for round_ in result.rounds)
         proposal = CandidateProposal(
+            status=result.status,
+            error_message=result.error_message or None,
+            adapter_error="; ".join(adapter_errors) or None,
             algorithm=result.algorithm,
-            baseline_prompts=dict(result.baseline_prompts),
-            prompts=dict(result.best_prompts),
-            changed=result.best_prompts != baseline_prompts,
+            baseline_prompts=dict(baseline_prompts),
+            prompts=result_prompts,
+            changed=result_prompts != baseline_prompts,
             stop_reason=result.stop_reason,
             rounds=rounds,
             cost_sources=(CostSource(
@@ -532,17 +502,16 @@ class LiveCandidateGenerator:
             ), ),
             duration_seconds=result.duration_seconds,
         )
-        return CandidateProposal.model_validate(proposal.model_dump(mode="python", by_alias=True))
+        return proposal
 
 
 def create_backends(
     mode: str,
     *,
-    call_agent: Optional[CallAgent] = None,
+    live_adapter: Optional[LiveAdapterSpec] = None,
     trace_fixture_path: Optional[str] = None,
     trace_fixture_hash: Optional[str] = None,
     dataset_hashes: Optional[dict[str, str]] = None,
-    callback_spec: Optional[str] = None,
     optimizer_shutdown_timeout_seconds: float = 10.0,
 ) -> tuple[EvaluationBackend, CandidateGenerator]:
     if mode == "fake":
@@ -555,13 +524,12 @@ def create_backends(
             DeterministicCandidateGenerator(),
         )
     if mode == "live":
-        if call_agent is None:
-            raise ValueError("live mode requires call_agent")
+        if live_adapter is None:
+            raise ValueError("live mode requires a validated LiveAdapterSpec")
         return (
-            LiveEvaluationBackend(call_agent),
+            LiveEvaluationBackend(live_adapter.callback),
             LiveCandidateGenerator(
-                call_agent,
-                callback_spec=callback_spec,
+                live_adapter,
                 shutdown_timeout_seconds=optimizer_shutdown_timeout_seconds,
             ),
         )

@@ -179,12 +179,14 @@ def evaluate_gate(
         "DURATION_BUDGET_EXCEEDED",
     )
     validation_regressed = (validation.score_delta < -config.epsilon or validation.pass_rate_delta < -config.epsilon)
-    overfit = train.score_delta > config.epsilon and validation_regressed
+    train_improved = train.score_delta > config.epsilon or train.pass_rate_delta > config.epsilon
+    overfit = train_improved and validation_regressed
     add(
         "OVERFIT_GUARD",
         not overfit,
         {
             "trainScoreDelta": train.score_delta,
+            "trainPassRateDelta": train.pass_rate_delta,
             "validationScoreDelta": validation.score_delta,
             "validationPassRateDelta": validation.pass_rate_delta,
         },

@@ -16,6 +16,7 @@ import pytest
 from examples.optimization.eval_optimize_loop.pipeline.models import (
     CandidateProposal,
     CandidateRound,
+    CostSource,
     Decision,
     OptimizationReport,
     Transition,
@@ -37,6 +38,14 @@ from examples.optimization.eval_optimize_loop.pipeline import orchestrator as or
 from examples.optimization.eval_optimize_loop.pipeline import reporting as reporting_module
 
 SOURCE = Path(__file__).resolve().parents[3] / "examples" / "optimization" / "eval_optimize_loop"
+
+
+async def importable_call_agent(query: str) -> str:
+    return query
+
+
+async def alternate_importable_call_agent(query: str) -> str:
+    return query
 
 
 def _example(tmp_path: Path, *, accept: bool = False, apply: bool = False) -> Path:
@@ -328,6 +337,90 @@ async def test_generator_failure_is_recorded_as_unknown_cost_and_redacted(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_failed_optimizer_result_preserves_rounds_cost_and_duration(tmp_path) -> None:
+    root = _example(tmp_path)
+
+    class FailedGenerator:
+        async def generate(self, **kwargs):
+            baseline = dict(kwargs["baseline_prompts"])
+            return CandidateProposal(
+                status="FAILED",
+                error_message="optimizer backend failed",
+                algorithm="gepa_reflective",
+                baseline_prompts=baseline,
+                prompts=baseline,
+                changed=False,
+                stop_reason="error",
+                rounds=(CandidateRound(
+                    round=1,
+                    candidate_prompts={},
+                    accepted=False,
+                    error_message="reflection request failed",
+                    cost_usd=0.12,
+                    duration_seconds=0.4,
+                ), ),
+                cost_sources=(CostSource(
+                    name="optimizer_reported",
+                    cost_usd=0.12,
+                    model_calls=1,
+                ), ),
+                duration_seconds=0.4,
+            )
+
+    report = await run_pipeline(
+        str(root),
+        run_id="failed-optimizer-facts",
+        candidate_generator=FailedGenerator(),
+    )
+
+    assert report.status == Decision.ERROR
+    assert report.optimization["proposal"]["status"] == "FAILED"
+    assert report.optimization["proposal"]["rounds"][0]["costUsd"] == 0.12
+    assert report.optimization["proposal"]["durationSeconds"] == 0.4
+    source = next(item for item in report.cost.sources if item.name.endswith("optimizer_reported"))
+    assert source.cost_usd == 0.12
+    assert all(item.name != "candidate_generation.unreported_failure" for item in report.cost.sources)
+
+
+@pytest.mark.asyncio
+async def test_adapter_rejected_success_is_audited_without_evaluation_or_apply(tmp_path) -> None:
+    root = _example(tmp_path, accept=True, apply=True)
+    prompt_path = root / "prompts" / "system.md"
+    baseline_prompt = prompt_path.read_text(encoding="utf-8")
+
+    class RejectedSuccessGenerator:
+        async def generate(self, **kwargs):
+            baseline = dict(kwargs["baseline_prompts"])
+            return CandidateProposal(
+                status="SUCCEEDED",
+                adapter_error="optimizer baseline prompts differ from the workspace baseline",
+                algorithm="gepa_reflective",
+                baseline_prompts=baseline,
+                prompts=baseline,
+                changed=False,
+                cost_sources=(CostSource(
+                    name="optimizer_reported",
+                    cost_usd=0.03,
+                    model_calls=1,
+                ), ),
+                duration_seconds=0.2,
+            )
+
+    report = await run_pipeline(
+        str(root),
+        run_id="adapter-rejected-success",
+        candidate_generator=RejectedSuccessGenerator(),
+    )
+
+    assert report.status == Decision.ERROR
+    assert report.stage == "candidate_generation"
+    assert report.optimization["proposal"]["status"] == "SUCCEEDED"
+    assert report.optimization["proposal"]["adapterError"]
+    assert report.candidate is None
+    assert prompt_path.read_text(encoding="utf-8") == baseline_prompt
+
+
+@pytest.mark.asyncio
 async def test_terminal_audit_failure_is_raised_instead_of_silently_returned(tmp_path, monkeypatch) -> None:
     root = _example(tmp_path)
 
@@ -361,9 +454,6 @@ async def test_live_evaluation_cost_bounds_are_accounted_conservatively(tmp_path
     })
     config_path.write_text(json.dumps(config), encoding="utf-8")
 
-    async def call_agent(query: str) -> str:
-        return query
-
     validated = preflight_run(
         str(root),
         config_path=None,
@@ -372,8 +462,8 @@ async def test_live_evaluation_cost_bounds_are_accounted_conservatively(tmp_path
         mode=None,
         run_id="live-cost-bounds",
         apply_candidate=False,
-        call_agent=call_agent,
-        callback_spec="tests.agent:call_agent",
+        call_agent=importable_call_agent,
+        callback_spec=f"{__name__}:importable_call_agent",
         backend=None,
         candidate_generator=None,
     )
@@ -640,17 +730,14 @@ def test_default_run_id_includes_effective_apply_setting(tmp_path) -> None:
     applying_run = preflight_run(str(root), apply_candidate=True, **common)
     assert dry_run.run_id != applying_run.run_id
 
-    async def call_agent(query: str) -> str:
-        return query
-
     first_callback = preflight_run(
         str(root),
         apply_candidate=False,
         **{
             **common,
             "mode": "live",
-            "call_agent": call_agent,
-            "callback_spec": "package.first:call_agent",
+            "call_agent": importable_call_agent,
+            "callback_spec": f"{__name__}:importable_call_agent",
         },
     )
     second_callback = preflight_run(
@@ -659,28 +746,47 @@ def test_default_run_id_includes_effective_apply_setting(tmp_path) -> None:
         **{
             **common,
             "mode": "live",
-            "call_agent": call_agent,
-            "callback_spec": "package.second:call_agent",
+            "call_agent": alternate_importable_call_agent,
+            "callback_spec": f"{__name__}:alternate_importable_call_agent",
         },
     )
     assert first_callback.run_id != second_callback.run_id
 
 
+def test_preflight_rejects_mismatched_live_callback_identity(tmp_path) -> None:
+    root = _example(tmp_path)
+    with pytest.raises(ValueError, match="must resolve to the same function"):
+        preflight_run(
+            str(root),
+            config_path=None,
+            train_path=None,
+            validation_path=None,
+            mode="live",
+            run_id="mismatched-live-callback",
+            apply_candidate=False,
+            call_agent=importable_call_agent,
+            callback_spec=f"{__name__}:alternate_importable_call_agent",
+            backend=None,
+            candidate_generator=None,
+        )
+
+
 @pytest.mark.asyncio
-async def test_final_duration_includes_terminal_report_write(tmp_path, monkeypatch) -> None:
+async def test_terminal_report_is_committed_once_with_gate_consistent_duration(tmp_path, monkeypatch) -> None:
     root = _example(tmp_path)
     original = reporting_module.persist_report
-    delayed = False
+    complete_writes = 0
 
     def persist_with_delay(sink, report):
-        nonlocal delayed
-        if report.stage == "complete" and not delayed:
-            delayed = True
+        nonlocal complete_writes
+        if report.stage == "complete":
+            complete_writes += 1
             time.sleep(0.05)
         return original(sink, report)
 
     monkeypatch.setattr(reporting_module, "persist_report", persist_with_delay)
     report = await run_pipeline(str(root), run_id="duration-includes-report")
-    assert delayed is True
-    assert report.duration_seconds >= 0.05
+    duration_check = next(check for check in report.gate_decision.checks if check.code == "DURATION_BUDGET")
+    assert complete_writes == 1
+    assert report.duration_seconds == pytest.approx(duration_check.observed, abs=1e-12)
     assert report.inputs["environment"]["sdk"]

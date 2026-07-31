@@ -4,28 +4,23 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib
 import json
 from pathlib import Path
-from typing import Any
 
 from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
+from .live_adapter import load_verified_callback
 from .schema import parse_strict_json, sanitize
-
-
-def _load_callback(spec: str) -> Any:
-    if ":" not in spec:
-        raise ValueError("callbackSpec must use MODULE:FUNCTION syntax")
-    module_name, function_name = spec.split(":", 1)
-    if not module_name or not function_name:
-        raise ValueError("callbackSpec must use MODULE:FUNCTION syntax")
-    return getattr(importlib.import_module(module_name), function_name)
 
 
 async def _run(request_path: Path) -> None:
     request = parse_strict_json(request_path.read_text(encoding="utf-8"))
-    callback = _load_callback(str(request["callbackSpec"]))
+    callback = load_verified_callback(
+        str(request["callbackSpec"]),
+        expected_source_path=str(request["callbackSourcePath"]),
+        expected_source_sha256=str(request["callbackSourceSha256"]),
+        expected_callable_sha256=str(request["callbackCallableSha256"]),
+    )
     prompt_paths = request["promptPaths"]
     if not isinstance(prompt_paths, dict) or not prompt_paths:
         raise ValueError("promptPaths must be a non-empty object")

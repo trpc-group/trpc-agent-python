@@ -384,7 +384,9 @@ class CandidateRound(StrictModel):
 
 
 class CandidateProposal(StrictModel):
-    status: Literal["SUCCEEDED"] = "SUCCEEDED"
+    status: Literal["SUCCEEDED", "FAILED", "CANCELED"] = "SUCCEEDED"
+    error_message: Optional[str] = None
+    adapter_error: Optional[str] = None
     algorithm: str
     baseline_prompts: dict[str, str]
     prompts: dict[str, str]
@@ -401,6 +403,12 @@ class CandidateProposal(StrictModel):
 
     @model_validator(mode="after")
     def valid_round_history(self) -> "CandidateProposal":
+        if self.status == "SUCCEEDED" and self.error_message:
+            raise ValueError("successful candidate generation cannot contain an error")
+        if self.adapter_error and self.status != "SUCCEEDED":
+            raise ValueError("adapter errors only describe rejected successful backend results")
+        if self.status == "FAILED" and not self.error_message:
+            raise ValueError("failed candidate generation requires an error message")
         if set(self.baseline_prompts) != set(self.prompts):
             raise ValueError("candidate prompt keys must equal baseline keys")
         if self.changed != (self.prompts != self.baseline_prompts):

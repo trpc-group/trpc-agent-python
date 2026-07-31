@@ -9,12 +9,14 @@ The dependency direction is flat and one-way:
 
 ```text
 CLI -> orchestrator -> preflight / evaluation_runtime / candidate_runtime / reporting
-configuration -> models / schema
+configuration -> live_adapter / models / schema
 models -> schema
 evaluation_runtime -> backend contract / normalizer / cost ledger / artifact sink
 candidate_runtime -> generator contract / split policy / prompt workspace / artifact sink
-backends -> offline_evaluation / trace_fixture / contracts / models
-optimizer_worker -> schema
+backends -> offline_evaluation / trace_fixture / live_adapter / contracts / models
+live_adapter -> none
+optimizer_worker -> live_adapter / schema
+preflight -> live_adapter
 trace_fixture -> models / schema
 offline_evaluation -> SDK evaluation types
 pure policies -> models
@@ -82,9 +84,12 @@ with prompt_set_lock(validated.prompt_paths):
     failures = attribute(structured_evidence, explicit_maps, reason_semantics, metric_fallback)
     candidate = optimizer_worker(inner_train(failures), inner_selection)
     regression = compare(evaluate(candidate, train, validation), baseline)
-    decision = hard_overfit_guard(regression) -> configured_gate(regression, cost, duration)
-    persist_complete_redacted_audit_or_raise()
-    apply_verified(candidate) only when decision == ACCEPT and explicitly_authorized
+    preliminary = hard_overfit_guard(regression) -> configured_gate(regression, cost, duration)
+    persist_pre_apply_audit_or_raise()
+    apply_verified(candidate) only when preliminary == ACCEPT and explicitly_authorized
+    terminal = configured_gate(regression, cost, current_duration)
+    restore_verified_baseline() if terminal rejects an applied candidate
+    persist_terminal_audit_once_or_raise()
 on cancel: request_stop -> bounded_wait -> terminate -> bounded_wait -> kill
 ```
 
@@ -99,12 +104,19 @@ on cancel: request_stop -> bounded_wait -> terminate -> bounded_wait -> kill
    attribution is passed to the candidate generator.
 5. The candidate is generated with source updates disabled, then evaluated on
    full train and held-out validation inside a verified temporary prompt context.
-6. Pure comparison and gate functions produce the only business decision.
+6. Pure comparison and gate functions produce the only business decision. The
+   non-configurable overfit guard treats either train score or train pass-rate
+   improvement combined with either validation score or pass-rate regression as
+   a rejection.
 7. A report is persisted before optional apply. Apply occurs only on ACCEPT when
    explicitly enabled, and every write is read back and hash verified.
-8. A complete terminal write cycle is measured before the final duration is
-   recorded. The report excludes its own files from its embedded artifact list;
-   the manifest hashes the final JSON and Markdown files.
+8. The terminal gate and report duration are sampled at the final decision
+   boundary. If that decision changes to REJECT after an apply, the baseline is
+   restored before publication. The terminal report, manifest, JSON snapshot,
+   and Markdown snapshot are then published once. Audit I/O is outside the
+   business duration gate; the 180-second end-to-end requirement is measured by
+   the acceptance runner. The report excludes its own files from its embedded
+   artifact list; the manifest hashes the final JSON and Markdown files.
 
 The immutable `artifacts/<run_id>/` directory and its manifest are the authority.
 Root-level report files are atomic latest-run snapshots for interactive use. They
@@ -123,14 +135,23 @@ The import boundary enforces file-count, per-file-byte and total-byte budgets
 before reading optimizer output. This boundary protects audit storage; it is not
 a sandbox for a programmatic generator, which is trusted in-process code.
 
-CLI live optimization uses `optimizer_worker.py`. Cancellation writes the SDK
-stop signal, waits for the configured bound, then terminates and finally kills a
-worker that still does not exit. Programmatically injected generators remain
-trusted in-process components and make the report non-reproducible. Terminal
-report persistence failures raise `AuditPersistenceError`; they are never
-discarded while returning an apparently handled pipeline error. Audit writes
-redact credentials without truncation and fail before publication when the
-configured file-byte ceiling is exceeded.
+Default live evaluation and optimization resolve one importable callback through
+`LiveAdapterSpec`; preflight binds its source path, file SHA-256, and callable code
+fingerprint to the run, and the worker verifies all three after re-importing it. A
+different callback object, source, cached code version, or source version is
+rejected before optimization. Live optimization always uses
+`optimizer_worker.py`. Cancellation
+writes the SDK stop signal, waits for the configured bound, then terminates and
+finally kills a worker that still does not exit. Programmatically injected
+backends and generators remain trusted in-process components and make the report
+non-reproducible. A successful SDK result must report the exact workspace
+baseline and registered best-prompt keys before it can enter regression. Failed
+or canceled SDK results retain their structured rounds, duration, error and cost
+facts in the terminal report. Terminal report
+persistence failures raise `AuditPersistenceError`; they are never discarded
+while returning an apparently handled pipeline error. Audit writes redact
+credentials without truncation and fail before publication when the configured
+file-byte ceiling is exceeded.
 
 A replay claim is emitted only for a clean, pinned Git commit when every
 effective config, dataset, prompt, trace and live callback source is inside that

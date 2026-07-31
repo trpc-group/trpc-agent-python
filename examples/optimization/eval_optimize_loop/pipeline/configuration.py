@@ -15,6 +15,7 @@ from pydantic import (
 
 from trpc_agent_sdk.evaluation import EvalConfig, EvalSet, OptimizeConfig
 
+from .live_adapter import LiveAdapterSpec
 from .models import FailureCategory, RunMode
 from .schema import (
     StrictModel,
@@ -37,7 +38,6 @@ class GateConfig(StrictModel):
     max_cost_usd: Optional[StrictFloat] = None
     max_duration_seconds: Optional[StrictFloat] = 180.0
     epsilon: StrictFloat = 1e-9
-    overfit_guard: StrictBool = True
 
     @field_validator(
         "min_validation_score_delta",
@@ -57,13 +57,6 @@ class GateConfig(StrictModel):
     @classmethod
     def valid_budget(cls, value: Optional[float]) -> Optional[float]:
         return None if value is None else _non_negative(value, "budget")
-
-    @field_validator("overfit_guard")
-    @classmethod
-    def overfit_guard_is_mandatory(cls, value: bool) -> bool:
-        if not value:
-            raise ValueError("overfit_guard is a mandatory safety invariant")
-        return value
 
     @field_validator("metric_max_regression")
     @classmethod
@@ -167,4 +160,4 @@ class ValidatedRunConfig(StrictModel):
     prompt_hashes: dict[str, str]
     adapter_identity: str
     reproducibility_paths: tuple[str, ...]
-    reproducibility_issues: tuple[str, ...] = ()
+    live_adapter: Optional[LiveAdapterSpec] = Field(default=None, exclude=True, repr=False)

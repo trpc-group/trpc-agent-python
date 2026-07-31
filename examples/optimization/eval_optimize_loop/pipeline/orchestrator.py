@@ -23,6 +23,7 @@ from .models import (
     CandidateProposal,
     ComparisonPair,
     Decision,
+    GateDecision,
     InnerSplit,
     OptimizationReport,
     Phase,
@@ -91,8 +92,6 @@ async def run_pipeline(
             validated,
             started_at=started_at,
             started_clock=started_clock,
-            call_agent=call_agent,
-            callback_spec=callback_spec,
             backend=backend,
             candidate_generator=candidate_generator,
             fault_injector=fault_injector,
@@ -104,8 +103,6 @@ async def _run_validated_pipeline(
     *,
     started_at: str,
     started_clock: float,
-    call_agent: Optional[CallAgent],
-    callback_spec: Optional[str],
     backend: Optional[EvaluationBackend],
     candidate_generator: Optional[CandidateGenerator],
     fault_injector: Optional[FaultInjector],
@@ -118,19 +115,18 @@ async def _run_validated_pipeline(
     if backend is None or candidate_generator is None:
         default_backend, default_generator = create_backends(
             settings.mode,
-            call_agent=call_agent,
+            live_adapter=validated.live_adapter,
             trace_fixture_path=validated.trace_fixture_path,
             trace_fixture_hash=validated.input_hashes.get("trace"),
             dataset_hashes={
                 "train": validated.input_hashes["train"],
                 "validation": validated.input_hashes["validation"],
             },
-            callback_spec=callback_spec,
             optimizer_shutdown_timeout_seconds=settings.optimizer_shutdown_timeout_seconds,
         )
         backend = backend or default_backend
         candidate_generator = candidate_generator or default_generator
-    if isinstance(backend, TraceEvaluationBackend):
+    if custom_backend and isinstance(backend, TraceEvaluationBackend):
         backend.validate_fixture(validated.train, validated.validation)
 
     target = TargetPrompt()
@@ -172,7 +168,7 @@ async def _run_validated_pipeline(
         started_clock=started_clock,
         baseline_prompts=workspace.baseline,
         baseline_hashes=workspace.baseline_hashes,
-        callback_spec=callback_spec,
+        callback_spec=(validated.live_adapter.import_path if validated.live_adapter else None),
         programmatic_component=custom_components,
     )
 
@@ -282,6 +278,12 @@ async def _run_validated_pipeline(
                 token_usage=source.token_usage,
             )
         sink.write_json("candidate.json", proposal.model_dump(mode="json", by_alias=True))
+        if proposal.adapter_error:
+            raise RuntimeError(f"candidate adapter rejected optimizer result: {proposal.adapter_error}")
+        if proposal.status == "CANCELED":
+            raise asyncio.CancelledError(proposal.error_message or "AgentOptimizer canceled")
+        if proposal.status == "FAILED":
+            raise RuntimeError(f"AgentOptimizer candidate generation failed: {proposal.error_message}")
         for name, content in proposal.prompts.items():
             sink.write_text(f"candidate_prompts/{name}.md", content)
 
@@ -323,17 +325,20 @@ async def _run_validated_pipeline(
         comparisons = ComparisonPair(train=train_comparison, validation=validation_comparison)
         sink.write_json("comparison.json", comparisons.model_dump(mode="json", by_alias=True))
 
+        def decide(duration_seconds: float) -> GateDecision:
+            return evaluate_gate(
+                train=train_comparison,
+                validation=validation_comparison,
+                candidate=proposal,
+                cost=ledger.summary(),
+                duration_seconds=duration_seconds,
+                baseline_prompt_hashes=workspace.baseline_hashes,
+                candidate_prompt_hashes=prompt_hashes(proposal.prompts),
+                config=settings.gate,
+            )
+
         enter_stage("gate")
-        gate_decision = evaluate_gate(
-            train=train_comparison,
-            validation=validation_comparison,
-            candidate=proposal,
-            cost=ledger.summary(),
-            duration_seconds=time.monotonic() - started_clock,
-            baseline_prompt_hashes=workspace.baseline_hashes,
-            candidate_prompt_hashes=prompt_hashes(proposal.prompts),
-            config=settings.gate,
-        )
+        gate_decision = decide(time.monotonic() - started_clock)
         if gate_decision.decision == Decision.ERROR:
             raise ValueError("gate rejected structurally invalid regression inputs")
 
@@ -347,8 +352,17 @@ async def _run_validated_pipeline(
             applied = True
 
         enter_stage("final_report")
+        terminal_duration = time.monotonic() - started_clock
+        gate_decision = decide(terminal_duration)
+        if gate_decision.decision == Decision.ERROR:
+            raise ValueError("terminal gate rejected structurally invalid regression inputs")
+        if applied and not gate_decision.accepted:
+            await workspace.restore()
+            applied = False
+            terminal_duration = time.monotonic() - started_clock
+            gate_decision = decide(terminal_duration)
         final_report = build_report(gate_decision.decision, "complete")
-        return persist_terminal_report(sink, final_report, started_clock=started_clock)
+        return persist_terminal_report(sink, final_report, duration_seconds=terminal_duration)
     except BaseException as error:
         if candidate_started and proposal is None:
             ledger.record(
@@ -373,7 +387,7 @@ async def _run_validated_pipeline(
             error_report = persist_terminal_report(
                 sink,
                 error_report,
-                started_clock=started_clock,
+                duration_seconds=time.monotonic() - started_clock,
             )
         except BaseException as persist_error:
             persistence_error = persist_error

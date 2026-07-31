@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import inspect
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,6 +11,7 @@ from trpc_agent_sdk.evaluation import EvalSet
 from .artifacts import load_strict_json
 from .evaluation import canonical_json, dataset_fingerprint, validate_datasets
 from .configuration import PipelineConfig, ValidatedRunConfig
+from .live_adapter import LiveAdapterSpec
 from .schema import validate_safe_component, validate_secret_free_text
 from .prompt_workspace import prompt_hashes
 from .trace_fixture import TraceFixture
@@ -40,31 +40,10 @@ def _component_identity(component: object | None, default: str) -> str:
     return f"{component_type.__module__}.{component_type.__qualname__}"
 
 
-def _callable_identity(call_agent: object | None, callback_spec: Optional[str]) -> Optional[str]:
-    if callback_spec:
-        return callback_spec
-    if call_agent is None:
-        return None
-    module = getattr(call_agent, "__module__", type(call_agent).__module__)
-    qualname = getattr(call_agent, "__qualname__", type(call_agent).__qualname__)
-    return f"{module}:{qualname}"
-
-
-def _callable_source_path(call_agent: object | None) -> Optional[Path]:
-    if call_agent is None:
-        return None
-    try:
-        source = inspect.getsourcefile(inspect.unwrap(call_agent)) or inspect.getfile(call_agent)
-    except (OSError, TypeError):
-        return None
-    return Path(source).resolve() if source else None
-
-
 def _adapter_identity(
     mode: str,
     *,
-    call_agent: object | None,
-    callback_spec: Optional[str],
+    live_adapter: Optional[LiveAdapterSpec],
     backend: object | None,
     candidate_generator: object | None,
 ) -> str:
@@ -78,7 +57,11 @@ def _adapter_identity(
         "candidateGenerator":
         _component_identity(candidate_generator, f"default:{mode}:candidate-generator:v1"),
         "callback":
-        _callable_identity(call_agent, callback_spec) if mode == "live" else None,
+        ({
+            "importPath": live_adapter.import_path,
+            "sourceSha256": live_adapter.source_sha256,
+            "callableSha256": live_adapter.callable_sha256,
+        } if live_adapter is not None else None),
     })
 
 
@@ -165,10 +148,20 @@ def preflight_run(
             hashes["trace"],
         ).validate(train, validation)
 
+    live_adapter: Optional[LiveAdapterSpec] = None
+    if settings.mode == "live":
+        if backend is None and call_agent is None:
+            raise ValueError("default live evaluation requires call_agent")
+        if callback_spec is not None:
+            if call_agent is None:
+                raise ValueError("callback_spec requires call_agent for identity verification")
+            live_adapter = LiveAdapterSpec.resolve(callback_spec, call_agent)
+        if (backend is None or candidate_generator is None) and live_adapter is None:
+            raise ValueError("default live components require an importable callback_spec")
+
     adapter_identity = _adapter_identity(
         settings.mode,
-        call_agent=call_agent,
-        callback_spec=callback_spec,
+        live_adapter=live_adapter,
         backend=backend,
         candidate_generator=candidate_generator,
     )
@@ -176,13 +169,10 @@ def preflight_run(
     reproducibility_paths.extend(Path(path) for path in prompt_paths.values())
     if trace_path is not None:
         reproducibility_paths.append(trace_path)
-    reproducibility_issues: list[str] = []
-    if settings.mode == "live" and callback_spec:
-        callback_source = _callable_source_path(call_agent)
-        if callback_source is None:
-            reproducibility_issues.append("live_callback_source_unavailable")
-        else:
-            reproducibility_paths.append(callback_source)
+    if live_adapter is not None:
+        reproducibility_paths.append(live_adapter.source_path)
+        hashes["callback"] = live_adapter.source_sha256
+        hashes["callbackCallable"] = live_adapter.callable_sha256
     derived = ("run-" + hashlib.sha256(
         canonical_json({
             "inputHashes": hashes,
@@ -208,5 +198,5 @@ def preflight_run(
         prompt_hashes=prompt_hashes(prompts),
         adapter_identity=adapter_identity,
         reproducibility_paths=tuple(str(path.resolve()) for path in reproducibility_paths),
-        reproducibility_issues=tuple(reproducibility_issues),
+        live_adapter=live_adapter,
     )

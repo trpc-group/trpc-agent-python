@@ -4,10 +4,10 @@ This example runs a baseline on train and held-out validation data, attributes
 failures, generates a candidate from an inner training split, reruns full
 regression, and makes a deterministic gate decision. Every completed run writes
 an immutable, authoritative audit directory under `artifacts/<run_id>/`. The
-generated `optimization_report.json` and `optimization_report.md` files in this
-directory are ignored atomic latest-run convenience snapshots, not a
-transactional report pair. Consumers that need a coherent pair must read the JSON
-run ID and then use the two immutable files and manifest under
+root-level generated `optimization_report.json` and `optimization_report.md`
+files are ignored atomic latest-run convenience snapshots, not a transactional
+report pair. Consumers that need a coherent pair must read the JSON run ID and
+then use the two immutable files and manifest under
 `artifacts/<run_id>/`.
 
 The default fake mode is deterministic, offline, and does not read API keys:
@@ -32,9 +32,11 @@ fake black-box mode fail fast because they cannot be scored deterministically.
 Reports retain each rubric's ID, score, pass status, and reason. Failure
 attribution uses only rubric outcomes that failed their metric threshold.
 
-Live mode requires an importable async `query -> str` callback. The optimizer is
-run in a supervised subprocess and always called with `update_source=False`;
-only this pipeline's gate may apply a candidate:
+Live mode requires one importable async `query -> str` callback. Preflight binds
+its resolved source path, file SHA-256, and callable code fingerprint to the run;
+the optimizer worker reloads the callback and verifies all three before use. The
+optimizer is run in a supervised subprocess and always called with
+`update_source=False`; only this pipeline's gate may apply a candidate:
 
 ```bash
 python examples/optimization/eval_optimize_loop/run_pipeline.py \
@@ -62,7 +64,11 @@ cancellation first requests cooperative shutdown, then terminates the isolated
 worker after `optimizerShutdownTimeoutSeconds`. Audit values are redacted but
 never silently truncated; a report exceeding `maxAuditFileBytes` fails
 explicitly. Concurrent runs targeting the same prompt files are rejected by a
-cross-process lock.
+cross-process lock. Failed optimizer runs retain reported rounds, costs, duration,
+and error facts. The terminal decision and duration are finalized before one
+terminal audit publication, so an applied prompt cannot be paired with a stale
+ACCEPT report. A successful optimizer result is rejected before regression when
+its reported baseline or best-prompt key set differs from the pipeline workspace.
 
 See [SOLUTION.md](SOLUTION.md) for the concise Chinese issue proposal and
 [DESIGN.md](DESIGN.md) for detailed stage contracts and failure semantics. A

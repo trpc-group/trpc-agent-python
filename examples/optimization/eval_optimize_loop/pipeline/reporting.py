@@ -70,7 +70,6 @@ def create_report_context(
         trace_hash=validated.input_hashes.get("trace"),
         programmatic_component=programmatic_component,
         input_paths=validated.reproducibility_paths,
-        input_issues=validated.reproducibility_issues,
     )
     return ReportContext(
         validated=validated,
@@ -100,7 +99,6 @@ def build_reproducibility(
         trace_hash: Optional[str] = None,
         programmatic_component: bool = False,
         input_paths: tuple[str, ...] = (),
-        input_issues: tuple[str, ...] = (),
 ) -> Reproducibility:
     commit: Optional[str] = None
     dirty: Optional[bool] = None
@@ -142,9 +140,6 @@ def build_reproducibility(
         reason = "live_callback_not_importable"
     elif reason is None and mode == "trace" and (not trace_fixture or not trace_hash):
         reason = "trace_fixture_not_pinned"
-    elif reason is None and input_issues:
-        reason = input_issues[0]
-
     if reason is None:
         assert git_root is not None
         for input_path in input_paths:
@@ -357,20 +352,16 @@ def persist_terminal_report(
     sink: AuditSink,
     report: OptimizationReport,
     *,
-    started_clock: float,
+    duration_seconds: float,
 ) -> OptimizationReport:
-    """Persist one full terminal cycle before recording the completed duration."""
+    """Commit one authoritative terminal report and publish its latest snapshots."""
 
-    persist_report(sink, report)
-    sink.write_manifest()
-    sink.publish_latest_snapshot("optimization_report.json", "optimization_report.json")
-    sink.publish_latest_snapshot("optimization_report.md", "optimization_report.md")
     completed = OptimizationReport.model_validate({
         **report.model_dump(mode="python", by_alias=False),
         "finished_at":
         utc_now(),
         "duration_seconds":
-        time.monotonic() - started_clock,
+        duration_seconds,
     })
     persist_report(sink, completed)
     sink.write_manifest()
