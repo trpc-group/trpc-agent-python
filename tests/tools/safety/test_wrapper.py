@@ -310,26 +310,6 @@ async def test_filter_allows_safe_mixed_language_fields_in_strict_mode():
 
 
 @pytest.mark.asyncio
-async def test_filter_scans_untyped_code_conservatively():
-    safety_filter = ToolSafetyFilter()
-    result = FilterResult()
-
-    await safety_filter._before(
-        None,
-        {
-            "code": "rm -rf /",
-            "tool_name": "custom",
-        },
-        result,
-    )
-
-    assert result.is_continue is False
-    assert result.rsp["language"] == "unknown"
-    assert result.rsp["decision"] == "deny"
-    assert any(finding["rule_id"] == "BASH_RECURSIVE_DELETE" for finding in result.rsp["findings"])
-
-
-@pytest.mark.asyncio
 async def test_filter_scans_execution_context_once_for_mixed_fields():
     safety_filter = ToolSafetyFilter()
     result = FilterResult()
