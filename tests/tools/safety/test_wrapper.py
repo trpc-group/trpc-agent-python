@@ -246,6 +246,27 @@ async def test_filter_extracts_command_as_bash():
 
 
 @pytest.mark.asyncio
+async def test_filter_scans_all_script_like_fields():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "script": "echo ok",
+            "command": "rm -rf /",
+            "language": "bash",
+            "tool_name": "shell_tool",
+        },
+        result,
+    )
+
+    assert result.is_continue is False
+    assert result.rsp["decision"] == "deny"
+    assert any(finding["rule_id"] == "BASH_RECURSIVE_DELETE" for finding in result.rsp["findings"])
+
+
+@pytest.mark.asyncio
 async def test_filter_extracts_python_code_language():
     safety_filter = ToolSafetyFilter()
     result = FilterResult()

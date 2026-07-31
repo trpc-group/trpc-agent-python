@@ -99,14 +99,14 @@ class ToolSafetyFilter(BaseFilter):
 
 
 def _extract_script(req: dict[str, Any]) -> str:
+    parts: list[str] = []
     for key in _SCRIPT_ARG_KEYS:
         value = req.get(key)
         if isinstance(value, str) and value.strip():
-            return value
+            parts.append(value)
 
     code_blocks = req.get("code_blocks")
     if isinstance(code_blocks, list):
-        parts: list[str] = []
         for block in code_blocks:
             if isinstance(block, dict):
                 code = block.get("code", "")
@@ -114,9 +114,7 @@ def _extract_script(req: dict[str, Any]) -> str:
                 code = getattr(block, "code", "")
             if isinstance(code, str) and code:
                 parts.append(code)
-        if parts:
-            return "\n".join(parts)
-    return ""
+    return "\n".join(parts)
 
 
 def _extract_tool_name(req: dict[str, Any]) -> str:
