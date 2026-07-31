@@ -29,7 +29,7 @@ DEMO_QUERIES = {
     "code_allow": "Use the CodeExecutor and emit exactly one tool_code block that prints sum([1, 2, 3]).",
     "code_review": (
         "Use the CodeExecutor and emit exactly one tool_code block containing: "
-        "import subprocess\\nsubprocess.run(['python', '--version'], check=False)"
+        "import subprocess\\nimport sys\\nsubprocess.run([sys.executable, '--version'], check=False)"
     ),
     "skill_allow": "Use skill_run for skill safety_demo with exactly this command: python --version",
     "skill_review": 'Use skill_run for skill safety_demo with exactly this command: python -c "print(1)"',
