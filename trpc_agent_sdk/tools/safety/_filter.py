@@ -24,8 +24,12 @@ from ._telemetry import record_safety_attributes
 from ._types import Decision
 from ._types import SafetyReport
 from ._types import ToolScriptScanRequest
+from ._types import aggregate_decision
+from ._types import max_risk_level
 
-_SCRIPT_ARG_KEYS = ("script", "code", "command", "cmd", "python_code", "bash_code")
+_PYTHON_ARG_KEYS = ("python_code", )
+_BASH_ARG_KEYS = ("command", "cmd", "bash_code")
+_GENERIC_ARG_KEYS = ("script", )
 _LANGUAGE_ARG_KEYS = ("language", "lang")
 _COMMAND_ARGS_KEYS = ("command_args", "args", "argv")
 
@@ -60,22 +64,15 @@ class ToolSafetyFilter(BaseFilter):
         self._current_report.set(None)
         if not isinstance(req, dict):
             return None
-        script = _extract_script(req)
-        if not script:
-            return None
         tool_name = _extract_tool_name(req)
-        request = ToolScriptScanRequest(
-            script=script,
-            language=_extract_language(req, tool_name),
-            command_args=_extract_command_args(req),
-            cwd=str(req.get("cwd", "")),
-            env=dict(req.get("env", {}) or {}),
-            tool_name=tool_name,
-            tool_metadata=dict(req.get("tool_metadata", {}) or {}),
-        )
-        report = self.scanner.scan(request)
-        should_block = report.decision == Decision.DENY or (self.block_on_review
-                                                            and report.decision == Decision.NEEDS_HUMAN_REVIEW)
+        requests = _extract_scan_requests(req, tool_name)
+        if not requests:
+            return None
+        report = _merge_reports(
+            [self.scanner.scan(request) for request in requests])
+        should_block = report.decision == Decision.DENY or (
+            self.block_on_review
+            and report.decision == Decision.NEEDS_HUMAN_REVIEW)
         report.set_blocked(should_block)
         record_safety_attributes(report)
         if self.audit_log_path:
@@ -98,23 +95,97 @@ class ToolSafetyFilter(BaseFilter):
         return None
 
 
-def _extract_script(req: dict[str, Any]) -> str:
-    parts: list[str] = []
-    for key in _SCRIPT_ARG_KEYS:
-        value = req.get(key)
-        if isinstance(value, str) and value.strip():
-            parts.append(value)
+def _extract_scan_requests(req: dict[str, Any],
+                           tool_name: str) -> list[ToolScriptScanRequest]:
+    grouped_parts: dict[str, list[str]] = {}
+
+    for key in _PYTHON_ARG_KEYS:
+        _add_script_part(grouped_parts, "python", req.get(key))
+    for key in _BASH_ARG_KEYS:
+        _add_script_part(grouped_parts, "bash", req.get(key))
+
+    generic_language = _extract_language(req, tool_name)
+    for key in _GENERIC_ARG_KEYS:
+        _add_script_part(grouped_parts, generic_language, req.get(key))
+    code_language = _extract_explicit_language(req) or "python"
+    _add_script_part(grouped_parts, code_language, req.get("code"))
 
     code_blocks = req.get("code_blocks")
     if isinstance(code_blocks, list):
         for block in code_blocks:
             if isinstance(block, dict):
                 code = block.get("code", "")
+                language = block.get("language", "")
             else:
                 code = getattr(block, "code", "")
-            if isinstance(code, str) and code:
-                parts.append(code)
-    return "\n".join(parts)
+                language = getattr(block, "language", "")
+            block_language = _canonical_language(language) if isinstance(
+                language, str) and language.strip() else generic_language
+            _add_script_part(grouped_parts, block_language, code)
+
+    command_args = _extract_command_args(req)
+    cwd = str(req.get("cwd", ""))
+    env = dict(req.get("env", {}) or {})
+    tool_metadata = dict(req.get("tool_metadata", {}) or {})
+    requests: list[ToolScriptScanRequest] = []
+    for index, (language, parts) in enumerate(grouped_parts.items()):
+        include_context = index == 0
+        requests.append(
+            ToolScriptScanRequest(
+                script="\n".join(parts),
+                language=language,
+                command_args=command_args if include_context else [],
+                cwd=cwd if include_context else "",
+                env=env if include_context else {},
+                tool_name=tool_name,
+                tool_metadata=tool_metadata if include_context else {},
+            ))
+    return requests
+
+
+def _add_script_part(grouped_parts: dict[str, list[str]], language: str,
+                     value: Any) -> None:
+    if not isinstance(value, str) or not value.strip():
+        return
+    parts = grouped_parts.setdefault(_canonical_language(language), [])
+    if value not in parts:
+        parts.append(value)
+
+
+def _merge_reports(reports: list[SafetyReport]) -> SafetyReport:
+    report = reports[0]
+    if len(reports) == 1:
+        return report
+
+    report.findings = [
+        finding for item in reports for finding in item.findings
+    ]
+    report.decision = aggregate_decision(report.findings)
+    report.risk_level = max_risk_level(report.findings)
+    report.elapsed_ms = round(sum(item.elapsed_ms for item in reports), 3)
+    report.sanitized = any(item.sanitized for item in reports)
+    languages = list(dict.fromkeys(item.language for item in reports))
+    report.language = languages[0] if len(languages) == 1 else "mixed"
+    rule_ids = [finding.rule_id for finding in report.findings]
+    if rule_ids:
+        report.summary = (
+            f"Decision {report.decision.value} with {report.risk_level.value} risk from rules: "
+            f"{', '.join(rule_ids[:5])}.")
+    else:
+        report.summary = "No safety rules matched; execution is allowed by the current static policy."
+    report.telemetry_attributes.update({
+        "tool.safety.decision":
+        report.decision.value,
+        "tool.safety.risk_level":
+        report.risk_level.value,
+        "tool.safety.rule_id":
+        ",".join(rule_ids[:10]),
+        "tool.safety.sanitized":
+        report.sanitized,
+        "tool.safety.duration_ms":
+        report.elapsed_ms,
+    })
+    return report
 
 
 def _extract_tool_name(req: dict[str, Any]) -> str:
@@ -128,26 +199,33 @@ def _extract_tool_name(req: dict[str, Any]) -> str:
     return "unknown_tool"
 
 
-def _extract_language(req: dict[str, Any], tool_name: str) -> str:
-    has_python_source = any(isinstance(req.get(key), str) and req[key].strip() for key in ("code", "python_code"))
-    has_bash_source = any(isinstance(req.get(key), str) and req[key].strip() for key in ("command", "cmd", "bash_code"))
-    if has_python_source and has_bash_source:
-        return "unknown"
-
+def _extract_explicit_language(req: dict[str, Any]) -> str:
     for key in _LANGUAGE_ARG_KEYS:
         value = req.get(key)
         if isinstance(value, str) and value.strip():
-            return value.strip().lower()
-    if has_python_source:
-        return "python"
-    if has_bash_source:
-        return "bash"
+            return _canonical_language(value)
+    return ""
+
+
+def _extract_language(req: dict[str, Any], tool_name: str) -> str:
+    explicit_language = _extract_explicit_language(req)
+    if explicit_language:
+        return explicit_language
     lowered_tool_name = tool_name.lower()
     if "python" in lowered_tool_name:
         return "python"
     if any(hint in lowered_tool_name for hint in ("bash", "shell", "sh")):
         return "bash"
     return "unknown"
+
+
+def _canonical_language(language: str) -> str:
+    normalized = (language or "unknown").strip().lower()
+    if normalized in {"py", "python3"}:
+        return "python"
+    if normalized in {"shell", "sh"}:
+        return "bash"
+    return normalized
 
 
 def _extract_command_args(req: dict[str, Any]) -> list[str]:
