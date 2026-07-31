@@ -102,7 +102,7 @@ def _extract_scan_requests(req: dict[str, Any], tool_name: str) -> list[ToolScri
     generic_language = _extract_language(req, tool_name)
     for key in _GENERIC_ARG_KEYS:
         _add_script_part(grouped_parts, generic_language, req.get(key))
-    code_language = _extract_explicit_language(req) or generic_language
+    code_language = _extract_explicit_language(req) or "python"
     _add_script_part(grouped_parts, code_language, req.get("code"))
 
     code_blocks = req.get("code_blocks")
