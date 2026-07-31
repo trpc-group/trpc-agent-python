@@ -68,11 +68,9 @@ class ToolSafetyFilter(BaseFilter):
         requests = _extract_scan_requests(req, tool_name)
         if not requests:
             return None
-        report = _merge_reports(
-            [self.scanner.scan(request) for request in requests])
-        should_block = report.decision == Decision.DENY or (
-            self.block_on_review
-            and report.decision == Decision.NEEDS_HUMAN_REVIEW)
+        report = _merge_reports([self.scanner.scan(request) for request in requests])
+        should_block = report.decision == Decision.DENY or (self.block_on_review
+                                                            and report.decision == Decision.NEEDS_HUMAN_REVIEW)
         report.set_blocked(should_block)
         record_safety_attributes(report)
         if self.audit_log_path:
@@ -95,8 +93,7 @@ class ToolSafetyFilter(BaseFilter):
         return None
 
 
-def _extract_scan_requests(req: dict[str, Any],
-                           tool_name: str) -> list[ToolScriptScanRequest]:
+def _extract_scan_requests(req: dict[str, Any], tool_name: str) -> list[ToolScriptScanRequest]:
     grouped_parts: dict[str, list[str]] = {}
 
     for key in _PYTHON_ARG_KEYS:
@@ -119,8 +116,8 @@ def _extract_scan_requests(req: dict[str, Any],
             else:
                 code = getattr(block, "code", "")
                 language = getattr(block, "language", "")
-            block_language = _canonical_language(language) if isinstance(
-                language, str) and language.strip() else generic_language
+            block_language = _canonical_language(language) if isinstance(language,
+                                                                         str) and language.strip() else generic_language
             _add_script_part(grouped_parts, block_language, code)
 
     command_args = _extract_command_args(req)
@@ -143,8 +140,7 @@ def _extract_scan_requests(req: dict[str, Any],
     return requests
 
 
-def _add_script_part(grouped_parts: dict[str, list[str]], language: str,
-                     value: Any) -> None:
+def _add_script_part(grouped_parts: dict[str, list[str]], language: str, value: Any) -> None:
     if not isinstance(value, str) or not value.strip():
         return
     parts = grouped_parts.setdefault(_canonical_language(language), [])
@@ -157,9 +153,7 @@ def _merge_reports(reports: list[SafetyReport]) -> SafetyReport:
     if len(reports) == 1:
         return report
 
-    report.findings = [
-        finding for item in reports for finding in item.findings
-    ]
+    report.findings = [finding for item in reports for finding in item.findings]
     report.decision = aggregate_decision(report.findings)
     report.risk_level = max_risk_level(report.findings)
     report.elapsed_ms = round(sum(item.elapsed_ms for item in reports), 3)
@@ -168,22 +162,16 @@ def _merge_reports(reports: list[SafetyReport]) -> SafetyReport:
     report.language = languages[0] if len(languages) == 1 else "mixed"
     rule_ids = [finding.rule_id for finding in report.findings]
     if rule_ids:
-        report.summary = (
-            f"Decision {report.decision.value} with {report.risk_level.value} risk from rules: "
-            f"{', '.join(rule_ids[:5])}.")
+        report.summary = (f"Decision {report.decision.value} with {report.risk_level.value} risk from rules: "
+                          f"{', '.join(rule_ids[:5])}.")
     else:
         report.summary = "No safety rules matched; execution is allowed by the current static policy."
     report.telemetry_attributes.update({
-        "tool.safety.decision":
-        report.decision.value,
-        "tool.safety.risk_level":
-        report.risk_level.value,
-        "tool.safety.rule_id":
-        ",".join(rule_ids[:10]),
-        "tool.safety.sanitized":
-        report.sanitized,
-        "tool.safety.duration_ms":
-        report.elapsed_ms,
+        "tool.safety.decision": report.decision.value,
+        "tool.safety.risk_level": report.risk_level.value,
+        "tool.safety.rule_id": ",".join(rule_ids[:10]),
+        "tool.safety.sanitized": report.sanitized,
+        "tool.safety.duration_ms": report.elapsed_ms,
     })
     return report
 
