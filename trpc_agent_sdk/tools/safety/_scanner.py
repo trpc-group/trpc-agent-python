@@ -50,21 +50,38 @@ class ToolScriptSafetyScanner:
         self.custom_rules.append(rule)
 
     def scan(self, request: ToolScriptScanRequest) -> SafetyReport:
-        started = time.perf_counter()
-        language = self._normalize_language(request.language)
-        sanitized = self._env_contains_sensitive_keys(request.env)
-        _, script_sanitized = sanitize_text(request.script, limit=max(len(request.script), 1))
-        sanitized = sanitized or script_sanitized
+        return self.scan_segments([request])
 
-        if language == "python":
-            findings = scan_python_script(request.script, self.policy)
-        elif language in {"bash", "sh", "shell"}:
-            findings = scan_bash_script(request.script, self.policy)
-        else:
-            findings = scan_bash_script(request.script, self.policy)
-            findings.extend(scan_python_script(request.script, self.policy))
-        findings.extend(self._scan_execution_context(request))
-        findings.extend(self._scan_custom_rules(request))
+    def scan_segments(self, requests: Iterable[ToolScriptScanRequest]) -> SafetyReport:
+        """Scan language-specific script segments as one tool invocation."""
+        request_list = list(requests)
+        if not request_list:
+            raise ValueError("At least one script segment is required.")
+
+        started = time.perf_counter()
+        base_request = request_list[0]
+        languages: list[str] = []
+        findings: list[RiskFinding] = []
+        sanitized = False
+
+        for request in request_list:
+            language = self._normalize_language(request.language)
+            languages.append(language)
+            sanitized = sanitized or self._env_contains_sensitive_keys(request.env)
+            _, script_sanitized = sanitize_text(request.script, limit=max(len(request.script), 1))
+            sanitized = sanitized or script_sanitized
+
+            if language == "python":
+                findings.extend(scan_python_script(request.script, self.policy))
+            elif language in {"bash", "sh", "shell"}:
+                findings.extend(scan_bash_script(request.script, self.policy))
+            else:
+                findings.extend(scan_bash_script(request.script, self.policy))
+                findings.extend(scan_python_script(request.script, self.policy))
+
+        findings.extend(self._scan_execution_context(base_request))
+        for request in request_list:
+            findings.extend(self._scan_custom_rules(request))
 
         decision = aggregate_decision(findings)
         risk_level = max_risk_level(findings)
@@ -74,6 +91,8 @@ class ToolScriptSafetyScanner:
         summary = self._build_summary(decision.value, risk_level.value, rule_ids)
         scan_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
+        normalized_languages = list(dict.fromkeys(languages))
+        language = normalized_languages[0] if len(normalized_languages) == 1 else "mixed"
         telemetry_attributes = {
             "tool.safety.scan_id": scan_id,
             "tool.safety.decision": decision.value,
@@ -81,7 +100,7 @@ class ToolScriptSafetyScanner:
             "tool.safety.rule_id": ",".join(rule_ids[:10]),
             "tool.safety.blocked": blocked,
             "tool.safety.sanitized": sanitized,
-            "tool.safety.tool_name": request.tool_name,
+            "tool.safety.tool_name": base_request.tool_name,
             "tool.safety.duration_ms": elapsed_ms,
         }
         return SafetyReport(
@@ -90,7 +109,7 @@ class ToolScriptSafetyScanner:
             decision=decision,
             risk_level=risk_level,
             findings=findings,
-            tool_name=request.tool_name,
+            tool_name=base_request.tool_name,
             language=language,
             elapsed_ms=elapsed_ms,
             sanitized=sanitized,
