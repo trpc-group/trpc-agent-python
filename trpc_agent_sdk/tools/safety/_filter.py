@@ -129,13 +129,18 @@ def _extract_tool_name(req: dict[str, Any]) -> str:
 
 
 def _extract_language(req: dict[str, Any], tool_name: str) -> str:
+    has_python_source = any(isinstance(req.get(key), str) and req[key].strip() for key in ("code", "python_code"))
+    has_bash_source = any(isinstance(req.get(key), str) and req[key].strip() for key in ("command", "cmd", "bash_code"))
+    if has_python_source and has_bash_source:
+        return "unknown"
+
     for key in _LANGUAGE_ARG_KEYS:
         value = req.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip().lower()
-    if isinstance(req.get("python_code"), str) or "code" in req:
+    if has_python_source:
         return "python"
-    if isinstance(req.get("bash_code"), str) or "command" in req or "cmd" in req:
+    if has_bash_source:
         return "bash"
     lowered_tool_name = tool_name.lower()
     if "python" in lowered_tool_name:

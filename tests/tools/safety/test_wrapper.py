@@ -267,6 +267,27 @@ async def test_filter_scans_all_script_like_fields():
 
 
 @pytest.mark.asyncio
+async def test_filter_scans_mixed_language_fields_without_language():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "code": "print('ok')",
+            "command": "rm -rf /",
+            "tool_name": "mixed_tool",
+        },
+        result,
+    )
+
+    assert result.is_continue is False
+    assert result.rsp["language"] == "unknown"
+    assert result.rsp["decision"] == "deny"
+    assert any(finding["rule_id"] == "BASH_RECURSIVE_DELETE" for finding in result.rsp["findings"])
+
+
+@pytest.mark.asyncio
 async def test_filter_extracts_python_code_language():
     safety_filter = ToolSafetyFilter()
     result = FilterResult()
