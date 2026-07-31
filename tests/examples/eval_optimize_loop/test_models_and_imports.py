@@ -7,11 +7,14 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from trpc_agent_sdk.evaluation import EvalSet
 
+from examples.optimization.eval_optimize_loop.pipeline.artifacts import load_strict_json
 from examples.optimization.eval_optimize_loop.pipeline.configuration import (
     GateConfig,
     PipelineSettings,
 )
+from examples.optimization.eval_optimize_loop.pipeline.evaluation import dataset_fingerprint
 from examples.optimization.eval_optimize_loop.pipeline.models import (
     CandidateProposal,
     CandidateRound,
@@ -32,6 +35,15 @@ from examples.optimization.eval_optimize_loop.pipeline.schema import (
 )
 
 PIPELINE_DIR = Path(__file__).resolve().parents[3] / "examples" / "optimization" / "eval_optimize_loop" / "pipeline"
+EXAMPLE_DIR = PIPELINE_DIR.parent
+
+
+def test_dataset_fingerprint_tracks_only_explicit_input_fields() -> None:
+    train = EvalSet.model_validate(load_strict_json(EXAMPLE_DIR / "train.evalset.json"))
+    validation = EvalSet.model_validate(load_strict_json(EXAMPLE_DIR / "val.evalset.json"))
+
+    assert dataset_fingerprint(train) == "af410bcc6f46c041a373efb1d1dda9f0f0f20258d1ef2146eac8a583cde99b19"
+    assert dataset_fingerprint(validation) == "5011756743a6211c78c75f2b7cbc435e98cf4caf0e0c484bbac9c5f03951c7d9"
 
 
 def test_models_forbid_unknown_and_non_finite_values() -> None:

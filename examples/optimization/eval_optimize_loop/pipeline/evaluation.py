@@ -83,7 +83,9 @@ def case_input_fingerprint(case: Any) -> str:
 
 
 def dataset_fingerprint(eval_set: EvalSet) -> str:
-    payload = eval_set.model_dump(mode="json", by_alias=True)
+    # Hash the submitted dataset contract, not defaults injected by SDK or
+    # Pydantic versions after validation.
+    payload = eval_set.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return sha256_json(_without_execution_ids(payload))
 
 
