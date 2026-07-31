@@ -82,11 +82,14 @@ class LlmProcessor:
                 return
 
             # Step 2: Call the model and process responses with telemetry tracing.
+            terminal_event: Optional[Event] = None
             with tracer.start_as_current_span('call_llm'):
                 event_id = Event.new_id()
                 final_llm_response = None
                 aggregated_raw_function_calls: list[dict] = []
                 aggregated_event_function_calls: list[dict] = []
+                instruction = getattr(context.agent, 'instruction', None)
+                instruction_metadata = getattr(instruction, 'metadata', None)
 
                 def _append_function_calls(target: list[dict], calls: list) -> None:
                     for call in calls or []:
@@ -125,15 +128,40 @@ class LlmProcessor:
                         # Process response with planner if available
                         event = self._process_planning_response(event, context)
 
-                        # Track the latest non-partial response for tracing
-                        # In streaming mode, only the final (non-partial) response
-                        # contains complete data suitable for telemetry reporting.
                         if not llm_response.partial:
                             final_llm_response = llm_response
+                            # Trace before yielding because consumers stop
+                            # immediately after receiving an error event.
+                            trace_call_llm(
+                                context,
+                                event_id,
+                                request,
+                                llm_response,
+                                instruction_metadata=instruction_metadata,
+                                stream_function_calls_raw=aggregated_raw_function_calls,
+                                stream_function_calls_post_planner=aggregated_event_function_calls,
+                            )
+                            terminal_event = event
+                            # Finish the model stream and exit the span context
+                            # before exposing the terminal event downstream.
+                            continue
 
                         yield event
                 except Exception as ex:
                     metrics_error_type = type(ex).__name__
+                    trace_call_llm(
+                        context,
+                        event_id,
+                        request,
+                        LlmResponse(
+                            error_code="LLM_CALL_ERROR",
+                            error_message=str(ex),
+                            custom_metadata={"error_type": type(ex).__name__},
+                        ),
+                        instruction_metadata=instruction_metadata,
+                        stream_function_calls_raw=aggregated_raw_function_calls,
+                        stream_function_calls_post_planner=aggregated_event_function_calls,
+                    )
                     raise
                 finally:
                     duration_s = time.monotonic() - t_start
@@ -148,18 +176,8 @@ class LlmProcessor:
                         error_type=metrics_error_type,
                     )
 
-                # Trace the LLM call once after the stream completes,
-                # using the final complete response to avoid attribute
-                # overwrites from multiple partial trace_call_llm calls.
-                if final_llm_response is not None:
-                    instruction_metadata = getattr(context.agent.instruction, 'metadata', None)
-                    trace_call_llm(context,
-                                   event_id,
-                                   request,
-                                   final_llm_response,
-                                   instruction_metadata=instruction_metadata,
-                                   stream_function_calls_raw=aggregated_raw_function_calls,
-                                   stream_function_calls_post_planner=aggregated_event_function_calls)
+            if terminal_event is not None:
+                yield terminal_event
 
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("LLM call failed for agent %s: %s", author, ex)

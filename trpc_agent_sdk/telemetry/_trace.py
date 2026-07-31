@@ -457,6 +457,26 @@ def trace_call_llm(
         llm_response_json,
     )
 
+    error_code = getattr(llm_response, "error_code", None)
+    if error_code:
+        error_message = getattr(llm_response, "error_message", None)
+        custom_metadata = getattr(llm_response, "custom_metadata", None)
+        error_type = custom_metadata.get("error_type") if isinstance(custom_metadata, dict) else None
+        error_type = str(error_type or error_code)
+        status_description = str(error_message or error_code)
+
+        span.set_status(trace.StatusCode.ERROR, status_description)
+        span.set_attribute("error.type", error_type)
+        span.set_attribute(f"{_trpc_agent_span_name}.llm.error_code", str(error_code))
+        if error_message:
+            span.set_attribute(f"{_trpc_agent_span_name}.llm.error_message", str(error_message))
+
+        exception_attributes = {
+            "exception.type": error_type,
+            "exception.message": status_description,
+        }
+        span.add_event("exception", exception_attributes)
+
     if stream_function_calls_raw:
         span.set_attribute(
             f"{_trpc_agent_span_name}.stream_function_calls.raw",
@@ -517,8 +537,10 @@ def _build_llm_request_for_trace(llm_request: LlmRequest) -> dict[str, Any]:
     """
     # Some fields in LlmRequest are function pointers and can not be serialized.
     result = {
-        "model": llm_request.model,
-        "config": llm_request.config.model_dump(exclude_none=True, exclude="response_schema"),
+        "model":
+        llm_request.model,
+        "config": (llm_request.config.model_dump(exclude_none=True, exclude="response_schema")
+                   if llm_request.config is not None else {}),
         "contents": [],
     }
     # We do not want to send bytes data to the trace.

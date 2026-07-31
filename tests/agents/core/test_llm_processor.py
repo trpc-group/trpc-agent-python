@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import List
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 
@@ -23,6 +24,7 @@ from trpc_agent_sdk.types import Content, Part
 
 
 class _StubAgent(BaseAgent):
+
     async def _run_async_impl(self, ctx):
         yield
 
@@ -53,21 +55,17 @@ def register_test_model():
 @pytest.fixture
 def model():
     m = MockLLMModel(model_name="test-llmproc-model")
-    m._responses = [
-        LlmResponse(
-            content=Content(parts=[Part(text="hello")]),
-            partial=False,
-        )
-    ]
+    m._responses = [LlmResponse(
+        content=Content(parts=[Part(text="hello")]),
+        partial=False,
+    )]
     return m
 
 
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test", user_id="u1", session_id="s1")
-    )
+    session = asyncio.run(service.create_session(app_name="test", user_id="u1", session_id="s1"))
     agent = _StubAgent(name="test_agent")
     ctx = InvocationContext(
         session_service=service,
@@ -86,6 +84,7 @@ def invocation_context():
 
 
 class TestCreateEventFromResponse:
+
     def test_maps_response_fields(self, model, invocation_context):
         proc = LlmProcessor(model)
         response = LlmResponse(
@@ -121,6 +120,7 @@ class TestCreateEventFromResponse:
 
 
 class TestCreateErrorEvent:
+
     def test_creates_error_event(self, model, invocation_context):
         proc = LlmProcessor(model)
         event = proc._create_error_event(invocation_context, "err_code", "err_msg")
@@ -136,6 +136,7 @@ class TestCreateErrorEvent:
 
 
 class TestProcessPlanningResponse:
+
     def test_no_planner_returns_event_unchanged(self, model, invocation_context):
         proc = LlmProcessor(model)
         event = Event(
@@ -159,6 +160,7 @@ class TestProcessPlanningResponse:
 
 
 class TestCallLlmAsync:
+
     def test_yields_events_for_responses(self, model, invocation_context):
         proc = LlmProcessor(model)
         request = LlmRequest()
@@ -210,3 +212,33 @@ class TestCallLlmAsync:
         assert len(content_events) == 2
         assert content_events[0].partial is True
         assert content_events[1].partial is False
+
+    def test_error_response_is_traced_before_consumer_stops(self, invocation_context):
+        m = MockLLMModel(model_name="test-llmproc-model")
+        m._responses = [
+            LlmResponse(
+                error_code="STREAMING_ERROR",
+                error_message="rate limit exceeded",
+                partial=False,
+            )
+        ]
+        proc = LlmProcessor(m)
+        request = LlmRequest()
+
+        async def run():
+            stream = proc.call_llm_async(request, invocation_context, stream=True)
+            event = await anext(stream)
+            # The downstream LlmAgent returns immediately for an error event,
+            # so tracing and span-context cleanup must be complete at this point.
+            mock_trace.assert_called_once()
+            span_context.__exit__.assert_called_once()
+            await stream.aclose()
+            return event
+
+        with patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm") as mock_trace, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.tracer") as mock_tracer:
+            span_context = mock_tracer.start_as_current_span.return_value
+            event = asyncio.run(run())
+
+        assert event.error_code == "STREAMING_ERROR"
+        assert mock_trace.call_args.args[3].error_message == "rate limit exceeded"
