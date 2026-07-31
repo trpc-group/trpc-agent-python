@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -35,6 +36,21 @@ def _directory_link_or_emulation(link: Path, target: Path, monkeypatch) -> None:
             lambda path: path == link or (bool(original(path)) if original else False),
             raising=False,
         )
+
+
+def _contend_for_prompt_lock(prompt_path: str, lock_root: str, start, release, outcomes) -> None:
+    lock = PromptRunLock((prompt_path, ), lock_root=lock_root)
+    start.wait(timeout=10)
+    try:
+        lock.acquire()
+    except RuntimeError:
+        outcomes.put("blocked")
+        return
+    try:
+        outcomes.put("acquired")
+        release.wait(timeout=10)
+    finally:
+        lock.release()
 
 
 @pytest.mark.asyncio
@@ -74,6 +90,36 @@ def test_prompt_run_lock_rejects_concurrent_owner_and_releases(tmp_path) -> None
             second.acquire()
     with second:
         assert second.path == first.path
+
+
+def test_prompt_run_lock_first_acquire_has_one_sentinel_byte(tmp_path) -> None:
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    lock_root = str(tmp_path / "locks")
+    context = multiprocessing.get_context("spawn")
+    start = context.Event()
+    release = context.Event()
+    outcomes = context.Queue()
+    processes = [
+        context.Process(
+            target=_contend_for_prompt_lock,
+            args=(str(prompt_path), lock_root, start, release, outcomes),
+        ) for _ in range(2)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    try:
+        results = [outcomes.get(timeout=15) for _ in processes]
+    finally:
+        release.set()
+        for process in processes:
+            process.join(timeout=15)
+
+    assert sorted(results) == ["acquired", "blocked"]
+    assert all(process.exitcode == 0 for process in processes)
+    lock_path = PromptRunLock((str(prompt_path), ), lock_root=lock_root).path
+    assert lock_path.read_bytes() == b"\0"
 
 
 @pytest.mark.asyncio

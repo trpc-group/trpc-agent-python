@@ -38,25 +38,47 @@ class PromptRunLock:
         self.path = root / f"{digest}.lock"
         self._handle = None
 
+    @staticmethod
+    def _lock(handle) -> None:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    @staticmethod
+    def _unlock(handle) -> None:
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def acquire(self) -> None:
         if self._handle is not None:
             raise RuntimeError("prompt run lock is already acquired")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         handle = self.path.open("a+b")
-        if self.path.stat().st_size == 0:
-            handle.write(b"\0")
-            handle.flush()
         handle.seek(0)
         try:
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self._lock(handle)
         except (OSError, BlockingIOError) as error:
             handle.close()
             raise RuntimeError("prompt sources are already owned by another pipeline run") from error
+        try:
+            if handle.seek(0, os.SEEK_END) == 0:
+                handle.write(b"\0")
+                handle.flush()
+        except BaseException:
+            try:
+                self._unlock(handle)
+            except OSError:
+                pass
+            handle.close()
+            raise
         self._handle = handle
 
     def release(self) -> None:
@@ -64,13 +86,7 @@ class PromptRunLock:
         if handle is None:
             return
         try:
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            self._unlock(handle)
         finally:
             handle.close()
             self._handle = None

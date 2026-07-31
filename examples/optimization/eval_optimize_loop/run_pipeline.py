@@ -14,6 +14,19 @@ if str(_REPO_ROOT) not in sys.path:
 
 from examples.optimization.eval_optimize_loop.pipeline.orchestrator import run_pipeline
 from examples.optimization.eval_optimize_loop.pipeline.live_adapter import load_callback
+from examples.optimization.eval_optimize_loop.pipeline.schema import sanitized_exception_message
+
+_CLI_ERROR_MAX_CHARS = 4000
+
+
+def _format_cli_error(error: BaseException) -> str:
+    error_type = type(error).__name__[:128]
+    prefix = f"ERROR: {error_type}: "
+    summary = sanitized_exception_message(
+        error,
+        max_text_chars=_CLI_ERROR_MAX_CHARS - len(prefix),
+    )
+    return prefix + summary
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -57,5 +70,5 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, asyncio.CancelledError):
         raise
     except Exception as error:
-        print(f"ERROR: {type(error).__name__}: {error}", file=sys.stderr)
+        print(_format_cli_error(error), file=sys.stderr)
         raise SystemExit(1)
