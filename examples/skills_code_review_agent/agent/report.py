@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from dataclasses import replace
 from pathlib import Path
 
 from .models import FilterDecision
@@ -41,12 +42,12 @@ def dedupe_findings(findings: list[Finding]) -> list[Finding]:
     seen: set[str] = set()
     unique: list[Finding] = []
     for finding in findings:
-        fingerprint = finding.fingerprint or _fallback_fingerprint(finding)
-        finding.fingerprint = fingerprint
+        redacted = _redact_finding(finding)
+        fingerprint = finding.fingerprint or _fallback_fingerprint(redacted)
         if fingerprint in seen:
             continue
         seen.add(fingerprint)
-        unique.append(_redact_finding(finding))
+        unique.append(replace(redacted, fingerprint=fingerprint))
     return unique
 
 
@@ -251,10 +252,12 @@ def _sandbox_finding(run: SandboxRun) -> Finding:
 
 
 def _redact_finding(finding: Finding) -> Finding:
-    finding.evidence = redact_text(finding.evidence)
-    finding.recommendation = redact_text(finding.recommendation)
-    finding.title = redact_text(finding.title)
-    return finding
+    return replace(
+        finding,
+        evidence=redact_text(finding.evidence),
+        recommendation=redact_text(finding.recommendation),
+        title=redact_text(finding.title),
+    )
 
 
 def _fallback_fingerprint(finding: Finding) -> str:

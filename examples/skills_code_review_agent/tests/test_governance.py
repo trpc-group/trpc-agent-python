@@ -77,6 +77,42 @@ def test_shell_payload_split_rm_flags_are_denied(tmp_path: Path):
         assert event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
 
 
+def test_sensitive_redirect_variants_are_denied(tmp_path: Path):
+    commands = [
+        ["bash", "-lc", "echo value >/etc/passwd"],
+        ["bash", "-lc", "echo value 2>/var/log/example"],
+        ["bash", "-lc", "echo value > /usr/local/example"],
+        ["tee", "/etc/passwd"],
+        ["cp", "/tmp/source", "/etc/passwd"],
+        ["dd", "if=/tmp/source", "of=/dev/sda"],
+    ]
+
+    for command in commands:
+        event = evaluate_execution_request("task", _request(tmp_path, RuntimeKind.DRY_RUN, command=command))
+        assert event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
+
+
+def test_shell_newline_and_substitution_are_denied(tmp_path: Path):
+    commands = [
+        ["bash", "-lc", "echo safe\nrm -r -f /tmp/example"],
+        ["bash", "-lc", "echo $(rm -rf /tmp/example)"],
+        ["bash", "-lc", "echo `rm -rf /tmp/example`"],
+    ]
+
+    for command in commands:
+        event = evaluate_execution_request("task", _request(tmp_path, RuntimeKind.DRY_RUN, command=command))
+        assert event.reason_code is FilterReasonCode.HIGH_RISK_COMMAND
+
+
+def test_safe_temporary_write_is_not_blocked(tmp_path: Path):
+    event = evaluate_execution_request(
+        "task",
+        _request(tmp_path, RuntimeKind.DRY_RUN, command=["tee", str(tmp_path / "result.txt")]),
+    )
+
+    assert event.decision is FilterDecision.ALLOW
+
+
 def test_network_command_needs_human_review(tmp_path: Path):
     request = _request(tmp_path, RuntimeKind.DRY_RUN, command=["curl", "https://example.com"])
 

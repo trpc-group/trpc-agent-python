@@ -36,10 +36,24 @@ def test_dedupe_findings_uses_fingerprint():
 
 def test_dedupe_findings_generates_missing_fingerprint():
     finding = _finding(None)
+    original = finding.to_dict()
 
     deduped = dedupe_findings([finding])
 
     assert deduped[0].fingerprint
+    assert deduped[0] is not finding
+    assert finding.to_dict() == original
+
+
+def test_dedupe_findings_does_not_mutate_sensitive_evidence():
+    sensitive_value = generic_password_value()
+    finding = _finding(None, evidence=f"password={sensitive_value}")
+    original = finding.to_dict()
+
+    deduped = dedupe_findings([finding])
+
+    assert "[REDACTED]" in deduped[0].evidence
+    assert finding.to_dict() == original
 
 
 def test_route_findings_splits_low_confidence_to_warnings():

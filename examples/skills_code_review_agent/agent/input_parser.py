@@ -444,8 +444,3 @@ def _merge_diff_texts(*texts: str) -> str:
 
 def _unique(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
-
-
-# Compatibility aliases retained for callers of the initial example contract.
-parse_diff_text = parse_unified_diff
-parse_repo = parse_repo_path

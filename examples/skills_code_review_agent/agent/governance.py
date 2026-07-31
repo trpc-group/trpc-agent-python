@@ -28,7 +28,10 @@ DEFAULT_ALLOWED_ENV_KEYS = ("LANG", "LC_ALL", "PATH", "PYTHONPATH")
 _NETWORK_COMMANDS = ("curl", "wget", "nc", "ncat", "telnet", "ssh", "scp")
 _SHELL_EXECUTABLES = {"sh", "bash"}
 _SHELL_PAYLOAD_FLAGS = {"-c", "-lc"}
-_SENSITIVE_REDIRECT_ROOTS = ("/etc/", "/usr/", "/var/")
+_SENSITIVE_PATH_ROOTS = ("/etc", "/usr", "/var", "/dev")
+_WRITE_COMMANDS = {"tee", "cp", "mv", "install"}
+_SENSITIVE_REDIRECT_RE = re.compile(r"(?i)(?:^|[\s;&|\n])(?:\d+)?\s*>{1,2}\s*/\s*(?:etc|usr|var|dev)(?:/|\b)")
+_UNSUPPORTED_SHELL_RE = re.compile(r"(?:\$\(|`)")
 
 
 @dataclass(frozen=True)
@@ -249,7 +252,10 @@ def _argv_is_dangerous(argv: tuple[str, ...]) -> bool:
         return True
     if executable == "mkfs":
         return True
-    if executable == "dd" and any(item.startswith("if=") for item in arguments):
+    if executable == "dd" and any(
+            item.startswith(("if=", "of=")) and _is_sensitive_path(item.split("=", 1)[1]) for item in arguments):
+        return True
+    if executable in _WRITE_COMMANDS and _argv_writes_sensitive_path(arguments):
         return True
     return False
 
@@ -277,32 +283,34 @@ def _has_recursive_flag(arguments: list[str]) -> bool:
 def _payload_invokes_known_command(payload: str, known_commands: tuple[str, ...]) -> bool:
     lowered = payload.lower()
     for command_name in known_commands:
-        pattern = rf"(^|[;&|][&|]?\s*){re.escape(command_name)}(\s|$)"
+        pattern = rf"(^|[;&|\n][&|]?\s*){re.escape(command_name)}(\s|$)"
         if re.search(pattern, lowered):
             return True
     return False
 
 
 def _payload_is_dangerous(payload: str) -> bool:
-    lowered = payload.lower()
-    for root in _SENSITIVE_REDIRECT_ROOTS:
-        trimmed_root = root.rstrip("/")
-        redirect_markers = (f"> {root}", f">> {root}", f"> {trimmed_root}", f">> {trimmed_root}")
-        if any(marker in lowered for marker in redirect_markers):
-            return True
-    for command in re.split(r"[;&|]+", payload):
+    if _UNSUPPORTED_SHELL_RE.search(payload):
+        return True
+    if _SENSITIVE_REDIRECT_RE.search(payload):
+        return True
+    for command in re.split(r"[;&|\n]+", payload):
         try:
             argv = tuple(shlex.split(command))
         except ValueError:
             argv = tuple(command.split())
         if _argv_is_dangerous(argv):
             return True
-    if re.search(r"(^|[;&|][&|]?\s*)mkfs(\s|$)", lowered):
-        return True
-    if re.search(r"(^|[;&|][&|]?\s*)dd\s+[^;&|]*\bif=", lowered):
-        return True
-    if re.search(r"(^|[;&|][&|]?\s*)chmod\s+[^;&|]*(?:-r\b|--recursive\b)", lowered):
-        return True
-    if re.search(r"(^|[;&|][&|]?\s*)chown\s+[^;&|]*(?:-r\b|--recursive\b)", lowered):
-        return True
     return False
+
+
+def _argv_writes_sensitive_path(arguments: list[str]) -> bool:
+    return any(not item.startswith("-") and _is_sensitive_path(item) for item in arguments)
+
+
+def _is_sensitive_path(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    if not normalized.startswith("/"):
+        return False
+    normalized = "/" + normalized.lstrip("/")
+    return any(normalized == root or normalized.startswith(f"{root}/") for root in _SENSITIVE_PATH_ROOTS)

@@ -11,6 +11,7 @@ import asyncio
 import json
 import threading
 import time
+from collections.abc import Callable
 from collections.abc import Coroutine
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,7 +58,6 @@ class _WorkspaceRuntimeAdapter:
 
     runtime: RuntimeKind
     workspace_runtime: Any
-    cube_client: Any = None
 
     def run_rule_script(
         self,
@@ -68,21 +68,43 @@ class _WorkspaceRuntimeAdapter:
         timeout_sec: float,
         output_limit_bytes: int,
     ) -> tuple[SandboxRun, dict[str, Any]]:
-        try:
-            return _run_async(
-                self._run_rule_script_async(
-                    task_id,
-                    input_path,
-                    manifest_path,
-                    timeout_sec,
-                    output_limit_bytes,
-                ))
-        finally:
-            if self.cube_client is not None:
-                try:
-                    _run_async(self.cube_client.destroy())
-                except Exception:
-                    pass
+        return _run_async(
+            _run_workspace_rule_script_async(
+                self.workspace_runtime,
+                self.runtime,
+                task_id,
+                input_path,
+                manifest_path,
+                timeout_sec,
+                output_limit_bytes,
+            ))
+
+
+@dataclass
+class _CubeWorkspaceRuntimeAdapter:
+    """Create and use the Cube client inside one async lifecycle."""
+
+    runtime: RuntimeKind
+    client_factory: Callable[[], Coroutine[Any, Any, Any]]
+    runtime_factory: Callable[[Any], Any]
+
+    def run_rule_script(
+        self,
+        task_id: str,
+        input_path: Path,
+        manifest_path: Path,
+        output_path: Path,
+        timeout_sec: float,
+        output_limit_bytes: int,
+    ) -> tuple[SandboxRun, dict[str, Any]]:
+        return _run_async(
+            self._run_rule_script_async(
+                task_id,
+                input_path,
+                manifest_path,
+                timeout_sec,
+                output_limit_bytes,
+            ))
 
     async def _run_rule_script_async(
         self,
@@ -92,61 +114,122 @@ class _WorkspaceRuntimeAdapter:
         timeout_sec: float,
         output_limit_bytes: int,
     ) -> tuple[SandboxRun, dict[str, Any]]:
-        from trpc_agent_sdk.code_executors import WorkspaceOutputSpec
-        from trpc_agent_sdk.code_executors import WorkspaceRunProgramSpec
-
-        exec_id = f"{task_id}-{int(time.time() * 1000)}"
-        command = ("python3 skills/code-review/scripts/rule_runner.py --input inputs/parsed_input.json "
-                   "--manifest inputs/skill_manifest.json --output outputs/rule_result.json")
-        sandbox_run = SandboxRun(
-            task_id=task_id,
-            runtime=self.runtime,
-            command=command,
-            timeout_sec=timeout_sec,
-            output_limit_bytes=output_limit_bytes,
-        )
-        started = time.monotonic()
-        workspace = None
+        client = None
+        outcome: tuple[SandboxRun, dict[str, Any]] | None = None
         try:
-            manager = self.workspace_runtime.manager()
-            fs = self.workspace_runtime.fs()
-            runner = self.workspace_runtime.runner()
-            workspace = await manager.create_workspace(exec_id)
-            await fs.put_files(workspace, _workspace_bundle(input_path, manifest_path))
-            run_result = await runner.run_program(
-                workspace,
-                WorkspaceRunProgramSpec(
-                    cmd="python3",
-                    args=[
-                        "skills/code-review/scripts/rule_runner.py",
-                        "--input",
-                        "inputs/parsed_input.json",
-                        "--manifest",
-                        "inputs/skill_manifest.json",
-                        "--output",
-                        "outputs/rule_result.json",
-                    ],
-                    cwd="work",
-                    timeout=timeout_sec,
-                    env={"PYTHONPATH": "."},
-                ),
+            client = await self.client_factory()
+            workspace_runtime = self.runtime_factory(client)
+            outcome = await _run_workspace_rule_script_async(
+                workspace_runtime,
+                self.runtime,
+                task_id,
+                input_path,
+                manifest_path,
+                timeout_sec,
+                output_limit_bytes,
             )
-            sandbox_run.exit_code = run_result.exit_code
-            sandbox_run.duration_ms = int(run_result.duration * 1000) if run_result.duration else int(
-                (time.monotonic() - started) * 1000)
-            sandbox_run.stdout, sandbox_run.stdout_truncated = _truncate(redact_text(run_result.stdout),
-                                                                         output_limit_bytes)
-            sandbox_run.stderr, sandbox_run.stderr_truncated = _truncate(redact_text(run_result.stderr),
-                                                                         output_limit_bytes)
-            if run_result.timed_out:
-                sandbox_run.status = SandboxStatus.TIMEOUT
-                sandbox_run.error_type = "TimeoutExpired"
-                return sandbox_run, _failure_result(sandbox_run.stderr or f"Command timed out after {timeout_sec:g}s")
-            if run_result.exit_code != 0:
-                sandbox_run.status = SandboxStatus.FAILED
-                sandbox_run.error_type = "CommandFailed"
-                return sandbox_run, _failure_result(sandbox_run.stderr or sandbox_run.stdout)
+        except Exception as ex:
+            if client is None:
+                raise _RuntimeUnavailableError(f"cube runtime is unavailable: {type(ex).__name__}: {ex}") from ex
+            sandbox_run = SandboxRun(
+                task_id=task_id,
+                runtime=self.runtime,
+                command="python3 skills/code-review/scripts/rule_runner.py",
+                timeout_sec=timeout_sec,
+                output_limit_bytes=output_limit_bytes,
+                status=SandboxStatus.FAILED,
+                stderr=redact_text(str(ex)),
+                error_type=type(ex).__name__,
+            )
+            outcome = sandbox_run, _failure_result(str(ex))
+        finally:
+            if client is not None:
+                try:
+                    await client.destroy()
+                except Exception as ex:
+                    if outcome is None:
+                        raise _RuntimeUnavailableError(
+                            f"cube runtime cleanup failed: {type(ex).__name__}: {ex}") from ex
+                    sandbox_run, result = outcome
+                    if sandbox_run.status is SandboxStatus.SUCCESS:
+                        sandbox_run.status = SandboxStatus.FAILED
+                        sandbox_run.error_type = "ClientDestroyFailed"
+                    if sandbox_run.stderr:
+                        sandbox_run.stderr = f"{sandbox_run.stderr}; {redact_text(str(ex))}"
+                    else:
+                        sandbox_run.stderr = redact_text(str(ex))
+                    outcome = sandbox_run, result
+        if outcome is None:  # pragma: no cover - defensive lifecycle guard
+            raise _RuntimeUnavailableError("cube runtime did not return a result")
+        return outcome
 
+
+async def _run_workspace_rule_script_async(
+    workspace_runtime: Any,
+    runtime: RuntimeKind,
+    task_id: str,
+    input_path: Path,
+    manifest_path: Path,
+    timeout_sec: float,
+    output_limit_bytes: int,
+) -> tuple[SandboxRun, dict[str, Any]]:
+    """Execute a rule script and clean up its workspace in the same loop."""
+    from trpc_agent_sdk.code_executors import WorkspaceOutputSpec
+    from trpc_agent_sdk.code_executors import WorkspaceRunProgramSpec
+
+    exec_id = f"{task_id}-{int(time.time() * 1000)}"
+    command = ("python3 skills/code-review/scripts/rule_runner.py --input inputs/parsed_input.json "
+               "--manifest inputs/skill_manifest.json --output outputs/rule_result.json")
+    sandbox_run = SandboxRun(
+        task_id=task_id,
+        runtime=runtime,
+        command=command,
+        timeout_sec=timeout_sec,
+        output_limit_bytes=output_limit_bytes,
+    )
+    started = time.monotonic()
+    workspace = None
+    workspace_creation_started = False
+    result = _failure_result("")
+    try:
+        manager = workspace_runtime.manager()
+        fs = workspace_runtime.fs()
+        runner = workspace_runtime.runner()
+        workspace_creation_started = True
+        workspace = await manager.create_workspace(exec_id)
+        await fs.put_files(workspace, _workspace_bundle(input_path, manifest_path))
+        run_result = await runner.run_program(
+            workspace,
+            WorkspaceRunProgramSpec(
+                cmd="python3",
+                args=[
+                    "skills/code-review/scripts/rule_runner.py",
+                    "--input",
+                    "inputs/parsed_input.json",
+                    "--manifest",
+                    "inputs/skill_manifest.json",
+                    "--output",
+                    "outputs/rule_result.json",
+                ],
+                cwd="work",
+                timeout=timeout_sec,
+                env={"PYTHONPATH": "."},
+            ),
+        )
+        sandbox_run.exit_code = run_result.exit_code
+        sandbox_run.duration_ms = int(run_result.duration * 1000) if run_result.duration else int(
+            (time.monotonic() - started) * 1000)
+        sandbox_run.stdout, sandbox_run.stdout_truncated = _truncate(redact_text(run_result.stdout), output_limit_bytes)
+        sandbox_run.stderr, sandbox_run.stderr_truncated = _truncate(redact_text(run_result.stderr), output_limit_bytes)
+        if run_result.timed_out:
+            sandbox_run.status = SandboxStatus.TIMEOUT
+            sandbox_run.error_type = "TimeoutExpired"
+            result = _failure_result(sandbox_run.stderr or f"Command timed out after {timeout_sec:g}s")
+        elif run_result.exit_code != 0:
+            sandbox_run.status = SandboxStatus.FAILED
+            sandbox_run.error_type = "CommandFailed"
+            result = _failure_result(sandbox_run.stderr or sandbox_run.stdout)
+        else:
             manifest = await fs.collect_outputs(
                 workspace,
                 WorkspaceOutputSpec(
@@ -160,29 +243,36 @@ class _WorkspaceRuntimeAdapter:
             if not manifest.files:
                 sandbox_run.status = SandboxStatus.FAILED
                 sandbox_run.error_type = "MissingOutput"
-                return sandbox_run, _failure_result("workspace rule_result.json was not collected")
-            if manifest.limits_hit:
+                result = _failure_result("workspace rule_result.json was not collected")
+            elif manifest.limits_hit:
                 sandbox_run.status = SandboxStatus.FAILED
                 sandbox_run.error_type = "OutputLimitExceeded"
-                return sandbox_run, _failure_result("workspace output collection hit configured limits")
-            try:
-                result = redact_mapping(json.loads(manifest.files[0].content or "{}"))
-            except json.JSONDecodeError as ex:
-                sandbox_run.status = SandboxStatus.FAILED
-                sandbox_run.error_type = "InvalidOutput"
-                return sandbox_run, _failure_result(f"workspace rule_result.json is invalid JSON: {ex}")
-            sandbox_run.status = SandboxStatus.SUCCESS
-            return sandbox_run, result
-        finally:
-            sandbox_run.duration_ms = sandbox_run.duration_ms or int((time.monotonic() - started) * 1000)
-            if workspace is not None:
+                result = _failure_result("workspace output collection hit configured limits")
+            else:
                 try:
-                    await self.workspace_runtime.manager().cleanup(exec_id)
-                except Exception as ex:  # pragma: no cover - backend cleanup is best effort
-                    if sandbox_run.status is SandboxStatus.SUCCESS:
-                        sandbox_run.status = SandboxStatus.FAILED
-                        sandbox_run.error_type = type(ex).__name__
-                        sandbox_run.stderr = redact_text(str(ex))
+                    result = redact_mapping(json.loads(manifest.files[0].content or "{}"))
+                    sandbox_run.status = SandboxStatus.SUCCESS
+                except json.JSONDecodeError as ex:
+                    sandbox_run.status = SandboxStatus.FAILED
+                    sandbox_run.error_type = "InvalidOutput"
+                    result = _failure_result(f"workspace rule_result.json is invalid JSON: {ex}")
+    except Exception as ex:
+        sandbox_run.status = SandboxStatus.FAILED
+        sandbox_run.error_type = type(ex).__name__
+        sandbox_run.stderr = redact_text(str(ex))
+        result = _failure_result(str(ex))
+    finally:
+        sandbox_run.duration_ms = sandbox_run.duration_ms or int((time.monotonic() - started) * 1000)
+        if workspace_creation_started:
+            try:
+                await workspace_runtime.manager().cleanup(exec_id)
+            except Exception as ex:  # pragma: no cover - backend cleanup is best effort
+                cleanup_error = redact_text(str(ex))
+                if sandbox_run.status is SandboxStatus.SUCCESS:
+                    sandbox_run.status = SandboxStatus.FAILED
+                    sandbox_run.error_type = "CleanupFailed"
+                sandbox_run.stderr = f"{sandbox_run.stderr}; {cleanup_error}".strip("; ")
+    return sandbox_run, result
 
 
 def _resolve_runtime_adapter(
@@ -231,21 +321,26 @@ def _probe_cube_runtime(*, timeout_sec: float) -> _RuntimeAdapterResult:
         cfg.resolve_template()
         cfg.resolve_api_url()
         cfg.resolve_api_key()
-        client = _run_async(create_cube_sandbox_client(cfg))
-        runtime = create_cube_workspace_runtime(
-            sandbox_client=client,
-            execute_timeout=timeout_sec,
-            workspace_cfg=CubeWorkspaceRuntimeConfig(),
-        )
     except Exception as ex:  # pragma: no cover - depends on optional local environment
         return _RuntimeAdapterResult(
             runtime=RuntimeKind.CUBE,
             available=False,
             reason=f"cube runtime is unavailable: {type(ex).__name__}: {ex}",
         )
+
+    async def create_client() -> Any:
+        return await create_cube_sandbox_client(cfg)
+
+    def create_runtime(client: Any) -> Any:
+        return create_cube_workspace_runtime(
+            sandbox_client=client,
+            execute_timeout=timeout_sec,
+            workspace_cfg=CubeWorkspaceRuntimeConfig(),
+        )
+
     return _RuntimeAdapterResult(runtime=RuntimeKind.CUBE,
                                  available=True,
-                                 adapter=_WorkspaceRuntimeAdapter(RuntimeKind.CUBE, runtime, cube_client=client))
+                                 adapter=_CubeWorkspaceRuntimeAdapter(RuntimeKind.CUBE, create_client, create_runtime))
 
 
 def _workspace_bundle(input_path: Path, manifest_path: Path) -> list[Any]:

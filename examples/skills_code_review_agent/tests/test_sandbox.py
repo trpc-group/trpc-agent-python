@@ -7,12 +7,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
+import sys
 from types import SimpleNamespace
 from pathlib import Path
 
 import examples.skills_code_review_agent.agent.sandbox as sandbox_module
+import examples.skills_code_review_agent.agent.sandbox_workspace as workspace_module
 from examples.skills_code_review_agent.agent import RuntimeKind
 from examples.skills_code_review_agent.agent import SandboxStatus
 from examples.skills_code_review_agent.agent import load_skill
@@ -153,6 +156,94 @@ def test_optional_runtime_adapter_success_is_recorded(tmp_path: Path, monkeypatc
     assert result["skill_name"] == "code-review"
 
 
+def test_cube_adapter_uses_one_event_loop_for_client_lifecycle(tmp_path: Path):
+    input_path, manifest_path = _write_inputs(tmp_path)
+    loop_ids: list[int] = []
+
+    async def create_client():
+        loop_ids.append(id(asyncio.get_running_loop()))
+        return _LoopTrackingClient(loop_ids)
+
+    def create_runtime(_client):
+        loop_ids.append(id(asyncio.get_running_loop()))
+        return _LoopTrackingWorkspaceRuntime(loop_ids)
+
+    adapter = workspace_module._CubeWorkspaceRuntimeAdapter(
+        RuntimeKind.CUBE,
+        create_client,
+        create_runtime,
+    )
+
+    async def invoke():
+        return adapter.run_rule_script(
+            "task",
+            input_path,
+            manifest_path,
+            tmp_path / "rule_result.json",
+            30,
+            65536,
+        )
+
+    sandbox_run, result = asyncio.run(invoke())
+
+    assert sandbox_run.status is SandboxStatus.SUCCESS
+    assert result["schema_version"] == "code-review.rules.v1"
+    assert len(set(loop_ids)) == 1
+
+
+def test_workspace_cleanup_is_attempted_when_creation_fails(tmp_path: Path):
+    input_path, manifest_path = _write_inputs(tmp_path)
+    manager = _FailingCreateManager()
+    runtime = _FakeWorkspaceRuntime()
+    runtime.manager_obj = manager
+    adapter = workspace_module._WorkspaceRuntimeAdapter(RuntimeKind.CONTAINER, runtime)
+
+    sandbox_run, result = adapter.run_rule_script(
+        "task",
+        input_path,
+        manifest_path,
+        tmp_path / "rule_result.json",
+        30,
+        65536,
+    )
+
+    assert sandbox_run.status is SandboxStatus.FAILED
+    assert sandbox_run.error_type == "RuntimeError"
+    assert manager.cleanup_called is True
+    assert result["findings"] == []
+
+
+def test_workspace_bundle_is_importable_and_executable(tmp_path: Path):
+    input_path, manifest_path = _write_inputs(tmp_path)
+    bundle_root = tmp_path / "bundle"
+    for file_info in workspace_module._workspace_bundle(input_path, manifest_path):
+        target = bundle_root / file_info.path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(file_info.content)
+
+    output_path = bundle_root / "work" / "outputs" / "rule_result.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "work/skills/code-review/scripts/rule_runner.py",
+            "--input",
+            "work/inputs/parsed_input.json",
+            "--manifest",
+            "work/inputs/skill_manifest.json",
+            "--output",
+            "work/outputs/rule_result.json",
+        ],
+        cwd=bundle_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0
+    assert output_path.is_file()
+    assert json.loads(output_path.read_text(encoding="utf-8"))["schema_version"] == "code-review.rules.v1"
+
+
 class _FakeWorkspaceRuntime:
 
     def __init__(self):
@@ -177,6 +268,48 @@ class _FakeManager:
 
     async def cleanup(self, exec_id):
         return None
+
+
+class _FailingCreateManager:
+
+    def __init__(self):
+        self.cleanup_called = False
+
+    async def create_workspace(self, exec_id):
+        raise RuntimeError("workspace creation failed")
+
+    async def cleanup(self, exec_id):
+        self.cleanup_called = True
+
+
+class _LoopTrackingClient:
+
+    def __init__(self, loop_ids: list[int]):
+        self.loop_ids = loop_ids
+
+    async def destroy(self):
+        self.loop_ids.append(id(asyncio.get_running_loop()))
+
+
+class _LoopTrackingWorkspaceRuntime(_FakeWorkspaceRuntime):
+
+    def __init__(self, loop_ids: list[int]):
+        super().__init__()
+        self.manager_obj = _LoopTrackingManager(loop_ids)
+
+
+class _LoopTrackingManager(_FakeManager):
+
+    def __init__(self, loop_ids: list[int]):
+        self.loop_ids = loop_ids
+
+    async def create_workspace(self, exec_id):
+        self.loop_ids.append(id(asyncio.get_running_loop()))
+        return await super().create_workspace(exec_id)
+
+    async def cleanup(self, exec_id):
+        self.loop_ids.append(id(asyncio.get_running_loop()))
+        await super().cleanup(exec_id)
 
 
 class _FakeFS:

@@ -24,6 +24,7 @@ _ASSIGNMENT_RE = re.compile(
     r"(?P=quote)")
 _URL_PASSWORD_RE = re.compile(r"(?P<prefix>[a-z][a-z0-9+.-]*://[^:\s/@]+:)(?P<password>[^@\s/]+)(?P<suffix>@)",
                               re.IGNORECASE)
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 _TOKEN_LITERAL_RE = re.compile(
     r"\b(?:sk-[A-Za-z0-9_-]{8,}|pk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9_]{8,}|gho_[A-Za-z0-9_]{8,}|"
     r"github_pat_[A-Za-z0-9_]{8,}|xox[bp]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})\b")
@@ -35,6 +36,7 @@ def redact_text(text: str) -> str:
     redacted = _BEARER_RE.sub(f"Bearer {_REDACTED}", redacted)
     redacted = _URL_PASSWORD_RE.sub(lambda match: f"{match.group('prefix')}{_REDACTED}{match.group('suffix')}",
                                     redacted)
+    redacted = _JWT_RE.sub(_REDACTED, redacted)
     redacted = _ASSIGNMENT_RE.sub(lambda match: f"{match.group('key')}{match.group('sep')}{_REDACTED}", redacted)
     return _TOKEN_LITERAL_RE.sub(_REDACTED, redacted)
 

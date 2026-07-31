@@ -80,8 +80,8 @@ def test_high_risk_recall_and_false_positive_quality_gate():
         ])
 
     recall = hits / len(positives)
-    high_confidence_total = hits + len(unexpected)
-    false_positive_rate = len(unexpected) / high_confidence_total if high_confidence_total else 0.0
+    # This is a public-corpus proxy metric, not a production security guarantee.
+    false_positive_rate = len(unexpected) / len(negatives) if negatives else 0.0
 
     assert recall >= 0.80
     assert false_positive_rate <= 0.15
@@ -91,46 +91,62 @@ def test_high_risk_recall_and_false_positive_quality_gate():
 class _RedactionCase:
     name: str
     build: Callable[[], tuple[str, list[str]]]
+    strict: bool = False
 
 
 def test_redaction_quality_gate_covers_common_secret_shapes():
     # Secret-shaped values are assembled at runtime to keep tracked tests safe
     # for CodeCC and secret scanning while preserving redaction coverage.
     cases = [
-        _value_case("bearer", bearer_like_token, lambda value: f"Authorization: Bearer {value}"),
-        _assignment_case("api key", ("api", "_", "key"), openai_like_token),
-        _assignment_case("OpenAI API key", ("OPENAI", "_", "API", "_", "KEY"), openai_live_like_token, quote="'"),
+        _value_case("bearer", bearer_like_token, lambda value: f"Authorization: Bearer {value}", strict=True),
+        _assignment_case("api key", ("api", "_", "key"), openai_like_token, strict=True),
+        _assignment_case("OpenAI API key", ("OPENAI", "_", "API", "_", "KEY"),
+                         openai_live_like_token,
+                         quote="'",
+                         strict=True),
         _assignment_case("password", ("pass", "word"), generic_password_value),
         _assignment_case("passwd", ("pass", "wd"), generic_password_value, separator=":"),
         _assignment_case("pwd", ("p", "wd"), generic_password_value, quote="'"),
         _assignment_case("secret", ("secret", ), generic_secret_value, quote="'"),
-        _assignment_case("GitHub PAT", ("token", ), github_pat_like_token),
-        _assignment_case("GitHub classic token", ("token", ), github_classic_like_token),
-        _assignment_case("GitHub OAuth token", ("token", ), github_oauth_like_token),
-        _assignment_case("Slack token", ("slack", "_", "token"), slack_like_token),
-        _assignment_case("AWS key", ("aws", "_", "key"), aws_access_key_like_token),
-        _assignment_case("AWS session key", ("aws", "_", "session"), aws_session_key_like_token),
-        _url_case("Postgres URL", ("postgres", ), ("user", ), db_password_like_value, "db/app"),
-        _url_case("MySQL URL", ("mysql", ), ("root", ), db_password_like_value, "localhost/db"),
-        _url_case("Redis URL", ("redis", ), ("default", ), db_password_like_value, "localhost:6379/0"),
+        _assignment_case("GitHub PAT", ("token", ), github_pat_like_token, strict=True),
+        _assignment_case("GitHub classic token", ("token", ), github_classic_like_token, strict=True),
+        _assignment_case("GitHub OAuth token", ("token", ), github_oauth_like_token, strict=True),
+        _assignment_case("Slack token", ("slack", "_", "token"), slack_like_token, strict=True),
+        _assignment_case("AWS key", ("aws", "_", "key"), aws_access_key_like_token, strict=True),
+        _assignment_case("AWS session key", ("aws", "_", "session"), aws_session_key_like_token, strict=True),
+        _url_case("Postgres URL", ("postgres", ), ("user", ), db_password_like_value, "db/app", strict=True),
+        _url_case("MySQL URL", ("mysql", ), ("root", ), db_password_like_value, "localhost/db", strict=True),
+        _url_case("Redis URL", ("redis", ), ("default", ), db_password_like_value, "localhost:6379/0", strict=True),
         _private_key_case(),
-        _assignment_case("client secret", ("client", "_", "secret"), client_secret_like_value),
-        _assignment_case("refresh token", ("refresh", "-", "token"), refresh_token_like_value),
+        _assignment_case("client secret", ("client", "_", "secret"), client_secret_like_value, strict=True),
+        _assignment_case("refresh token", ("refresh", "-", "token"), refresh_token_like_value, strict=True),
         _value_case(
-            "JWT",
+            "bare JWT",
             jwt_like_token,
-            lambda value: _assignment_text(("jwt", "_", "token"), value),
-            forbidden=lambda value: [value.split(".", 1)[0]],
+            lambda value: value,
+            forbidden=lambda value: [value],
+            strict=True,
+        ),
+        _assignment_case(
+            "JWT assignment",
+            ("jwt", "_", "token"),
+            jwt_like_token,
+            strict=True,
         ),
     ]
 
     redacted_count = 0
+    strict_failures = []
     for case in cases:
         text, forbidden_values = case.build()
         redacted = redact_text(text)
-        if "[REDACTED]" in redacted and all(value not in redacted for value in forbidden_values):
+        passed = "[REDACTED]" in redacted and all(value not in redacted for value in forbidden_values)
+        if case.strict and not passed:
+            strict_failures.append(case.name)
+        if passed:
             redacted_count += 1
 
+    assert not strict_failures, f"strict redaction cases failed: {strict_failures}"
     assert redacted_count / len(cases) >= 0.95
 
 
@@ -196,13 +212,15 @@ def _value_case(
     value_builder: Callable[[], str],
     render: Callable[[str], str],
     forbidden: Callable[[str], list[str]] | None = None,
+    *,
+    strict: bool = False,
 ) -> _RedactionCase:
 
     def build() -> tuple[str, list[str]]:
         value = value_builder()
         return render(value), forbidden(value) if forbidden is not None else [value]
 
-    return _RedactionCase(name=name, build=build)
+    return _RedactionCase(name=name, build=build, strict=strict)
 
 
 def _assignment_case(
@@ -212,11 +230,13 @@ def _assignment_case(
     *,
     separator: str = "=",
     quote: str = "",
+    strict: bool = False,
 ) -> _RedactionCase:
     return _value_case(
         name,
         value_builder,
         lambda value: _assignment_text(key_parts, value, separator=separator, quote=quote),
+        strict=strict,
     )
 
 
@@ -236,11 +256,14 @@ def _url_case(
     user_parts: tuple[str, ...],
     password_builder: Callable[[], str],
     suffix: str,
+    *,
+    strict: bool = False,
 ) -> _RedactionCase:
     return _value_case(
         name,
         password_builder,
         lambda value: f"{''.join(scheme_parts)}://{''.join(user_parts)}:{value}@{suffix}",
+        strict=strict,
     )
 
 
@@ -252,4 +275,5 @@ def _private_key_case() -> _RedactionCase:
             ("private", "_", "key"),
             f"-----BEGIN PRIVATE KEY-----\\n{value}\\n-----END PRIVATE KEY-----",
         ),
+        strict=True,
     )
