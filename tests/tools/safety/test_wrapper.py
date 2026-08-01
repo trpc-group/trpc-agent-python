@@ -354,6 +354,26 @@ async def test_filter_deduplicates_findings_across_segments():
     matching_findings = [finding for finding in result.rsp["findings"] if finding["rule_id"] == "BASH_RECURSIVE_DELETE"]
     assert result.rsp["decision"] == "deny"
     assert len(matching_findings) == 1
+    assert all(finding["rule_id"] != "PY_PARSE_ERROR_REVIEW" for finding in result.rsp["findings"])
+
+
+@pytest.mark.asyncio
+async def test_filter_allows_safe_unknown_bash_script_in_strict_mode():
+    safety_filter = ToolSafetyFilter(block_on_review=True)
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "script": "git status",
+            "tool_name": "custom",
+        },
+        result,
+    )
+
+    assert result.is_continue is True
+    assert result.rsp["decision"] == "allow"
+    assert all(finding["rule_id"] != "PY_PARSE_ERROR_REVIEW" for finding in result.rsp["findings"])
 
 
 @pytest.mark.asyncio

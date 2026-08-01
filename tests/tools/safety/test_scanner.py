@@ -250,7 +250,14 @@ def test_unknown_language_scans_python_and_bash_rules():
     assert report.language == "unknown"
     assert report.decision == Decision.DENY
     assert "BASH_RECURSIVE_DELETE" in _rule_ids(report)
-    assert "PY_PARSE_ERROR_REVIEW" in _rule_ids(report)
+    assert "PY_PARSE_ERROR_REVIEW" not in _rule_ids(report)
+
+
+def test_unknown_language_keeps_python_findings_when_parse_succeeds():
+    report = _scanner().scan_script("while True:\n    pass\n", "unknown")
+
+    assert "PY_INFINITE_LOOP" in _rule_ids(report)
+    assert "PY_PARSE_ERROR_REVIEW" not in _rule_ids(report)
 
 
 def test_language_aliases_are_normalized():
