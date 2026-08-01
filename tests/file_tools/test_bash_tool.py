@@ -233,6 +233,7 @@ class TestBashTool:
             r"echo escaped\;separator",
             "echo ok 2>&1",
             "echo ok &>output.log",
+            "echo '$" + "\\" + "\n" + "(blocked_cmd)'",
         ],
     )
     def test_is_command_safe_preserves_quoted_escaped_and_redirected_arguments(self, tool_with_whitelist, command):
@@ -274,6 +275,10 @@ class TestBashTool:
             "echo 'unterminated",
             "echo <(blocked_cmd)",
             "echo >(blocked_cmd)",
+            "echo $" + "\\" + "\n" + "(blocked_cmd)",
+            'echo "$' + "\\" + "\n" + '(blocked_cmd)"',
+            "cat <" + "\\" + "\n" + "(blocked_cmd)",
+            "cat >" + "\\" + "\n" + "(blocked_cmd)",
         ],
     )
     def test_is_command_safe_fails_closed_for_unverifiable_syntax(self, tool_with_whitelist, command):
