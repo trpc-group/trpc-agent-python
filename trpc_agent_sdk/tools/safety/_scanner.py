@@ -78,7 +78,11 @@ class ToolScriptSafetyScanner:
                 findings.extend(scan_bash_script(request.script, self.policy))
             else:
                 findings.extend(scan_bash_script(request.script, self.policy))
-                findings.extend(scan_python_script(request.script, self.policy))
+                python_findings = scan_python_script(request.script, self.policy)
+                # An unknown segment may be valid non-Python input; keep Python
+                # findings only when AST parsing succeeds.
+                if not any(finding.rule_id == "PY_PARSE_ERROR_REVIEW" for finding in python_findings):
+                    findings.extend(python_findings)
 
         findings.extend(self._scan_execution_context(base_request))
         for request in request_list:
