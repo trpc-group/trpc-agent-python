@@ -27,6 +27,85 @@ from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Type
 
 
+def _parse_heredoc_operator(command: str, index: int) -> Optional[tuple[int, str, bool, bool]]:
+    """Parse a heredoc operator and its delimiter without running a shell."""
+    cursor = index + 2
+    strip_tabs = cursor < len(command) and command[cursor] == "-"
+    if strip_tabs:
+        cursor += 1
+
+    while cursor < len(command) and command[cursor] in {" ", "\t"}:
+        cursor += 1
+
+    delimiter: list[str] = []
+    quote = ""
+    quoted = False
+    while cursor < len(command):
+        char = command[cursor]
+        if quote:
+            if char == quote:
+                quote = ""
+            elif char == "\\" and quote == '"':
+                quoted = True
+                cursor += 1
+                if cursor >= len(command) or command[cursor] == "\n":
+                    return None
+                delimiter.append(command[cursor])
+            else:
+                delimiter.append(char)
+            cursor += 1
+            continue
+
+        if char in {"'", '"'}:
+            quote = char
+            quoted = True
+            cursor += 1
+            continue
+        if char == "\\":
+            quoted = True
+            cursor += 1
+            if cursor >= len(command) or command[cursor] == "\n":
+                return None
+            delimiter.append(command[cursor])
+            cursor += 1
+            continue
+        if char.isspace() or char in {"|", ";", "&", "<", ">"}:
+            break
+        delimiter.append(char)
+        cursor += 1
+
+    if quote or not delimiter:
+        return None
+    return cursor, "".join(delimiter), strip_tabs, quoted
+
+
+def _skip_heredoc_bodies(
+    command: str,
+    index: int,
+    heredocs: list[tuple[str, bool, bool]],
+) -> Optional[int]:
+    """Skip heredoc data while rejecting executable substitutions."""
+    cursor = index
+    for delimiter, strip_tabs, quoted in heredocs:
+        while cursor <= len(command):
+            line_end = command.find("\n", cursor)
+            if line_end == -1:
+                line_end = len(command)
+            line = command[cursor:line_end].removesuffix("\r")
+            comparable_line = line.lstrip("\t") if strip_tabs else line
+            if comparable_line == delimiter:
+                cursor = line_end + 1 if line_end < len(command) else line_end
+                break
+            if not quoted and any(pattern in line for pattern in ("$(", "`", "<(", ">(")):
+                return None
+            if line_end == len(command):
+                return None
+            cursor = line_end + 1
+        else:
+            return None
+    return cursor
+
+
 def _extract_base_commands(command: str) -> Optional[list[str]]:
     """Extract every executable command segment without executing the shell."""
     segments: list[str] = []
@@ -35,6 +114,7 @@ def _extract_base_commands(command: str) -> Optional[list[str]]:
     escaped = False
     index = 0
     previous_is_redirect = False
+    pending_heredocs: list[tuple[str, bool, bool]] = []
 
     while index < len(command):
         char = command[index]
@@ -73,6 +153,17 @@ def _extract_base_commands(command: str) -> Optional[list[str]]:
         if char == "`" or command.startswith(("$(", "<(", ">("), index):
             return None
 
+        if command.startswith("<<", index) and not command.startswith("<<<", index):
+            operator_start = index
+            heredoc = _parse_heredoc_operator(command, index)
+            if heredoc is None:
+                return None
+            index, delimiter, strip_tabs, quoted = heredoc
+            current.append(command[operator_start:index])
+            pending_heredocs.append((delimiter, strip_tabs, quoted))
+            previous_is_redirect = False
+            continue
+
         if char in {"|", ";", "&", "\n"}:
             # Keep file-descriptor redirections such as 2>&1 and &>file in
             # the current segment; a standalone ampersand is a separator.
@@ -89,6 +180,13 @@ def _extract_base_commands(command: str) -> Optional[list[str]]:
                 segments.append(segment)
             current = []
             previous_is_redirect = False
+            if char == "\n" and pending_heredocs:
+                heredoc_end = _skip_heredoc_bodies(command, index + 1, pending_heredocs)
+                if heredoc_end is None:
+                    return None
+                pending_heredocs = []
+                index = heredoc_end
+                continue
             if command.startswith(("||", "&&", "|&", ";;"), index):
                 index += 2
             else:
@@ -99,7 +197,7 @@ def _extract_base_commands(command: str) -> Optional[list[str]]:
         previous_is_redirect = char in {"<", ">"}
         index += 1
 
-    if quote or escaped:
+    if quote or escaped or pending_heredocs:
         return None
 
     segment = "".join(current).strip()

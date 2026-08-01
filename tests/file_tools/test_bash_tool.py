@@ -242,6 +242,35 @@ class TestBashTool:
     @pytest.mark.parametrize(
         "command",
         [
+            "cat <<EOF\nplain data\nEOF",
+            "cat <<'EOF'\n$(blocked_cmd)\nEOF",
+            "cat <<-EOF\n\ttab-indented data\n\tEOF",
+            "cat <<EOF\nplain data\nEOF\necho done",
+        ],
+    )
+    def test_is_command_safe_allows_heredoc_data(self, tmp_path, command):
+        """Heredoc bodies are data rather than separate command segments."""
+        tool = BashTool(cwd=str(tmp_path), whitelist_commands=["cat", "echo"])
+
+        assert tool._is_command_safe(command, tool.cwd) is True
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "cat <<EOF\nplain data",
+            "cat <<EOF\n$(blocked_cmd)\nEOF",
+            "cat <<EOF\nplain data\nEOF\nblocked_cmd",
+        ],
+    )
+    def test_is_command_safe_rejects_unsafe_or_unterminated_heredocs(self, tmp_path, command):
+        """Heredocs fail closed when parsing or expansion is unsafe."""
+        tool = BashTool(cwd=str(tmp_path), whitelist_commands=["cat", "echo"])
+
+        assert tool._is_command_safe(command, tool.cwd) is False
+
+    @pytest.mark.parametrize(
+        "command",
+        [
             "echo 'unterminated",
             "echo <(blocked_cmd)",
             "echo >(blocked_cmd)",
