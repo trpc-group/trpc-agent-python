@@ -127,6 +127,8 @@ def _extract_base_commands(command: str) -> Optional[list[str]]:
             continue
 
         if char == "\\" and quote != "'":
+            if command.startswith(("\\\n", "\\\r\n"), index):
+                return None
             current.append(char)
             escaped = True
             previous_is_redirect = False
