@@ -123,11 +123,10 @@ def _copy_case(case: dict) -> dict:
 
 
 def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
-                    fixed_categories: list[str] | None = None,
                     val_regression_cases: list[str] | None = None) -> dict:
     """根据场景生成候选 actual_conversation。
 
-    - fix_attributed：train 上归因类别相关的失败 case 用期望替换实际（修复成功）。
+    - fix_attributed：train 上失败的 case 用期望替换实际（修复成功）。
       非失败 case 保持不变。
     - noop：候选 actual = baseline actual（无变化）。
     - overfit：train 全部用期望（"记住"训练集）；val 上指定回归 case 扰动（退化）。
@@ -266,7 +265,6 @@ def run_validation_trace(
     train_cases = _load_cases(train_evalset_path)
     val_cases = _load_cases(val_evalset_path)
 
-    fixed_categories = getattr(optimizer_result, "fixed_categories", [])
     strat = scenario or getattr(optimizer_result, "candidate_strategy", "fix_attributed")
 
     # overfit 场景且未指定回归 case 时，自动选前 2 个 val case 扰动，
@@ -277,13 +275,11 @@ def run_validation_trace(
 
     # 生成候选 actuals
     candidate_train_cases = [
-        _apply_scenario(c, strat, is_train=True, fixed_categories=fixed_categories,
-                        val_regression_cases=effective_regression)
+        _apply_scenario(c, strat, is_train=True, val_regression_cases=effective_regression)
         for c in train_cases
     ]
     candidate_val_cases = [
-        _apply_scenario(c, strat, is_train=False, fixed_categories=fixed_categories,
-                        val_regression_cases=effective_regression)
+        _apply_scenario(c, strat, is_train=False, val_regression_cases=effective_regression)
         for c in val_cases
     ]
 
