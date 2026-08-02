@@ -23,6 +23,14 @@ from datetime import datetime, timezone
 # Ensure imports work from the example directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# 兼容 Windows GBK 控制台：输出统一用 UTF-8，避免 emoji/中文 print 崩溃
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from pipeline.config import (
     PipelineConfig,
     load_evalset,
@@ -32,7 +40,7 @@ from pipeline.config import (
 from pipeline.baseline import BaselineResult, run_baseline_fake
 from pipeline.attribution import attribute_failures, AttributionReport
 from pipeline.gate import evaluate_gate, GateDecision, GateResult
-from pipeline.validate import run_validation_fake, ValidationResult
+from pipeline.validate import run_validation_trace, ValidationResult
 from pipeline.report import generate_json_report, generate_md_report
 from pipeline.optimize import (
     run_optimize_fake,
@@ -59,6 +67,8 @@ Examples:
                         help="Execution mode (default: fake)")
     parser.add_argument("--train-evalset", default="data/train.evalset.json")
     parser.add_argument("--val-evalset", default="data/val.evalset.json")
+    parser.add_argument("--holdout-evalset", default="data/holdout.evalset.json",
+                        help="Holdout set (optional, scored in report)")
     parser.add_argument("--optimizer-config", default="data/optimizer.json")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-iterations", type=int, default=3,
@@ -69,6 +79,11 @@ Examples:
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--ci", action="store_true",
                         help="CI mode: exit non-zero on gate rejection")
+    parser.add_argument("--scenario", default="fix_attributed",
+                        choices=["fix_attributed", "noop", "overfit"],
+                        help="Candidate generation strategy (default: fix_attributed)")
+    parser.add_argument("--val-regression-cases", default="",
+                        help="Comma-separated val case ids to regress in overfit scenario")
     args = parser.parse_args()
 
     # Generate task ID
@@ -86,6 +101,9 @@ Examples:
         mode=args.mode,
         verbose=args.verbose,
         ci_mode=args.ci,
+        scenario=args.scenario,
+        holdout_evalset=args.holdout_evalset,
+        val_regression_cases=[x.strip() for x in args.val_regression_cases.split(",") if x.strip()],
     )
 
     # Initialize audit tracer
@@ -162,7 +180,7 @@ Examples:
     print("[4/7] Running optimization...")
     tracer.start_stage("optimization")
     if cfg.mode == "fake":
-        optimize_result = run_optimize_fake(attribution, cfg)
+        optimize_result = run_optimize_fake(attribution, cfg, scenario=cfg.scenario)
     else:
         optimize_result = run_optimize_live(cfg.optimizer_config, cfg)
 
@@ -177,6 +195,7 @@ Examples:
     tracer.add_cost(optimization_cost, "optimization")
     tracer.end_stage("optimization")
     print(f"  Algorithm: {optimize_result.algorithm}")
+    print(f"  Scenario: {cfg.scenario}")
     print(f"  Iterations: {optimize_result.total_iterations}")
     print(f"  Best score: {optimize_result.best_score:.3f}")
     print(f"  Cost: ${optimization_cost:.4f}")
@@ -190,27 +209,16 @@ Examples:
     print("[5/7] Validating candidate on validation set...")
     tracer.start_stage("validate")
 
-    # Build candidate: simulate improvement based on optimization result
-    if attribution.total_failures > 0 and optimize_result.total_iterations > 0:
-        improvement_fraction = min(1.0, optimize_result.total_iterations / len(attribution.by_category))
-        new_pass_rate = min(1.0, baseline_train.pass_rate + improvement_fraction * 0.3)
-        new_passes = min(baseline_train.total_cases, baseline_train.passed_cases + attribution.total_failures)
-    else:
-        new_pass_rate = baseline_train.pass_rate
-        new_passes = baseline_train.passed_cases
-
-    candidate_train = BaselineResult(
-        evalset_id=baseline_train.evalset_id,
-        pass_rate=new_pass_rate,
-        total_cases=baseline_train.total_cases,
-        passed_cases=new_passes,
-        failed_cases=baseline_train.total_cases - new_passes,
-        failed_case_ids=baseline_train.failed_case_ids[attribution.total_failures:],
+    validation = run_validation_trace(
+        cfg.train_evalset,
+        cfg.val_evalset,
+        baseline_val,
+        optimize_result,
+        cfg,
+        scenario=cfg.scenario,
+        val_regression_cases=cfg.val_regression_cases,
     )
-
-    validation = run_validation_fake(
-        cfg.val_evalset, baseline_val, candidate_train, cfg,
-    )
+    candidate_train = validation.candidate_train or baseline_train
     tracer.end_stage("validate")
     print(f"  New passes: {validation.new_passes}, "
           f"New failures: {validation.new_failures}, "
@@ -235,6 +243,7 @@ Examples:
         candidate_failed=candidate_train.failed_case_ids,
         max_cost=cfg.max_cost_budget,
         optimization_cost=optimization_cost,
+        validation_new_failures=validation.new_failures,
     )
     tracer.end_stage("gate")
     gate_icon = {"accept": "[ACCEPT]", "reject": "[REJECT]", "needs_review": "[REVIEW]"}

@@ -4,9 +4,12 @@ Compares baseline vs candidate on the held-out validation set to detect
 overfitting (train improvement without val improvement).
 """
 
+import json
+import os
 from dataclasses import dataclass, field
 
-from .baseline import BaselineResult, run_baseline_fake
+from .baseline import BaselineResult
+from .comparator import TraceMatcher, default_matcher
 from .config import PipelineConfig
 
 
@@ -24,6 +27,7 @@ class ValidationResult:
     """Validation set comparison results."""
     baseline: BaselineResult | None = None
     candidate: BaselineResult | None = None
+    candidate_train: BaselineResult | None = None
     deltas: list[ValidationDelta] = field(default_factory=list)
 
     @property
@@ -98,3 +102,219 @@ def run_validation_fake(
         candidate=candidate_baseline,
         deltas=deltas,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Section: 候选评估（场景驱动的真实评分）
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _load_cases(path: str) -> list[dict]:
+    """加载 evalset 的 cases 列表。"""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("eval_cases", [])
+
+
+def _copy_case(case: dict) -> dict:
+    """深拷贝一个 case，避免修改原始数据。"""
+    import copy
+    return copy.deepcopy(case)
+
+
+def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
+                    fixed_categories: list[str] | None = None,
+                    val_regression_cases: list[str] | None = None) -> dict:
+    """根据场景生成候选 actual_conversation。
+
+    - fix_attributed：train 上归因类别相关的失败 case 用期望替换实际（修复成功）。
+      非失败 case 保持不变。
+    - noop：候选 actual = baseline actual（无变化）。
+    - overfit：train 全部用期望（"记住"训练集）；val 上指定回归 case 扰动（退化）。
+
+    支持 case 携带可选的 `candidate_conversation` 字段：若存在则优先回放该内容，
+    支持隐藏样本的真实评分（验收标准 #2）。
+    """
+    new_case = _copy_case(case)
+
+    # 优先使用 case 自带的 candidate_conversation（真实回放）
+    if "candidate_conversation" in case:
+        new_case["actual_conversation"] = case["candidate_conversation"]
+        return new_case
+
+    conversation = case.get("conversation", [])
+    actual = case.get("actual_conversation", [])
+    case_id = str(case.get("eval_id", ""))
+
+    if scenario == "noop":
+        # 无变化：保持 baseline actual
+        return new_case
+
+    if scenario == "fix_attributed":
+        # 仅修复归因失败类别的 case（用期望替换实际）
+        failed = not _case_passes(case)
+        if is_train and failed:
+            new_case["actual_conversation"] = conversation
+        return new_case
+
+    if scenario == "overfit":
+        if is_train:
+            # train 全部"记住"期望 → train 提升
+            if conversation:
+                new_case["actual_conversation"] = conversation
+        else:
+            # val 指定回归 case 扰动 → val 退化
+            if val_regression_cases and case_id in val_regression_cases:
+                new_case["actual_conversation"] = _perturb_case(case)
+        return new_case
+
+    return new_case
+
+
+def _case_passes(case: dict) -> bool:
+    """用 TraceMatcher 判断 case 当前是否通过。"""
+    matcher = default_matcher()
+    return matcher.evaluate(case).passed
+
+
+def _perturb_case(case: dict) -> list[dict]:
+    """扰动 case 的 actual_conversation，制造退化（val 回归场景）。
+
+    把最终回复替换为固定错误文本，确保与期望不一致。
+    """
+    conversation = case.get("conversation", [])
+    if not conversation:
+        return case.get("actual_conversation", [])
+    perturbed = _copy_case(conversation)
+    for inv in perturbed:
+        parts = inv.get("final_response", {}).get("parts", [])
+        if parts:
+            parts[0]["text"] = "[过拟合退化] 回复被错误改写，与期望不一致。"
+    return perturbed
+
+
+def _evaluate_cases(cases: list[dict], eval_set_id: str, matcher: TraceMatcher) -> BaselineResult:
+    """用 TraceMatcher 批量评估 cases，返回 BaselineResult。"""
+    total = len(cases)
+    passed = 0
+    failed_ids: list[str] = []
+    per_case: list[dict] = []
+    score_sum = 0.0
+
+    for case in cases:
+        verdict = matcher.evaluate(case)
+        case_id = str(case.get("eval_id", "unknown"))
+        if verdict.passed:
+            passed += 1
+        else:
+            failed_ids.append(case_id)
+        score_sum += verdict.score
+        per_case.append({
+            "eval_id": case_id,
+            "pass": verdict.passed,
+            "score": round(verdict.score, 4),
+            "reason": verdict.detail or ("passed" if verdict.passed else "failed"),
+            "category": str(verdict.category) if verdict.category else "",
+            "evidence": verdict.evidence,
+            "expected_final": verdict.expected_final,
+            "actual_final": verdict.actual_final,
+        })
+
+    return BaselineResult(
+        evalset_id=eval_set_id,
+        pass_rate=passed / total if total > 0 else 0.0,
+        total_cases=total,
+        passed_cases=passed,
+        failed_cases=total - passed,
+        failed_case_ids=failed_ids,
+        metric_breakdown={
+            "overall_pass_rate": passed / total if total > 0 else 0.0,
+            "final_response_avg_score": round(score_sum / total, 4) if total > 0 else 0.0,
+        },
+        per_case_results=per_case,
+    )
+
+
+def run_validation_trace(
+    train_evalset_path: str,
+    val_evalset_path: str,
+    baseline_val: BaselineResult,
+    optimizer_result,
+    config: PipelineConfig,
+    *,
+    scenario: str = "fix_attributed",
+    val_regression_cases: list[str] | None = None,
+) -> ValidationResult:
+    """场景驱动的候选评估（带 per_case_results）。
+
+    根据候选场景生成候选 actuals，用 TraceMatcher 重评 train 和 val，
+    与 baseline 逐 case 对比，检测过拟合（val 新增失败）。
+
+    Args:
+        train_evalset_path: 训练集路径。
+        val_evalset_path: 验证集路径。
+        baseline_val: baseline 在 val 上的结果。
+        optimizer_result: 优化阶段结果（含 candidate_strategy / fixed_categories）。
+        config: Pipeline 配置。
+        scenario: 候选生成策略。
+        val_regression_cases: overfit 场景下要扰动的 val case id 列表。
+
+    Returns:
+        ValidationResult with candidate train/val per-case deltas.
+    """
+    matcher = default_matcher()
+    train_cases = _load_cases(train_evalset_path)
+    val_cases = _load_cases(val_evalset_path)
+
+    fixed_categories = getattr(optimizer_result, "fixed_categories", [])
+    strat = scenario or getattr(optimizer_result, "candidate_strategy", "fix_attributed")
+
+    # 生成候选 actuals
+    candidate_train_cases = [
+        _apply_scenario(c, strat, is_train=True, fixed_categories=fixed_categories,
+                        val_regression_cases=val_regression_cases)
+        for c in train_cases
+    ]
+    candidate_val_cases = [
+        _apply_scenario(c, strat, is_train=False, fixed_categories=fixed_categories,
+                        val_regression_cases=val_regression_cases)
+        for c in val_cases
+    ]
+
+    candidate_train = _evaluate_cases(candidate_train_cases, "candidate-train", matcher)
+    candidate_val = _evaluate_cases(candidate_val_cases, "candidate-val", matcher)
+
+    # 计算 delta（与 baseline val 对比）
+    baseline_map = {
+        c.get("eval_id"): c.get("pass", True)
+        for c in baseline_val.per_case_results
+    }
+    deltas = []
+    all_ids = set(baseline_map.keys()) | {c.get("eval_id", "") for c in candidate_val.per_case_results}
+    for case_id in sorted(all_ids):
+        bl_pass = baseline_map.get(case_id, True)
+        cd_pass = next(
+            (c.get("pass", True) for c in candidate_val.per_case_results if c.get("eval_id") == case_id),
+            True,
+        )
+        if not bl_pass and cd_pass:
+            change = "new_pass"
+        elif bl_pass and not cd_pass:
+            change = "new_fail"
+        else:
+            change = "unchanged"
+        deltas.append(ValidationDelta(
+            eval_id=case_id,
+            baseline_passed=bl_pass,
+            candidate_passed=cd_pass,
+            change=change,
+        ))
+
+    result = ValidationResult(
+        baseline=baseline_val,
+        candidate=candidate_val,
+        deltas=deltas,
+    )
+    # 附上候选 train 结果供报告使用
+    result.candidate_train = candidate_train
+    return result

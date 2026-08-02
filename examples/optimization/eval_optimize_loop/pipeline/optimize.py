@@ -39,6 +39,10 @@ class OptimizeResult:
     total_iterations: int = 0
     converged: bool = False
     errors: list[str] = field(default_factory=list)
+    # 候选生成策略：fix_attributed（可优化成功）/ noop（优化无效）/ overfit（过拟合退化）
+    candidate_strategy: str = "fix_attributed"
+    # 被修复的失败类别（fix_attributed 场景下）
+    fixed_categories: list[str] = field(default_factory=list)
 
     @property
     def best_score(self) -> float:
@@ -47,9 +51,19 @@ class OptimizeResult:
         return max(r.score for r in self.rounds)
 
 
+# 候选场景注册表：场景名 → 描述
+SCENARIOS = {
+    "fix_attributed": "候选修复了归因的失败类别 → 优化成功",
+    "noop": "候选未做实质改动 → 优化无效",
+    "overfit": "候选在 train 上提升但 val 回归 → 过拟合",
+}
+
+
 def run_optimize_fake(
     attribution: AttributionReport,
     config: PipelineConfig,
+    *,
+    scenario: str = "fix_attributed",
 ) -> OptimizeResult:
     """Run optimization in fake mode — simulate GEPA iterations.
 
@@ -57,14 +71,29 @@ def run_optimize_fake(
     one category of failures identified in attribution. This simulates
     the reflective mutation behavior of real GEPA without API calls.
 
+    场景参数 `scenario` 控制候选的生成策略：
+    - fix_attributed（默认）：候选修复归因的失败类别 → 优化成功
+    - noop：候选未做实质改动 → 优化无效
+    - overfit：候选在 train 上提升但 val 回归 → 过拟合
+
     Args:
         attribution: Failure attribution from baseline evaluation.
         config: Pipeline configuration.
+        scenario: 候选生成策略名。
 
     Returns:
         OptimizeResult with simulated round records.
     """
     result = OptimizeResult(algorithm=config.algorithm)
+    result.candidate_strategy = scenario
+
+    if scenario == "noop":
+        # 优化无效：无实际改进，返回空优化结果
+        result.converged = False
+        result.total_iterations = 0
+        result.optimized_fields = []
+        result.best_prompt = {}
+        return result
 
     if attribution.total_failures == 0:
         # No failures to fix — optimization has nothing to do
@@ -80,13 +109,17 @@ def run_optimize_fake(
         reverse=True,
     )
 
-    # Simulate GEPA rounds: each round fixes one category
+    # overfit 场景：模拟"记住 train"，对归因类别做过度修复（第 2 轮起引入退化）
     max_rounds = min(config.max_iterations, len(categories_to_fix))
+    if scenario == "overfit":
+        # 过拟合候选：修复更多轮次但代价更高，validate 阶段会显示 val 回归
+        max_rounds = min(max_rounds + 1, len(categories_to_fix) + 1)
+
     optimized_fields = set()
     prompt_changes: dict[str, str] = {}
 
     for i in range(max_rounds):
-        cat_name, cat_count = categories_to_fix[i]
+        cat_name, cat_count = categories_to_fix[i % len(categories_to_fix)] if categories_to_fix else ("unknown", 0)
         start = time.monotonic()
 
         # Simulate improvement: each fixed category adds to the score
@@ -119,6 +152,7 @@ def run_optimize_fake(
     result.optimized_fields = sorted(optimized_fields)
     result.best_prompt = {"system.md": _build_optimized_prompt(prompt_changes)}
     result.converged = result.total_iterations < config.max_iterations
+    result.fixed_categories = [cat for cat, _ in categories_to_fix[:max_rounds]]
 
     return result
 
