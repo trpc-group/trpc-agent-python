@@ -4,6 +4,7 @@ Compares baseline vs candidate on the held-out validation set to detect
 overfitting (train improvement without val improvement).
 """
 
+import copy
 import json
 import os
 from dataclasses import dataclass, field
@@ -118,7 +119,6 @@ def _load_cases(path: str) -> list[dict]:
 
 def _copy_case(case: dict) -> dict:
     """深拷贝一个 case，避免修改原始数据。"""
-    import copy
     return copy.deepcopy(case)
 
 

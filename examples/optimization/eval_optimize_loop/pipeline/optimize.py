@@ -17,6 +17,25 @@ from .attribution import AttributionReport
 from .config import PipelineConfig
 
 
+def _ensure_import_paths() -> None:
+    """确保 example 目录与项目根在 sys.path（live SDK 需要）。
+
+    - example 目录：`from agent.agent import build_call_agent`
+    - 项目根：`from trpc_agent_sdk import ...`（源码包）
+    仅当缺失时插入，失败记录 warning。
+    """
+    try:
+        _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
+        _example_dir = os.path.abspath(os.path.join(_pipeline_dir, os.pardir))
+        _repo_root = os.path.abspath(
+            os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
+        for _p in (_example_dir, _repo_root):
+            if _p not in sys.path:
+                sys.path.insert(0, _p)
+    except Exception as e:  # pragma: no cover — 极端路径异常
+        print(f"  ⚠️  warning: 无法设置导入路径: {e}")
+
+
 @dataclass
 class RoundRecord:
     """A single round of optimization."""
@@ -181,17 +200,7 @@ async def run_optimize_live(
 
     try:
         # 确保项目根与 example 目录在 sys.path
-        # pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）
-        try:
-            _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
-            _example_dir = os.path.abspath(os.path.join(_pipeline_dir, os.pardir))
-            _repo_root = os.path.abspath(
-                os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
-            for _p in (_example_dir, _repo_root):
-                if _p not in sys.path:
-                    sys.path.insert(0, _p)
-        except Exception:
-            pass
+        _ensure_import_paths()
         from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
         if call_agent is None:
@@ -217,22 +226,28 @@ async def run_optimize_live(
             output_dir=config.output_dir,
         )
 
-        # Extract results
-        result.total_cost = getattr(opt_result, 'total_cost', 0.0)
-        result.converged = getattr(opt_result, 'converged', False)
-        result.total_iterations = getattr(opt_result, 'total_iterations', 0)
-        result.optimized_fields = getattr(opt_result, 'optimized_fields', [])
+        # Extract results（按 SDK OptimizeResult 实际字段映射）
+        result.total_cost = getattr(opt_result, 'total_llm_cost', 0.0)
+        result.total_iterations = getattr(opt_result, 'total_rounds', 0)
+        result.converged = getattr(opt_result, 'status', '') == 'accepted'
+        result.optimized_fields = []
+        result.fixed_categories = []
 
-        if hasattr(opt_result, 'best_prompt'):
-            result.best_prompt = opt_result.best_prompt
-        if hasattr(opt_result, 'rounds'):
+        best_prompts = getattr(opt_result, 'best_prompts', None)
+        if best_prompts:
+            result.best_prompt = dict(best_prompts)
+            result.optimized_fields = list(best_prompts.keys())
+
+        rounds = getattr(opt_result, 'rounds', None)
+        if rounds:
             result.rounds = [
                 RoundRecord(
-                    round_index=getattr(r, 'index', i),
-                    score=getattr(r, 'score', 0.0),
-                    best_so_far=getattr(r, 'best_so_far', 0.0),
+                    round_index=getattr(r, 'round', i + 1),
+                    score=getattr(r, 'validation_pass_rate', 0.0),
+                    best_so_far=getattr(r, 'validation_pass_rate', 0.0),
+                    prompt_changes=list(getattr(r, 'optimized_field_names', []) or []),
                 )
-                for i, r in enumerate(opt_result.rounds)
+                for i, r in enumerate(rounds)
             ]
 
     except ImportError as e:

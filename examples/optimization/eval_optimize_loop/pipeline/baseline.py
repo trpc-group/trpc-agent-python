@@ -10,6 +10,22 @@ from .comparator import TraceMatcher, FailureCategory, default_matcher
 from .config import PipelineConfig
 
 
+def _ensure_repo_root_in_path() -> None:
+    """确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）。
+
+    pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）。
+    仅当项目根不在 sys.path 时插入；失败时记录 warning 而非静默吞掉。
+    """
+    try:
+        _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
+        _repo_root = os.path.abspath(
+            os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
+        if _repo_root not in sys.path:
+            sys.path.insert(0, _repo_root)
+    except Exception as e:  # pragma: no cover — 极端路径异常
+        print(f"  ⚠️  warning: 无法将项目根加入 sys.path: {e}")
+
+
 @dataclass
 class BaselineResult:
     """Baseline evaluation results for an evalset."""
@@ -102,45 +118,54 @@ def run_baseline_fake(evalset_path: str, config: PipelineConfig) -> BaselineResu
     )
 
 
-async def run_baseline_sdk(evalset_path: str, *, call_agent: Any = None) -> BaselineResult:
+async def run_baseline_sdk(
+    evalset_path: str,
+    *,
+    call_agent: Any = None,
+    eval_config: Any = None,
+) -> BaselineResult:
     """Run baseline evaluation using the real SDK AgentEvaluator.
 
     trace 格式的 evalset 可离线评测（无需 API key，无需 agent_module）；
-    若提供 call_agent 则走真实 agent 调用。所有 SDK 调用均以 try/except
-    保护，失败返回 errors 而非崩溃。
+    若提供 call_agent 则走真实 agent 调用。SDK 的 `evaluate_eval_set`
+    要求必填 `eval_config`，此处从 optimizer.json 的 evaluate 段构造。
 
     Args:
         evalset_path: Path to .evalset.json file.
         call_agent: 可选，真实 agent 调用入口（async callable）。
+        eval_config: 可选，SDK EvalConfig。缺省时从 data/optimizer.json 加载。
 
     Returns:
         BaselineResult from actual AgentEvaluator run.
     """
     try:
-        # 确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）
+        # 确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）。
         # pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）
-        try:
-            _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
-            _repo_root = os.path.abspath(
-                os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
-            if _repo_root not in sys.path:
-                sys.path.insert(0, _repo_root)
-        except Exception:
-            pass
+        _ensure_repo_root_in_path()
+
         from trpc_agent_sdk.evaluation import AgentEvaluator, EvalSet
+        from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
 
         result = BaselineResult(evalset_id=os.path.basename(evalset_path))
         if not os.path.exists(evalset_path):
             result.errors.append(f"Evalset not found: {evalset_path}")
             return result
 
-        eval_set = EvalSet.model_validate_json(
-            open(evalset_path, encoding="utf-8").read()
-        )
+        # eval_config 必填；缺省时从默认 data/optimizer.json 的 evaluate 段加载
+        if eval_config is None:
+            from .config import load_optimize_config
+            _default_opt = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "data", "optimizer.json")
+            eval_config = load_optimize_config(_default_opt)
+
+        with open(evalset_path, encoding="utf-8") as f:
+            eval_set = EvalSet.model_validate_json(f.read())
         # trace 模式离线评测：evaluate_eval_set 返回 per-case 结果
         _, _, _, case_results = await AgentEvaluator.evaluate_eval_set(
             eval_set,
             call_agent=call_agent,
+            eval_config=eval_config,
             print_detailed_results=False,
         )
 
@@ -152,15 +177,16 @@ async def run_baseline_sdk(evalset_path: str, *, call_agent: Any = None) -> Base
         for case_id, results in (case_results or {}).items():
             for cr in results:
                 total += 1
-                ok = getattr(cr, "passed", False)
+                ok = getattr(cr, "final_eval_status", None) == EvalStatus.PASSED
                 if ok:
                     passed += 1
                 else:
                     failed_case_ids.append(case_id)
+                reason = getattr(cr, "error_message", "") or ("" if ok else "failed")
                 per_case.append({
                     "eval_id": case_id,
                     "pass": ok,
-                    "reason": getattr(cr, "failure_reason", "") or ("" if ok else "failed"),
+                    "reason": reason,
                     "category": "",
                     "evidence": "",
                 })

@@ -67,3 +67,134 @@ class TestBuildCallAgent:
         # 直接测 run_agent 确定性
         result = run_agent("What is 25 + 17?")
         assert "final_response" in result
+
+
+class TestLiveModeContract:
+    """Live 模式契约测试 — 用 mock SDK 验证字段映射正确。
+
+    reviewer 指出：此前 live 测试断言过弱，SDK 字段名错误被 getattr 默认值
+    掩盖。这里通过 monkeypatch sys.modules 注入符合 SDK schema 的 fake 模块，
+    验证 run_baseline_sdk / run_optimize_live 的映射逻辑正确。
+    """
+
+    def test_baseline_maps_eval_status_to_pass(self, monkeypatch, tmp_path):
+        """EvalCaseResult.final_eval_status == PASSED → pass=True。"""
+        import sys
+        import pipeline.baseline as baseline_mod
+        import tempfile, json, os
+
+        class _Status:
+            PASSED = object()
+            FAILED = object()
+            NOT_EVALUATED = object()
+
+        class _CaseResult:
+            def __init__(self, status, msg=""):
+                self.final_eval_status = status
+                self.error_message = msg
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                return object()
+
+        class _FakeEvalMetrics:
+            EvalStatus = _Status
+
+        # 构造 mock case_results：2 个 PASSED、1 个 FAILED
+        async def _fake_evaluate(eval_set, **kwargs):
+            assert kwargs.get("eval_config") is not None, "eval_config 必填"
+            results = {
+                "c1": [_CaseResult(_Status.PASSED)],
+                "c2": [_CaseResult(_Status.PASSED)],
+                "c3": [_CaseResult(_Status.FAILED, "wrong answer")],
+            }
+            return (None, [], [], results)
+
+        class _FakeAgentEvaluator:
+            @staticmethod
+            async def evaluate_eval_set(*args, **kwargs):
+                return await _fake_evaluate(*args, **kwargs)
+
+        class _FakeEvalModule:
+            AgentEvaluator = _FakeAgentEvaluator
+            EvalSet = _FakeEvalSet
+
+        # 注入 fake SDK 模块到 sys.modules，让函数内 import 拿到
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules,
+            "trpc_agent_sdk.evaluation._eval_metrics",
+            _FakeEvalMetrics,
+        )
+
+        # 临时 evalset 文件
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"eval_set_id": "t", "eval_cases": []}, f)
+            path = f.name
+        try:
+            result = asyncio.run(baseline_mod.run_baseline_sdk(path, eval_config=object()))
+            assert result.total_cases == 3
+            assert result.passed_cases == 2
+            assert result.failed_cases == 1
+            assert "c3" in result.failed_case_ids
+        finally:
+            os.unlink(path)
+
+    def test_optimize_maps_sdk_fields(self, monkeypatch):
+        """SDK OptimizeResult 字段 → 我们的 OptimizeResult（total_llm_cost 等）。"""
+        import sys
+        import pipeline.optimize as optimize_mod
+
+        class _FakeRound:
+            round = 1
+            validation_pass_rate = 0.95
+            optimized_field_names = ["system"]
+            train_pass_rate = 0.97
+            candidate_prompts = {"system": "new prompt"}
+
+        class _FakeOptimizeResult:
+            total_llm_cost = 1.5
+            total_rounds = 3
+            status = "accepted"
+            best_prompts = {"system": "optimized prompt"}
+            rounds = [_FakeRound()]
+
+        async def _fake_optimize(**kwargs):
+            return _FakeOptimizeResult()
+
+        class _FakeAgentOptimizer:
+            @staticmethod
+            async def optimize(**kwargs):
+                return await _fake_optimize(**kwargs)
+
+        class _FakeTargetPrompt:
+            def add_path(self, *args, **kwargs):
+                pass
+
+        class _FakeEvalModule:
+            AgentOptimizer = _FakeAgentOptimizer
+            TargetPrompt = _FakeTargetPrompt
+
+        # 注入 fake SDK 模块
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._optimize_config",
+            type("M", (), {}),
+        )
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        cfg = load_pipeline_config(mode="live")
+        result = asyncio.run(optimize_mod.run_optimize_live("opt.json", cfg, call_agent=object()))
+        assert result.total_cost == 1.5
+        assert result.total_iterations == 3
+        assert result.converged is True
+        assert result.best_prompt == {"system": "optimized prompt"}
+        assert len(result.rounds) == 1
+        assert result.rounds[0].score == 0.95
+        assert result.rounds[0].round_index == 1

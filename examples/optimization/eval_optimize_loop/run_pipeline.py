@@ -147,13 +147,21 @@ Examples:
     else:
         print("  [live] trace-replay baseline（SDK AgentEvaluator，无需 API key）")
         from pipeline.baseline import run_baseline_sdk
+        from pipeline.config import load_optimize_config
         from agent.agent import build_call_agent
         _call_agent = build_call_agent()
+        try:
+            _eval_config = load_optimize_config(cfg.optimizer_config)
+        except Exception as _e:
+            _eval_config = None
+            print(f"  ⚠️  EvalConfig 加载失败（将降级到 trace comparator）: {_e}")
         baseline_train = asyncio.run(
-            run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent)
+            run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent,
+                             eval_config=_eval_config)
         )
         baseline_val = asyncio.run(
-            run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent)
+            run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent,
+                             eval_config=_eval_config)
         )
 
     if baseline_train.errors:
