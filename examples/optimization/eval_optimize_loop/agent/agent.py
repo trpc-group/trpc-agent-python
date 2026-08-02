@@ -6,10 +6,30 @@ responses based on the input question.
 """
 
 import hashlib
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .config import AgentConfig
 from .prompts import BASELINE_SYSTEM_PROMPT
+
+
+def build_call_agent() -> Callable[[str], Awaitable[str]]:
+    """构建一个适配 SDK CallAgent 签名的异步 callable。
+
+    AgentOptimizer.optimize 的 `call_agent` 参数要求
+    `Callable[[str], Awaitable[str]]`（输入用户问题，返回 agent 最终回复）。
+    此处包装 run_agent，模型为 "fake" 时确定性离线执行（无需 API key），
+    配置真实模型时可跑真实 LLM。
+
+    Returns:
+        Async callable: user question → final response text。
+    """
+    config = AgentConfig()
+
+    async def _call(question: str) -> str:
+        result = run_agent(question, config=config)
+        return str(result.get("final_response", ""))
+
+    return _call
 
 
 def create_agent(config: AgentConfig | None = None) -> dict[str, Any]:
