@@ -89,7 +89,7 @@ def attribute_failures(
 
     # Count by category
     for entry in all_failed:
-        cat = entry.category.value
+        cat = str(entry.category)
         report.by_category[cat] = report.by_category.get(cat, 0) + 1
 
     return report
@@ -105,12 +105,22 @@ def _extract_failures(result: dict) -> list[AttributionEntry]:
         case_id = case.get("eval_id", "unknown")
         if case_id in failed_ids or not case.get("pass", True):
             reason = case.get("reason", "")
-            category = _categorize_failure(reason)
+            # 优先使用 comparator 提供的 category/evidence（更准确）
+            raw_cat = case.get("category", "")
+            if raw_cat and raw_cat in _CATEGORY_MAP:
+                category = _CATEGORY_MAP[raw_cat]
+                evidence = case.get("evidence", "") or reason
+            else:
+                category = _categorize_failure(reason)
+                evidence = reason
+            score = case.get("score", 0.7)
+            confidence = max(0.5, min(0.95, score)) if isinstance(score, (int, float)) else 0.7
             entries.append(AttributionEntry(
                 case_id=case_id,
                 category=category,
-                confidence=0.7,
+                confidence=round(confidence, 2),
                 detail=reason or "Failed without specific reason",
+                evidence=evidence,
             ))
 
     return entries
@@ -123,14 +133,37 @@ def _attribute_from_cases(per_case: list, failed_ids: list[str]) -> list[Attribu
         case_id = case.get("eval_id", "unknown")
         if case_id in failed_ids:
             reason = case.get("reason", "")
-            category = _categorize_failure(reason)
+            raw_cat = case.get("category", "")
+            if raw_cat and raw_cat in _CATEGORY_MAP:
+                category = _CATEGORY_MAP[raw_cat]
+                evidence = case.get("evidence", "") or reason
+            else:
+                category = _categorize_failure(reason)
+                evidence = reason
+            score = case.get("score", 0.7)
+            confidence = max(0.5, min(0.95, score)) if isinstance(score, (int, float)) else 0.7
             entries.append(AttributionEntry(
                 case_id=case_id,
                 category=category,
-                confidence=0.7,
+                confidence=round(confidence, 2),
                 detail=reason or "Failed without specific reason",
+                evidence=evidence,
             ))
     return entries
+
+
+# 字符串类别名 → FailureCategory 枚举映射
+_CATEGORY_MAP = {
+    "final_response_mismatch": FailureCategory.FINAL_RESPONSE_MISMATCH,
+    "tool_call_error": FailureCategory.TOOL_CALL_ERROR,
+    "wrong_tool_selected": FailureCategory.WRONG_TOOL_SELECTED,
+    "tool_parameter_error": FailureCategory.TOOL_PARAMETER_ERROR,
+    "llm_rubric_not_met": FailureCategory.LLM_RUBRIC_NOT_MET,
+    "knowledge_recall_insufficient": FailureCategory.KNOWLEDGE_RECALL_INSUFFICIENT,
+    "format_not_as_required": FailureCategory.FORMAT_NOT_AS_REQUIRED,
+    "missing_expected_output": FailureCategory.MISSING_EXPECTED_OUTPUT,
+    "unknown": FailureCategory.UNKNOWN,
+}
 
 
 def _categorize_failure(reason: str) -> FailureCategory:
