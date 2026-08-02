@@ -18,6 +18,11 @@
     "algorithm": {
       "name": "gepa_reflective",
       "seed": 42,
+      "reflection_lm": {
+        "provider_name": "fake",
+        "model_name": "fake",
+        "api_key": ""
+      },
       "candidate_selection_strategy": "current_best",
       "module_selector": "round_robin",
       "max_metric_calls": 100,

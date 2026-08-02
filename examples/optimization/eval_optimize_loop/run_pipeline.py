@@ -14,14 +14,21 @@ Usage:
 """
 
 import argparse
+import asyncio
 import os
 import sys
 import time
 import uuid
 from datetime import datetime, timezone
 
-# Ensure imports work from the example directory
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure imports work from the example directory and the repo root
+# （repo root 含 trpc_agent_sdk 源码包，live 模式需要）
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+# eval_optimize_loop → optimization → examples → trpc-agent-python（3 级）
+_REPO_ROOT = os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir, os.pardir))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 # 兼容 Windows GBK 控制台：输出统一用 UTF-8，避免 emoji/中文 print 崩溃
 if hasattr(sys.stdout, "reconfigure"):
@@ -138,9 +145,16 @@ Examples:
         baseline_train = run_baseline_fake(cfg.train_evalset, cfg)
         baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
     else:
+        print("  [live] trace-replay baseline（SDK AgentEvaluator，无需 API key）")
         from pipeline.baseline import run_baseline_sdk
-        baseline_train = run_baseline_sdk(cfg.train_evalset)
-        baseline_val = run_baseline_sdk(cfg.val_evalset)
+        from agent.agent import build_call_agent
+        _call_agent = build_call_agent()
+        baseline_train = asyncio.run(
+            run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent)
+        )
+        baseline_val = asyncio.run(
+            run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent)
+        )
 
     if baseline_train.errors:
         for e in baseline_train.errors:
@@ -182,7 +196,11 @@ Examples:
     if cfg.mode == "fake":
         optimize_result = run_optimize_fake(attribution, cfg, scenario=cfg.scenario)
     else:
-        optimize_result = run_optimize_live(cfg.optimizer_config, cfg)
+        print("  [live] AgentOptimizer (GEPA) — 离线确定性 call_agent 或真实 API")
+        from agent.agent import build_call_agent
+        optimize_result = asyncio.run(
+            run_optimize_live(cfg.optimizer_config, cfg, call_agent=build_call_agent())
+        )
 
     if optimize_result.errors:
         for e in optimize_result.errors:

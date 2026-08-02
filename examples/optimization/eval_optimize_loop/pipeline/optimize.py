@@ -8,6 +8,7 @@ Records per-round optimization results for audit trail.
 """
 
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -157,20 +158,21 @@ def run_optimize_fake(
     return result
 
 
-def run_optimize_live(
+async def run_optimize_live(
     optimizer_config_path: str,
     config: PipelineConfig,
+    call_agent: Any | None = None,
 ) -> OptimizeResult:
     """Run optimization using real AgentOptimizer (GEPA reflective).
 
-    This path requires:
-    - gepa package installed (pip install trpc-agent-python[gepa])
-    - Valid API keys configured
-    - Agent module importable
+    正确调用 SDK 的 `AgentOptimizer.optimize`（async classmethod，需
+    `call_agent` 参数）。默认使用 agent.build_call_agent() 提供确定性
+    离线执行（无需 API key）；配置了 TRPC_AGENT_API_KEY 时可跑真实模型。
 
     Args:
         optimizer_config_path: Path to optimizer.json.
         config: Pipeline configuration.
+        call_agent: 可选，SDK CallAgent 签名（Async callable）。
 
     Returns:
         OptimizeResult from actual GEPA run.
@@ -178,7 +180,23 @@ def run_optimize_live(
     result = OptimizeResult(algorithm=config.algorithm)
 
     try:
+        # 确保项目根与 example 目录在 sys.path
+        # pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）
+        try:
+            _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
+            _example_dir = os.path.abspath(os.path.join(_pipeline_dir, os.pardir))
+            _repo_root = os.path.abspath(
+                os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
+            for _p in (_example_dir, _repo_root):
+                if _p not in sys.path:
+                    sys.path.insert(0, _p)
+        except Exception:
+            pass
         from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
+
+        if call_agent is None:
+            from agent.agent import build_call_agent
+            call_agent = build_call_agent()
 
         # Register target prompts for optimization
         target = TargetPrompt()
@@ -189,9 +207,10 @@ def run_optimize_live(
                     field_name = fname.replace(".md", "")
                     target.add_path(field_name, os.path.join(prompt_dir, fname))
 
-        # Run optimization
-        opt_result = AgentOptimizer.optimize(
+        # Run optimization（async，需 await；显式传 call_agent）
+        opt_result = await AgentOptimizer.optimize(
             config_path=optimizer_config_path,
+            call_agent=call_agent,
             target_prompt=target,
             train_dataset_path=config.train_evalset,
             validation_dataset_path=config.val_evalset,

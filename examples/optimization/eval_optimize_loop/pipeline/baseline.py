@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -101,12 +102,12 @@ def run_baseline_fake(evalset_path: str, config: PipelineConfig) -> BaselineResu
     )
 
 
-def run_baseline_sdk(evalset_path: str, *, call_agent: Any = None) -> BaselineResult:
+async def run_baseline_sdk(evalset_path: str, *, call_agent: Any = None) -> BaselineResult:
     """Run baseline evaluation using the real SDK AgentEvaluator.
 
-    trace 格式的 evalset 可离线评测（无需 API key）；若提供 call_agent
-    则走真实 agent 调用。所有 SDK 调用均以 try/except 保护，失败返回
-    errors 而非崩溃。
+    trace 格式的 evalset 可离线评测（无需 API key，无需 agent_module）；
+    若提供 call_agent 则走真实 agent 调用。所有 SDK 调用均以 try/except
+    保护，失败返回 errors 而非崩溃。
 
     Args:
         evalset_path: Path to .evalset.json file.
@@ -116,47 +117,54 @@ def run_baseline_sdk(evalset_path: str, *, call_agent: Any = None) -> BaselineRe
         BaselineResult from actual AgentEvaluator run.
     """
     try:
-        from trpc_agent_sdk.evaluation import AgentEvaluator
+        # 确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）
+        # pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）
+        try:
+            _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
+            _repo_root = os.path.abspath(
+                os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
+            if _repo_root not in sys.path:
+                sys.path.insert(0, _repo_root)
+        except Exception:
+            pass
+        from trpc_agent_sdk.evaluation import AgentEvaluator, EvalSet
 
         result = BaselineResult(evalset_id=os.path.basename(evalset_path))
         if not os.path.exists(evalset_path):
             result.errors.append(f"Evalset not found: {evalset_path}")
             return result
 
-        executer = AgentEvaluator.get_executer(
-            evalset_path,
+        eval_set = EvalSet.model_validate_json(
+            open(evalset_path, encoding="utf-8").read()
+        )
+        # trace 模式离线评测：evaluate_eval_set 返回 per-case 结果
+        _, _, _, case_results = await AgentEvaluator.evaluate_eval_set(
+            eval_set,
             call_agent=call_agent,
             print_detailed_results=False,
-            print_summary_report=False,
         )
-        try:
-            executer.evaluate()
-        except Exception:
-            # SDK 在部分 case 失败时会抛异常，但 evaluate() 仍产出结果
-            pass
-        eval_result = executer.get_result()
 
-        # 映射 SDK 结果到 BaselineResult
-        cases = eval_result.eval_case_results if hasattr(eval_result, "eval_case_results") else []
+        # case_results: dict[str, list[EvalCaseResult]] — case_id → results
         passed = 0
         failed_case_ids = []
         per_case = []
-        for cr in cases:
-            case_id = getattr(cr, "case_id", "") or getattr(cr, "eval_id", "") or "unknown"
-            ok = getattr(cr, "passed", False)
-            if ok:
-                passed += 1
-            else:
-                failed_case_ids.append(case_id)
-            per_case.append({
-                "eval_id": case_id,
-                "pass": ok,
-                "reason": getattr(cr, "failure_reason", "") or ("" if ok else "failed"),
-                "category": "",
-                "evidence": "",
-            })
+        total = 0
+        for case_id, results in (case_results or {}).items():
+            for cr in results:
+                total += 1
+                ok = getattr(cr, "passed", False)
+                if ok:
+                    passed += 1
+                else:
+                    failed_case_ids.append(case_id)
+                per_case.append({
+                    "eval_id": case_id,
+                    "pass": ok,
+                    "reason": getattr(cr, "failure_reason", "") or ("" if ok else "failed"),
+                    "category": "",
+                    "evidence": "",
+                })
 
-        total = len(cases)
         result.total_cases = total
         result.passed_cases = passed
         result.failed_cases = total - passed
@@ -171,4 +179,9 @@ def run_baseline_sdk(evalset_path: str, *, call_agent: Any = None) -> BaselineRe
             errors=["SDK AgentEvaluator not available — use fake mode"]
         )
     except Exception as e:
-        return BaselineResult(errors=[str(e)])
+        # SDK 评测失败（如 evalset schema 不兼容）时，降级到 trace comparator 评测，
+        # 保证 live 模式仍有有意义的 baseline，pipeline 不中断。
+        from .config import PipelineConfig
+        fallback = run_baseline_fake(evalset_path, PipelineConfig())
+        fallback.errors = [f"SDK AgentEvaluator failed ({e}); fell back to trace comparator"]
+        return fallback
