@@ -181,6 +181,19 @@ Examples:
     print(f"  Val pass rate:   {baseline_val.pass_rate:.1%} "
           f"({baseline_val.passed_cases}/{baseline_val.total_cases})")
 
+    # Holdout 集评分（可选）：加载 holdout evalset 并用 comparator 评分，
+    # 结果写入审计字典供报告展示
+    holdout_result = None
+    if os.path.exists(cfg.holdout_evalset):
+        try:
+            holdout_result = run_baseline_fake(cfg.holdout_evalset, cfg)
+            print(f"  Holdout pass rate: {holdout_result.pass_rate:.1%} "
+                  f"({holdout_result.passed_cases}/{holdout_result.total_cases})")
+            tracer.add_cost(0.0, "holdout")
+        except Exception as e:
+            print(f"  ⚠️  Holdout 评分失败: {e}")
+            tracer.add_warning(f"Holdout eval failed: {e}")
+
     # ═══════════════════════════════════════════════════════════════
     # Stage 3: Failure Attribution
     # ═══════════════════════════════════════════════════════════════
@@ -311,6 +324,14 @@ Examples:
         "errors": errors,
         "reproduce_command": audit_dict["reproducibility"]["reproduce_command"],
     })
+    # Holdout 结果（可选）写入审计，供报告展示
+    if holdout_result is not None:
+        audit_dict["holdout"] = {
+            "evalset_id": holdout_result.evalset_id,
+            "pass_rate": holdout_result.pass_rate,
+            "passed_cases": holdout_result.passed_cases,
+            "total_cases": holdout_result.total_cases,
+        }
 
     json_report = generate_json_report(
         task_id, baseline_train, baseline_val,
