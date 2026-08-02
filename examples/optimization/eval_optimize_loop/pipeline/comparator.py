@@ -358,7 +358,11 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         # 注意：期望"答案在开头"（如 "0.75 = 75/100"）由 Phase 2 数据归一化
         # 统一为 =后/末尾格式，这里不做过度猜测。
         act_nums = extract_numbers(act_final)
-        eq_nums = [float(m) for m in re.findall(r"=\s*(-?\d+(?:\.\d+)?)", act_final)]
+        # 支持 = $386.66、= 100、= $15,353.13（千分位逗号）等货币/百分号答案格式
+        eq_nums = [
+            float(m.replace(",", ""))
+            for m in re.findall(r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final)
+        ]
         candidates = eq_nums if eq_nums else [act_nums[-1]] if act_nums else []
         if any(abs(a - exp_bare) <= 1e-6 for a in candidates):
             answer_ok = True
@@ -380,11 +384,17 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         else:
             answer_reason = f"expected numeric-with-unit {exp_num}, actual ends with {act_num}"
     elif len(exp_norm) <= 20:
-        # 类答案期望：归一化 contains
+        # 类答案期望：归一化 contains 或期望数字子集
+        # （兼容实际为长解释、答案数字散布在推导中的场景）
         if exp_norm in act_norm:
             answer_ok = True
         else:
-            answer_reason = f"expected answer '{exp_final}' not found in actual"
+            exp_nums = extract_numbers(exp_final)
+            act_nums = extract_numbers(act_final)
+            if exp_nums and all(any(abs(e - a) <= 1e-6 for a in act_nums) for e in exp_nums):
+                answer_ok = True
+            else:
+                answer_reason = f"expected answer '{exp_final}' not matched in actual"
     else:
         # 类解释期望：contains 或期望数字子集
         if exp_norm in act_norm:
