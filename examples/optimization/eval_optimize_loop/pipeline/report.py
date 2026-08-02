@@ -35,6 +35,23 @@ def generate_json_report(
     Returns:
         JSON string.
     """
+    # 候选块：candidate train/validation 评分 + 逐 case delta
+    candidate_block = {}
+    if validation is not None:
+        candidate_block = {
+            "train": _baseline_to_dict(validation.candidate_train) if validation.candidate_train else {},
+            "validation": _baseline_to_dict(validation.candidate) if validation.candidate else {},
+            "per_case_delta": [
+                {
+                    "eval_id": d.eval_id,
+                    "baseline_passed": d.baseline_passed,
+                    "candidate_passed": d.candidate_passed,
+                    "change": d.change,
+                }
+                for d in validation.deltas
+            ],
+        }
+
     report = {
         "task_id": task_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -42,15 +59,17 @@ def generate_json_report(
             "train": _baseline_to_dict(baseline_train),
             "validation": _baseline_to_dict(baseline_val),
         },
+        "candidate": candidate_block,
         "attribution": {
             "total_failures": attribution.total_failures,
             "by_category": attribution.by_category,
             "entries": [
                 {
                     "case_id": e.case_id,
-                    "category": e.category.value,
+                    "category": getattr(e.category, "value", str(e.category)),
                     "confidence": e.confidence,
                     "detail": e.detail,
+                    "evidence": e.evidence,
                 }
                 for e in attribution.entries
             ],
@@ -83,6 +102,16 @@ def generate_md_report(
     cost = audit.get("optimization_cost", 0.0)
     duration = audit.get("duration_seconds", 0)
 
+    # 候选 pass rate（来自 validation 的真实评分）
+    candidate_train_rate = (
+        validation.candidate_train.pass_rate
+        if validation and validation.candidate_train else None
+    )
+    candidate_val_rate = (
+        validation.candidate.pass_rate
+        if validation and validation.candidate else None
+    )
+
     lines = [
         f"# Optimization Report",
         f"",
@@ -93,8 +122,14 @@ def generate_md_report(
         f"",
         f"| Metric | Baseline | Candidate | Delta |",
         f"|--------|----------|-----------|-------|",
-        f"| Train Pass Rate | {baseline_train.pass_rate:.1%} | — | — |",
-        f"| Val Pass Rate | {baseline_val.pass_rate:.1%} | — | — |",
+        f"| Train Pass Rate | {baseline_train.pass_rate:.1%} | "
+        f"{candidate_train_rate:.1%} | {candidate_train_rate - baseline_train.pass_rate:+.1%} |"
+        if candidate_train_rate is not None
+        else f"| Train Pass Rate | {baseline_train.pass_rate:.1%} | — | — |",
+        f"| Val Pass Rate | {baseline_val.pass_rate:.1%} | "
+        f"{candidate_val_rate:.1%} | {candidate_val_rate - baseline_val.pass_rate:+.1%} |"
+        if candidate_val_rate is not None
+        else f"| Val Pass Rate | {baseline_val.pass_rate:.1%} | — | — |",
         f"",
         f"## Gate Decision",
         f"",
@@ -103,6 +138,20 @@ def generate_md_report(
         f"**Reason**: {gate.reason}",
         f"",
     ]
+
+    # Candidate vs Baseline 逐 case delta
+    if validation and validation.deltas:
+        lines.append(f"## Candidate vs Baseline")
+        lines.append(f"")
+        lines.append(f"| Case | Baseline | Candidate | Change |")
+        lines.append(f"|------|----------|-----------|--------|")
+        for d in validation.deltas:
+            bl = "✅" if d.baseline_passed else "❌"
+            cd = "✅" if d.candidate_passed else "❌"
+            change = {"new_pass": "🆕 Pass", "new_fail": "💥 Fail",
+                      "unchanged": "—"}.get(d.change, d.change)
+            lines.append(f"| {d.eval_id} | {bl} | {cd} | {change} |")
+        lines.append(f"")
 
     # Gate checks
     if gate.details.get("checks"):
