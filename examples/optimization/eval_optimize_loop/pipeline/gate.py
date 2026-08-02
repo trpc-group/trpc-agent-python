@@ -36,6 +36,7 @@ def evaluate_gate(
     candidate_failed: list[str] | None = None,
     max_cost: float = 10.0,
     optimization_cost: float = 0.0,
+    validation_new_failures: int = 0,
 ) -> GateResult:
     """Evaluate whether to accept the optimized candidate.
 
@@ -50,6 +51,7 @@ def evaluate_gate(
         candidate_failed: Case IDs that failed after optimization.
         max_cost: Maximum optimization budget.
         optimization_cost: Actual optimization cost.
+        validation_new_failures: Candidate 在验证集上新增的失败数（过拟合检测）。
 
     Returns:
         GateResult with accept/reject/needs_review decision.
@@ -101,12 +103,21 @@ def evaluate_gate(
                    else f"New failures: {newly_failed}"),
     })
 
-    # Check 5: Overfitting detection — train improvement without val improvement
+    # Check 5: Overfitting detection — 候选在验证集上新增失败 → 拒绝
     checks.append({
         "check": "overfitting",
-        "passed": True,  # Requires val set comparison (handled in validate.py)
-        "detail": "Validation set comparison handled separately",
+        "passed": validation_new_failures == 0,
+        "detail": (f"No validation regression"
+                   if validation_new_failures == 0
+                   else f"Candidate introduces {validation_new_failures} new failure(s) on validation set"),
     })
+
+    if validation_new_failures > 0:
+        return GateResult(
+            decision=GateDecision.REJECT,
+            reason=f"Overfitting: candidate introduces {validation_new_failures} new failure(s) on validation set",
+            details={"validation_new_failures": validation_new_failures, "checks": checks},
+        )
 
     # Check 6: Cost budget
     checks.append({

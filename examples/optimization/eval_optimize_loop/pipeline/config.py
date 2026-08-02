@@ -35,6 +35,11 @@ class PipelineConfig:
     verbose: bool = False
     ci_mode: bool = False    # Exit non-zero on failure
 
+    # Candidate scenario
+    scenario: str = "fix_attributed"    # fix_attributed / noop / overfit
+    holdout_evalset: str = "data/holdout.evalset.json"
+    val_regression_cases: list[str] = field(default_factory=list)
+
 
 def load_optimizer_json(path: str) -> dict:
     """Load and parse optimizer.json configuration file.
