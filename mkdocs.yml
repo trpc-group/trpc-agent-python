@@ -33,6 +33,9 @@ nav:
       - Model: en/model.md
       - Tools:
           - Tool: en/tool.md
+          - TodoWrite Tool: en/tool_todowrite.md
+          - Task Tools: en/tool_task.md
+          - Goal: en/goal.md
           - Code Executor: en/code_executor.md
           - Skills: en/skill.md
       - Session & Memory:
@@ -60,6 +63,7 @@ nav:
       - Runtime:
           - Filter: en/filter.md
           - Human in the Loop: en/human_in_the_loop.md
+          - Plan Mode: en/plan.md
           - Cancellation: en/cancel.md
   - 中文:
       - 概览: zh/index.md
@@ -75,6 +79,9 @@ nav:
       - 模型: zh/model.md
       - 工具:
           - 工具: zh/tool.md
+          - TodoWrite 工具: zh/tool_todowrite.md
+          - Task 工具: zh/tool_task.md
+          - Goal 工具: zh/goal.md
           - 代码执行器: zh/code_executor.md
           - Skills: zh/skill.md
       - Session 与 Memory:
@@ -102,4 +109,5 @@ nav:
       - 运行时:
           - Filter: zh/filter.md
           - Human in the Loop: zh/human_in_the_loop.md
+          - Plan Mode: zh/plan.md
           - Cancellation: zh/cancel.md

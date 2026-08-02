@@ -35,9 +35,14 @@ def inject_snapshot_diff(snapshot: ReplaySnapshot, kind: str) -> ReplaySnapshot:
         if snap.events:
             snap.events[0]["author"] = "INJECTED"
     elif kind == "event_text":
-        content = snap.events[0].get("content") if snap.events else None
-        if content and content.get("parts"):
-            content["parts"][0]["text"] = "INJECTED"
+        if not snap.events:
+            raise AssertionError("event_text injection failed: events is empty")
+        content = snap.events[0].get("content")
+        if not content:
+            raise AssertionError("event_text injection failed: event[0].content is missing")
+        if not content.get("parts"):
+            raise AssertionError("event_text injection failed: event[0].content.parts is missing")
+        content["parts"][0]["text"] = "INJECTED"
     elif kind == "extra_event":
         snap.events.append({"author": "INJECTED", "content": {"parts": [{"text": "x"}]}})
     elif kind == "state_value":
@@ -68,32 +73,52 @@ def inject_sql_diff(
     session_id: str,
     kind: str = "event_author",
 ) -> bool:
-    """端到端 SQL:直接 UPDATE 行,绕过 service 缓存。返回是否成功注入。"""
+    """端到端 SQL:直接 UPDATE 行,绕过 service 缓存。返回是否成功注入。
+
+    注意:state_value 注入用 Python 层 json.loads→→改值→→json.dumps,避免对 TEXT 列
+    用 json_set 导致双重序列化(与 SDK 写入格式不一致)。
+    """
     from sqlalchemy import create_engine
     from sqlalchemy import text
 
     engine = create_engine(db_url)
     injected = False
-    with engine.begin() as conn:
-        if kind == "event_author":
-            conn.execute(
-                text("UPDATE events SET author = :v WHERE session_id = :sid"),
-                {
-                    "v": "INJECTED-SQL",
-                    "sid": session_id
-                },
-            )
-            injected = True
-        elif kind == "state_value":
-            conn.execute(
-                text("UPDATE OR REPLACE app_states "
-                     "SET state = json_set(state, '$.injected', :v) WHERE app_name = :a"),
-                {
-                    "v": '"INJECTED"',
-                    "a": app_name
-                },
-            )
-            injected = True
+    try:
+        with engine.begin() as conn:
+            if kind == "event_author":
+                conn.execute(
+                    text("UPDATE events SET author = :v WHERE session_id = :sid"),
+                    {
+                        "v": "INJECTED-SQL",
+                        "sid": session_id
+                    },
+                )
+                injected = True
+            elif kind == "state_value":
+                # session 作用域注入:修改 sessions.state 的 JSON 字段(而非 app_states)
+                # state_overwrite case 的 state_delta 无前缀键(counter/flag)属 session 作用域
+                result = conn.execute(
+                    text("SELECT state FROM sessions WHERE app_name = :a AND user_id = :u AND id = :sid"), {
+                        "a": app_name,
+                        "u": user_id,
+                        "sid": session_id
+                    })
+                row = result.fetchone()
+                if row and row[0]:
+                    state_dict = json.loads(row[0])
+                    state_dict["injected"] = "INJECTED"
+                    conn.execute(
+                        text("UPDATE sessions SET state = :s WHERE app_name = :a AND user_id = :u AND id = :sid"),
+                        {
+                            "s": json.dumps(state_dict, ensure_ascii=False),
+                            "a": app_name,
+                            "u": user_id,
+                            "sid": session_id
+                        },
+                    )
+                    injected = True
+    finally:
+        engine.dispose()  # 资源清理(helloopenworld review Warning)
     return injected
 
 
@@ -104,21 +129,37 @@ def inject_redis_diff(
     session_id: str,
     kind: str = "event_author",
 ) -> bool:
-    """端到端 Redis:SET / HSET 改 key。需要真实 Redis 可达。"""
+    """端到端 Redis:SET / HSET 改 key。需要真实 Redis 可达。
+
+    设置 decode_responses=True 确保返回 str(与 SDK 一致),避免 bytes/str 混淆
+    (helloopenworld review Warning)。
+    """
     import redis
 
-    client = redis.from_url(redis_url)
+    client = redis.from_url(redis_url, decode_responses=True)  # 关键修复
     injected = False
-    if kind == "event_author":
-        key = f"session:{app_name}:{user_id}:{session_id}"
-        raw = client.get(key)
-        if raw:
-            data = json.loads(raw)
-            if data.get("events"):
-                data["events"][0]["author"] = "INJECTED-REDIS"
-                client.set(key, json.dumps(data))
+    try:
+        if kind == "event_author":
+            key = f"session:{app_name}:{user_id}:{session_id}"
+            raw = client.get(key)
+            if raw:
+                data = json.loads(raw)
+                if data.get("events"):
+                    data["events"][0]["author"] = "INJECTED-REDIS"
+                    client.set(key, json.dumps(data, ensure_ascii=False))
+                    injected = True
+        elif kind == "state_value":
+            # session 作用域注入:修改 session JSON 中的 .state 字段(而非 app_state hash)
+            # state_overwrite case 的 state_delta 无前缀键(counter/flag)属 session 作用域
+            key = f"session:{app_name}:{user_id}:{session_id}"
+            raw = client.get(key)
+            if raw:
+                data = json.loads(raw)
+                if "state" not in data:
+                    data["state"] = {}
+                data["state"]["injected"] = "INJECTED"
+                client.set(key, json.dumps(data, ensure_ascii=False))
                 injected = True
-    elif kind == "state_value":
-        client.hset(f"app_state:{app_name}", "injected", "INJECTED")
-        injected = True
+    finally:
+        client.close()  # 资源清理
     return injected

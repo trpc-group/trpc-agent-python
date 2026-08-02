@@ -10,6 +10,18 @@ Tool（工具）是 trpc_agent 中扩展 Agent 能力的核心机制。借助工
 - **MCP 协议**：完整支持 STDIO、SSE、Streamable HTTP 三种传输方式
 - **会话管理**：MCP 工具集支持自动会话健康检查与重连
 
+### Tool 安全检查
+
+对于会执行 shell、Python、文件或网络操作的 Tool，可以在真实执行前启用
+Tool Script Safety Guard。它会对命令和脚本进行静态扫描，输出 `allow`、
+`needs_human_review` 或 `deny`，并支持审计日志和结构化安全报告。`deny` 会在
+执行边界前阻断，`needs_human_review` 可按配置决定是否阻断。
+
+完整使用示例见
+[examples/tool_safety/README.md](../../../examples/tool_safety/README.md)，处理流程和
+风险决策见
+[examples/tool_safety/DESIGN.md](../../../examples/tool_safety/DESIGN.md)。
+
 ## Agent 如何使用工具
 
 Agent 通过以下步骤动态使用工具：
@@ -33,9 +45,9 @@ Agent 通过以下步骤动态使用工具：
 | [Streaming Tools（流式工具）](#streaming-tools流式工具) | 实时预览长文本生成 | 使用 StreamingFunctionTool | 代码生成、文档写作 |
 | [WebFetchTool](#webfetchtool) | 抓取并文本化单个公网 URL | 实例化 WebFetchTool 并加入 tools | 阅读文档页、RFC、changelog、新闻 |
 | [WebSearchTool](#websearchtool) | 公网搜索引擎检索 | 实例化 WebSearchTool 并加入 tools | 实时资讯、版本发布、事实/定义查询 |
-| [TodoWriteTool](#todowritetool-任务清单工具) | 多步任务规划与进度跟踪（整表替换） | 挂载 `TodoWriteTool` | 短清单、无依赖编排、token 不敏感 |
-| [Task 工具族](#task-工具族结构化任务看板) | 结构化任务看板（按 id 增量更新 + 依赖） | 挂载 `TaskToolSet` | 长任务板、跨轮跟踪、blockedBy 依赖 |
-| [Goal 工具族](#goal-工具族持久会话目标) | 单会话持久目标 + 强制收尾 | `setup_goal(agent)` | 跨轮大目标、宿主设目标、未完成不许收尾 |
+| [TodoWriteTool](./tool_todowrite.md) | 多步任务规划与进度跟踪（整表替换） | 挂载 `TodoWriteTool` | 短清单、无依赖编排、token 不敏感 |
+| [Task 工具族](./tool_task.md) | 结构化任务看板（按 id 增量更新 + 依赖） | 挂载 `TaskToolSet` | 长任务板、跨轮跟踪、blockedBy 依赖 |
+| [Goal 工具族](./goal.md) | 单会话持久目标 + 强制收尾 | `setup_goal(agent)` | 跨轮大目标、宿主设目标、未完成不许收尾 |
 | [Agent Code Executor](./code_executor.md) | 自动生成并执行代码场景、数据处理场景 | 配置 CodeExecutor | API 自动调用、表格数据处理 |
 ---
 
@@ -2268,21 +2280,32 @@ print(regular_tool.is_streaming)  # False
 
 ## WebFetchTool (网页获取工具)
 
-`WebFetchTool` 是 trpc-agent-python 框架内置的**单 URL 联网抓取工具**。当 Agent 需要阅读、摘要或引用某个公开网页的内容时，可以通过该工具发起一次 HTTP GET 请求，框架会将响应统一转换为可供 LLM 消费的结构化文本：HTML 会被裁剪为 Markdown 纯文本，其它 `text/*` / `application/json` 等文本型 MIME 按原样返回，二进制响应则以结构化错误拒收。
+`WebFetchTool` 是 trpc-agent-python 框架内置的**单 URL 联网抓取工具**。当 Agent 需要阅读、摘要或引用某个公开网页的内容时，可以通过该工具获取页面文本，并统一转换为可供 LLM 消费的结构化结果。
+
+该工具采用**可插拔 provider** 设计，目前内置两种后端：
+
+- **`direct`（默认）**：直接发起 HTTP GET。HTML 会被裁剪为 Markdown 纯文本，其它 `text/*` / `application/json` 等文本型 MIME 按原样返回，二进制响应以结构化错误拒收
+- **`tavily`**：走 Tavily Extract API，由 Tavily 负责抽取页面正文；需要配置 `api_key`（或环境变量 `TAVILY_API_KEY`），适合希望减少本地 HTML 解析噪音、直接拿到较干净正文的场景
 
 ### 功能特性
 
-- **单次 HTTP GET**：HTML 自动转换为 Markdown 纯文本（去除 `<script>` / `<style>` / `<svg>` 等非内容块）；其他文本型 MIME 按原样返回；二进制响应（PDF、图片、归档等）以 `UNSUPPORTED_CONTENT_TYPE` 错误拒收
-- **SSRF 防护**：`block_private_network=True`（默认）会对请求目标及**每一跳重定向**做 DNS 解析校验，拒绝回环 / 私网 / 链路本地（含 `169.254.169.254` 云元数据端点）/ 保留 / 组播 / 未指定地址
+- **双 Provider 支持**：`direct`（本地直连抓取）与 `tavily`（Tavily Extract）通过 `provider` 参数切换；对 LLM 暴露的 `FunctionDeclaration` 保持一致
+- **文本化输出**：`direct` 模式下 HTML 自动转换为 Markdown 纯文本（去除 `<script>` / `<style>` / `<svg>` 等非内容块）；其他文本型 MIME 按原样返回；二进制响应（PDF、图片、归档等）以 `UNSUPPORTED_CONTENT_TYPE` 错误拒收。`tavily` 模式直接返回 Extract 抽取后的正文（`content_type` 标记为 `text/markdown`）
+- **SSRF 防护**：`block_private_network=True`（默认）时，`direct` 模式会对请求目标及**每一跳重定向**做 DNS 解析校验，拒绝回环 / 私网 / 链路本地（含 `169.254.169.254` 云元数据端点）/ 保留 / 组播 / 未指定地址；`tavily` 模式**仅校验用户传入的首跳 URL**，无法拦截 Tavily 服务端后续跟随的重定向（这是第三方抓取的固有限制，与 `direct` 的逐跳 SSRF 不等价）
 - **域名白/黑名单**：`allowed_domains` / `blocked_domains` 为**工具级**配置，子域感知匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）
 - **内容与字节双重裁剪**：`max_content_length`（字符）与 `max_response_bytes`（字节）分别控制返回文本长度与实际读取的原始字节；LLM 还可在调用时通过 `max_length` 参数进一步控制
-- **手动重定向控制**：`follow_redirects` / `max_redirects` 提供可预期的重定向循环上限，避免无限跳转
+- **手动重定向控制**：`follow_redirects` / `max_redirects` 提供可预期的重定向循环上限，避免无限跳转（仅 `direct` 模式生效）
 - **进程内 LRU 缓存**：`enable_cache=True` 时启用 URL → `FetchResult` LRU；`cache_ttl_seconds` / `cache_max_bytes` 控制TTL与缓存字节预算，命中时响应上 `cached=true`，缓存键会做 URL 归一化（统一 scheme 大小写、剥离 `www.`、忽略默认端口和尾部 `/`）
 
 ### WebFetchTool 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
+| `provider` | `Literal["direct", "tavily"]` | `"direct"` | 抓取后端；`tavily` 需要配置 `api_key` 或环境变量 `TAVILY_API_KEY` |
+| `api_key` | `Optional[str]` | `None` | Tavily API Key；缺省时回退到环境变量 `TAVILY_API_KEY`（仅 `provider="tavily"` 使用） |
+| `base_url` | `Optional[str]` | Tavily 默认 Extract 地址 | 覆盖 Tavily Extract Base URL（主要用于测试 / 代理） |
+| `tavily_extract_depth` | `Literal["basic", "advanced"]` | `"basic"` | Tavily Extract 抽取深度；`advanced` 通常更完整，但也更慢、更贵 |
+| `tavily_extra_params` | `Optional[dict]` | `None` | 透传给 Tavily Extract 的额外 JSON 参数 |
 | `timeout` | `float` | `30.0` | HTTP 超时时间（秒） |
 | `user_agent` | `str` | `"trpc-agent-python-webfetch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
 | `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
@@ -2292,8 +2315,8 @@ print(regular_tool.is_streaming)  # False
 | `allowed_domains` | `Optional[List[str]]` | `None` | 工具级 host 白名单（子域感知，`www.` 前缀剥离），LLM 无法覆盖 |
 | `blocked_domains` | `Optional[List[str]]` | `None` | 工具级 host 黑名单，匹配规则同白名单；**优先于白名单**检查 |
 | `block_private_network` | `bool` | `True` | SSRF 防护开关；开启时拒绝所有解析到私网 / 回环 / 链路本地等地址的目标 |
-| `follow_redirects` | `bool` | `True` | 是否手动跟随 3xx 重定向 |
-| `max_redirects` | `int` | `5` | 重定向最大跳数上限 |
+| `follow_redirects` | `bool` | `True` | 是否手动跟随 3xx 重定向（仅 `direct`） |
+| `max_redirects` | `int` | `5` | 重定向最大跳数上限（仅 `direct`） |
 | `enable_cache` | `bool` | `False` | 是否启用进程内 LRU 缓存 |
 | `cache_ttl_seconds` | `float` | `900.0`（15 分钟） | 缓存项 TTL，超时后下次访问穿透并淘汰 |
 | `cache_max_bytes` | `int` | `50 * 1024 * 1024`（50 MB） | 缓存总字节容量；超过该容量将被静默跳过 |
@@ -2319,13 +2342,13 @@ print(regular_tool.is_streaming)  # False
 | `bytes` | `int` | `content` 的 UTF-8 字节长度 |
 | `duration_ms` | `int` | 整个请求的耗时（毫秒） |
 | `cached` | `bool` | 是否命中进程内 LRU 缓存 |
-| `error` | `str` | 失败或被拒绝时的结构化错误码（如 `BLOCKED_URL` / `SSRF_BLOCKED_URL` / `HTTP_STATUS` / `UNSUPPORTED_CONTENT_TYPE` / `HTTP_ERROR`） |
+| `error` | `str` | 失败或被拒绝时的结构化错误码（如 `BLOCKED_URL` / `SSRF_BLOCKED_URL` / `HTTP_STATUS` / `UNSUPPORTED_CONTENT_TYPE` / `HTTP_ERROR` / `TAVILY_NOT_CONFIGURED` / `TAVILY_EXTRACT_ERROR`） |
 
 ### 使用方式
 
 #### 构造 WebFetchTool Agent
 
-在`agent/agent.py` 中创建 WebFetchTool Agent：
+在`agent/agent.py` 中创建 WebFetchTool Agent（默认 `provider="direct"`，无需 API Key）：
 
 ```python
 from trpc_agent_sdk.agents import LlmAgent
@@ -2345,6 +2368,7 @@ def _create_model() -> LLMModel:
 def create_default_fetch_agent() -> LlmAgent:
     """创建 WebFetchTool Agent"""
     web_fetch = WebFetchTool(
+        provider="direct", # 默认直连抓取，无需 API Key
         timeout=10.0, # 超时时间配置
         user_agent="trpc-agent-python-webfetch-example/1.0", # User-Agent 头
         max_content_length=4000, # 返回文本字符上限
@@ -2367,10 +2391,39 @@ def create_default_fetch_agent() -> LlmAgent:
     )
 ```
 
+**切换到 Tavily Extract**：当希望由 Tavily 负责页面正文抽取、减少本地 HTML 噪音时，切换到 `provider="tavily"`。可在 [Tavily](https://tavily.com) 申请 API Key，并通过构造参数或环境变量 `TAVILY_API_KEY` 注入：
+
+```python
+import os
+
+from trpc_agent_sdk.tools import WebFetchTool
+
+
+def create_tavily_fetch_agent() -> LlmAgent:
+    """创建基于 Tavily Extract 的 WebFetchTool Agent"""
+    web_fetch = WebFetchTool(
+        provider="tavily",
+        api_key=os.getenv("TAVILY_API_KEY"),
+        tavily_extract_depth="basic",          # 或 "advanced"
+        # tavily_extra_params={"include_images": False},
+        timeout=20.0,
+        max_content_length=8000,
+        block_private_network=True,            # Extract 前仍会做 SSRF 校验
+    )
+    return LlmAgent(
+        name="tavily_webfetch_assistant",
+        description="Web-reading assistant powered by Tavily Extract.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_fetch],
+    )
+```
+
 > **注意**：
-> - `allowed_domains` / `blocked_domains` 是**工具级**配置，LLM **无法在调用参数里覆盖**；匹配规则为**子域感知**（`www.` 前缀会被剥离），且**每一跳重定向都会重新校验**，防止"合法首跳 → 跳到被禁主机"的绕过
-> - `block_private_network=True` 默认开启 SSRF 防护；仅当调用方已用外部白名单限定目标且确信输入可信时可以考虑关闭
+> - `allowed_domains` / `blocked_domains` 是**工具级**配置，LLM **无法在调用参数里覆盖**；匹配规则为**子域感知**（`www.` 前缀会被剥离）。`direct` 模式会对**每一跳重定向**重新校验域名策略与 SSRF；`tavily` 模式**仅校验首跳 URL**，不保证拦截 Tavily 服务端后续重定向
+> - `block_private_network=True` 默认开启 SSRF 防护；仅当调用方已用外部白名单限定目标且确信输入可信时可以考虑关闭。`tavily` 模式只会在调用 Extract 前校验首跳主机，**不要**把它当成与 `direct` 等价的逐跳 SSRF 防护
 > - `enable_cache` 默认关闭，需显式 opt-in；缓存键会做 URL 归一化（统一 scheme 大小写、剥离 `www.`、忽略默认端口、忽略尾 `/`），`https://example.com` 与 `https://www.example.com/` 共享同一条缓存项
+> - `tavily` 模式不会走本地 HTML → Markdown 转换链路，返回的是 Tavily Extract 的抽取正文；未配置 `api_key` / `TAVILY_API_KEY` 时会返回 `TAVILY_NOT_CONFIGURED`。Tavily HTTP 4xx/5xx 返回通用 `HTTP_ERROR`；API 正常响应但 `failed_results` 有错误或没有可用结果时返回 `TAVILY_EXTRACT_ERROR`
 
 #### 驱动 Agent 并打印工具事件
 
@@ -2491,13 +2544,23 @@ if __name__ == "__main__":
 
 # 二进制响应被拒
 {"url": "https://example.com/a.pdf", "error": "UNSUPPORTED_CONTENT_TYPE: application/pdf", ...}
+
+# Tavily 未配置 api_key
+{"url": "https://example.com", "error": "TAVILY_NOT_CONFIGURED: set api_key or TAVILY_API_KEY", ...}
+
+# Tavily Extract HTTP 失败
+{"url": "https://example.com", "error": "HTTP_ERROR: Client error '401 Unauthorized' ...", ...}
+
+# Tavily API 正常响应，但页面抽取失败
+{"url": "https://example.com", "error": "TAVILY_EXTRACT_ERROR: timeout while extracting", ...}
 ```
 
 建议在 Agent 的 `instruction` 中约定：当工具返回 `error` 字段时，应向用户**复述错误码并解释原因**，而不是编造内容；当 `content` 被截断或命中缓存时，也应在回答中显式说明
 
 ### WebFetchTool 最佳实践
 
-- **安全优先**：在能访问云元数据端点（如 AWS EC2 的 `169.254.169.254`）或内网资源的环境中部署 Agent 时，**保留 `block_private_network=True` 默认值**
+- **Provider 选择**：默认 `direct` 即可覆盖大多数公开文档页；当目标站点 HTML 噪音较大、或希望直接拿到较干净正文时，切换到 `tavily` 并配置 `TAVILY_API_KEY`
+- **安全优先**：在能访问云元数据端点（如 AWS EC2 的 `169.254.169.254`）或内网资源的环境中部署 Agent 时，**保留 `block_private_network=True` 默认值**；若需要逐跳 SSRF 防护，优先使用 `direct`（`tavily` 仅校验首跳）
 - **内容裁剪**：为防止长页面撑爆上下文窗口，建议为 `max_content_length` 设置一个与模型窗口匹配的合理值（例如 4000~20000 字符）；LLM 仅需摘要时可通过 `max_length`设置
 - **字节预算**：对大文件（如巨型 HTML、日志页）优先依赖 `max_response_bytes` 在网络层提前止损，而不是先下载再裁剪
 - **缓存策略**：对热点文档 / changelog / status page 打开 `enable_cache=True`，并依据页面平均大小设置 `cache_max_bytes`；注意 TTL 过长可能返回过期内容，`cached=true` 可用于下游判断
@@ -2521,35 +2584,36 @@ if __name__ == "__main__":
 
 `WebSearchTool` 是 trpc-agent-python 框架内置的**公网搜索工具**。当 Agent 需要回答"最新动态 / 版本号 / 事件 / 定义 / 事实类"等超出模型知识截止日期的问题时，可以通过该工具调用主流搜索引擎的检索 API，获取带标题、URL 与摘要的结构化结果，并按约定将所有引用以 Markdown 超链接的形式列在 `Sources:` 段落中。
 
-该工具采用**可插拔 provider** 设计，目前内置两种后端：
+该工具采用**可插拔 provider** 设计，目前内置三种后端：
 
 - **`duckduckgo`（默认）**：DuckDuckGo Instant Answer API，**无需 API Key**。返回 DDG 精选的 instant answer / abstract / definition 摘要及相关主题，适合百科/定义/事实类查询；注意返回的并非完整的实时网页结果，而是 DDG 的 curated 结果集
 - **`google`**：Google Custom Search（CSE）JSON API，需要配置 `api_key` 与 `engine_id`（即 CSE 的 `cx`）；返回真实的公网搜索结果，支持 `siteSearch`、`hl`（语言）、`safe`（SafeSearch）、`dateRestrict`（时效性）等 CSE 原生参数
+- **`tavily`**：Tavily Search API，需要配置 `api_key`（或环境变量 `TAVILY_API_KEY`）；返回面向 LLM 的网页结果，并可选返回图片 URL（调用参数 `include_images=true`）
 
 在此基础上，`WebSearchTool` 还内置了**域名白/黑名单过滤、URL 归一化去重、结果裁剪、引用规范强制注入、HTTP 连接池复用**等能力，帮助你在生产环境中稳定、可控地把联网检索接入 LLM Agent。
 
 ### 功能特性
 
-- **双 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）与 `google`（需要 CSE API Key，支持真实公网搜索）通过 `provider` 参数切换，对 LLM 暴露的 `FunctionDeclaration` 保持一致
-- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤
+- **多 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）、`google`（CSE，真实公网搜索）与 `tavily`（LLM-ready 搜索，可选图片）通过 `provider` 参数切换；基础 `FunctionDeclaration` 保持一致，`tavily` 额外暴露 `include_images`
+- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤；Tavily 会映射为 `include_domains` / `exclude_domains`，并仍做客户端二次过滤
 - **URL 归一化去重**：`dedup_urls=True`（默认）会按 scheme/host/path 归一化键合并重复命中，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
 - **结果裁剪**：`results_num` / `snippet_len` / `title_len` 分别控制返回条数、单条摘要与标题的字符上限，所有参数都会按 `[1, _MAX_*]` 做 clamp，避免误配超上下文窗口；LLM 还可通过 `count` 参数在调用时进一步控制返回条数
 - **强制引用规范**：工具在 `process_request` 阶段自动向 LLM 追加指令，**强制**要求：（1）回答末尾必须追加 `Sources:` 段并以 `[Title](URL)` 列出工具返回的 URL；（2）不得编造 URL；（3）涉及"最新/recent"类查询时使用**当前年月**入参，避免幻觉旧年份
-- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`、`gl`、`cr`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
+- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` / `tavily_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`，或 Tavily 的 `search_depth`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
 - **共享 httpx 连接池**：通过构造参数 `http_client` 传入预建好的 `httpx.AsyncClient`，可在多个 agent / 多次调用之间复用连接池；调用方负责其生命周期（工具不会帮你 `aclose`）
-- **结构化输出**：统一返回 `WebSearchResult`，包含 `query` / `provider` / `results: List[{title, url, snippet}]` / `summary`，便于 LLM 引用拼装，也便于下游做 re-rank / RAG
+- **结构化输出**：统一返回 `WebSearchResult`（Tavily 为扩展的 `TavilyWebSearchResult`），包含 `query` / `provider` / `results: List[{title, url, snippet}]` / `summary`；Tavily 还可额外返回 `images`
 
 ### WebSearchTool 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `provider` | `Literal["duckduckgo", "google"]` | `"duckduckgo"` | 搜索后端；`google` 需要同时配置 `api_key` 与 `engine_id`，否则调用时返回未配置提示 |
-| `api_key` | `Optional[str]` | `None` | Google CSE API Key，缺省时回退到环境变量 `GOOGLE_CSE_API_KEY` |
+| `provider` | `Literal["duckduckgo", "google", "tavily"]` | `"duckduckgo"` | 搜索后端；`google` 需要 `api_key` + `engine_id`，`tavily` 需要 `api_key`，否则调用时返回未配置提示 |
+| `api_key` | `Optional[str]` | `None` | Provider API Key。Google 缺省回退到 `GOOGLE_CSE_API_KEY`；Tavily 缺省回退到 `TAVILY_API_KEY` |
 | `engine_id` | `Optional[str]` | `None` | Google CSE 引擎 ID（即 `cx`），缺省时回退到环境变量 `GOOGLE_CSE_ENGINE_ID` |
 | `base_url` | `Optional[str]` | provider 默认 | 覆盖 provider 的 API Base URL（主要用于测试 / 代理） |
 | `user_agent` | `str` | `"trpc-agent-python-websearch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
 | `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
-| `lang` | `Optional[str]` | `None` | Google CSE 默认语言（对应 `hl` 参数），DDG 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
+| `lang` | `Optional[str]` | `None` | Google CSE 默认语言（对应 `hl` 参数），DDG / Tavily 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
 | `http_client` | `Optional[httpx.AsyncClient]` | `None` | 可选的预构建 `httpx.AsyncClient`，用于复用连接池（调用方负责生命周期） |
 | `results_num` | `int` | `5` | 默认返回条数上限，clamp 到 `[1, 10]`；可被调用参数 `count` 覆盖 |
 | `snippet_len` | `int` | `300` | 单条 `snippet` 的字符上限，clamp 到 `[1, 1000]` |
@@ -2558,6 +2622,7 @@ if __name__ == "__main__":
 | `dedup_urls` | `bool` | `True` | 是否按归一化键合并重复 URL；`False` 时保留原始命中顺序 |
 | `ddg_extra_params` | `Optional[dict]` | `None` | 透传给 DDG 的额外查询参数 |
 | `google_extra_params` | `Optional[dict]` | `None` | 透传给 Google CSE 的额外查询参数（如 `{"safe": "active"}`、`{"dateRestrict": "m6"}`、`{"gl": "us"}` 等） |
+| `tavily_extra_params` | `Optional[dict]` | `None` | 透传给 Tavily Search 的额外 JSON 参数（如 `{"search_depth": "advanced"}`、`{"include_answer": True}`） |
 | `filters_name` | `Optional[List[str]]` | `None` | 关联的 filter 名称，透传给 `BaseTool` |
 | `filters` | `Optional[List[BaseFilter]]` | `None` | 直接注入的 filter 实例，透传给 `BaseTool` |
 
@@ -2569,16 +2634,18 @@ if __name__ == "__main__":
 | `count` | `integer` | 否 | 本次调用的返回条数上限，`1-10`（clamp）；默认为工具级 `results_num` |
 | `allowed_domains` | `array[string]` | 否 | 域名白名单（host only，子域感知，`www.` 自动剥离）；与 `blocked_domains` 互斥 |
 | `blocked_domains` | `array[string]` | 否 | 域名黑名单，匹配规则同上；与 `allowed_domains` 互斥 |
-| `lang` | `string` | 否 | 仅 Google CSE 生效（对应 `hl`），DDG 会忽略；覆盖工具级 `lang` |
+| `lang` | `string` | 否 | 仅 Google CSE 生效（对应 `hl`），DDG / Tavily 会忽略；覆盖工具级 `lang` |
+| `include_images` | `boolean` | 否 | **仅 `provider="tavily"` 暴露**。为 `true` 时请求 Tavily 返回图片 URL；默认 `false` |
 
 **`WebSearchResult` 返回字段**：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `query` | `str` | 本次检索的查询词（原样回显） |
-| `provider` | `"duckduckgo" \| "google"` | 实际使用的 provider |
+| `provider` | `"duckduckgo" \| "google" \| "tavily"` | 实际使用的 provider |
 | `results` | `List[SearchHit]` | 结构化命中列表，每项包含 `title` / `url` / `snippet` |
-| `summary` | `str` | DDG 的 instant answer / abstract / definition 聚合摘要；Google 在发生拼写纠错或 API 错误时也会写入此字段 |
+| `summary` | `str` | DDG 的 instant answer / abstract / definition 聚合摘要；Google 在发生拼写纠错或 API 错误时也会写入此字段；Tavily 响应包含 `answer` 时会将其写入此字段。工具默认发送 `include_answer=false`，可通过 `tavily_extra_params` 开启 |
+| `images` | `List[ImageHit]` | **仅 Tavily**：可选图片列表，每项包含 `url` / `description`（未请求图片时为空列表） |
 
 当调用参数非法（如同时传入 `allowed_domains` 与 `blocked_domains`、`query` 过短）或 HTTP 出错时，工具会返回结构化错误对象（如 `{"error": "INVALID_ARGS: ..."}` / `{"error": "HTTP_ERROR: ..."}`），便于 LLM 做降级处理。
 
@@ -2665,11 +2732,44 @@ def create_google_agent() -> LlmAgent:
     )
 ```
 
+**切换到 Tavily Search**：当需要面向 LLM 的网页检索结果，或希望可选返回图片 URL 时，切换到 `provider="tavily"`。可在 [Tavily](https://tavily.com) 申请 API Key，并通过构造参数或环境变量 `TAVILY_API_KEY` 注入：
+
+```python
+import os
+
+from trpc_agent_sdk.tools import WebSearchTool
+
+
+def create_tavily_agent() -> LlmAgent:
+    """创建基于 Tavily Search 的 WebSearchTool Agent"""
+    web_search = WebSearchTool(
+        provider="tavily",
+        api_key=os.getenv("TAVILY_API_KEY"),
+        results_num=5,
+        snippet_len=300,
+        title_len=100,
+        timeout=15.0,
+        tavily_extra_params={
+            "search_depth": "basic",     # 或 "advanced"
+            # "include_answer": True,    # 需要答案摘要时打开
+        },
+    )
+    return LlmAgent(
+        name="tavily_research_assistant",
+        description="Web research assistant powered by Tavily Search.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
 > **注意**：
+> - `provider` 只接受 `duckduckgo` / `google` / `tavily`；传入其它值会在构造 `WebSearchTool` 时抛出 `ValueError`
 > - `allowed_domains` / `blocked_domains` 由 **LLM 在调用参数里**填入（而非构造参数），LLM 可根据用户 prompt 决定是否启用；两者互斥，同时传入会返回 `INVALID_ARGS`
 > - 当传入外部 `http_client` 时，`WebSearchTool` **不会**帮你调用 `aclose()`，需要调用方在**同一个事件循环**内显式关闭，避免 `Unclosed client` 警告
-> - 即使复用外部 client，工具内部仍会在每次 `GET` 时强制应用构造器里的 `timeout` 与 `user_agent`，保证 agent 层的约束始终生效
-> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等
+> - 即使复用外部 client，工具内部仍会在每次请求时强制应用构造器里的 `timeout` 与 `user_agent`，保证 agent 层的约束始终生效
+> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等；对 Tavily 可通过 `tavily_extra_params` 透传 `search_depth`、`include_answer` 等
+> - `include_images` 仅在 `provider="tavily"` 时出现在工具 schema 中；默认关闭，只有回答确实需要图片时再让模型打开
 
 #### 驱动 Agent 并打印工具事件
 
@@ -2798,6 +2898,29 @@ LLM 看到上述 prompt 后，会按 `FunctionDeclaration` 自动组装出类似
 
 DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG 聚合的摘要文本（如维基摘要、词典定义等），LLM 可直接引用；当 DDG 没有 `Results` 时，工具会兜底把 DDG 搜索页 URL 作为唯一来源返回，保证 `Sources:` 段不为空。
 
+Tavily provider 成功时还会多返回 `images` 字段（仅当调用参数 `include_images=true` 时有内容）：
+
+```python
+{
+    "query": "Python logo",
+    "provider": "tavily",
+    "results": [
+        {
+            "title": "Python",
+            "url": "https://www.python.org/",
+            "snippet": "The official home of the Python Programming Language.",
+        },
+    ],
+    "summary": "",
+    "images": [
+        {
+            "url": "https://www.python.org/static/community_logos/python-logo.png",
+            "description": "Python logo",
+        },
+    ],
+}
+```
+
 **错误处理**：当参数非法或 HTTP 出错时，工具返回结构化错误对象：
 
 ```python
@@ -2810,6 +2933,10 @@ DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG
 # Google CSE 未配置 api_key / engine_id
 {"query": "...", "provider": "google", "results": [],
  "summary": "Google provider is not configured: set api_key + engine_id ..."}
+
+# Tavily 未配置 api_key
+{"query": "...", "provider": "tavily", "results": [], "images": [],
+ "summary": "Tavily provider is not configured: set api_key or TAVILY_API_KEY."}
 
 # 网络 / HTTP 错误
 {"error": "HTTP_ERROR: ConnectTimeout(...)", "provider": "google", "query": "..."}
@@ -2827,15 +2954,16 @@ DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG
 
 ### WebSearchTool 最佳实践
 
-- **Provider 选择**：仅需无 API Key、轻量的定义/百科/事实类检索时使用默认的 `duckduckgo`；需要真实公网搜索、支持 site/语言/SafeSearch/时效性时切换到 `google` 并配置 CSE 凭据
+- **Provider 选择**：仅需无 API Key、轻量的定义/百科/事实类检索时使用默认的 `duckduckgo`；需要真实公网搜索、支持 site/语言/SafeSearch/时效性时切换到 `google` 并配置 CSE 凭据；需要面向 LLM 的检索结果、或可选图片结果时切换到 `tavily` 并配置 `TAVILY_API_KEY`
 - **结果裁剪**：为防止长摘要超过上下文窗口，建议为 `snippet_len` / `title_len` / `results_num` 设置与模型窗口匹配的合理值；LLM 仅需少量来源时可通过调用参数 `count` 进一步收紧
 - **域名策略**：需要把 Agent 限定在可信站点（如企业官网、官方文档）时，在 prompt 中显式要求 LLM 填入 `allowed_domains`；想屏蔽内容农场或噪声站点时使用 `blocked_domains`；两者互斥
 - **Google 多域名过滤**：Google CSE 的 `siteSearch` 只接受单个值，因此多域名白/黑名单时工具会自动回退到客户端过滤。若希望单域名走服务端快速路径，prompt 中约束 LLM 一次只传一个域名即可
+- **Tavily 图片参数**：默认不要打开 `include_images`；只有用户明确需要图片、或回答需要配图时再启用，避免额外 token 开销
 - **去重开关**：默认开启URL归一化去重，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
-- **时效性控制**：对"最新/what's new/today"类 Agent，把 `google_extra_params={"dateRestrict": "m6"}`（最近 6 个月）/ `"m1"`（1 个月）/ `"d7"`（7 天）固化在 agent 层，比在 prompt 里反复强调更可靠
+- **时效性控制**：对"最新/what's new/today"类 Agent，把 `google_extra_params={"dateRestrict": "m6"}`（最近 6 个月）/ `"m1"`（1 个月）/ `"d7"`（7 天）固化在 agent 层，比在 prompt 里反复强调更可靠；Tavily 侧可用 `tavily_extra_params={"search_depth": "advanced"}` 提升召回质量
 - **连接池复用**：同一进程内挂载多个 `WebSearchTool` 或高频调用时，通过 `http_client` 传入共享的 `httpx.AsyncClient`，并在程序退出时由调用方显式 `aclose()`
-- **凭据与代理**：Google CSE 的 `api_key` / `engine_id` 建议通过环境变量（`GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_ENGINE_ID`）注入，不硬编码在源码；需要经过企业出口代理时通过 `proxy` 参数配置
-- **与 WebFetchTool 配合**：`WebSearchTool` 用来"发现 URL"，`WebFetchTool` 用来"读取 URL 全文"——当 LLM 需要对某条搜索结果做深入阅读 / 摘要 / 引述时，把两个工具同时挂到 Agent 上，形成"搜索 → 精读"的两阶段工作流
+- **凭据与代理**：Google CSE 的 `api_key` / `engine_id` 建议通过环境变量（`GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_ENGINE_ID`）注入；Tavily 建议通过 `TAVILY_API_KEY` 注入，不硬编码在源码；需要经过企业出口代理时通过 `proxy` 参数配置
+- **与 WebFetchTool 配合**：`WebSearchTool` 用来"发现 URL"，`WebFetchTool` 用来"读取 URL 全文"——当 LLM 需要对某条搜索结果做深入阅读 / 摘要 / 引述时，把两个工具同时挂到 Agent 上，形成"搜索 → 精读"的两阶段工作流。两端都可以切到 `tavily`（Search + Extract）
 - **与 Knowledge/RAG 配合**：把搜索结果作为实时补充语料接入 RAG 流程时，参考 [examples/knowledge_with_searchtool_rag_agent](../../../examples/knowledge_with_searchtool_rag_agent)
 
 ### WebSearchTool 完整示例
@@ -2848,356 +2976,3 @@ DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG
 - **DuckDuckGo 原始命中**（`ddg_raw_agent`，`dedup_urls=False`）：保留 provider 原始召回列表，便于下游处理
 - **Google 基线**（`google_agent`，`safe=active`）：真实公网搜索 + 服务端单域 `siteSearch` + 客户端多域过滤 + 黑名单 + per-call `lang` 覆盖
 - **Google 时效性 Agent**（`google_raw_agent`，`dateRestrict=m6` + `dedup_urls=False`）：只保留过去 6 个月索引的结果，适合"最新/what's new"类查询
-
----
-
-## TodoWriteTool（任务清单工具）
-
-`TodoWriteTool` 是框架内置的**结构化任务清单工具**，对齐 Claude Code / DeepAgents 的 `TodoWrite` 语义：模型通过单次 `todo_write` 调用发送**完整、更新后的清单**，工具校验后整体替换上一份清单，并将会话级 state 持久化，从而在多轮 `Runner.run_async` 之间保持计划与进度。
-
-适合**步骤较少、无显式依赖边、希望实现简单**的场景。若需要服务端分配 id、按 `taskId` 增量 patch、或 `blockedBy` / `blocks` 依赖编排，请改用下文 [Task 工具族](#task-工具族结构化任务看板)。
-
-### 功能特性
-
-- **整表替换**：每次调用传入完整 `todos` 数组，新列表**完全覆盖**旧列表（不做智能 merge）；唯一合法的清空方式是显式传入 `todos: []`
-- **会话级持久化**：清单序列化为 JSON 写入 `tool_context.state["todos[:<branch>]"]`（默认前缀 `todos`，**勿用** `temp:`——该前缀会被 `BaseSessionService` 剥离且不持久化）
-- **子 Agent 隔离**：state key 追加 `:<branch>`，父 / 子 Agent 各自维护独立清单
-- **硬契约校验（代码强制）**：`content` / `activeForm` 非空、至多一个 `in_progress`、`content` 全局唯一；违反时返回 `INVALID_ARGS` / `INVALID_TODOS`
-- **Prompt 引导分层**：`DEFAULT_TODO_PROMPT` 经 `process_request` 自动注入 system instruction，描述使用时机与写法；与硬契约分离
-- **响应带回 diff**：成功时返回 `{message, todos, oldTodos}`，便于前端 / CLI 直接渲染当前清单与变更
-- **可选策略钩子**：`nudge_hooks` 只读回调，可在成功响应 `message` 末尾追加策略提示（不得修改清单）
-- **全部完成后自动清空**：`clear_on_all_done=True`（默认）时，若传入列表全部为 `completed`，持久化为空列表，避免历史项堆积
-
-### TodoWriteTool 参数
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `state_key_prefix` | `str` | `"todos"` | state key 前缀；勿使用 `temp:` |
-| `clear_on_all_done` | `bool` | `True` | 全部为 `completed` 时是否清空持久化列表 |
-| `default_nudge` | `str` | 内置文案 | 每次成功响应的基础提示语 |
-| `nudge_hooks` | `Optional[List[NudgeHook]]` | `None` | 只读策略钩子列表 |
-| `filters_name` / `filters` | — | `None` | 透传给 `BaseTool` 的 Filter |
-
-**LLM 调用参数**（`todo_write`）：
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `todos` | `array` | 是 | 完整清单；每项含 `content`（祈使句）、`activeForm`（进行时）、`status`（`pending` / `in_progress` / `completed`） |
-
-**成功响应字段**：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `message` | `str` | 基础 nudge + 钩子追加文案 |
-| `todos` | `array` | 持久化后的当前清单 |
-| `oldTodos` | `array \| null` | 更新前的清单（首次写入为 `null`） |
-
-### 使用方式
-
-```python
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools import TodoWriteTool
-
-agent = LlmAgent(
-    name="todo_planner",
-    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
-    instruction="你是规划型助手，多步任务请用 todo_write 维护清单。",
-    tools=[TodoWriteTool()],
-)
-```
-
-服务端 / 审计读取当前清单：
-
-```python
-from trpc_agent_sdk.tools import get_todos, render_todos
-
-todos = get_todos(session, branch=agent.name)
-print(render_todos(todos))  # ✅ / 🔄 / ⬜ 纯文本 checklist
-```
-
-### TodoWriteTool 与 Task 工具族对比
-
-| 维度 | `TodoWriteTool` | `TaskToolSet` |
-| --- | --- | --- |
-| 工具数量 | 1（`todo_write`） | 4（`task_create` / `task_update` / `task_get` / `task_list`） |
-| 更新方式 | 整表替换 | 按 `taskId` 增量 patch |
-| 单项标识 | `content`（唯一键） | `id`（服务端分配） |
-| 依赖编排 | 无 | `blockedBy` / `blocks`，完成上游自动 unblock |
-| state key | `todos[:branch]` | `tasks[:branch]` |
-| 并行 tool 调用 | 整表覆盖，天然 last-write-wins | 内置 `task_store_lock` 串行化 RMW |
-
-> **建议二选一挂载**；同时挂载易让模型混用两套语义。
-
-### TodoWriteTool 完整示例
-
-见 [examples/todo_tool/run_agent.py](../../../examples/todo_tool/run_agent.py)：同一 session 内多轮「规划 → 逐项完成」，每轮用 `get_todos` 读回持久化清单。
-
----
-
-## Task 工具族（结构化任务看板）
-
-`TaskToolSet` 暴露四个工具——`task_create`、`task_update`、`task_get`、`task_list`——对齐 Claude Code v2.1.142+ 的结构化 Task 能力。与 `TodoWriteTool` 的整表替换不同，Task 工具族采用**按服务端分配的 `id` 增量更新**：创建时返回 id，后续用 `task_update` 局部修改状态、字段或依赖边。
-
-整个看板序列化为**单个 JSON blob** 写入 `tool_context.state["tasks[:<branch>]"]`，跨轮存活；`highwatermark` 记录曾分配的最高 id，软删除（`status: deleted`）后**不会复用 id**。
-
-### 功能特性
-
-- **增量更新**：`task_create` 分配 id；`task_update` 按 `taskId` patch，无需重传整板
-- **依赖编排**：`addBlockedBy` / `removeBlockedBy`（及 `addBlocks` / `removeBlocks`）维护双向边；上游 `completed` 时自动从下游 `blockedBy` 移除并返回 `unblocked`
-- **Token 优化**：`task_list` 只返回摘要（省略 `description`）；完整详情用 `task_get`
-- **硬契约校验**：`subject` 非空、状态合法、依赖存在、**无环**（`detect_cycle`）、默认**至多一个 `in_progress`**（`enforce_single_in_progress`，可关）
-- **并发安全**：`_TaskToolBase` 在 load → mutate → save 外包 `task_store_lock`（按 session + branch），兼容 `parallel_tool_calls=True` 下同批并行调用
-- **Prompt 自动注入**：`DEFAULT_TASK_PROMPT` 多工具挂载时只注入一次
-
-### TaskToolSet 构造参数
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `state_key_prefix` | `str` | `"tasks"` | state key 前缀；勿使用 `temp:` |
-| `enforce_single_in_progress` | `bool` | `True` | 设置某任务 `in_progress` 时，若已有其他 `in_progress` 则拒绝 |
-| `inject_prompt` | `bool` | `True` | 是否向 system instruction 注入 `DEFAULT_TASK_PROMPT` |
-
-### 四个工具的 LLM 参数概要
-
-**`task_create`**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `subject` | 是 | 短标题（祈使句） |
-| `description` | 否 | 自由文本详情 |
-| `activeForm` | 否 | 进行时文案 |
-| `metadata` | 否 | 扩展键值 |
-
-返回 `{task: {id, subject}, message}`。
-
-**`task_update`**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `taskId` | 是 | 要更新的任务 id |
-| `status` | 否 | `pending` / `in_progress` / `completed` / `deleted` |
-| `subject` / `description` / `activeForm` / `owner` / `metadata` | 否 | 标量字段 patch |
-| `addBlockedBy` / `removeBlockedBy` | 否 | 上游依赖 id 列表 |
-| `addBlocks` / `removeBlocks` | 否 | 下游阻塞 id 列表 |
-
-返回 `{task, unblocked, message}`；`unblocked` 为因本次完成而解除阻塞的 pending 任务 id 列表。
-
-**`task_get`**：`taskId`（必填）→ 含 `description` 的完整记录。
-
-**`task_list`**：可选 `includeDeleted`；返回 `{tasks, stats}`，摘要不含 `description`。
-
-**常见错误码**：`INVALID_ARGS`、`INVALID_DEPENDENCY`、`INVALID_STATUS`、`NOT_FOUND`。
-
-### 使用方式
-
-```python
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools import TaskToolSet
-
-agent = LlmAgent(
-    name="task_planner",
-    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
-    instruction="多步项目请用 task_create / task_update 维护看板。",
-    tools=[TaskToolSet()],
-    # parallel_tool_calls=True 时，同批多个 task 工具由 task_store_lock 保护 store 一致性
-)
-```
-
-读回持久化看板（REST / 审计 / demo 收尾）：
-
-```python
-from trpc_agent_sdk.tools import get_task_store, render_task_list
-
-store = get_task_store(session, branch=agent.name)
-print(render_task_list(store))
-# ✅ #1 已完成
-# 🔄 #2 进行中
-# ⬜ #3 待办 (blocked by: 2)
-```
-
-### 依赖与解锁示例
-
-```text
-#1 设计表结构
- ├──→ #2 实现 API ──→ #3 单元测试
- └──→ #4 编写文档
-
-#1 completed  →  unblocked: ['2', '4']
-#2 completed  →  unblocked: ['3']
-```
-
-### Task 工具族最佳实践
-
-- **规划与执行分离**：先 `task_create` 建板并 `addBlockedBy`，再逐项 `in_progress` → `completed`
-- **不要编造 id**：只使用 `task_create` 返回的 id
-- **并行调用**：开启 `parallel_tool_calls=True` 时，同 board 上的并发 `task_create` / `task_update` 由锁串行化；不同 `branch` 仍并行
-- **与 TodoWrite 二选一**：长板 + 依赖用 Task；短清单用 TodoWrite
-
-### Task 工具族完整示例
-
-| 示例 | 说明 |
-| --- | --- |
-| [examples/task_tools](../../../examples/task_tools/) | 多轮对话：依赖编排、逐项完成、跨轮 `get_task_store` 读回看板 |
-| [examples/task_tools_parallel](../../../examples/task_tools_parallel/) | 验证 `parallel_tool_calls` 与 `task_store_lock`（Phase 1–2 无需 API Key） |
-
----
-
-## Goal 工具族（持久会话目标）
-
-`GoalToolSet` 暴露三个工具——`create_goal`、`get_goal`、`update_goal`——对齐 Claude Code 的 **Session Goal** 能力。与 `TodoWriteTool`（多行待办）和 `TaskToolSet`（多任务看板）不同，Goal 在每个 session branch 上**至多只有一个**持久目标：在目标为 `active` 期间，模型给出「看起来像最终答案」的文本**不算完成**——必须继续执行，或显式调用 `update_goal('complete' | 'blocked')` 收尾。
-
-目标序列化为**单个 JSON blob**（`GoalRecord`）写入 `tool_context.state["goal[:<branch>]"]`，跨 `Runner.run_async` 调用存活。除三个模型工具外，完整能力还需通过 `setup_goal()` 挂载一对 **enforcement callbacks**（`before_model` / `after_model`），在**同一次 invocation 内**拦截过早的最终回复并自动重试。
-
-### 功能特性
-
-- **单目标契约**：每个 branch 一个 `GoalRecord`（`objective` + 三态 `active` / `complete` / `blocked`）；`complete` / `blocked` 为**不可逆**终态
-- **跨轮持久化**：随 function-response 的 state delta 落库；**勿用** `temp:` 前缀
-- **子 Agent 隔离**：state key 追加 `:<branch>`，父 / 子 Agent 各自维护独立目标
-- **强制收尾（enforcement）**：目标 `active` 时，`after_model` 检测「无 tool call、有可见文本、非 partial」的过早 final，抑制该回复并在同 invocation 内 re-run；`before_model` 注入 user-role nudge
-- **fail-open 预算**：`max_retries`（默认 3）次拦截后放行最终回复，避免无限循环；计数器存在 invocation 级 `agent_context.metadata`，不持久化
-- **双入口创建**：
-  - **模型侧**：`create_goal(objective=...)` —— LLM 判断多步任务后自主创建
-  - **宿主侧**：`start_goal(session_service, ...)` —— 应用层在首轮前写入 session，模型无需调用 `create_goal`
-- **Prompt 引导分层**：`DEFAULT_GUIDANCE` 在目标 active 时经 `before_model` 注入 system instruction（`inject_guidance=True`）；硬约束由 store 校验 + callback 共同保证
-- **并发安全**：`_GoalToolBase` 在 load → mutate → save 外包 `goal_store_lock`（按 session + branch），兼容 `parallel_tool_calls=True`
-
-### 与 Todo / Task 的关系
-
-| 维度 | `TodoWriteTool` | `TaskToolSet` | Goal 工具族 |
-| --- | --- | --- | --- |
-| 粒度 | 多行待办清单 | 多任务看板 + 依赖 | **单个**会话目标 |
-| 更新方式 | 整表替换 | 按 `taskId` 增量 | `create_goal` / `update_goal` |
-| 未完成能否收尾 | Prompt 引导 | Prompt 引导 | **callback 强制拦截** |
-| state key | `todos[:branch]` | `tasks[:branch]` | `goal[:branch]` |
-| 典型用途 | 步骤可视、短清单 | 长看板、依赖编排 | 整件事是否算做完 |
-
-> Todo / Task 管「步骤分解」，Goal 管「整体完成契约」。可组合使用，但避免让模型同时混用过多规划工具。
-
-### GoalOptions 构造参数
-
-通过 `setup_goal(agent, GoalOptions(...))` 配置：
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `state_key_prefix` | `str` | `"goal"` | state key 前缀；勿使用 `temp:` |
-| `inject_guidance` | `bool` | `True` | 是否在 `before_model` 向 system instruction 注入 `DEFAULT_GUIDANCE` |
-| `guidance` | `str` | `DEFAULT_GUIDANCE` | 注入的长文案（含串行调用 goal 工具等约定） |
-| `max_retries` | `int` | `3` | 同 invocation 内拦截过早 final 的预算；耗尽后 fail-open |
-| `nudge_template` | `str` | `DEFAULT_NUDGE` | 拦截后以 user-role 追加的提醒模板（支持 `{attempt}` / `{max_retries}` / `{objective}`） |
-| `on_retry` | `Callable[[RetryEvent], None]` | `None` | 每次拦截或预算耗尽时的可观测回调 |
-
-仅挂载模型工具、不要 enforcement 时，可直接 `tools=[GoalToolSet()]`，但不具备「未完成不许收尾」能力。
-
-### 三个工具的 LLM 参数概要
-
-**`create_goal`**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `objective` | 是 | 完成标准——「done」具体指什么 |
-
-成功返回 `{message, goal}`；若已有 `active` 目标返回 `{error: "INVALID_STATE: ..."}`。
-
-**`get_goal`**
-
-无参数。有目标时返回 `{message, goal}`；无目标时返回 `{message: "No session goal is set."}`。
-
-**`update_goal`**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `status` | 是 | `complete`（目标已达成）或 `blocked`（同一阻塞条件反复出现、无用户输入无法继续） |
-
-成功返回 `{message, goal}`；无 active 目标或已是终态时返回 `{error: "INVALID_STATE: ..."}`。
-
-**`GoalRecord` 字段**（JSON 使用 camelCase 别名持久化）：
-
-| 字段 | 说明 |
-|------|------|
-| `id` | 服务端分配的 uuid |
-| `objective` | 完成标准文本 |
-| `status` | `active` / `complete` / `blocked` |
-| `createdAtUnix` / `updatedAtUnix` | 创建 / 最后更新时间（unix 秒） |
-| `terminalAtUnix` | 进入终态的时间（可选） |
-
-### enforcement 工作流程
-
-```text
-模型输出 final 文本（无 tool call，goal 仍 active）
-        ↓
-after_model 判定为 premature final
-        ↓
-抑制该 final（不提交为答案），retry_count += 1
-before_model 注入 nudge，同 invocation 继续 agent loop
-        ↓
-retry_count >= max_retries → fail-open，on_retry(reason="exhausted")
-```
-
-拦截条件（`_is_premature_final`）：非 partial、无 error、content 含可见文本，且**不含** `function_call` / `function_response`。
-
-### 使用方式
-
-推荐一行挂载工具 + callbacks：
-
-```python
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools.goal_tools import GoalOptions, RetryEvent, setup_goal
-
-def on_retry(event: RetryEvent) -> None:
-    if event.reason == "blocked":
-        print(f"拦截过早收尾 (attempt {event.attempt_number}/{event.max_retries})")
-
-agent = LlmAgent(
-    name="goal_agent",
-    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
-    instruction="多步工程任务请用 goal 工具跟踪完成状态。",
-    tools=[...],  # 业务工具，如 BashTool / WriteTool
-)
-setup_goal(agent, GoalOptions(max_retries=3, on_retry=on_retry))
-```
-
-宿主在首轮前预注入目标（模型不调用 `create_goal`）：
-
-```python
-from trpc_agent_sdk.tools.goal_tools import start_goal
-
-goal = await start_goal(
-    session_service,
-    app_name="my_app",
-    user_id="user_1",
-    session_id=session_id,
-    objective="在当前目录创建 notes/ 并写入 summary.txt 与 example.py",
-    agent_name=agent.name,  # 与 LlmAgent.name 一致，用于 branch 隔离
-)
-```
-
-读回持久化目标（REST / 审计 / demo 收尾）：
-
-```python
-from trpc_agent_sdk.tools.goal_tools import get_goal_record, render_goal
-
-goal = get_goal_record(session, branch=agent.name)
-print(render_goal(goal))
-# ✅ Goal [complete]
-#    objective: ...
-#    created:   1782893110
-#    terminal:  1782893116
-```
-
-### Goal 工具族最佳实践
-
-- **用 `setup_goal` 而非只挂 `GoalToolSet`**：只有 callbacks 才能实现「active 期间不许 final」
-- **模型侧 vs 宿主侧**：Slash command、`/goal`、配置驱动任务用 `start_goal()`；让模型自主判断多步任务时用 `create_goal`
-- **一次响应只调一个 goal 工具**：`DEFAULT_GUIDANCE` 要求串行语义；不要同轮 `create_goal` + `update_goal`
-- **`blocked` 慎用**：仅当同一阻塞条件跨多次尝试仍无法推进、且需要用户输入或外部状态变化时使用；不要因为任务难、慢或不完整就标记 blocked
-- **可观测性**：通过 `on_retry` 记录 `⚡ Premature final intercepted` 与预算耗尽，便于调优 prompt 或 `max_retries`
-- **与 Todo / Task 分工**：Todo / Task 展示步骤与依赖；Goal 约束「整件事是否已真正完成」
-
-### Goal 工具族完整示例
-
-| 示例 | 说明 |
-| --- | --- |
-| [examples/goal_tools](../../../examples/goal_tools/) | Case 1：模型 `create_goal`；Case 2：宿主 `start_goal` 预注入；演示 enforcement 拦截与 `update_goal(complete)` |

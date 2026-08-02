@@ -6,7 +6,7 @@
 """Replay 一致性 E2E:同一组 case 驱动多后端,比较事件/state/memory/summary。
 
 轻量模式默认 InMemory vs SQLite(:memory:);Redis 经 TRPC_REPLAY_REDIS_URL 启用。
-报告产物:仓库根 session_memory_summary_diff_report.json。
+报告产物:tests/sessions/session_memory_summary_diff_report.json。
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from tests.sessions.replay.allowed_diff import check_governance
 from tests.sessions.replay.backends import enabled_backends
 from tests.sessions.replay.backends import in_memory_backend
 from tests.sessions.replay.backends import sqlite_backend
@@ -28,7 +29,7 @@ from tests.sessions.replay.report import write_report
 from tests.sessions.replay.summary_checks import check_summary_issues
 
 CASES_DIR = str(Path(__file__).parent / "replay" / "replay_cases")
-REPORT_PATH = str(Path(__file__).parents[2] / "session_memory_summary_diff_report.json")
+REPORT_PATH = str(Path(__file__).parent / "session_memory_summary_diff_report.json")
 LIGHTWEIGHT_TIMEOUT = 30  # 验收第 6 条:轻量模式 ≤30s
 
 KNOWN_DRIFT = {"summary_update", "summary_truncation"}
@@ -85,10 +86,10 @@ class TestReplaySmoke:
 
 class TestReplayConsistencyE2E:
 
-    async def test_all_cases_cross_backend(self):
+    async def test_all_cases_cross_backend(self, tmp_path):
         start = time.time()
         cases = load_cases(CASES_DIR)
-        backends, statuses = enabled_backends()
+        backends, statuses = enabled_backends(str(tmp_path))
         reference = backends[0]
         candidates = backends[1:]
 
@@ -96,6 +97,7 @@ class TestReplayConsistencyE2E:
         for case in cases:
             snap_ref = normalize_snapshot(await replay_case(reference, case))
             comparisons: list[Comparison] = []
+            all_diffs: list[object] = []
             for cand in candidates:
                 snap_cand = normalize_snapshot(await replay_case(cand, case))
                 diffs = compare_snapshots(
@@ -105,6 +107,9 @@ class TestReplayConsistencyE2E:
                     candidate_backend=cand.name,
                     allowed_diff=case.allowed_diff,
                 )
+                all_diffs.extend(diffs)
+                # 治理检查:防 allowed_diff 规则越界(超条数/超占比/无 reason)
+                check_governance(case, total_fields=len(all_diffs), used_allowed=sum(1 for d in all_diffs if d.allowed))
                 issues = check_summary_issues(
                     snap_ref.summary,
                     snap_cand.summary,
@@ -123,21 +128,18 @@ class TestReplayConsistencyE2E:
             case_results.append(
                 CaseResult(case_id=case.case_id, session_id=snap_ref.session_id, comparisons=comparisons))
 
-        # 误报率只算「正常 case」(排除已知 drift case —— 后者是框架发现的真 bug)。
+        # 正常 case(排除已知 drift —— 后者是框架发现的真 bug),用于下方误报率断言;
+        # 误报率本身由 build_diff_report(known_drift_cases=...) 内部计算(设计 §6)。
         normal = [cr for cr in case_results if cr.case_id not in KNOWN_DRIFT]
-        normal_mismatch = sum(1 for cr in normal if any(c.status == "mismatch" for c in cr.comparisons))
-        fpr = normal_mismatch / len(normal) if normal else 0.0
 
-        report = build_diff_report(reference.name, case_results, statuses)
-        report["false_positive_rate"] = fpr
-        report["known_drift_cases"] = sorted(KNOWN_DRIFT)
+        report = build_diff_report(reference.name, case_results, statuses, known_drift_cases=sorted(KNOWN_DRIFT))
         write_report(report, REPORT_PATH)
 
         # 验收 1:InMemory + 持久化(SQLite)对比。
         assert "sqlite" in report["compared_backends"]
-        # 验收 3:正常 case 误报率 0。
+        # 验收 3:正常 case 误报率 0(build_diff_report 已排除 drift,直接断言其输出)。
         bad = [cr.case_id for cr in normal if any(c.status == "mismatch" for c in cr.comparisons)]
-        assert fpr == 0.0, f"normal-case FPR>0: {bad}"
+        assert report["false_positive_rate"] == 0.0, f"normal-case FPR>0: {bad}"
         for cr in normal:
             for comp in cr.comparisons:
                 assert comp.status == "match", (f"unexpected mismatch in {cr.case_id}: "

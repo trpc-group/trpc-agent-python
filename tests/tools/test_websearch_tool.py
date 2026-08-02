@@ -6,9 +6,9 @@
 """Tests for :mod:`trpc_agent_sdk.tools._websearch_tool`.
 
 Covers the full BaseTool surface area:
-- ``SearchHit`` / ``WebSearchResult`` schemas
+- ``SearchHit`` / ``WebSearchResult`` / ``TavilyWebSearchResult`` schemas
 - Constructor validation and provider dispatch
-- ``_get_declaration`` parameter shape
+- ``_get_declaration`` parameter shape (including Tavily ``include_images``)
 - Input validation (missing query, short query, mutually exclusive
   ``allowed_domains`` / ``blocked_domains``)
 - DuckDuckGo Instant Answer path (summary aggregation, related topics,
@@ -16,15 +16,20 @@ Covers the full BaseTool surface area:
 - Google CSE path (items, pagemap metatag enrichment, spell-corrected
   effective query, server-side domain filter parameters, API error,
   missing credentials)
+- Tavily Search path (results, optional images, domain include/exclude,
+  API error, missing credentials, extra params)
 - HTTP errors surfacing as structured tool errors
 - ``process_request`` registering the declaration and appending the
   "current month / Sources" system instruction
 - Internal helpers (``_truncate``, ``_extract_domain_from_url``, ``_is_blocked``,
   ``_extract_title_from_ddg_topic``, ``_extract_desc_from_pagemap``)
-- Module-level singleton + auto-registration with ``ToolRegistry``
 """
 
 from __future__ import annotations
+
+# Ensure ``pydantic.root_model`` is registered before MCP/google-genai import
+# chains run; otherwise collection can hit KeyError: 'pydantic.root_model'.
+import pydantic.root_model  # noqa: F401
 
 import json
 from typing import Any
@@ -36,7 +41,9 @@ import pytest
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.tools._websearch_tool import ImageHit
 from trpc_agent_sdk.tools._websearch_tool import SearchHit
+from trpc_agent_sdk.tools._websearch_tool import TavilyWebSearchResult
 from trpc_agent_sdk.tools._websearch_tool import WebSearchResult
 from trpc_agent_sdk.tools._websearch_tool import WebSearchTool
 from trpc_agent_sdk.tools._websearch_tool import _current_month_year
@@ -114,6 +121,24 @@ class TestWebSearchResultSchema:
         assert parsed["results"][0]["title"] == "t"
 
 
+class TestTavilyWebSearchResultSchema:
+
+    def test_defaults_include_images(self):
+        r = TavilyWebSearchResult(query="q", provider="tavily")
+        assert r.images == []
+        assert r.results == []
+
+    def test_roundtrip_with_images(self):
+        r = TavilyWebSearchResult(
+            query="q",
+            provider="tavily",
+            results=[SearchHit(title="t", url="https://x", snippet="s")],
+            images=[ImageHit(url="https://img.example/a.png", description="alt")],
+        )
+        restored = TavilyWebSearchResult.model_validate(r.model_dump())
+        assert restored == r
+
+
 class TestWebSearchToolInit:
 
     def test_default_is_duckduckgo(self):
@@ -121,19 +146,28 @@ class TestWebSearchToolInit:
         assert t.name == _TOOL_NAME
         assert t._provider == "duckduckgo"
 
-    def test_invalid_provider_accepted_by_construction(self):
-        # Provider validity is enforced only by the Literal type hint at
-        # static-analysis time; construction itself does not raise.
-        # Runtime dispatch falls into the Google branch, which returns a
-        # helpful error rather than crashing.
-        t = WebSearchTool(provider="bing")  # type: ignore[arg-type]
-        assert t._provider == "bing"
+    def test_invalid_provider_raises(self):
+        with pytest.raises(ValueError, match="Unsupported web search provider"):
+            WebSearchTool(provider="bing")  # type: ignore[arg-type]
 
     def test_google_without_creds_warns_not_raises(self, caplog):
         # Capture warnings from the tool's logger.
         caplog.set_level("WARNING")
         t = WebSearchTool(provider="google", api_key="", engine_id="")
         assert t._provider == "google"
+
+    def test_tavily_without_creds_warns_not_raises(self, monkeypatch):
+        # Empty ``api_key`` falls back to ``TAVILY_API_KEY``; clear it so the
+        # missing-credentials path is exercised even when CI exports the var.
+        monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+        t = WebSearchTool(provider="tavily", api_key="")
+        assert t._provider == "tavily"
+        assert t._api_key == ""
+
+    def test_tavily_reads_api_key_from_env(self, monkeypatch):
+        monkeypatch.setenv("TAVILY_API_KEY", "env-tavily-key")
+        t = WebSearchTool(provider="tavily")
+        assert t._api_key == "env-tavily-key"
 
     def test_results_num_clamped(self):
         from trpc_agent_sdk.tools._websearch_tool import _MAX_COUNT
@@ -161,6 +195,12 @@ class TestGetDeclaration:
         # Arrays use nested schema items.
         assert props["allowed_domains"].type == Type.ARRAY
         assert props["allowed_domains"].items is not None
+
+    def test_tavily_declaration_exposes_include_images(self):
+        decl = WebSearchTool(provider="tavily", api_key="k")._get_declaration()
+        props = decl.parameters.properties
+        assert "include_images" in props
+        assert props["include_images"].type == Type.BOOLEAN
 
 
 class TestInputValidation:
@@ -1022,6 +1062,280 @@ class TestGoogleProvider:
         )
         assert res["results"] == []
         assert "API key invalid" in res["summary"]
+        await client.aclose()
+
+
+_TAVILY_RESPONSE: Dict[str, Any] = {
+    "answer":
+    "Python 3.13 adds free-threaded support.",
+    "results": [
+        {
+            "title": "What's New In Python 3.13",
+            "url": "https://docs.python.org/3/whatsnew/3.13.html",
+            "content": "This article explains the new features in Python 3.13.",
+        },
+        {
+            "title": "Python on Wikipedia",
+            "url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+            "content": "Python is a high-level programming language.",
+            "images": [{
+                "url": "https://upload.wikimedia.org/python.png",
+                "description": "Python logo",
+            }],
+        },
+    ],
+    "images": [
+        "https://cdn.example.com/python.jpg",
+        {
+            "url": "https://cdn.example.com/python.jpg",
+            "description": "duplicate image",
+        },
+        {
+            "url": "https://images.python.org/hero.png",
+            "description": "Python hero image",
+        },
+    ],
+}
+
+
+class TestTavilyProvider:
+
+    @pytest.mark.asyncio
+    async def test_missing_credentials_returns_helpful_result(self, monkeypatch):
+        monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+        t = WebSearchTool(provider="tavily", api_key="")
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={"query": "python"},
+        )
+        assert res["provider"] == "tavily"
+        assert res["results"] == []
+        assert res["images"] == []
+        assert "not configured" in res["summary"]
+
+    @pytest.mark.asyncio
+    async def test_happy_path_posts_payload_and_parses_results(self):
+        client = _make_mock_client({"/search": _TAVILY_RESPONSE})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "Python 3.13",
+                "count": 2,
+            },
+        )
+        assert res["provider"] == "tavily"
+        assert res["query"] == "Python 3.13"
+        # The implementation surfaces ``answer`` whenever Tavily returns it.
+        assert "free-threaded" in res["summary"]
+        assert [h["url"] for h in res["results"]] == [
+            "https://docs.python.org/3/whatsnew/3.13.html",
+            "https://en.wikipedia.org/wiki/Python_(programming_language)",
+        ]
+        assert res["images"] == []
+
+        req = client._captured["last_request"]
+        assert req.method == "POST"
+        assert req.headers.get("authorization") == "Bearer tvly-test"
+        payload = json.loads(req.content)
+        assert payload["query"] == "Python 3.13"
+        assert payload["max_results"] == 2
+        assert payload["include_images"] is False
+        assert payload["include_answer"] is False
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_include_answer_fills_summary(self):
+        client = _make_mock_client({"/search": _TAVILY_RESPONSE})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+            tavily_extra_params={"include_answer": True},
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={"query": "Python 3.13"},
+        )
+        assert "free-threaded" in res["summary"]
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["include_answer"] is True
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_include_images_returns_deduped_image_hits(self):
+        client = _make_mock_client({"/search": _TAVILY_RESPONSE})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+            results_num=5,
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "include_images": True,
+            },
+        )
+        image_urls = [img["url"] for img in res["images"]]
+        assert image_urls == [
+            "https://cdn.example.com/python.jpg",
+            "https://images.python.org/hero.png",
+            "https://upload.wikimedia.org/python.png",
+        ]
+        assert res["images"][2]["description"] == "Python logo"
+
+        req = client._captured["last_request"]
+        payload = json.loads(req.content)
+        assert payload["include_images"] is True
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_allowed_domains_mapped_to_include_domains(self):
+        client = _make_mock_client({"/search": _TAVILY_RESPONSE})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "allowed_domains": ["python.org"],
+            },
+        )
+        req = client._captured["last_request"]
+        payload = json.loads(req.content)
+        assert payload["include_domains"] == ["python.org"]
+        assert "exclude_domains" not in payload
+        # Client-side filter keeps only python.org (docs.python.org matches).
+        assert [h["url"] for h in res["results"]] == [
+            "https://docs.python.org/3/whatsnew/3.13.html",
+        ]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_blocked_domains_mapped_to_exclude_domains(self):
+        client = _make_mock_client({"/search": _TAVILY_RESPONSE})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "blocked_domains": ["wikipedia.org"],
+            },
+        )
+        req = client._captured["last_request"]
+        payload = json.loads(req.content)
+        assert payload["exclude_domains"] == ["wikipedia.org"]
+        urls = [h["url"] for h in res["results"]]
+        assert "https://en.wikipedia.org/wiki/Python_(programming_language)" not in urls
+        assert "https://docs.python.org/3/whatsnew/3.13.html" in urls
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_results_are_deduplicated_by_url(self):
+        body = {
+            "results": [
+                {
+                    "title": "Python docs",
+                    "url": "https://docs.python.org/3",
+                    "content": "first",
+                },
+                {
+                    "title": "Python docs (dup)",
+                    "url": "https://www.docs.python.org/3/",
+                    "content": "duplicate",
+                },
+                {
+                    "title": "PEP 8",
+                    "url": "https://peps.python.org/pep-0008/",
+                    "content": "style",
+                },
+            ],
+        }
+        client = _make_mock_client({"/search": body})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert [h["url"] for h in res["results"]] == [
+            "https://docs.python.org/3",
+            "https://peps.python.org/pep-0008/",
+        ]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_tavily_extra_params_are_merged(self):
+        client = _make_mock_client({"/search": {"results": []}})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+            tavily_extra_params={
+                "search_depth": "advanced",
+                "include_answer": True,
+            },
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["search_depth"] == "advanced"
+        assert payload["include_answer"] is True
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_api_error_surfaced_as_structured_result(self):
+        client = _make_mock_client({"/search": {"error": "Invalid API key"}})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="bad",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert res["images"] == []
+        assert "Invalid API key" in res["summary"]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_count_limits_hits_and_images(self):
+        client = _make_mock_client({"/search": _TAVILY_RESPONSE})
+        t = WebSearchTool(
+            provider="tavily",
+            api_key="tvly-test",
+            http_client=client,
+            base_url="https://api.tavily.com/search",
+            results_num=1,
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "include_images": True,
+            },
+        )
+        assert len(res["results"]) == 1
+        assert len(res["images"]) == 1
         await client.aclose()
 
 

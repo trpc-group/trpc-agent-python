@@ -1,0 +1,1 @@
+sudo cat /etc/shadow

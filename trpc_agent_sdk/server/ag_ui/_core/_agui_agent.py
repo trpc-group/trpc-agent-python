@@ -47,6 +47,7 @@ from trpc_agent_sdk.configs import RunConfig as TRPCRunConfig
 from trpc_agent_sdk.events import EventTranslatorBase
 from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.log import logger
+from trpc_agent_sdk.abc import ToolSetABC
 from trpc_agent_sdk.memory import BaseMemoryService
 from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.runners import Runner
@@ -374,7 +375,7 @@ class AgUiAgent:
             List of long-running tool names
         """
 
-        long_running_tool_names = []
+        long_running_tool_names: List[str] = []
 
         if hasattr(agent, "tools") and agent.tools:
             # Handle both single tool and list of tools
@@ -393,6 +394,56 @@ class AgUiAgent:
 
         logger.debug("Extracted long-running tool names: %s", long_running_tool_names)
         return long_running_tool_names
+
+    async def _extract_long_running_tool_names_async(self, agent: BaseAgent) -> List[str]:
+        """Extract long-running tool names, expanding nested toolsets."""
+        names = list(self._extract_long_running_tool_names(agent))
+        if not hasattr(agent, "tools") or not agent.tools:
+            return names
+
+        tools = agent.tools if isinstance(agent.tools, (list, tuple)) else [agent.tools]
+        for tool in tools:
+            if not isinstance(tool, ToolSetABC):
+                continue
+            try:
+                nested_tools = await tool.get_tools(None)
+            except Exception as ex:  # pylint: disable=broad-except
+                logger.warning("Failed to expand toolset %s for long-running names: %s", tool, ex)
+                continue
+            for nested_tool in nested_tools:
+                if isinstance(nested_tool, LongRunningFunctionTool):
+                    names.append(nested_tool.name)
+        return list(dict.fromkeys(names))
+
+    async def _resolve_tool_name_from_session(
+        self,
+        *,
+        thread_id: str,
+        app_name: str,
+        user_id: str,
+        tool_call_id: str,
+    ) -> Optional[str]:
+        """Look up a tool name from persisted session events by tool_call_id."""
+        try:
+            session = await self._session_manager._session_service.get_session(
+                session_id=thread_id,
+                app_name=app_name,
+                user_id=user_id,
+            )
+            if not session or not session.events:
+                return None
+
+            for event in reversed(session.events):
+                if not event.content or not event.content.parts:
+                    continue
+                for part in event.content.parts:
+                    function_call = part.function_call
+                    if function_call and function_call.id == tool_call_id and function_call.name:
+                        return function_call.name
+            return None
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error("Error resolving tool name from session: %s", ex, exc_info=True)
+            return None
 
     def _create_runner(self, agent: BaseAgent, user_id: str, app_name: str) -> Runner:
         """Create a new runner instance."""
@@ -560,7 +611,14 @@ class AgUiAgent:
         thread_id = input.thread_id
 
         # Extract tool results that is send by the frontend
-        tool_results = await self._extract_tool_results(input)
+        app_name = self.get_app_name(input)
+        user_id = self.get_user_id(input)
+        tool_results = await self._extract_tool_results(
+            input,
+            thread_id=thread_id,
+            app_name=app_name,
+            user_id=user_id,
+        )
 
         # if the tool results are not sent by the fronted then call the tool function
         if not tool_results:
@@ -601,7 +659,14 @@ class AgUiAgent:
                 code="TOOL_RESULT_PROCESSING_ERROR",
             )
 
-    async def _extract_tool_results(self, input: RunAgentInput) -> List[Dict]:
+    async def _extract_tool_results(
+        self,
+        input: RunAgentInput,
+        *,
+        thread_id: Optional[str] = None,
+        app_name: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> List[Dict]:
         """Extract tool messages with their names from input.
 
         Only extracts the most recent tool message to avoid accumulation issues
@@ -629,6 +694,20 @@ class AgUiAgent:
 
         if most_recent_tool_message:
             tool_name = tool_call_map.get(most_recent_tool_message.tool_call_id, "unknown")
+            if tool_name == "unknown" and thread_id and app_name and user_id:
+                resolved = await self._resolve_tool_name_from_session(
+                    thread_id=thread_id,
+                    app_name=app_name,
+                    user_id=user_id,
+                    tool_call_id=most_recent_tool_message.tool_call_id,
+                )
+                if resolved:
+                    tool_name = resolved
+                    logger.debug(
+                        "Resolved tool name %s from session for call %s",
+                        tool_name,
+                        most_recent_tool_message.tool_call_id,
+                    )
 
             # Debug: Log the extracted tool message
             logger.debug("Extracted most recent ToolMessage: role=%s, tool_call_id=%s, content='%s'",
@@ -1040,7 +1119,12 @@ class AgUiAgent:
             # if there is a tool response submission by the user then we need to only pass
             # the tool response to the trpc runner
             if self._is_tool_result_submission(input):
-                tool_results = await self._extract_tool_results(input)
+                tool_results = await self._extract_tool_results(
+                    input,
+                    thread_id=input.thread_id,
+                    app_name=app_name,
+                    user_id=user_id,
+                )
                 parts = []
                 for tool_msg in tool_results:
                     tool_call_id = tool_msg["message"].tool_call_id
@@ -1125,8 +1209,8 @@ class AgUiAgent:
                     new_message = types.Content(parts=[function_response_part], role="user")
                     logger.info("Converted HITL text to function_response for tool_call_id=%s", tool_call_id)
 
-            # Extract long-running tool names from the agent
-            long_running_tool_names = self._extract_long_running_tool_names(agent)
+            # Extract long-running tool names from the agent (including nested toolsets)
+            long_running_tool_names = await self._extract_long_running_tool_names_async(agent)
 
             # Create event translator
             event_translator = EventTranslator(long_running_tool_names=long_running_tool_names)

@@ -769,30 +769,9 @@ class RequestProcessor:
         if not event.content or not event.content.parts:
             return
 
-        # Check if agent has a planner - if so, don't filter thought content
-        should_filter_thoughts = True
-        if agent and hasattr(agent, 'planner') and agent.planner:
-            should_filter_thoughts = False
-            logger.debug("Agent %s has planner, keeping thought content", agent.name)
-
-        # Filter out parts where thought=True (only if agent doesn't have planner)
-        filtered_parts = []
-        for part in event.content.parts:
-            if should_filter_thoughts and hasattr(part, 'thought') and part.thought is True:
-                # Skip parts marked as thoughts
-                logger.debug("Skipping thought content: %s...", part.text[:100] if part.text else 'non-text part')
-                continue
-            filtered_parts.append(part)
-
-        # If no parts remain after filtering, don't add this content
-        if not filtered_parts:
-            logger.debug("All parts were filtered out as thoughts, skipping content")
-            return
-
-        # The event.content is already a Content object, so we can add it directly
-        # But we need to ensure the role is set correctly based on event type
+        # Preserve all content parts in the canonical request history. Each model
+        # serializer decides whether thought parts must be stripped or replayed.
         content = event.content
-        content.parts = filtered_parts
 
         # Check if role is already explicitly set (e.g., by _convert_foreign_event)
         # If so, respect that role and don't override it

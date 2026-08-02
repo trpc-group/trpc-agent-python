@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -29,7 +30,7 @@ from tests.sessions.replay.injectors import inject_sql_diff
 from tests.sessions.replay.normalizer import normalize_snapshot
 from tests.sessions.replay.summary_checks import check_summary_issues
 
-CASES_DIR = "tests/sessions/replay/replay_cases"
+CASES_DIR = str(Path(__file__).parent / "replay" / "replay_cases")
 
 # 验收 2(字面):每条 case 配一种「该 case 结构支持」的注入,断言 100% 检出。
 _CASE_INJECTION = {
@@ -151,6 +152,29 @@ class TestEndToEndSqlInjection:
         real = [d for d in diffs if not d.allowed]
         assert any("author" in d.field_path for d in real), f"author drift not detected: {real}"
 
+    async def test_state_value_drift_detected(self, tmp_path):
+        """验收 state_value 端到端测试(helloopenworld review 建议):注入后读回 state,
+        断言含注入键且与 SDK 写入格式可被 compare_snapshots 正确比较。
+        """
+        db_url = f"sqlite:///{tmp_path.as_posix()}/inj.db"
+        case = _find("state_overwrite")
+        await replay_case(sqlite_backend(db_url), case)
+
+        before = normalize_snapshot(await _read_sql_snapshot(db_url, "replay-state", "u1", "sess-state"))
+        assert inject_sql_diff(db_url, "replay-state", "u1", "sess-state", "state_value")
+        after = normalize_snapshot(await _read_sql_snapshot(db_url, "replay-state", "u1", "sess-state"))
+
+        diffs = compare_snapshots(
+            before,
+            after,
+            reference_backend="sqlite",
+            candidate_backend="sqlite",
+            allowed_diff=[],
+        )
+        real = [d for d in diffs if not d.allowed]
+        assert real and any("injected" in d.field_path for d in real), \
+            f"state_value drift not detected: diffs={real}, injected 键未出现"
+
 
 # ---------------------------------------------------------------------------
 # 端到端 Redis 注入(需要真实 Redis)
@@ -198,3 +222,45 @@ class TestEndToEndRedisInjection:
         )
         real = [d for d in diffs if not d.allowed]
         assert any("author" in d.field_path for d in real), f"redis drift not detected: {real}"
+
+    async def test_state_value_drift_detected(self):
+        """验收 state_value 端到端测试(helloopenworld review 建议):注入后读回 app_state,
+        断言含注入键且与 SDK 写入格式可被 compare_snapshots 正确比较。
+        """
+        redis_url = os.environ.get("TRPC_REPLAY_REDIS_URL")
+        if not redis_url:
+            pytest.skip("TRPC_REPLAY_REDIS_URL unset")
+        from tests.sessions.replay.backends import redis_backend
+
+        case = _find("state_overwrite")
+        backend = redis_backend(redis_url)
+        await replay_case(backend, case)
+
+        # 读回 app_state(Redis 存的是 hash,需要 HGETALL)
+        got = await backend.session_service.get_session(app_name="replay-state", user_id="u1", session_id="sess-state")
+        before = normalize_snapshot(
+            ReplaySnapshot(backend_name="redis",
+                           session_id="sess-state",
+                           events=[e.model_dump() for e in got.events],
+                           state=dict(got.state)))
+        assert inject_redis_diff(redis_url, "replay-state", "u1", "sess-state", "state_value")
+        # 注入后重新读回 app_state
+        after = await backend.session_service.get_session(app_name="replay-state",
+                                                          user_id="u1",
+                                                          session_id="sess-state")
+        after = normalize_snapshot(
+            ReplaySnapshot(backend_name="redis",
+                           session_id="sess-state",
+                           events=[e.model_dump() for e in after.events],
+                           state=dict(after.state)))
+
+        diffs = compare_snapshots(
+            before,
+            after,
+            reference_backend="redis",
+            candidate_backend="redis",
+            allowed_diff=[],
+        )
+        real = [d for d in diffs if not d.allowed]
+        assert real and any("injected" in d.field_path for d in real), \
+            f"state_value drift not detected: diffs={real}, injected 键未出现"

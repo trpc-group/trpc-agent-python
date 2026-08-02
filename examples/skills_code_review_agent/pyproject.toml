@@ -1,0 +1,10 @@
+[project]
+name = "skills-code-review-agent"
+version = "0.1.0"
+description = "A skill-based code review agent using Docker and SQL persistence"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+postgresql = ["psycopg[binary]>=3.2,<4"]

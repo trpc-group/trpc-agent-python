@@ -170,6 +170,9 @@ async def replay_case(backend: ReplayBackend, case: ReplayCase) -> ReplaySnapsho
     base_ts = time.time()
     memory_results: dict[str, Any] = {}
 
+    # 预检查:case 是否涉及 memory 操作(用于末尾断言,避免注入漏检)
+    case_involves_memory = any(op.op in ("memory_store", "memory_search") for op in case.operations)
+
     for op in case.operations:
         if op.op == "create_session":
             session = await svc.create_session(
@@ -232,6 +235,15 @@ async def replay_case(backend: ReplayBackend, case: ReplayCase) -> ReplaySnapsho
             }
         else:
             summary_out = {"current": None}
+
+    # 修复:如果 case 涉及 memory 操作但 memory 为空,抛出断言避免注入漏检
+    # (helloopenworld review Warning:memory_search 空 memory 会让注入静默跳过)
+    if case_involves_memory and not memory_results:
+        raise AssertionError(
+            f"Case {case.case_id} 涉及 memory 操作(memory_store/memory_search) "
+            f"但 backend {backend.name} memory 服务未生效或未落库(snap.memory 为空),"
+            f"导致 test_replay_injections.py 的 memory_content 注入被跳过 → 漏检。"
+        )
 
     return ReplaySnapshot(
         case_id=case.case_id,

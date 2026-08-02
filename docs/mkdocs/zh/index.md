@@ -16,6 +16,7 @@
 - [Memory](./memory.md)：存储和检索长期记忆。
 - [Knowledge](./knowledge.md)：基于 LangChain 组件构建 RAG 工作流。
 - [多 Agent](./multi_agents.md)：编排多个 Agent 完成复杂任务。
+- [Plan Mode](./plan.md)：先规划后实施，写工具 gate + HITL 审批。
 - [Evaluation](./evaluation.md)：评测 Agent 行为和回复质量。
 
 源码与示例请参考 [GitHub 仓库](https://github.com/trpc-group/trpc-agent-python)。

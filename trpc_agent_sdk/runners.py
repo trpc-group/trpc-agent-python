@@ -453,7 +453,7 @@ class Runner:
             last_non_streaming_event = None
 
             # Track accumulated partial text for cancellation handling
-            temp_text = ""
+            temp_text_parts: list[str] = []
 
             try:
                 # Support multiple levels of agent transfers
@@ -463,15 +463,15 @@ class Runner:
 
                     transfer_requested = False
                     async for event in current_agent.run_async(invocation_context):
-                        # Track partial text accumulation
+                        # Track partial text accumulation (store refs; join only on cancel)
                         if event.partial:
                             if event.content and event.content.parts:
                                 for part in event.content.parts:
                                     if part.text:
-                                        temp_text += part.text
+                                        temp_text_parts.append(part.text)
                         else:
-                            # Clear temp_text on full event
-                            temp_text = ""
+                            # Clear accumulated parts on full event
+                            temp_text_parts.clear()
 
                         if not event.partial:
                             await self.session_service.append_event(session=session, event=event)
@@ -583,6 +583,7 @@ class Runner:
 
                 # Capture partial state at cancellation point
                 state_partial = dict(session.state)
+                temp_text = "".join(temp_text_parts)
 
                 # Handle session cleanup for cancellation (two scenarios: streaming vs non-streaming)
                 await cancel.handle_cancellation_session_cleanup(
