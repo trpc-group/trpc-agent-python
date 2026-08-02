@@ -1,16 +1,28 @@
 {
-  "task_id": "opt-20260709-001700-469da632",
-  "generated_at": "2026-07-09T00:17:00.265480+00:00",
+  "task_id": "opt-20260802-130921-7280b549",
+  "generated_at": "2026-08-02T13:09:21.258108+00:00",
   "baseline": {
     "train": {
       "evalset_id": "train-mixed-v2",
-      "pass_rate": 1.0,
+      "pass_rate": 0.7058823529411765,
       "total_cases": 34,
-      "passed_cases": 34,
-      "failed_cases": 0,
-      "failed_case_ids": [],
+      "passed_cases": 24,
+      "failed_cases": 10,
+      "failed_case_ids": [
+        "train_simple_math_002_fail",
+        "train_simple_math_004_fail",
+        "train_reasoning_002_fail",
+        "train_reasoning_004_fail",
+        "train_tool_002_fail",
+        "train_tool_006_fail",
+        "train_multiturn_002_fail",
+        "train_chinese_003_fail",
+        "train_edge_003_fail",
+        "train_format_004_fail"
+      ],
       "metric_breakdown": {
-        "overall_pass_rate": 1.0
+        "overall_pass_rate": 0.7058823529411765,
+        "final_response_avg_score": 0.7206
       }
     },
     "validation": {
@@ -21,23 +33,224 @@
       "failed_cases": 0,
       "failed_case_ids": [],
       "metric_breakdown": {
-        "overall_pass_rate": 1.0
+        "overall_pass_rate": 1.0,
+        "final_response_avg_score": 1.0
       }
     }
   },
+  "candidate": {
+    "train": {
+      "evalset_id": "candidate-train",
+      "pass_rate": 0.9705882352941176,
+      "total_cases": 34,
+      "passed_cases": 33,
+      "failed_cases": 1,
+      "failed_case_ids": [
+        "train_tool_006_fail"
+      ],
+      "metric_breakdown": {
+        "overall_pass_rate": 0.9705882352941176,
+        "final_response_avg_score": 0.9706
+      }
+    },
+    "validation": {
+      "evalset_id": "candidate-val",
+      "pass_rate": 1.0,
+      "total_cases": 16,
+      "passed_cases": 16,
+      "failed_cases": 0,
+      "failed_case_ids": [],
+      "metric_breakdown": {
+        "overall_pass_rate": 1.0,
+        "final_response_avg_score": 1.0
+      }
+    },
+    "per_case_delta": [
+      {
+        "eval_id": "val_chinese_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_chinese_002",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_edge_001_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_edge_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_edge_003_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_format_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_format_002",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_multiturn_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_multiturn_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_reasoning_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_reasoning_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_reasoning_003_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_simple_math_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_simple_math_002",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_tool_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_tool_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      }
+    ]
+  },
   "attribution": {
-    "total_failures": 0,
-    "by_category": {},
-    "entries": []
+    "total_failures": 10,
+    "by_category": {
+      "final_response_mismatch": 9,
+      "format_not_as_required": 1
+    },
+    "entries": [
+      {
+        "case_id": "train_simple_math_002_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「12」vs 实际「144 / 12 = 13」"
+      },
+      {
+        "case_id": "train_simple_math_004_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「30」vs 实际「15% of 200 is 25. Here is how I calculated it: 200 * 0.15 = 」"
+      },
+      {
+        "case_id": "train_reasoning_002_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「$26.99」vs 实际「Tax: $24.99 * 0.12 = $3.00. Total: $24.99 + $3.00 = $27.99」"
+      },
+      {
+        "case_id": "train_reasoning_004_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「61」vs 实际「The answer is 60」"
+      },
+      {
+        "case_id": "train_tool_002_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「$15353.13」vs 实际「25000 * (1 - 0.15)^3 = 25000 * 0.614125 = $15721.25」"
+      },
+      {
+        "case_id": "train_tool_006_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「$7,472.58」vs 实际「PV = 10000 / (1 + 0.06)^5 = 10000 / 1.3382... = approximatel」"
+      },
+      {
+        "case_id": "train_multiturn_002_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 2 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「63」vs 实际「100 - 37 = 63」；[inv2] 期望「126」vs 实际「63 * 2 = 136」"
+      },
+      {
+        "case_id": "train_chinese_003_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「48平方厘米」vs 实际「三角形面积 = 底 * 高 / 2 = 12 * 8 / 2 = 48厘米」"
+      },
+      {
+        "case_id": "train_edge_003_fail",
+        "category": "final_response_mismatch",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: final_response_mismatch",
+        "evidence": "[inv1] 期望「-65」vs 实际「-15 + (-25) * 2 = -15 + (-50) = -35」"
+      },
+      {
+        "case_id": "train_format_004_fail",
+        "category": "format_not_as_required",
+        "confidence": 0.5,
+        "detail": "invocation 1 失败: format_not_as_required",
+        "evidence": "[inv1] 期望「391」vs 实际「The product is 391.」"
+      }
+    ]
   },
   "gate": {
-    "decision": "needs_review",
-    "reason": "Improvement +0.00% below threshold +5%",
+    "decision": "accept",
+    "reason": "All checks passed — improvement: +26.47%",
     "checks": [
       {
         "check": "improvement_threshold",
-        "passed": false,
-        "detail": "Improvement: +0.00% (threshold: +5%)"
+        "passed": true,
+        "detail": "Improvement: +26.47% (threshold: +5%)"
       },
       {
         "check": "critical_cases",
@@ -52,12 +265,12 @@
       {
         "check": "overfitting",
         "passed": true,
-        "detail": "Validation set comparison handled separately"
+        "detail": "No validation regression"
       },
       {
         "check": "cost_budget",
         "passed": true,
-        "detail": "Cost: $0.00 / $10.00"
+        "detail": "Cost: $0.10 / $10.00"
       }
     ]
   },
@@ -168,11 +381,13 @@
   "optimizer": {
     "algorithm": "gepa_reflective",
     "mode": "fake",
-    "optimized_fields": [],
-    "optimization_cost": 0.0,
-    "total_iterations": 0,
+    "optimized_fields": [
+      "system.md"
+    ],
+    "optimization_cost": 0.09999999999999999,
+    "total_iterations": 2,
     "converged": true,
-    "best_score": 0.0
+    "best_score": 0.95
   },
   "audit": {
     "reproducibility": {
@@ -217,18 +432,18 @@
       "total_duration_s": 0.0
     },
     "cost": {
-      "optimization_usd": 0.0,
+      "optimization_usd": 0.1,
       "evaluation_usd": 0.0,
-      "total_usd": 0.0
+      "total_usd": 0.1
     },
     "environment": {
       "python_version": "3.12.10",
       "platform": "Windows 11"
     },
     "results": {
-      "baseline_train_pass_rate": 1.0,
-      "candidate_train_pass_rate": 1.0,
-      "improvement": 0.0
+      "baseline_train_pass_rate": 0.7058823529411765,
+      "candidate_train_pass_rate": 0.9705882352941176,
+      "improvement": 0.2647
     },
     "input_files": {
       "train_evalset": "data/train.evalset.json",
@@ -236,9 +451,9 @@
       "optimizer_config": "data/optimizer.json"
     },
     "input_file_hashes": {
-      "train_evalset": "b2c7a0eb5a67",
-      "val_evalset": "0ad806f95890",
-      "optimizer_config": "cef8b721b1c5"
+      "train_evalset": "c711db6237c7",
+      "val_evalset": "525b256972ea",
+      "optimizer_config": "ac7d163ebf48"
     },
     "output_files": {},
     "errors": [],
@@ -246,10 +461,10 @@
     "seed": 42,
     "mode": "fake",
     "duration_seconds": 0.0,
-    "optimization_cost": 0.0,
-    "improvement": 0.0,
-    "baseline_train_pass_rate": 1.0,
-    "candidate_train_pass_rate": 1.0,
+    "optimization_cost": 0.1,
+    "improvement": 0.2647,
+    "baseline_train_pass_rate": 0.7058823529411765,
+    "candidate_train_pass_rate": 0.9705882352941176,
     "reproduce_command": "python run_pipeline.py --mode fake"
   }
 }

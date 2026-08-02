@@ -89,7 +89,7 @@ def attribute_failures(
 
     # Count by category
     for entry in all_failed:
-        cat = str(entry.category)
+        cat = getattr(entry.category, "value", str(entry.category))
         report.by_category[cat] = report.by_category.get(cat, 0) + 1
 
     return report
