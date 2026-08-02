@@ -28,21 +28,41 @@ from pipeline.comparator import (
 def _mk_case(expected_final: str, actual_final: str, *, user: str = "Test question?",
              expected_tools: list | None = None, actual_tools: list | None = None,
              eval_id: str = "case_001") -> dict:
-    """构造一个单 invocation 的 evalset case。"""
+    """构造一个单 invocation 的 evalset case。
+
+    工具数据结构与真实 evalset 一致：
+    - tool_uses: [{"tool_name": "...", "arguments": {...}}]
+    - tool_responses: [{"result": "..."}]
+    旧格式 {"name", "result"} 会被拆分为 uses + responses。
+    """
+    def _split(tools: list) -> tuple[list, list]:
+        uses, responses = [], []
+        for t in tools or []:
+            uses.append({
+                "tool_name": t.get("tool_name") or t.get("name") or "",
+                "arguments": t.get("arguments") or {},
+            })
+            if "result" in t or "output" in t or "response" in t:
+                responses.append({"result": t.get("result") or t.get("output") or t.get("response") or ""})
+        return uses, responses
+
+    exp_uses, exp_resp = _split(expected_tools)
+    act_uses, act_resp = _split(actual_tools)
+
     conv = {
         "invocation_id": "inv-001",
         "user_content": {"parts": [{"text": user}], "role": "user"},
         "final_response": {"parts": [{"text": expected_final}], "role": "model"},
     }
     if expected_tools is not None:
-        conv["intermediate_data"] = {"tool_uses": expected_tools}
+        conv["intermediate_data"] = {"tool_uses": exp_uses, "tool_responses": exp_resp}
     actual = {
         "invocation_id": "inv-001",
         "user_content": {"parts": [{"text": user}], "role": "user"},
         "final_response": {"parts": [{"text": actual_final}], "role": "model"},
     }
     if actual_tools is not None:
-        actual["intermediate_data"] = {"tool_uses": actual_tools}
+        actual["intermediate_data"] = {"tool_uses": act_uses, "tool_responses": act_resp}
     return {
         "eval_id": eval_id,
         "eval_mode": "trace",

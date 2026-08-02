@@ -229,7 +229,8 @@ async def run_optimize_live(
         # Extract results（按 SDK OptimizeResult 实际字段映射）
         result.total_cost = getattr(opt_result, 'total_llm_cost', 0.0)
         result.total_iterations = getattr(opt_result, 'total_rounds', 0)
-        result.converged = getattr(opt_result, 'status', '') == 'accepted'
+        # SDK status 取值为 SUCCEEDED / FAILED / CANCELED
+        result.converged = getattr(opt_result, 'status', '') == 'SUCCEEDED'
         result.optimized_fields = []
         result.fixed_categories = []
 

@@ -158,7 +158,7 @@ class TestLiveModeContract:
         class _FakeOptimizeResult:
             total_llm_cost = 1.5
             total_rounds = 3
-            status = "accepted"
+            status = "SUCCEEDED"  # SDK 实际取值
             best_prompts = {"system": "optimized prompt"}
             rounds = [_FakeRound()]
 

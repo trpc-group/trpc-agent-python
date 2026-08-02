@@ -269,15 +269,21 @@ def run_validation_trace(
     fixed_categories = getattr(optimizer_result, "fixed_categories", [])
     strat = scenario or getattr(optimizer_result, "candidate_strategy", "fix_attributed")
 
+    # overfit 场景且未指定回归 case 时，自动选前 2 个 val case 扰动，
+    # 避免"train 提升 + val 无退化"被误 ACCEPT（reviewer 指出的问题）
+    effective_regression = val_regression_cases
+    if strat == "overfit" and not effective_regression and val_cases:
+        effective_regression = [str(c.get("eval_id", "")) for c in val_cases[:2]]
+
     # 生成候选 actuals
     candidate_train_cases = [
         _apply_scenario(c, strat, is_train=True, fixed_categories=fixed_categories,
-                        val_regression_cases=val_regression_cases)
+                        val_regression_cases=effective_regression)
         for c in train_cases
     ]
     candidate_val_cases = [
         _apply_scenario(c, strat, is_train=False, fixed_categories=fixed_categories,
-                        val_regression_cases=val_regression_cases)
+                        val_regression_cases=effective_regression)
         for c in val_cases
     ]
 
