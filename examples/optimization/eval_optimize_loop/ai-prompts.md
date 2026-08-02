@@ -57,3 +57,35 @@ tracing.py 的设计要点：
 - test_performance.py 的 100 case 缩放比阈值太严，fast ops 下浮点精度导致误判 → 增加绝对上限
 
 全部修复后，189 tests passed，pipeline fake mode 端到端验证通过。Commit，push 到 fork，PR 自动更新。
+
+## 第 5 轮：真实评测闭环 + 三场景演示 + 过拟合拒绝
+
+对照验收标准审查后发现，第 4 轮的 fake 评测仍是"有 conversation 即通过"的空转逻辑——
+默认运行 100% 通过、0 失败、0 归因，无法演示闭环价值。这轮做了本质改进：
+
+1. **新增 trace 回放评测器（comparator.py）**：逐 case 比较 `conversation`（期望）
+   与 `actual_conversation`（实际回放），采用分层规则：
+   - 纯数字期望按数值相等（容差），修复 `_fail` case 的算错检测
+   - 短期望按归一化 contains，兼容长解释答案
+   - 带单位期望校验单位词（避免 "48厘米" 误命中 "48平方厘米"）
+   - 格式层检测 ONLY-number/JSON 违规
+   - 工具层比较 tool 名/结果，捕获工具调用错误
+   这样 10 个 `_fail` 标注 case 真实失败，默认运行展示完整闭环。
+
+2. **三类候选场景（--scenario）**：
+   - `fix_attributed`（默认）：候选修复归因的失败 → gate ACCEPT
+   - `noop`：候选无改动 → gate NEEDS_REVIEW
+   - `overfit`：train 记住 + val 回归 → gate REJECT（过拟合）
+
+3. **过拟合拒绝真正生效**：gate 新增 `validation_new_failures` 检查，
+   候选在验证集新增失败 → REJECT，精确满足验收标准 #3。
+
+4. **数据归一化**：修正 train 中 2 个标注与内容矛盾的 case（期望实际一致却标 `_fail`），
+   使所有 evalset 与 comparator 语义一致。
+
+5. **Live 模式修复**：`run_optimize_live` 正确 await `AgentOptimizer.optimize(call_agent=...)`，
+   SDK 不可用时降级到离线 trace 回放，不崩溃。
+
+6. **归因精度锁**：`test_gold_verdicts.py` 用 84 条黄金判定表锁定归因准确率（≥90%）。
+
+验证：317 tests passed；三场景分别得到 ACCEPT / NEEDS_REVIEW / REJECT；CI 模式过拟合退出码 1。
