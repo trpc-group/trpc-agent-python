@@ -43,6 +43,9 @@ class FailureCategory(str):
     UNKNOWN = "unknown"
 
 
+# 工具结果比较的相对容差（容忍四舍五入差异，如 15353.125 vs 15353.13）
+_ROUND_TOLERANCE = 0.005
+
 # 类别优先级：数字越小越优先。用于同一个失败命中的多个类别时选择根因。
 _CATEGORY_PRIORITY = {
     FailureCategory.FORMAT_NOT_AS_REQUIRED: 0,
@@ -207,8 +210,18 @@ def _extract_tool_uses(intermediate: dict) -> list[dict]:
     return intermediate.get("tool_uses", []) or []
 
 
+def _extract_tool_responses(intermediate: dict) -> list[dict]:
+    """从 intermediate_data 提取 tool_responses 列表。
+
+    tool_responses 是独立数组，与 tool_uses 顺序对应，存结果。
+    """
+    if not intermediate:
+        return []
+    return intermediate.get("tool_responses", []) or []
+
+
 def _tool_name(tool: dict) -> str:
-    """提取 tool 名（兼容 name/function_name 两种字段）。"""
+    """提取 tool 名（兼容 name/function_name/tool_name 字段）。"""
     return str(tool.get("name") or tool.get("function_name") or tool.get("tool_name") or "")
 
 
@@ -217,36 +230,62 @@ def _tool_result_text(tool: dict) -> str:
     return str(tool.get("result") or tool.get("output") or tool.get("response") or "")
 
 
-def _compare_tools(expected_tools: list[dict], actual_tools: list[dict]) -> tuple[bool, str, str]:
+def _compare_tools(
+    expected_uses: list[dict],
+    expected_responses: list[dict],
+    actual_uses: list[dict],
+    actual_responses: list[dict],
+) -> tuple[bool, str, str]:
     """比较期望工具轨迹与实际工具轨迹。
 
-    返回 (是否通过, 类别, 证据)。
-    仅当期望 invocation 带工具数据时启用，避免对纯文本 case 误判。
+    tool_uses 存调用（name/arguments），tool_responses 存结果（result），
+    两者按顺序配对。返回 (是否通过, 类别, 证据)。
+
+    Args:
+        expected_uses: 期望 invocation 的 tool_uses 列表。
+        expected_responses: 期望 invocation 的 tool_responses 列表。
+        actual_uses: 实际 invocation 的 tool_uses 列表。
+        actual_responses: 实际 invocation 的 tool_responses 列表。
     """
-    if not expected_tools:
+    if not expected_uses:
         return True, "", "no expected tools"
-    if not actual_tools:
+    if not actual_uses:
         return False, FailureCategory.TOOL_CALL_ERROR, "expected tool call but actual has none"
 
     # 工具名比较（顺序对应）
-    for i, exp_tool in enumerate(expected_tools):
-        if i >= len(actual_tools):
-            return False, FailureCategory.TOOL_CALL_ERROR, f"expected {len(expected_tools)} tools, actual has {len(actual_tools)}"
-        act_tool = actual_tools[i]
+    for i, exp_tool in enumerate(expected_uses):
+        if i >= len(actual_uses):
+            return False, FailureCategory.TOOL_CALL_ERROR, f"expected {len(expected_uses)} tools, actual has {len(actual_uses)}"
+        act_tool = actual_uses[i]
         exp_name = _tool_name(exp_tool)
         act_name = _tool_name(act_tool)
         if exp_name and act_name and normalize_text(exp_name) != normalize_text(act_name):
             return False, FailureCategory.WRONG_TOOL_SELECTED, f"expected tool '{exp_name}', actual '{act_name}'"
-        # 结果比较（宽松字符串）
-        exp_res = normalize_text(_tool_result_text(exp_tool))
-        act_res = normalize_text(_tool_result_text(act_tool))
-        if exp_res and act_res and exp_res not in act_res and act_res not in exp_res:
-            return False, FailureCategory.TOOL_CALL_ERROR, f"tool '{exp_name or i}' result mismatch"
+        # 结果比较（从 tool_responses 取；数字用数值容差，非数字用宽松字符串）
+        exp_res = _tool_result_text(expected_responses[i]) if i < len(expected_responses) else ""
+        act_res = _tool_result_text(actual_responses[i]) if i < len(actual_responses) else ""
+        if exp_res and act_res:
+            exp_num = _last_number(exp_res)
+            act_num = _last_number(act_res)
+            if exp_num is not None and act_num is not None:
+                # 双方都是数字 → 数值容差比较（容忍舍入差异）
+                if abs(exp_num - act_num) > _ROUND_TOLERANCE * max(1.0, abs(exp_num)):
+                    return False, FailureCategory.TOOL_CALL_ERROR, f"tool '{exp_name or i}' result mismatch ({exp_num} vs {act_num})"
+            else:
+                # 非数字 → 宽松字符串包含
+                exp_n = normalize_text(exp_res)
+                act_n = normalize_text(act_res)
+                if exp_n and act_n and exp_n not in act_n and act_n not in exp_n:
+                    return False, FailureCategory.TOOL_CALL_ERROR, f"tool '{exp_name or i}' result mismatch"
 
     return True, "", "tools matched"
 
 
-def _tool_result_vs_answer(expected_final: str, actual_final: str, actual_tools: list[dict]) -> tuple[bool, str]:
+def _tool_result_vs_answer(
+    expected_final: str,
+    actual_final: str,
+    actual_responses: list[dict],
+) -> tuple[bool, str]:
     """工具结果与最终答案一致性检查。
 
     若期望是裸数字、且实际最后一个工具结果与期望不一致，而最终回复又声称是该答案，
@@ -254,14 +293,16 @@ def _tool_result_vs_answer(expected_final: str, actual_final: str, actual_tools:
     仅当最后一个工具结果与期望不同且最终答案数字与期望不同时触发。
     """
     exp_num = bare_answer(expected_final)
-    if exp_num is None or not actual_tools:
+    if exp_num is None or not actual_responses:
         return True, ""
-    last_result = _last_number(_tool_result_text(actual_tools[-1]))
+    last_result = _last_number(_tool_result_text(actual_responses[-1]))
     act_num = _last_number(actual_final)
     if last_result is None:
         return True, ""
-    # 工具结果与期望不符，且最终答案也不符 → 工具结果错误使用
-    if abs(last_result - exp_num) > 1e-6 and (act_num is None or abs(act_num - exp_num) > 1e-6):
+    # 工具结果与期望不符（相对容差），且最终答案也不符 → 工具结果错误使用
+    result_mismatch = abs(last_result - exp_num) > _ROUND_TOLERANCE * max(1.0, abs(exp_num))
+    answer_mismatch = act_num is None or abs(act_num - exp_num) > _ROUND_TOLERANCE * max(1.0, abs(exp_num))
+    if result_mismatch and answer_mismatch:
         return False, FailureCategory.TOOL_CALL_ERROR
     return True, ""
 
@@ -334,10 +375,14 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
     act_inter = actual.get("intermediate_data") or {}
     exp_tools = _extract_tool_uses(exp_inter)
     act_tools = _extract_tool_uses(act_inter)
+    exp_responses = _extract_tool_responses(exp_inter)
+    act_responses = _extract_tool_responses(act_inter)
 
-    tool_ok, tool_cat, tool_evidence = _compare_tools(exp_tools, act_tools)
+    tool_ok, tool_cat, tool_evidence = _compare_tools(
+        exp_tools, exp_responses, act_tools, act_responses,
+    )
     # 工具结果 vs 最终答案
-    tv_ok, tv_cat = _tool_result_vs_answer(exp_final, act_final, act_tools)
+    tv_ok, tv_cat = _tool_result_vs_answer(exp_final, act_final, act_responses)
 
     # 格式层
     fmt_ok, fmt_cat = _check_format(exp_user, exp_final, act_final)

@@ -42,7 +42,7 @@ GOLD: dict[str, tuple[bool, str]] = {
     "train_reasoning_005": (True, ""),
     "train_reasoning_006": (True, ""),
     "train_tool_001": (True, ""),
-    "train_tool_002_fail": (False, "final_response_mismatch"),
+    "train_tool_002_fail": (False, "tool_call_error"),
     "train_tool_003": (True, ""),
     "train_tool_004": (True, ""),
     "train_tool_005": (True, ""),
