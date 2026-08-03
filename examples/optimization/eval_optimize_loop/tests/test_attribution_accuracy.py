@@ -18,8 +18,9 @@ from pipeline.attribution import attribute_failures
 from pipeline.baseline import run_baseline_fake
 from pipeline.config import load_pipeline_config
 
-# 从 test_gold_verdicts 复用黄金表（避免重复维护）
-from tests.test_gold_verdicts import GOLD
+# 从 test_gold_verdicts 复用黄金表（避免重复维护）；
+# 相对导入：从仓库根单文件运行 pytest 时不被解析到仓库根的 tests/ 包
+from .test_gold_verdicts import GOLD
 
 
 def _run_attribution(data_dir, evalset_name: str):

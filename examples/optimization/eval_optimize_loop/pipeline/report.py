@@ -190,7 +190,11 @@ def generate_md_report(
         lines.append(f"| New Failures | {validation.new_failures} |")
         lines.append(f"| Unchanged | {validation.unchanged} |")
         lines.append(f"")
-        if validation.is_overfitting:
+        if validation.scenario_error:
+            # 场景配置错误：合成 delta 仅用于触发 gate 拒绝，不是真实过拟合
+            lines.append(f"⚠️ **Validation scenario error**: {validation.scenario_error}")
+            lines.append(f"")
+        elif validation.is_overfitting:
             lines.append(f"⚠️ **Overfitting detected**: Validation set degraded while training set improved.")
             lines.append(f"")
 

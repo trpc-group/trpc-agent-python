@@ -268,6 +268,10 @@ Examples:
         baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
     else:
         print("  [live] trace-replay baseline（SDK AgentEvaluator，无需 API key）")
+        # 显式 bootstrap 路径（与 run_optimize_live 一致）：agent.agent 的
+        # 可导入性不依赖顶部 sys.path.insert(0, _HERE)，降级/回退路径也安全
+        from pipeline._paths import ensure_example_and_repo_in_path
+        ensure_example_and_repo_in_path()
         from pipeline.baseline import run_baseline_sdk
         from pipeline.config import load_optimize_config
         from agent.agent import build_call_agent
@@ -449,6 +453,7 @@ Examples:
                     change="new_fail",
                 )
             ],
+            scenario_error=_scenario_error,
         )
         validation.candidate_train = baseline_train
         errors.append(str(_ve))

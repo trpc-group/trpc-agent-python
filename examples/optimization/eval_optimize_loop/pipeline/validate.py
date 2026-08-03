@@ -30,6 +30,10 @@ class ValidationResult:
     candidate: BaselineResult | None = None
     candidate_train: BaselineResult | None = None
     deltas: list[ValidationDelta] = field(default_factory=list)
+    # 场景配置错误（overfit + 空 val 等）时由 run_pipeline 标记：
+    # deltas 中的合成 new_fail 仅用于触发 gate 拒绝，不代表真实过拟合，
+    # 报告/审计据此不展示误导性的 overfitting 结论
+    scenario_error: str = ""
 
     @property
     def new_passes(self) -> int:
@@ -211,11 +215,19 @@ def _perturb_case(case: dict) -> list[dict]:
     if not conversation:
         return case.get("actual_conversation", [])
     perturbed = _copy_case(conversation)
+    modified = False
     for inv in perturbed:
         # final_response 可能显式为 None（部分 evalset schema 允许）→ 用 `or {}` 防护
         parts = (inv.get("final_response") or {}).get("parts", [])
         if parts:
             parts[0]["text"] = "[过拟合退化] 回复被错误改写，与期望不一致。"
+            modified = True
+    if not modified:
+        # 没有任何 invocation 可扰动：返回未改动的 conversation 会让调用方
+        # 误以为扰动成功（候选 val 仍通过 → 落到 new_failures==0 的笼统报错）。
+        # 显式失败以暴露"不可扰动"的真实根因。
+        raise ValueError(
+            "case cannot be perturbed: no invocation has final_response.parts")
     return perturbed
 
 
