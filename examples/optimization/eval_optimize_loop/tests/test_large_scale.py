@@ -116,7 +116,9 @@ def _generate_mock_evalset(num_cases: int, seed: int = 42,
 
         # Determine pass/fail
         should_fail = (i / num_cases) < fail_ratio
-        actual = expected if not should_fail else f"wrong_answer_{i}"
+        # 失败文本不含数字：避免 comparator 纯数字匹配在 "wrong_answer_{i}" 中
+        # 提取索引数字、恰好等于期望答案时误判通过，削弱失败断言的真实性
+        actual = expected if not should_fail else "wrong_answer_xyz"
 
         # Tool uses for tool topics
         tool_uses = None

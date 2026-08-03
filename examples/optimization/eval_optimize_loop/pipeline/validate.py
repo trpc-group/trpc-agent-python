@@ -128,7 +128,8 @@ def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
                     val_regression_cases: list[str] | None = None) -> dict:
     """根据场景生成候选 actual_conversation。
 
-    - fix_attributed：train 上失败的 case 用期望替换实际（修复成功）。
+    - fix_attributed：train 上失败的 case 全部用期望替换实际（修复成功，
+      不区分失败类别——不参考 attribution 结果）。
       非失败 case 保持不变。
     - noop：候选 actual = baseline actual（无变化）。
     - overfit：train 全部用期望（"记住"训练集）；val 上指定回归 case 扰动（退化）。
@@ -158,7 +159,7 @@ def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
         return new_case
 
     if scenario == "fix_attributed":
-        # 仅修复归因失败类别的 case（用期望替换实际）
+        # 修复所有 train 失败 case（用期望替换实际；不按归因类别过滤）
         failed = not _case_passes(case)
         if is_train and failed:
             new_case["actual_conversation"] = conversation
