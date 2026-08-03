@@ -6,10 +6,11 @@ are testable without running the full pipeline.
 """
 
 import argparse
+import os
 
 from pipeline.gate import GateDecision
 
-from run_pipeline import build_reproduce_command, ci_exit_code
+from run_pipeline import build_reproduce_command, ci_exit_code, is_output_dir_allowed
 
 
 def _ns(**overrides) -> argparse.Namespace:
@@ -113,6 +114,31 @@ class TestBuildReproduceCommand:
             "--min-improvement 0.1", "--max-cost 20.0", "--output-dir results",
             "--ci", "--critical-cases c1",
         ))
+
+
+class TestIsOutputDirAllowed:
+    """Tests for is_output_dir_allowed() — 拒绝越界/外部绝对路径。"""
+
+    def _repo_root(self) -> str:
+        import os
+        _here = os.path.dirname(os.path.abspath(__file__))  # eval_optimize_loop/tests
+        # tests → eval_optimize_loop → optimization → examples → 仓库根（4 级）
+        return os.path.realpath(os.path.join(_here, os.pardir, os.pardir, os.pardir, os.pardir))
+
+    def test_accepts_repo_internal(self):
+        assert is_output_dir_allowed(os.path.join(self._repo_root(), "results")) is True
+        assert is_output_dir_allowed("sample_output") is True
+
+    def test_rejects_absolute_path_outside_repo(self):
+        assert is_output_dir_allowed("/tmp/pr139_out") is False
+
+    def test_rejects_path_escape(self):
+        import os
+        outside = os.path.join(os.path.dirname(self._repo_root()), "escaped")
+        assert is_output_dir_allowed(outside) is False
+
+    def test_rejects_traversal(self):
+        assert is_output_dir_allowed("../../../../../../etc") is False
 
 
 class TestCiExitCode:
