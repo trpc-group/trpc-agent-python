@@ -517,6 +517,12 @@ Examples:
     tracer.start_stage("report")
 
     improvement = round(candidate_train.pass_rate - baseline_train.pass_rate, 4)
+    # live 模式两端口径不可比（SDK baseline 评分 vs trace comparator 重评分），
+    # 标注说明避免把差值当作客观提升
+    improvement_note = (
+        "live mode: SDK baseline 与 trace comparator 评分口径不可比，improvement 仅供参考"
+        if cfg.mode == "live" else ""
+    )
     tracer.set_results(
         baseline_train_pass_rate=baseline_train.pass_rate,
         candidate_train_pass_rate=candidate_train.pass_rate,
@@ -546,6 +552,7 @@ Examples:
         "duration_seconds": audit_dict["timing"]["total_duration_s"],
         "optimization_cost": round(optimization_cost, 4),
         "improvement": improvement,
+        "improvement_note": improvement_note,
         "baseline_train_pass_rate": baseline_train.pass_rate,
         "candidate_train_pass_rate": candidate_train.pass_rate,
         "errors": errors,

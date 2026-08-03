@@ -73,7 +73,7 @@ def run_validation_fake(
         for c in baseline_val.per_case_results
     }
     candidate_map = {
-        c.get("eval_id"): c.get("pass", True)
+        c.get("eval_id"): c.get("pass", False)
         for c in candidate_baseline.per_case_results
     }
 
