@@ -329,13 +329,13 @@ def run_validation_trace(
         for c in baseline_val.per_case_results
     }
     deltas = []
-    all_ids = set(baseline_map.keys()) | {c.get("eval_id", "") for c in candidate_val.per_case_results}
+    all_ids = set(baseline_map.keys()) | {str(c.get("eval_id", "")) for c in candidate_val.per_case_results}
     for case_id in sorted(all_ids):
         # 缺失侧默认 False（保守，与 run_validation_fake 一致）：case id 漂移/新增时
         # 不把"baseline 未评测"的 case 默认当通过，避免漏掉回归信号
         bl_pass = baseline_map.get(case_id, False)
         cd_pass = next(
-            (c.get("pass", False) for c in candidate_val.per_case_results if c.get("eval_id") == case_id),
+            (c.get("pass", False) for c in candidate_val.per_case_results if str(c.get("eval_id")) == case_id),
             False,
         )
         if not bl_pass and cd_pass:

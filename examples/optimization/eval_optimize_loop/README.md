@@ -36,6 +36,9 @@ echo $?   # → 1（REJECT）
 python run_pipeline.py --mode fake --scenario noop --ci
 echo $?   # → 2（NEEDS_REVIEW）
 
+# 注意：--mode live --ci 仅作 informational——live 评分口径不可比，NEEDS_REVIEW 一律 exit 0
+# （除成本超预算 REJECT 外），不要用 live 模式退出码做自动化阻断。
+
 # Live mode：SDK 接线 + 离线确定性 agent（当前为占位实现，非真实 LLM 端到端优化）
 # - baseline 走 SDK AgentEvaluator 的 trace 回放（无需 API key）
 # - 优化用 AgentOptimizer，但 reflection_lm 默认 fake，不会调用真实 LLM

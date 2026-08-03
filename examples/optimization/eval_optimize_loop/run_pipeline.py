@@ -180,7 +180,8 @@ Examples:
     parser.add_argument("--output-dir", default="sample_output")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--ci", action="store_true",
-                        help="CI mode: exit 1 on gate rejection, 2 on needs-review")
+                        help=("CI mode: exit 1 on gate rejection, 2 on needs-review; "
+                              "live mode is informational only (NEEDS_REVIEW exits 0)"))
     parser.add_argument("--scenario", default="fix_attributed",
                         choices=["fix_attributed", "noop", "overfit"],
                         help="Candidate generation strategy (default: fix_attributed)")
