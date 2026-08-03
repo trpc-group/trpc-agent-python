@@ -160,6 +160,9 @@ class TestFakeOptimizer:
         # validation rejects max_iterations < 1
         if fake_attr_report.optimization_priority:
             top_priority = fake_attr_report.optimization_priority[0]
+            assert len(result.candidates) > 0, (
+                f'Expected at least one candidate when optimization_priority={top_priority}'
+            )
             assert result.candidates[0].failure_category == top_priority
 
     def test_max_iterations_respected(self, fake_attr_report):
