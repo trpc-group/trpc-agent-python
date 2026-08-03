@@ -4,6 +4,16 @@
 本示例基于 tRPC-Agent 的 `AgentEvaluator` / `AgentOptimizer` 能力，演示如何判断
 优化是否真正提升、是否牺牲其他指标、是否过拟合、是否值得回写源 prompt。
 
+## 方案设计说明
+
+**失败归因**：用分层 comparator（数字/短答案/长解释/格式/工具轨迹逐层判定）逐 case 给出 pass/fail 与根因，归因模块按 9 类根因（最终回复不匹配、工具调用/选择/参数错误、rubric 不达标、知识召回不足、格式不符、缺失输出、未知）聚类，每个失败 case 带 detail/evidence/confidence；用黄金判定表锁 ≥90% 归因准确率，避免"只归因不验证"。
+
+**接受策略（gate）**：候选必须在验证集上相对 baseline 逐 case 对比后通过 6 项检查才 ACCEPT——提升达阈值、无负退化、关键 case 不退化、不新增 hard fail、验证集无过拟合回归、优化成本不超预算。阈值全部 CLI 可配，输出 accept/reject/needs_review 三态，`--ci` 映射为退出码 0/1/2。
+
+**防过拟合**：优化后强制用 trace comparator 在验证集重评候选，与 baseline 逐 case 对比（new_pass/new_fail/unchanged）；验证集新增失败 → 拒绝。gate 的 critical-case 保护同时覆盖 train 与 val；overfit 场景对空 val 集/无法扰动的 case 显式报错而非误 ACCEPT。
+
+**产物审计**：每轮候选 prompt、评测结果、gate 决策与理由、运行成本（USD）、分阶段耗时、随机种子、输入文件 sha256 与复现命令全部落盘到 optimization_report.json/.md 与 audit 段；报告含 baseline/candidate/逐 case delta/gate checks，保证优化"可复现、可审计、可回放"。另提供 `tests/test_decision_accuracy.py` 用自有黄金样本验证决策准确率 ≥80%（验收标准 #2）。
+
 ## 快速开始
 
 ```bash
