@@ -80,12 +80,13 @@ def normalize_text(text: str) -> str:
 
 
 def extract_numbers(text: str) -> list[float]:
-    """从文本中提取所有数字（支持小数、负数）。"""
+    """从文本中提取所有数字（支持小数、负数、千分位逗号）。"""
     if not text:
         return []
-    # 匹配可选负号 + 数字 + 可选小数部分
-    pattern = re.compile(r"-?\d+(?:\.\d+)?")
-    return [float(m) for m in pattern.findall(str(text))]
+    # 匹配可选负号 + 数字（含千分位逗号）+ 可选小数部分；
+    # 千分位与 eq_nums/bare_answer 路径对齐，避免 "15,353.13" 被切成 [15, 353.13]
+    pattern = re.compile(r"-?\d+(?:,\d{3})*(?:\.\d+)?")
+    return [float(m.replace(",", "")) for m in pattern.findall(str(text))]
 
 
 def bare_answer(text: str) -> float | None:
@@ -408,10 +409,11 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         for _m in re.finditer(r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final):
             _num = float(_m.group(1).replace(",", ""))
             # 否定语境只看候选紧邻的后文（前文不查：前面句子的 "not " 常属
-            # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）
-            _after = act_final[_m.end(): _m.end() + 20].lower()
-            if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
-                                         "error", "invalid", "no,", "not,")):
+            # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）；
+            # 只用明确指向该候选的否定词（去掉 error/invalid/no,/not, 等
+            # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16
+            _after = act_final[_m.end(): _m.end() + 15].lower()
+            if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake")):
                 continue
             eq_nums.append(_num)
         candidates = eq_nums if eq_nums else [act_nums[-1]] if act_nums else []
