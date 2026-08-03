@@ -7,6 +7,7 @@ onto sys.path. Centralized here to avoid three copies drifting apart.
 
 import os
 import sys
+import warnings
 
 
 def ensure_repo_root_in_path() -> None:
@@ -22,7 +23,7 @@ def ensure_repo_root_in_path() -> None:
         if _repo_root not in sys.path:
             sys.path.insert(0, _repo_root)
     except Exception as e:  # pragma: no cover — 极端路径异常
-        print(f"  ⚠️  warning: 无法将项目根加入 sys.path: {e}")
+        warnings.warn(f"无法将项目根加入 sys.path: {e}", RuntimeWarning, stacklevel=2)
 
 
 def ensure_example_and_repo_in_path() -> None:
@@ -36,4 +37,4 @@ def ensure_example_and_repo_in_path() -> None:
             if _p not in sys.path:
                 sys.path.insert(0, _p)
     except Exception as e:  # pragma: no cover — 极端路径异常
-        print(f"  ⚠️  warning: 无法设置导入路径: {e}")
+        warnings.warn(f"无法设置导入路径: {e}", RuntimeWarning, stacklevel=2)

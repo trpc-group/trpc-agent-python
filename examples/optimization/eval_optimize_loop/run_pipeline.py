@@ -274,10 +274,12 @@ Examples:
                 return await asyncio.gather(
                     run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent,
                                      eval_config=_eval_config,
-                                     optimizer_config_path=cfg.optimizer_config),
+                                     optimizer_config_path=cfg.optimizer_config,
+                                     config=cfg),
                     run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent,
                                      eval_config=_eval_config,
-                                     optimizer_config_path=cfg.optimizer_config),
+                                     optimizer_config_path=cfg.optimizer_config,
+                                     config=cfg),
                 )
 
             baseline_train, baseline_val = asyncio.run(_run_live_baselines())
