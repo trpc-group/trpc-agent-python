@@ -150,6 +150,14 @@ class TestCompareInvocations:
         )
         assert ok
 
+    def test_numeric_negation_context_not_matched(self):
+        """否定语境（= 15 is wrong, real = 14）中的中间值不得误判为答案。"""
+        ok, cat = compare_invocations(
+            _mk_case("15", "answer = 15 is wrong, real answer = 14")["conversation"][0],
+            _mk_case("15", "answer = 15 is wrong, real answer = 14")["actual_conversation"][0],
+        )
+        assert not ok
+
     def test_unit_word_match(self):
         """带单位期望：数字匹配 + 单位词存在于实际。"""
         ok, cat = compare_invocations(

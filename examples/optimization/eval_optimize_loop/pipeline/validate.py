@@ -322,9 +322,10 @@ def run_validation_trace(
     candidate_train = _evaluate_cases(candidate_train_cases, "candidate-train", matcher)
     candidate_val = _evaluate_cases(candidate_val_cases, "candidate-val", matcher)
 
-    # 计算 delta（与 baseline val 对比）
+    # 计算 delta（与 baseline val 对比）。
+    # eval_id 统一 str 归一化（候选侧已 str()），避免非字符串 id 时两侧失配导致全判 new_fail
     baseline_map = {
-        c.get("eval_id"): c.get("pass", True)
+        str(c.get("eval_id")): c.get("pass", True)
         for c in baseline_val.per_case_results
     }
     deltas = []
