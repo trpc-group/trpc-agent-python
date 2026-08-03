@@ -530,6 +530,11 @@ Examples:
         "best_score": optimize_result.best_score,
     }
 
+    # 报告路径已知后立即登记，确保 to_dict() 序列化的 audit.output_files 非空
+    json_path = os.path.join(cfg.output_dir, "optimization_report.json")
+    md_path = os.path.join(cfg.output_dir, "optimization_report.md")
+    tracer.set_output_files(json_path, md_path)
+
     audit_dict = tracer.to_dict()
     # Enrich audit with backward-compatible fields
     audit_dict.update({
@@ -561,15 +566,12 @@ Examples:
         attribution, gate, validation, audit_dict,
     )
 
-    # Write reports
+    # Write reports（路径已在 to_dict 前登记）
     os.makedirs(cfg.output_dir, exist_ok=True)
-    json_path = os.path.join(cfg.output_dir, "optimization_report.json")
-    md_path = os.path.join(cfg.output_dir, "optimization_report.md")
     with open(json_path, "w", encoding="utf-8") as f:
         f.write(json_report)
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_report)
-    tracer.set_output_files(json_path, md_path)
     tracer.end_stage("report")
     print(f"  Reports written to {json_path}, {md_path}")
 
