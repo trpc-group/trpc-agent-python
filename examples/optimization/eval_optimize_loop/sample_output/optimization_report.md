@@ -1,20 +1,20 @@
 # Optimization Report
 
-**Task ID**: `opt-20260802-130921-7280b549`
-**Generated**: 2026-08-02 13:09:21 UTC
+**Task ID**: `opt-20260803-111252-27cbe785`
+**Generated**: 2026-08-03 11:12:52 UTC
 
 ## Summary
 
 | Metric | Baseline | Candidate | Delta |
 |--------|----------|-----------|-------|
-| Train Pass Rate | 70.6% | 97.1% | +26.5% |
+| Train Pass Rate | 70.6% | 100.0% | +29.4% |
 | Val Pass Rate | 100.0% | 100.0% | +0.0% |
 
 ## Gate Decision
 
 **Decision**: ✅ ACCEPT
 
-**Reason**: All checks passed — improvement: +26.47%
+**Reason**: All checks passed — improvement: +29.41%
 
 ## Candidate vs Baseline
 
@@ -41,7 +41,8 @@
 
 | Check | Result | Detail |
 |-------|--------|--------|
-| improvement_threshold | ✅ | Improvement: +26.47% (threshold: +5%) |
+| improvement_threshold | ✅ | Improvement: +29.41% (threshold: +5%) |
+| no_degradation | ✅ | No regression |
 | critical_cases | ✅ | No critical cases regressed |
 | new_failures | ✅ | No new failures |
 | overfitting | ✅ | No validation regression |
@@ -53,7 +54,8 @@ Total failures: **10**
 
 | Category | Count |
 |----------|-------|
-| final_response_mismatch | 9 |
+| final_response_mismatch | 8 |
+| tool_call_error | 1 |
 | format_not_as_required | 1 |
 
 ## Validation Set Comparison

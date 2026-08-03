@@ -1,6 +1,6 @@
 {
-  "task_id": "opt-20260802-130921-7280b549",
-  "generated_at": "2026-08-02T13:09:21.258108+00:00",
+  "task_id": "opt-20260803-111252-27cbe785",
+  "generated_at": "2026-08-03T11:12:52.872140+00:00",
   "baseline": {
     "train": {
       "evalset_id": "train-mixed-v2",
@@ -41,16 +41,14 @@
   "candidate": {
     "train": {
       "evalset_id": "candidate-train",
-      "pass_rate": 0.9705882352941176,
+      "pass_rate": 1.0,
       "total_cases": 34,
-      "passed_cases": 33,
-      "failed_cases": 1,
-      "failed_case_ids": [
-        "train_tool_006_fail"
-      ],
+      "passed_cases": 34,
+      "failed_cases": 0,
+      "failed_case_ids": [],
       "metric_breakdown": {
-        "overall_pass_rate": 0.9705882352941176,
-        "final_response_avg_score": 0.9706
+        "overall_pass_rate": 1.0,
+        "final_response_avg_score": 1.0
       }
     },
     "validation": {
@@ -167,7 +165,8 @@
   "attribution": {
     "total_failures": 10,
     "by_category": {
-      "final_response_mismatch": 9,
+      "final_response_mismatch": 8,
+      "tool_call_error": 1,
       "format_not_as_required": 1
     },
     "entries": [
@@ -201,9 +200,9 @@
       },
       {
         "case_id": "train_tool_002_fail",
-        "category": "final_response_mismatch",
+        "category": "tool_call_error",
         "confidence": 0.5,
-        "detail": "invocation 1 失败: final_response_mismatch",
+        "detail": "invocation 1 失败: tool_call_error",
         "evidence": "[inv1] 期望「$15353.13」vs 实际「25000 * (1 - 0.15)^3 = 25000 * 0.614125 = $15721.25」"
       },
       {
@@ -245,12 +244,17 @@
   },
   "gate": {
     "decision": "accept",
-    "reason": "All checks passed — improvement: +26.47%",
+    "reason": "All checks passed — improvement: +29.41%",
     "checks": [
       {
         "check": "improvement_threshold",
         "passed": true,
-        "detail": "Improvement: +26.47% (threshold: +5%)"
+        "detail": "Improvement: +29.41% (threshold: +5%)"
+      },
+      {
+        "check": "no_degradation",
+        "passed": true,
+        "detail": "No regression"
       },
       {
         "check": "critical_cases",
@@ -385,9 +389,9 @@
       "system.md"
     ],
     "optimization_cost": 0.09999999999999999,
-    "total_iterations": 2,
+    "total_iterations": 3,
     "converged": true,
-    "best_score": 0.95
+    "best_score": 0.9
   },
   "audit": {
     "reproducibility": {
@@ -400,28 +404,28 @@
       "stages": [
         {
           "stage": "config",
-          "duration_ms": 0.0,
-          "duration_s": 0.0
+          "duration_ms": 3.2,
+          "duration_s": 0.003
         },
         {
           "stage": "baseline",
-          "duration_ms": 0.0,
-          "duration_s": 0.0
+          "duration_ms": 6.5,
+          "duration_s": 0.006
         },
         {
           "stage": "attribution",
-          "duration_ms": 0.0,
+          "duration_ms": 0.1,
           "duration_s": 0.0
         },
         {
           "stage": "optimization",
-          "duration_ms": 0.0,
+          "duration_ms": 0.1,
           "duration_s": 0.0
         },
         {
           "stage": "validate",
-          "duration_ms": 0.0,
-          "duration_s": 0.0
+          "duration_ms": 7.5,
+          "duration_s": 0.008
         },
         {
           "stage": "gate",
@@ -437,13 +441,13 @@
       "total_usd": 0.1
     },
     "environment": {
-      "python_version": "3.12.10",
-      "platform": "Windows 11"
+      "python_version": "3.12.7",
+      "platform": "Linux 6.8.0-90-generic"
     },
     "results": {
       "baseline_train_pass_rate": 0.7058823529411765,
-      "candidate_train_pass_rate": 0.9705882352941176,
-      "improvement": 0.2647
+      "candidate_train_pass_rate": 1.0,
+      "improvement": 0.2941
     },
     "input_files": {
       "train_evalset": "data/train.evalset.json",
@@ -451,20 +455,30 @@
       "optimizer_config": "data/optimizer.json"
     },
     "input_file_hashes": {
-      "train_evalset": "c711db6237c7",
-      "val_evalset": "525b256972ea",
-      "optimizer_config": "ac7d163ebf48"
+      "train_evalset": "91e9235997e7",
+      "val_evalset": "0ad806f95890",
+      "optimizer_config": "05118b74eaca"
     },
-    "output_files": {},
+    "output_files": {
+      "json_report": "sample_output/optimization_report.json",
+      "md_report": "sample_output/optimization_report.md"
+    },
     "errors": [],
     "warnings": [],
     "seed": 42,
     "mode": "fake",
     "duration_seconds": 0.0,
     "optimization_cost": 0.1,
-    "improvement": 0.2647,
+    "improvement": 0.2941,
+    "improvement_note": "",
     "baseline_train_pass_rate": 0.7058823529411765,
-    "candidate_train_pass_rate": 0.9705882352941176,
-    "reproduce_command": "python run_pipeline.py --mode fake"
+    "candidate_train_pass_rate": 1.0,
+    "reproduce_command": "python run_pipeline.py --mode fake",
+    "holdout": {
+      "evalset_id": "holdout-hidden",
+      "pass_rate": 1.0,
+      "passed_cases": 12,
+      "total_cases": 12
+    }
   }
 }
