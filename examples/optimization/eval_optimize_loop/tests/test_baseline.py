@@ -99,10 +99,14 @@ class TestRunBaselineSdk:
         # 文件不存在 → error recorded
         assert len(result.errors) > 0
 
-    def test_sdk_falls_back_to_trace_comparator(self):
-        # SDK 评测失败（schema 不兼容）→ 降级到 trace comparator，产生有意义结果
+    def test_sdk_falls_back_to_trace_comparator(self, monkeypatch):
+        # SDK 不可用（强制 ImportError）→ 确定性降级到 trace comparator，产生有意义结果。
+        # 仓库内有 trpc_agent_sdk 源码包，若不 monkeypatch 会走真实 SDK 路径而非降级。
+        import sys
         import json
         import tempfile
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", None)
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation._eval_metrics", None)
         cases = [{
             "eval_id": "c1",
             "eval_mode": "trace",
@@ -125,5 +129,7 @@ class TestRunBaselineSdk:
             result = asyncio.run(run_baseline_sdk(path))
             assert isinstance(result, BaselineResult)
             assert result.total_cases == 1
+            # 降级路径：errors 说明 SDK 不可用且回退到 trace comparator
+            assert any("SDK AgentEvaluator not available" in e for e in result.errors)
         finally:
             os.unlink(path)

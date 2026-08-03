@@ -532,6 +532,16 @@ def compare_case(case: dict) -> CaseVerdict:
              f"期望 {len(conversation)} 条 invocation，实际只有 {len(actual)} 条")
         )
 
+    # 长度不一致：实际比期望多 → 多余输出（跑偏/幻觉）也计失败，不能静默忽略
+    if len(actual) > len(conversation):
+        for i in range(len(conversation), len(actual)):
+            scores.append(0.0)
+        failure_info.append(
+            (_CATEGORY_PRIORITY.get(FailureCategory.FINAL_RESPONSE_MISMATCH, 99),
+             FailureCategory.FINAL_RESPONSE_MISMATCH,
+             f"实际 {len(actual)} 条 invocation，期望只有 {len(conversation)} 条（多余输出）")
+        )
+
     if not scores:
         return CaseVerdict(eval_id=eval_id, passed=True, score=1.0)
 

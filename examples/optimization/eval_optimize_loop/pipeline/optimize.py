@@ -188,9 +188,16 @@ async def run_optimize_live(
             from agent.agent import build_call_agent
             call_agent = build_call_agent()
 
-        # Register target prompts for optimization
-        target = TargetPrompt()
+        # Register target prompts for optimization。
+        # prompt_dir 默认为相对路径 "data/prompts"，按 CWD 解析——若非从 example 目录
+        # 运行 live 会解析失败；相对路径锚定到本模块（pipeline/）的上一级即 example 目录。
         prompt_dir = config.prompt_dir
+        if not os.path.isabs(prompt_dir):
+            prompt_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                prompt_dir,
+            )
+        target = TargetPrompt()
         if os.path.isdir(prompt_dir):
             for fname in os.listdir(prompt_dir):
                 if fname.endswith(".md"):
