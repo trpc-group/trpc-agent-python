@@ -232,7 +232,8 @@ async def run_optimize_live(
         result.total_cost = getattr(opt_result, 'total_llm_cost', 0.0)
         result.total_iterations = getattr(opt_result, 'total_rounds', 0)
         # SDK status 取值为 SUCCEEDED / FAILED / CANCELED
-        result.converged = getattr(opt_result, 'status', '') == 'SUCCEEDED'
+        opt_status = getattr(opt_result, 'status', '') or ''
+        result.converged = opt_status == 'SUCCEEDED'
         result.optimized_fields = []
         result.fixed_categories = []
 
@@ -240,6 +241,14 @@ async def run_optimize_live(
         if best_prompts:
             result.best_prompt = dict(best_prompts)
             result.optimized_fields = list(best_prompts.keys())
+
+        if opt_status and opt_status != 'SUCCEEDED':
+            # 失败/取消的运行：清空优化产物，避免把失败运行的 "best" 当可回写产物
+            result.best_prompt = {}
+            result.optimized_fields = []
+            result.errors.append(
+                f"AgentOptimizer did not succeed (status={opt_status!r}); "
+                f"discarding best_prompt/optimized_fields")
 
         rounds = getattr(opt_result, 'rounds', None)
         if rounds:

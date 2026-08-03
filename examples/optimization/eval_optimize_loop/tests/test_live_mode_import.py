@@ -143,6 +143,113 @@ class TestLiveModeContract:
         finally:
             os.unlink(path)
 
+    def test_baseline_skips_not_evaluated_cases(self, monkeypatch, tmp_path):
+        """EvalStatus.NOT_EVALUATED 不应计为失败（避免虚增失败/污染 gate）。"""
+        import sys
+        import pipeline.baseline as baseline_mod
+        import tempfile, json, os
+
+        class _Status:
+            PASSED = object()
+            FAILED = object()
+            NOT_EVALUATED = object()
+
+        class _CaseResult:
+            def __init__(self, status, msg=""):
+                self.final_eval_status = status
+                self.error_message = msg
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                return object()
+
+        class _FakeEvalMetrics:
+            EvalStatus = _Status
+
+        async def _fake_evaluate(eval_set, **kwargs):
+            results = {
+                "c1": [_CaseResult(_Status.PASSED)],
+                "c2": [_CaseResult(_Status.NOT_EVALUATED)],
+                "c3": [_CaseResult(_Status.FAILED, "wrong answer")],
+            }
+            return (None, [], [], results)
+
+        class _FakeAgentEvaluator:
+            @staticmethod
+            async def evaluate_eval_set(*args, **kwargs):
+                return await _fake_evaluate(*args, **kwargs)
+
+        class _FakeEvalModule:
+            AgentEvaluator = _FakeAgentEvaluator
+            EvalSet = _FakeEvalSet
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics", _FakeEvalMetrics,
+        )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"eval_set_id": "t", "eval_cases": []}, f)
+            path = f.name
+        try:
+            result = asyncio.run(baseline_mod.run_baseline_sdk(path, eval_config=object()))
+            # NOT_EVALUATED 跳过：total=2（PASSED+FAILED），失败仅 1
+            assert result.total_cases == 2
+            assert result.passed_cases == 1
+            assert result.failed_cases == 1
+            assert "c3" in result.failed_case_ids
+            assert "c2" not in result.failed_case_ids
+        finally:
+            os.unlink(path)
+
+    def test_optimize_clears_artifacts_on_non_success_status(self, monkeypatch):
+        """SDK status != SUCCEEDED（FAILED/CANCELED）时清空 best_prompt/optimized_fields。"""
+        import sys
+        import pipeline.optimize as optimize_mod
+
+        class _FakeOptimizeResult:
+            total_llm_cost = 2.0
+            total_rounds = 2
+            status = "FAILED"
+            best_prompts = {"system": "should be discarded"}
+            rounds = []
+
+        async def _fake_optimize(**kwargs):
+            return _FakeOptimizeResult()
+
+        class _FakeAgentOptimizer:
+            @staticmethod
+            async def optimize(**kwargs):
+                return await _fake_optimize(**kwargs)
+
+        class _FakeTargetPrompt:
+            def add_path(self, *args, **kwargs):
+                pass
+
+        class _FakeEvalModule:
+            AgentOptimizer = _FakeAgentOptimizer
+            TargetPrompt = _FakeTargetPrompt
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._optimize_config",
+            type("M", (), {}),
+        )
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        cfg = load_pipeline_config(mode="live")
+        result = asyncio.run(optimize_mod.run_optimize_live("opt.json", cfg, call_agent=object()))
+        assert result.converged is False
+        assert result.best_prompt == {}
+        assert result.optimized_fields == []
+        assert any("did not succeed" in e for e in result.errors)
+
     def test_optimize_maps_sdk_fields(self, monkeypatch):
         """SDK OptimizeResult 字段 → 我们的 OptimizeResult（total_llm_cost 等）。"""
         import sys

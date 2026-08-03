@@ -6,6 +6,7 @@ responses based on the input question.
 """
 
 import hashlib
+import re
 from typing import Any, Awaitable, Callable
 
 from .config import AgentConfig
@@ -100,9 +101,6 @@ def _fake_run(question: str, config: AgentConfig) -> dict[str, Any]:
     """
     qhash = hashlib.md5(question.encode()).hexdigest()
     hash_int = int(qhash[:8], 16)
-
-    # Parse simple math from the question
-    import re
 
     # Try to detect arithmetic operations
     response_text = ""

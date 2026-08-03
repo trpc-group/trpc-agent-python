@@ -176,8 +176,13 @@ async def run_baseline_sdk(
         total = 0
         for case_id, results in (case_results or {}).items():
             for cr in results:
+                st = getattr(cr, "final_eval_status", None)
+                if st == EvalStatus.NOT_EVALUATED:
+                    # 未评测（如缺少 trace 数据）≠ 失败：跳过，不计入 total 也不计失败，
+                    # 避免虚增失败数、拉低 pass_rate、污染 gate 的 improvement 判定。
+                    continue
                 total += 1
-                ok = getattr(cr, "final_eval_status", None) == EvalStatus.PASSED
+                ok = st == EvalStatus.PASSED
                 if ok:
                     passed += 1
                 else:
@@ -209,5 +214,8 @@ async def run_baseline_sdk(
         # 保证 live 模式仍有有意义的 baseline，pipeline 不中断。
         from .config import PipelineConfig
         fallback = run_baseline_fake(evalset_path, PipelineConfig())
-        fallback.errors = [f"SDK AgentEvaluator failed ({e}); fell back to trace comparator"]
+        fallback.errors = [
+            f"SDK AgentEvaluator failed ({type(e).__name__}: {e}); "
+            f"fell back to trace comparator"
+        ]
         return fallback
