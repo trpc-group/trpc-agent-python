@@ -113,9 +113,16 @@ def run_validation_fake(
 
 
 def _load_cases(path: str) -> list[dict]:
-    """加载 evalset 的 cases 列表。"""
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    """加载 evalset 的 cases 列表。
+
+    缺失/损坏文件抛 ValueError（场景错误路径，与 run_baseline_fake 的
+    优雅 errors 语义对齐），而不是裸 FileNotFoundError/JSONDecodeError。
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+        raise ValueError(f"failed to load evalset {path}: {type(e).__name__}: {e}")
     return data.get("eval_cases", [])
 
 

@@ -241,12 +241,13 @@ async def run_baseline_sdk(
             "SDK AgentEvaluator not available — fell back to trace comparator"
         ] + fallback.errors
         return fallback
-    except (ValueError, KeyError, TypeError) as e:
+    except ValueError as e:
         # evalset/配置校验失败（如 pydantic ValidationError，系 ValueError 子类）。
         # 为保持 live 模式可运行，仍降级到 trace comparator，但清晰标记：
         # 该结果来自 comparator、**不是** SDK 评分，避免把配置/数据问题伪装成
-        # "SDK 评分正常"。保留 fake 自身错误。其余非预期异常（AttributeError 等
-        # pipeline bug）向上抛出。
+        # "SDK 评分正常"。保留 fake 自身错误。
+        # KeyError/TypeError 不收窄在此：它们更可能是 SDK 结果处理中的 pipeline
+        # bug（缺键/对 None 取属性），应向上抛出暴露根因，而非静默降级。
         from .config import PipelineConfig
         _cfg = config or PipelineConfig()
         fallback = run_baseline_fake(evalset_path, _cfg)

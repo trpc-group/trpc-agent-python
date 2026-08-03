@@ -393,8 +393,10 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
 
     answer_ok = False
     answer_reason = ""
-    if exp_bare is not None and _is_numeric_only(exp_final):
+    if exp_bare is not None and _is_numeric_only(exp_final) and "%" not in exp_final:
         # 纯数字期望：匹配实际回复中"答案位置的数字"。
+        # 含 % 的期望（如 "12%"）排除：% 是单位词，落到下方单位词分支，
+        # 避免实际回复 "12"（无百分号）被误判通过。
         # 答案位置 = 等号后面的数字 ∪ 最后一个数字。这兼容：
         #   "144 / 12 = 13" → =后 [13] ≠ 12 → 失败（正确捕获算错）
         #   "225 / 15 = 15 because..." → =后含 15 → 通过

@@ -138,10 +138,18 @@ def live_gate_downgrade(gate: GateResult, *, live: bool,
     Returns:
         处理后的 gate（可能已降级为 NEEDS_REVIEW）。
     """
+    _details = gate.details or {}
+    # 成本超预算判定：gate 决策顺序短路——退化/关键 case/过拟合 REJECT 时
+    # details 无顶层 budget 键，但 checks 里 cost_budget 项仍标记未通过；
+    # 两类都视为"真实成本约束"，不得被降级规避
+    _cost_exceeded = ("budget" in _details) or any(
+        c.get("check") == "cost_budget" and c.get("passed") is False
+        for c in _details.get("checks") or []
+    )
     if (live and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
             and not (gate.decision == GateDecision.REJECT
-                     and (("budget" in (gate.details or {}))
-                          or (gate.details or {}).get("reason_code") == "scenario_config_error"))):
+                     and (_cost_exceeded
+                          or _details.get("reason_code") == "scenario_config_error"))):
         return GateResult(
             decision=GateDecision.NEEDS_REVIEW,
             reason=("live mode: " + gate.decision.value.upper()
@@ -580,6 +588,11 @@ Examples:
     )
 
     # Write reports（路径已在 to_dict 前登记）
+    if os.path.isfile(cfg.output_dir):
+        # output_dir 指向已存在文件：makedirs 会抛 FileExistsError，
+        # 且此时所有阶段已跑完——提前显式报错，避免结果静默丢失
+        raise ValueError(
+            f"output_dir '{cfg.output_dir}' is a file, not a directory")
     os.makedirs(cfg.output_dir, exist_ok=True)
     with open(json_path, "w", encoding="utf-8") as f:
         f.write(json_report)

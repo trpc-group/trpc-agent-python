@@ -7,6 +7,7 @@ Supports two execution modes:
 Records per-round optimization results for audit trail.
 """
 
+import asyncio
 import os
 import time
 from dataclasses import dataclass, field
@@ -205,25 +206,34 @@ async def run_optimize_live(
                     target.add_path(field_name, os.path.join(prompt_dir, fname))
 
         # 明确提示 reflection_lm 未配置真实 LLM：live GEPA 必然失败并降级，
-        # 避免配置中的空占位被误认为可工作的 fake 模型
+        # 避免配置中的空占位被误认为可工作的 fake 模型；同时读取 timeout 配置
+        _optimize_timeout = 600.0
         try:
             # 用 SDK 公开导出，避免耦合私有模块（同 pipeline/config.py 做法）
             from trpc_agent_sdk.evaluation import load_optimize_config as _sdk_load
-            _rl = _sdk_load(optimizer_config_path).optimize.algorithm.reflection_lm
+            _oc = _sdk_load(optimizer_config_path)
+            _rl = _oc.optimize.algorithm.reflection_lm
+            _optimize_timeout = float(
+                getattr(_oc.optimize.algorithm, "timeout_seconds", _optimize_timeout))
             if not (_rl.provider_name and _rl.model_name):
                 print("  ⚠️  reflection_lm 未配置真实 LLM（provider_name/model_name 为空），"
                       "live GEPA 优化将失败并降级为空结果")
         except Exception as _e:
             print(f"  ⚠️  无法检查 reflection_lm 配置（{type(_e).__name__}: {_e}）")
 
-        # Run optimization（async，需 await；显式传 call_agent）
-        opt_result = await AgentOptimizer.optimize(
-            config_path=optimizer_config_path,
-            call_agent=call_agent,
-            target_prompt=target,
-            train_dataset_path=config.train_evalset,
-            validation_dataset_path=config.val_evalset,
-            output_dir=config.output_dir,
+        # Run optimization（async，需 await；显式传 call_agent）。
+        # 用 wait_for 加超时：真实网络/LLM 调用可能卡顿，避免整条 live 流水线
+        # 无限挂起（超时抛 TimeoutError，下方 except 写入 result.errors）
+        opt_result = await asyncio.wait_for(
+            AgentOptimizer.optimize(
+                config_path=optimizer_config_path,
+                call_agent=call_agent,
+                target_prompt=target,
+                train_dataset_path=config.train_evalset,
+                validation_dataset_path=config.val_evalset,
+                output_dir=config.output_dir,
+            ),
+            timeout=_optimize_timeout,
         )
 
         # Extract results（按 SDK OptimizeResult 实际字段映射）
@@ -269,6 +279,10 @@ async def run_optimize_live(
     except (ValueError, KeyError, TypeError) as e:
         # 已知的 SDK 评测/字段问题 → 记录 error 并返回空结果
         result.errors.append(f"Optimization failed: {e}")
+    except asyncio.TimeoutError:
+        # wait_for 超时：网络卡顿/慢 LLM 不应让流水线无限挂起
+        result.errors.append(
+            f"AgentOptimizer timed out after {_optimize_timeout:.0f}s")
     # 其余非预期异常（AttributeError 等 pipeline 自身 bug）向上抛出，
     # 由 run_pipeline 的 try/except 捕获降级，避免把代码缺陷伪装成"优化失败"
 
