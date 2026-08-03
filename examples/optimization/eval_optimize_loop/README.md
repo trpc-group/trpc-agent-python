@@ -20,9 +20,11 @@ python run_pipeline.py --mode fake --scenario noop
 python run_pipeline.py --mode fake --scenario overfit \
   --val-regression-cases val_simple_math_001,val_reasoning_001
 
-# CI 模式（gate 拒绝时 exit 1，可用于自动化回归）
+# CI 模式（gate 拒绝时 exit 1，需人工审查时 exit 2，可用于自动化回归）
 python run_pipeline.py --mode fake --scenario overfit --ci
 echo $?   # → 1（REJECT）
+python run_pipeline.py --mode fake --scenario noop --ci
+echo $?   # → 2（NEEDS_REVIEW）
 
 # Live mode：真实 SDK AgentOptimizer（需配置 TRPC_AGENT_API_KEY）
 # 未配置时自动降级到离线 trace 回放，不会崩溃
@@ -95,8 +97,9 @@ python -m pytest tests/test_attribution_accuracy.py -q                       # �
 python -m pytest tests/test_live_mode_import.py -q                           # live 健壮性
 python -m pytest tests/test_performance.py -q --durations=20                 # 性能
 
-# CI 模式
+# CI 模式（REJECT → 1，NEEDS_REVIEW → 2）
 python run_pipeline.py --mode fake --scenario overfit --ci; echo $?  # → 1
+python run_pipeline.py --mode fake --scenario noop --ci; echo $?     # → 2
 ```
 
 ## 配置
@@ -179,7 +182,8 @@ python run_pipeline.py --mode fake --scenario overfit --ci; echo $?  # → 1
 | `--max-cost` | `10.0` | 优化成本预算（USD）|
 | `--output-dir` | `sample_output` | 报告输出目录 |
 | `--verbose` / `-v` | `false` | 详细输出 |
-| `--ci` | `false` | CI 模式（gate 拒绝时 exit 1）|
+| `--ci` | `false` | CI 模式（REJECT → exit 1，NEEDS_REVIEW → exit 2）|
+| `--critical-cases` | 空 | 逗号分隔的不可回归关键 case id（train/val 均保护）|
 
 ## 验收标准对照
 
