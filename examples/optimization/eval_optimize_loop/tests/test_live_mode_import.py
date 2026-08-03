@@ -65,6 +65,7 @@ class TestLiveModeRobustness:
         class _FakeEvalModule:
             AgentEvaluator = _FakeAgentEvaluator
             EvalSet = _FakeEvalSet
+            EvalStatus = type("S", (), {})
 
         monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
         monkeypatch.setitem(
@@ -161,6 +162,7 @@ class TestLiveModeContract:
         class _FakeEvalModule:
             AgentEvaluator = _FakeAgentEvaluator
             EvalSet = _FakeEvalSet
+            EvalStatus = _Status
 
         # 注入 fake SDK 模块到 sys.modules，让函数内 import 拿到
         monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
@@ -225,6 +227,7 @@ class TestLiveModeContract:
         class _FakeEvalModule:
             AgentEvaluator = _FakeAgentEvaluator
             EvalSet = _FakeEvalSet
+            EvalStatus = _Status
 
         monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
         monkeypatch.setitem(

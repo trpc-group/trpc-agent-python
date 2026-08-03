@@ -131,8 +131,13 @@ async def run_baseline_sdk(
         # pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）
         ensure_repo_root_in_path()
 
-        from trpc_agent_sdk.evaluation import AgentEvaluator, EvalSet
-        from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
+        # 用 SDK 公开导出，避免耦合私有模块（_eval_metrics 等重构后 ImportError
+        # 会被误判为 "SDK 不可用" 而静默降级为 fake 评分）
+        from trpc_agent_sdk.evaluation import (
+            AgentEvaluator,
+            EvalSet,
+            EvalStatus,
+        )
 
         result = BaselineResult(evalset_id=os.path.basename(evalset_path))
         if not os.path.exists(evalset_path):
