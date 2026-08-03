@@ -529,7 +529,8 @@ def compare_case(case: dict) -> CaseVerdict:
         for i in range(len(actual), len(conversation)):
             scores.append(0.0)
         failure_info.append(
-            (99, FailureCategory.MISSING_EXPECTED_OUTPUT,
+            (_CATEGORY_PRIORITY.get(FailureCategory.MISSING_EXPECTED_OUTPUT, 99),
+             FailureCategory.MISSING_EXPECTED_OUTPUT,
              f"期望 {len(conversation)} 条 invocation，实际只有 {len(actual)} 条")
         )
 

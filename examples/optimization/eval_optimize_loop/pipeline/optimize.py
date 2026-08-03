@@ -171,8 +171,10 @@ def run_optimize_fake(
     result.total_iterations = max_rounds
     result.optimized_fields = sorted(optimized_fields)
     result.best_prompt = {"system.md": _build_optimized_prompt(prompt_changes)}
-    result.converged = result.total_iterations < config.max_iterations
     result.fixed_categories = [cat for cat, _ in categories_to_fix[:max_rounds]]
+    # 收敛按归因覆盖率判定：所有待修类别都已覆盖才算收敛，
+    # 而非"未用满迭代轮数"（那可能是被 max_iterations 截断的未完成状态）。
+    result.converged = len(result.fixed_categories) >= len(categories_to_fix)
 
     return result
 

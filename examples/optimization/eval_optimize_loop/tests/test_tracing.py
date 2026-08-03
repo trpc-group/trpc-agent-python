@@ -138,6 +138,16 @@ class TestAuditTracer:
         audit_dict = tracer.to_dict()
         assert audit_dict["reproducibility"]["reproduce_command"] == injected
 
+    def test_finalize_is_idempotent_for_duration(self):
+        # run_pipeline 会先 to_dict()（内部 finalize）再 finalize() 打印；
+        # 两次读取的 total_duration_s 必须一致。
+        tracer = AuditTracer(seed=42, mode="fake")
+        tracer.start_stage("baseline")
+        tracer.end_stage("baseline")
+        first = tracer.finalize().total_duration_s
+        second = tracer.finalize().total_duration_s
+        assert first == second
+
     def test_to_dict_structure(self):
         tracer = AuditTracer(seed=42, mode="fake")
         tracer.start_stage("baseline")

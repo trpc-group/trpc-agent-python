@@ -326,6 +326,14 @@ Examples:
         print(f"  ⚠️  Overfitting detected!")
         tracer.add_warning("Overfitting detected: candidate regresses on validation set")
 
+    # live 模式诚实标注：验证/门控基于 scenario 合成候选，而非真实优化后 prompt。
+    # （真实重评需要基于 optimize_result.best_prompt 驱动 SDK agent，属后续工作）
+    if cfg.mode == "live":
+        msg = ("live mode: validation/gate uses scenario-simulated candidates, "
+               "not the real optimized prompt — results are indicative, not authoritative")
+        print(f"  ⚠️  {msg}")
+        tracer.add_warning(msg)
+
     # ═══════════════════════════════════════════════════════════════
     # Stage 6: Gate Decision
     # ═══════════════════════════════════════════════════════════════
