@@ -11,8 +11,8 @@
       "name": "gepa_reflective",
       "seed": 42,
       "reflection_lm": {
-        "provider_name": "fake",
-        "model_name": "fake",
+        "provider_name": "",
+        "model_name": "",
         "api_key": ""
       },
       "candidate_selection_strategy": "current_best",
