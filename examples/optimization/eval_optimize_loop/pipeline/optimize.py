@@ -207,13 +207,14 @@ async def run_optimize_live(
         # 明确提示 reflection_lm 未配置真实 LLM：live GEPA 必然失败并降级，
         # 避免配置中的空占位被误认为可工作的 fake 模型
         try:
-            from trpc_agent_sdk.evaluation._optimize_config import load_optimize_config
-            _rl = load_optimize_config(optimizer_config_path).optimize.algorithm.reflection_lm
+            # 用 SDK 公开导出，避免耦合私有模块（同 pipeline/config.py 做法）
+            from trpc_agent_sdk.evaluation import load_optimize_config as _sdk_load
+            _rl = _sdk_load(optimizer_config_path).optimize.algorithm.reflection_lm
             if not (_rl.provider_name and _rl.model_name):
                 print("  ⚠️  reflection_lm 未配置真实 LLM（provider_name/model_name 为空），"
                       "live GEPA 优化将失败并降级为空结果")
-        except Exception:
-            pass
+        except Exception as _e:
+            print(f"  ⚠️  无法检查 reflection_lm 配置（{type(_e).__name__}: {_e}）")
 
         # Run optimization（async，需 await；显式传 call_agent）
         opt_result = await AgentOptimizer.optimize(
