@@ -131,7 +131,9 @@ def _attribute_from_cases(per_case: list, failed_ids: list[str]) -> list[Attribu
     entries = []
     for case in per_case:
         case_id = case.get("eval_id", "unknown")
-        if case_id in failed_ids:
+        # 与 _extract_failures 判定一致：在 failed_ids 或 pass=False 都算失败，
+        # 避免 "pass=False 但未进 failed_case_ids" 的 case 被漏归因。
+        if case_id in failed_ids or not case.get("pass", True):
             reason = case.get("reason", "")
             raw_cat = case.get("category", "")
             if raw_cat and raw_cat in _CATEGORY_MAP:

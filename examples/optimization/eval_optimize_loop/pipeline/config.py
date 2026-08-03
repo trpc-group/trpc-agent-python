@@ -74,7 +74,9 @@ def load_optimize_config(path: str) -> "EvalConfig":
         SDK EvalConfig 实例（optimizer.json 的 evaluate 段）。
     """
     ensure_repo_root_in_path()
-    from trpc_agent_sdk.evaluation._optimize_config import load_optimize_config as _sdk_load
+    # 用 SDK 公开导出，避免耦合私有模块（_optimize_config 重构后 ImportError
+    # 会被误判为 "SDK 不可用" 而静默降级为 fake 评分）
+    from trpc_agent_sdk.evaluation import load_optimize_config as _sdk_load
     return _sdk_load(path).evaluate
 
 
