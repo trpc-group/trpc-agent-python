@@ -22,5 +22,14 @@ async def evaluate_split(
     _, _, _, results_by_eval_id = await AgentEvaluator.evaluate_eval_set(
         eval_set, call_agent=call_agent, eval_config=config, num_runs=config.num_runs, print_detailed_results=False
     )
+    expected_eval_ids = {case.eval_id for case in eval_set.eval_cases}
+    actual_eval_ids = set(results_by_eval_id)
+    if actual_eval_ids != expected_eval_ids:
+        missing = expected_eval_ids - actual_eval_ids
+        unexpected = actual_eval_ids - expected_eval_ids
+        raise ValueError(
+            f"evaluation error for {eval_set_path.name}: incomplete evaluator results; "
+            f"missing={sorted(missing)}, unexpected={sorted(unexpected)}"
+        )
     normalized = normalize_eval_results(results_by_eval_id, split=split, metric_weights=metric_weights)
     return SplitReport.from_cases([case for _, case in sorted(normalized.items())])

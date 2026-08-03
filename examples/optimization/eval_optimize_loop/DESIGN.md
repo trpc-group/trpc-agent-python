@@ -2,6 +2,10 @@
 
 本示例在公开的 `AgentEvaluator` 与 `AgentOptimizer` 之上增加独立编排层，形成“基线评测、失败归因、候选生成、独立回归、Gate 决策、审计落盘”的完整闭环，不修改 SDK 公共 API。失败归因采用规则优先策略：先根据执行异常、实际与期望工具选择、参数差异、工具响应、JSON 格式和判定原因分类；trace 模式优先使用真实中间轨迹，期望会话只作为参照。只有规则不能解释时才保留可扩展的 judge 入口；每个结论都带有类型、证据和置信度。
 
+## Why rule-first instead of counterfactual-first
+
+Issue #170 style counterfactual attribution can be stronger because it can rerun controlled variants and distinguish prompt, tool, data, and environment causes more directly. This example deliberately starts with rule-first attribution instead: the checked-in fake and trace paths need to be stable, credential-free, low cost, and reproducible in CI without an LLM judge. The rule layer also makes every failure reason auditable from the stored eval result, rather than from optimizer self-reporting. Counterfactual probes remain a future extension point behind the existing attribution interface, where they can add stronger diagnosis without changing the Gate contract.
+
 接受策略由 Gate 独立掌握，优化器的 round 状态或摘要不能直接决定通过。候选必须具有完整提示词映射，并在 `PromptSandbox` 中重新跑完整训练集和验证集。Gate 会拒绝评测不完整、新增 hard fail、关键回归、超出允许范围的回归、指标低于下限、验证集无增益、成本或耗时超预算以及违反平局策略的候选；未知成本会记录为警告。赢家按新增 hard fail、关键回归数、验证集通过率和得分、成本、耗时与稳定候选 ID 排序。
 
 防过拟合依靠训练集与验证集的独立全量回归，而不是读取优化器轮次指标。若训练提升而验证下降，或泛化差距超过配置阈值，Gate 会直接拒绝。优化期间固定 `update_source=False`，候选只作用于临时目标提示词目录；默认不回写，显式允许回写时还要校验基线和候选摘要。

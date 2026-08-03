@@ -183,6 +183,15 @@ def test_normalization_averages_all_runs_but_requires_every_run_to_pass() -> Non
     assert FailureType.FORMAT_VIOLATION in case.failure_types
 
 
+def test_normalization_rejects_empty_runs() -> None:
+    with pytest.raises(ValueError, match="no evaluator results"):
+        normalize_eval_results(
+            {"case": []},
+            split="validation",
+            metric_weights={"fake_rubric_score": 1.0},
+        )
+
+
 def test_normalization_rejects_metrics_missing_from_an_earlier_run() -> None:
     first_run = _case_result(score=1.0, status=EvalStatus.PASSED)
     second_run = _case_result(score=1.0, status=EvalStatus.PASSED)

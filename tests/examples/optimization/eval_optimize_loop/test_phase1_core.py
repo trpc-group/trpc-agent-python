@@ -6,8 +6,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from examples.optimization.eval_optimize_loop.pipeline import evaluator as evaluator_module
 from examples.optimization.eval_optimize_loop.pipeline.comparator import compare_case
 from examples.optimization.eval_optimize_loop.pipeline.config import canonical_sha256, load_pipeline_config
+from examples.optimization.eval_optimize_loop.pipeline.evaluator import evaluate_split
 from examples.optimization.eval_optimize_loop.pipeline.gate import evaluate_gate
 from examples.optimization.eval_optimize_loop.pipeline.normalization import parse_fake_response
 from examples.optimization.eval_optimize_loop.pipeline.models import (
@@ -61,6 +63,62 @@ def test_fake_config_loads_without_live_key(monkeypatch: pytest.MonkeyPatch, tmp
     config_path.write_text(json.dumps({"pipeline": {"reproducibility": {"seed": 42}}}), encoding="utf-8")
     monkeypatch.delenv("TRPC_AGENT_API_KEY", raising=False)
     assert load_pipeline_config(config_path, mode="fake").pipeline.reproducibility.seed == 42
+
+
+@pytest.mark.asyncio
+async def test_evaluate_split_rejects_missing_eval_case_results(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    eval_set_path = tmp_path / "train.evalset.json"
+    eval_set_path.write_text(
+        json.dumps(
+            {
+                "eval_set_id": "fake",
+                "eval_cases": [
+                    {
+                        "eval_id": "case_one",
+                        "conversation": [
+                            {
+                                "user_content": {"role": "user", "parts": [{"text": "one"}]},
+                                "final_response": {"role": "model", "parts": [{"text": "{}"}]},
+                            }
+                        ],
+                    },
+                    {
+                        "eval_id": "case_two",
+                        "conversation": [
+                            {
+                                "user_content": {"role": "user", "parts": [{"text": "two"}]},
+                                "final_response": {"role": "model", "parts": [{"text": "{}"}]},
+                            }
+                        ],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "optimizer.json").write_text(
+        json.dumps({"evaluate": {"metrics": [{"metric_name": "fake_rubric_score", "threshold": 0.75}]}}),
+        encoding="utf-8",
+    )
+
+    async def incomplete_evaluate_eval_set(
+        *_args: object,
+        **_kwargs: object,
+    ) -> tuple[None, None, None, dict[str, list[object]]]:
+        return None, None, None, {"case_one": []}
+
+    monkeypatch.setattr(evaluator_module.AgentEvaluator, "evaluate_eval_set", incomplete_evaluate_eval_set)
+
+    async def call_agent(_query: str) -> str:
+        return "{}"
+
+    with pytest.raises(ValueError, match="missing=\\['case_two'\\]"):
+        await evaluate_split(
+            eval_set_path,
+            call_agent=call_agent,
+            split="train",
+            metric_weights={"fake_rubric_score": 1.0},
+        )
 
 
 def test_critical_pass_to_fail_is_hard_regression() -> None:

@@ -2,6 +2,8 @@
 
 This example demonstrates an evaluation-first prompt-optimization loop around the public `AgentOptimizer` API.  It keeps the checked-in fake and trace paths deterministic and credential-free, while live mode is an opt-in adapter with independent acceptance checks.
 
+The loop uses a Champion-Challenger architecture. The source prompt is the Champion; each `AgentOptimizer` or fixture candidate is a Challenger. The Gate trusts only independent train and validation re-evaluation in `PromptSandbox`, not optimizer self-scores or round summaries.
+
 ## Run
 
 From the repository root:
@@ -15,6 +17,10 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py --mode live --ou
 `fake` uses checked-in candidates and a local rubric; it needs no key and makes no network calls. `trace` evaluates the checked-in recorded conversation only. `live` validates `TRPC_AGENT_API_KEY`, `TRPC_AGENT_BASE_URL`, and `TRPC_AGENT_MODEL_NAME` before constructing an optimizer. It exits with code `2` if any are absent, and does not start network work in that case.
 
 Live mode writes candidates to a temporary `TargetPrompt` workspace, passes only the SDK `evaluate`/`optimize` configuration to `AgentOptimizer.optimize`, and always uses `update_source=False`. Source write-back is disabled by default; it is considered only after a Gate-approved winner and guarded by prompt-digest checks.
+
+## CI collection
+
+The regression tests live under `tests/examples/optimization/eval_optimize_loop`. The repository-level pytest configuration in `pyproject.toml` already uses `testpaths = ["tests"]`, so these tests are collected by the existing `python -m pytest` CI path without a custom test runner.
 
 ## Outputs
 
