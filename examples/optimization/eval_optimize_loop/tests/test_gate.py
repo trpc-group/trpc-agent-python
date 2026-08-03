@@ -302,11 +302,11 @@ class TestLockModule:
 class TestPipelineFakeE2E:
     """End-to-end smoke test: run_pipeline.py fake mode exits 0 and produces output files."""
 
-    def test_fake_pipeline_exits_zero(self):
+    def test_fake_pipeline_exits_zero(self, tmp_path):
         """run_pipeline.py --quiet exits 0 in fake mode."""
         import subprocess
         result = subprocess.run(
-            ["python", str(PIPELINE_SCRIPT), "--quiet"],
+            ["python", str(PIPELINE_SCRIPT), "--quiet", "--output", str(tmp_path / "output")],
             capture_output=True, text=True, timeout=30,
             cwd=str(PIPELINE_SCRIPT.parent),
         )
@@ -314,41 +314,43 @@ class TestPipelineFakeE2E:
             f"Pipeline failed: stderr={result.stderr[:200]}"
         )
 
-    def test_fake_pipeline_produces_report_json(self):
+    def test_fake_pipeline_produces_report_json(self, tmp_path):
         """run_pipeline.py produces output/reports/optimization_report.json."""
         import subprocess, json
+        out_dir = tmp_path / "output"
         result = subprocess.run(
-            ["python", str(PIPELINE_SCRIPT), "--quiet"],
+            ["python", str(PIPELINE_SCRIPT), "--quiet", "--output", str(out_dir)],
             capture_output=True, text=True, timeout=30,
             cwd=str(PIPELINE_SCRIPT.parent),
         )
         assert result.returncode == 0
-        report_path = PIPELINE_SCRIPT.parent / "output" / "reports" / "optimization_report.json"
+        report_path = out_dir / "reports" / "optimization_report.json"
         assert report_path.exists(), f"Missing report: {report_path}"
         with open(report_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         assert "gate_decision" in data
         assert "baseline" in data
 
-    def test_fake_pipeline_produces_audit_dir(self):
+    def test_fake_pipeline_produces_audit_dir(self, tmp_path):
         """run_pipeline.py produces output/audit/<timestamp>/ directory."""
         import subprocess
+        out_dir = tmp_path / "output"
         result = subprocess.run(
-            ["python", str(PIPELINE_SCRIPT), "--quiet"],
+            ["python", str(PIPELINE_SCRIPT), "--quiet", "--output", str(out_dir)],
             capture_output=True, text=True, timeout=30,
             cwd=str(PIPELINE_SCRIPT.parent),
         )
         assert result.returncode == 0
-        audit_dir = PIPELINE_SCRIPT.parent / "output" / "audit"
+        audit_dir = out_dir / "audit"
         assert audit_dir.exists()
         subdirs = [d for d in audit_dir.iterdir() if d.is_dir()]
         assert len(subdirs) >= 1, f"No audit subdirectories in {audit_dir}"
 
-    def test_fake_pipeline_rejects_broken_evalset(self):
+    def test_fake_pipeline_rejects_broken_evalset(self, tmp_path):
         """run_pipeline.py with non-existent evalset exits non-zero."""
         import subprocess
         result = subprocess.run(
-            ["python", str(PIPELINE_SCRIPT), "--quiet", "--val", "nonexistent.json"],
+            ["python", str(PIPELINE_SCRIPT), "--quiet", "--val", "nonexistent.json", "--output", str(tmp_path / "output")],
             capture_output=True, text=True, timeout=30,
             cwd=str(PIPELINE_SCRIPT.parent),
         )
