@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.15](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.15) (2026-08-03)
+
+### Features
+
+* Tools: Added a Tool Script Safety Guard that scans Bash / Python scripts before execution and returns `allow` / `deny` / `needs_human_review`. It covers dangerous commands, sensitive path access, dependency installs, unknown network calls, and privilege escalation, and can be enabled on `BashTool`, local code executors, Skill, and MCP tool flows.
+* Tools: Added configurable safety policies, custom rule registration, JSONL audit logs, and telemetry attributes so teams can tune what to block, what to review, and how to observe safety decisions.
+* Testing: Added a Session / Memory / Summary multi-backend replay consistency framework. The same agent trajectories can be replayed on InMemory, SQLite, and optional Redis backends to compare events, state, memory, and summary results, with known SQLite summary drift reported instead of silently ignored.
+* Examples: Added a Skill-based code review agent example, including sandbox execution, review report generation, and policy filters for reviewing diffs / repositories more safely.
+* Examples: Added PostgreSQL storage support to the code review agent example, so review records can be persisted beyond the default SQLite backend.
+* Examples: Added pytest configuration and failure fallback handling for evaluation examples, making evaluation runs more resilient when individual cases fail.
+
+### Bug Fixes
+
+* Tools: Fixed `ToolSafetyFilter` only scanning the first non-empty script-like argument. It now scans all recognized fields such as `script` / `code` / `command` / `cmd` / `python_code` / `bash_code` / `code_blocks`, including mixed-language requests, so a safe earlier field can no longer hide a later dangerous command.
+* Tools: For unknown-language segments, keep running Bash rules but only merge Python findings when AST parsing succeeds. This avoids `PY_PARSE_ERROR_REVIEW` false positives that could block safe Bash scripts under strict review mode.
+* Model: Fixed Hunyuan hy3 conversations breaking the thinking chain when later turns omitted thinking content. Thinking text is now preserved when the model requires it for follow-up calls.
+* Model: Fixed tool calls being dropped when the model returned invalid JSON tool arguments. The SDK now tries `json_repair` first, and if repair fails it returns a parameter error to the agent instead of silently discarding the call.
+* Telemetry: Fixed missing traces for model retries and model call failures. Retry attempts and failure details are now recorded on the corresponding spans.
+
+### Docs
+
+* Docs: Added Tool Script Safety Guard design notes, policy examples, response schema examples, and a real-agent demo covering Tool / Skill / MCP / CodeExecutor allow-review-deny scenarios.
+* Docs: Expanded replay consistency README and implementation notes, including positive consistency checks and negative injection detection cases.
+
 ## [1.1.14](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.14) (2026-07-24)
 
 ### Features
