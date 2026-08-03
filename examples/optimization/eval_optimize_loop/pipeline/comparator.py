@@ -9,7 +9,8 @@
     2. 纯数字期望 → 数值相等（容差 1e-6）
     3. 类答案期望（≤20 字符）→ 归一化 contains；纯数字期望带舍入容差兜底（带单位绝不触发）
     4. 类解释期望（>20 字符）→ contains 或期望数字子集匹配
-    5. 格式层：prompt 要求 ONLY-number/JSON/markdown 而实际带额外 prose → format_not_as_required
+    5. 格式层：prompt 要求 ONLY-number 而实际带额外 prose → format_not_as_required
+       （json/markdown 输出要求暂不校验，见 _user_demands_simple_format）
     6. 工具层：期望含 intermediate_data 时比较 tool 名/参/结果 → tool_call_error 等
     7. 类别优先级：format > tool_parameter > wrong_tool > tool_call
        > final_response_mismatch > missing_expected_output > unknown
@@ -313,9 +314,12 @@ def _tool_result_vs_answer(
 
 
 def _user_demands_simple_format(user_text: str) -> str | None:
-    """检测 user prompt 是否要求特定简单输出格式。
+    """检测 user prompt 是否要求"仅输出数字"。
 
-    返回 "number" / "json" / "markdown" / None。
+    当前格式层只实现 number 检测；json/markdown 输出要求暂不校验
+    （避免文档承诺与实际行为不一致——见模块 docstring）。
+
+    返回 "number" 或 None。
     """
     if not user_text:
         return None
@@ -323,10 +327,6 @@ def _user_demands_simple_format(user_text: str) -> str | None:
     # 放宽匹配：ONLY the numeric result / just the number / answer with only the number 等
     if re.search(r"only.{0,15}(numeric|number)|only.{0,4}the number|just.{0,4}(the |)number|numeric.{0,6}(result|answer)", low):
         return "number"
-    if re.search(r"\bjson\b", low):
-        return "json"
-    if re.search(r"markdown|markdown table", low):
-        return "markdown"
     return None
 
 
@@ -334,7 +334,8 @@ def _check_format(user_text: str, expected_final: str, actual_final: str) -> tup
     """格式层检查：期望数字答案但实际带多余 prose → format_not_as_required。
 
     注意：必须要求"数字匹配 且 实际归一化含非数字字符"才判格式违规，
-    避免纯数字答案因归一化差异被误判。
+    避免纯数字答案因归一化差异被误判。目前仅支持 number 格式
+    （_user_demands_simple_format 只返回 "number" 或 None）。
     """
     fmt = _user_demands_simple_format(user_text)
     if fmt is None:

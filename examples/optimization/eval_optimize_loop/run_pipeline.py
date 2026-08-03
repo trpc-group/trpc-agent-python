@@ -111,6 +111,16 @@ def ci_exit_code(decision: GateDecision, ci_mode: bool) -> int:
     return 0
 
 
+def is_output_dir_allowed(output_dir: str) -> bool:
+    """output_dir 必须解析到仓库根目录内（防任意文件写入）。
+
+    拒绝 `..` 越界与外部绝对路径；`_REPO_ROOT` 为项目根（3 级上跳）。
+    """
+    _root_abs = os.path.realpath(_REPO_ROOT)
+    _out_abs = os.path.realpath(output_dir)
+    return _out_abs == _root_abs or _out_abs.startswith(_root_abs + os.sep)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Evaluation + Optimization Closed-Loop Pipeline",
@@ -170,9 +180,9 @@ Examples:
         critical_case_ids=[x.strip() for x in args.critical_cases.split(",") if x.strip()],
     )
 
-    # output_dir 路径安全：拒绝 `..` 越界（CI 模式尤其需要，避免任意文件写入）
-    if ".." in os.path.normpath(cfg.output_dir).split(os.sep):
-        print(f"  ❌ output-dir 含 '..' 越界路径，拒绝: {cfg.output_dir}")
+    # output_dir 路径安全：必须位于仓库根目录内（拒绝 `..` 越界与外部绝对路径）
+    if not is_output_dir_allowed(cfg.output_dir):
+        print(f"  ❌ output-dir 必须位于仓库内（{_REPO_ROOT}），拒绝: {cfg.output_dir}")
         return 1
 
     # Initialize audit tracer
