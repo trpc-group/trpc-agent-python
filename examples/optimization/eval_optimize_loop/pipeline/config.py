@@ -29,8 +29,9 @@ class PipelineConfig:
     max_cost_budget: float = 10.0
     critical_case_ids: list[str] = field(default_factory=list)
 
-    # Output
-    output_dir: str = "."
+    # Output（与 run_pipeline.py argparse --output-dir 默认值一致，
+    # 避免 "." 默认值使 is_output_dir_allowed 误拒仓库根、复现命令失真）
+    output_dir: str = "sample_output"
     mode: str = "fake"       # "fake" or "live"
     verbose: bool = False
     ci_mode: bool = False    # Exit non-zero on failure

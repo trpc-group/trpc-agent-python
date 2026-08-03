@@ -413,9 +413,12 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
             # 否定语境只看候选紧邻的后文（前文不查：前面句子的 "not " 常属
             # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）；
             # 只用明确指向该候选的否定词（去掉 error/invalid/no,/not, 等
-            # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16
-            _after = act_final[_m.end(): _m.end() + 15].lower()
-            if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake")):
+            # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16。
+            # 窗口 25 字符 + 补充变体（not right/should be/false）覆盖
+            # "= 15 . The previous value is incorrect" 类稍远否定
+            _after = act_final[_m.end(): _m.end() + 25].lower()
+            if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
+                                         "not right", "should be", "false")):
                 continue
             eq_nums.append(_num)
         candidates = eq_nums if eq_nums else [act_nums[-1]] if act_nums else []
