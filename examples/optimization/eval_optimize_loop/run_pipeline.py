@@ -126,6 +126,31 @@ def is_output_dir_allowed(output_dir: str) -> bool:
     return _out_abs.startswith(_root_abs + os.sep)
 
 
+def live_gate_downgrade(gate: GateResult, *, live: bool,
+                        optimization_cost: float,
+                        max_cost_budget: float) -> GateResult:
+    """live 模式下把不可比评分驱动的 ACCEPT/REJECT 降级为 NEEDS_REVIEW。
+
+    baseline=SDK 评分、候选=trace comparator 重评，口径不可比；除"成本超预算"
+    （真实约束、与评分口径无关）外，依赖 pass-rate 差值的 ACCEPT 与各类 REJECT
+    （退化/关键 case/过拟合/新增失败）一律降级，避免误判 ACCEPT 或 CI 阻断。
+
+    Returns:
+        处理后的 gate（可能已降级为 NEEDS_REVIEW）。
+    """
+    if (live and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
+            and not (gate.decision == GateDecision.REJECT
+                     and optimization_cost > max_cost_budget)):
+        return GateResult(
+            decision=GateDecision.NEEDS_REVIEW,
+            reason=("live mode: " + gate.decision.value.upper()
+                    + " downgraded to review — baseline=SDK vs "
+                    f"candidate=trace-comparator scoring differ: {gate.reason}"),
+            details=gate.details,
+        )
+    return gate
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Evaluation + Optimization Closed-Loop Pipeline",
@@ -444,21 +469,15 @@ Examples:
         validation_new_failed=[d.eval_id for d in validation.deltas if d.change == "new_fail"],
     )
 
-    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比。
-    # 除"成本超预算"（真实约束、与评分口径无关，直接用数值判断）外，依赖
-    # pass-rate 差值的 ACCEPT 与各类 REJECT（退化/关键 case/过拟合/新增失败）
-    # 一律降级 NEEDS_REVIEW，避免不可比评分误判 ACCEPT 或触发 CI 阻断。
-    if (cfg.mode == "live"
-            and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
-            and not (gate.decision == GateDecision.REJECT
-                     and optimization_cost > cfg.max_cost_budget)):
-        gate = GateResult(
-            decision=GateDecision.NEEDS_REVIEW,
-            reason=("live mode: " + gate.decision.value.upper()
-                    + " downgraded to review — baseline=SDK vs "
-                    f"candidate=trace-comparator scoring differ: {gate.reason}"),
-            details=gate.details,
-        )
+    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比：
+    # 除"成本超预算"外，依赖 pass-rate 差值的 ACCEPT/REJECT 一律降级 NEEDS_REVIEW。
+    _downgraded = live_gate_downgrade(
+        gate, live=(cfg.mode == "live"),
+        optimization_cost=optimization_cost,
+        max_cost_budget=cfg.max_cost_budget,
+    )
+    if _downgraded.decision != gate.decision:
+        gate = _downgraded
         tracer.add_warning(
             "live mode: gate decision downgraded to NEEDS_REVIEW "
             "(incomparable SDK/comparator scoring)"
