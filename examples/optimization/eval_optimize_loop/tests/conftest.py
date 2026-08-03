@@ -91,7 +91,9 @@ def all_fail_baseline():
 
 @pytest.fixture
 def temp_evalset():
-    """Create a temporary evalset JSON file."""
+    """Create a temporary evalset JSON file (auto-cleaned at teardown)."""
+    created: list[str] = []
+
     def _create(cases: list[dict], evalset_id: str = "temp-evalset") -> str:
         data = {
             "eval_set_id": evalset_id,
@@ -102,20 +104,26 @@ def temp_evalset():
             mode="w", suffix=".json", delete=False, encoding="utf-8"
         ) as f:
             json.dump(data, f)
+            created.append(f.name)
             return f.name
-    return _create
+    yield _create
+    cleanup_temp(*created)
 
 
 @pytest.fixture
 def temp_json_file():
-    """Create a temporary JSON file with given content."""
+    """Create a temporary JSON file with given content (auto-cleaned at teardown)."""
+    created: list[str] = []
+
     def _create(data: dict) -> str:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False, encoding="utf-8"
         ) as f:
             json.dump(data, f)
+            created.append(f.name)
             return f.name
-    return _create
+    yield _create
+    cleanup_temp(*created)
 
 
 def cleanup_temp(*paths: str) -> None:

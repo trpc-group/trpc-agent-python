@@ -26,7 +26,6 @@ class PipelineConfig:
 
     # Gate
     min_improvement_threshold: float = 0.05
-    allow_no_degradation: bool = True
     max_cost_budget: float = 10.0
     critical_case_ids: list[str] = field(default_factory=list)
 
