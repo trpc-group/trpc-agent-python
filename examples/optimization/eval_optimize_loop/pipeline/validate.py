@@ -281,10 +281,15 @@ def run_validation_trace(
     # 避免"train 提升 + val 无退化"被误 ACCEPT（reviewer 指出的问题）
     effective_regression = val_regression_cases
     if strat == "overfit" and not effective_regression and val_cases:
-        # 只选"可扰动"的 case（conversation[0].final_response.parts 存在）作为回归候选，
-        # 避免选到无法制造退化的 case 落到下方 new_failures==0 的报错。
-        perturbable = [c for c in val_cases if _case_is_perturbable(c)]
-        pool = perturbable or val_cases
+        # 优先选"可扰动 且 baseline 通过"的 case（扰动后才能产生 new_fail）；
+        # 只选可扰动的会选到 baseline 已失败的 case，扰动后仍不产生 new_fail，
+        # 落到下方 new_failures==0 的报错。
+        bl_pass = {c.get("eval_id"): c.get("pass", True)
+                   for c in baseline_val.per_case_results}
+        eligible = [c for c in val_cases
+                    if _case_is_perturbable(c)
+                    and bl_pass.get(str(c.get("eval_id", "")), True)]
+        pool = eligible or val_cases
         effective_regression = [str(c.get("eval_id", "")) for c in pool[:2]]
 
     if strat == "overfit" and not effective_regression:

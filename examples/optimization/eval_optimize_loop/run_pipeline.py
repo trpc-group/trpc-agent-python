@@ -185,9 +185,11 @@ Examples:
         critical_case_ids=[x.strip() for x in args.critical_cases.split(",") if x.strip()],
     )
 
-    # output_dir 路径安全：必须位于仓库根目录内（拒绝 `..` 越界与外部绝对路径）
+    # output_dir 路径安全：必须位于仓库根目录内（拒绝 `..` 越界与外部绝对路径）。
+    # 相对路径按 CWD 解析，默认 `sample_output` 需在仓库目录内运行本脚本。
     if not is_output_dir_allowed(cfg.output_dir):
         print(f"  ❌ output-dir 必须位于仓库内（{_REPO_ROOT}），拒绝: {cfg.output_dir}")
+        print("     提示：请先 cd 到仓库目录再运行 run_pipeline.py（相对路径按当前目录解析）。")
         return 1
 
     # Initialize audit tracer
@@ -443,12 +445,13 @@ Examples:
     )
 
     # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比。
-    # 除"成本超预算"（真实约束、与评分口径无关）外，依赖 pass-rate 差值的
-    # ACCEPT 与各类 REJECT（退化/关键 case/过拟合/新增失败）一律降级
-    # NEEDS_REVIEW，避免不可比评分误判 ACCEPT 或触发 CI 阻断。
+    # 除"成本超预算"（真实约束、与评分口径无关，直接用数值判断）外，依赖
+    # pass-rate 差值的 ACCEPT 与各类 REJECT（退化/关键 case/过拟合/新增失败）
+    # 一律降级 NEEDS_REVIEW，避免不可比评分误判 ACCEPT 或触发 CI 阻断。
     if (cfg.mode == "live"
             and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
-            and not (gate.decision == GateDecision.REJECT and "exceeds budget" in gate.reason)):
+            and not (gate.decision == GateDecision.REJECT
+                     and optimization_cost > cfg.max_cost_budget)):
         gate = GateResult(
             decision=GateDecision.NEEDS_REVIEW,
             reason=("live mode: " + gate.decision.value.upper()
