@@ -74,6 +74,63 @@ async def test_live_backend_uses_sanitized_config_temporary_target_and_archives_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
+    ("secret_path", "secret_payload"),
+    [
+        ("auth_token", {"evaluate": {}, "optimize": {"auth_token": "plain-token"}}),
+        (
+            "headers.authorization_token",
+            {"evaluate": {}, "optimize": {"headers": {"authorization_token": "plain-token"}}},
+        ),
+    ],
+)
+async def test_live_backend_rejects_literal_token_like_runtime_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    secret_path: str,
+    secret_payload: dict[str, object],
+) -> None:
+    async def should_not_run(**_kwargs):
+        raise AssertionError("optimizer must not receive literal runtime secrets")
+
+    monkeypatch.setattr(AgentOptimizer, "optimize", should_not_run)
+    backend = AgentOptimizerBackend(raw_config=secret_payload, candidate_scope="best_only")
+    with pytest.raises(PipelineExecutionError, match=secret_path):
+        await backend.generate_candidates(
+            baseline_prompts=_baseline(),
+            train_dataset_path=DATASET,
+            validation_dataset_path=EXAMPLE_DIR / "val.evalset.json",
+            output_dir=tmp_path,
+        )
+
+
+@pytest.mark.asyncio
+async def test_live_backend_accepts_placeholder_token_like_runtime_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, object] = {}
+
+    async def fake_optimize(**kwargs):
+        observed.update(kwargs)
+        return _result()
+
+    monkeypatch.setattr(AgentOptimizer, "optimize", fake_optimize)
+    backend = AgentOptimizerBackend(
+        raw_config={"evaluate": {}, "optimize": {"auth_token": "${TRPC_AGENT_AUTH_TOKEN}"}},
+        candidate_scope="best_only",
+    )
+    await backend.generate_candidates(
+        baseline_prompts=_baseline(),
+        train_dataset_path=DATASET,
+        validation_dataset_path=EXAMPLE_DIR / "val.evalset.json",
+        output_dir=tmp_path,
+    )
+    payload = json.loads(Path(observed["config_path"]).read_text(encoding="utf-8"))
+    assert payload["optimize"]["auth_token"] == "${TRPC_AGENT_AUTH_TOKEN}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
     ("scope", "expected_ids", "expected_duplicates", "expected_skipped"),
     [
         ("best_only", ["best"], {}, []),

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from examples.optimization.eval_optimize_loop.pipeline.prompt_sandbox import PromptSandbox, SourceRestoreError
 from examples.optimization.eval_optimize_loop.run_pipeline import run_fake_pipeline
 
 
@@ -32,6 +33,47 @@ async def test_fake_loop_does_not_require_live_model_key(monkeypatch: pytest.Mon
     monkeypatch.delenv("TRPC_AGENT_API_KEY", raising=False)
     report = await run_fake_pipeline(output_dir=tmp_path)
     assert report.mode == "fake"
+
+
+@pytest.mark.asyncio
+async def test_prompt_sandbox_preserves_evaluation_error_when_restore_verification_fails() -> None:
+    class BrokenRestoreTarget:
+        def __init__(self) -> None:
+            self.prompts = {"system_prompt": "BASELINE"}
+
+        async def read_all(self) -> dict[str, str]:
+            return dict(self.prompts)
+
+        async def write_all(self, prompts: dict[str, str]) -> None:
+            self.prompts = dict(prompts)
+            if prompts == {"system_prompt": "BASELINE"}:
+                self.prompts = {"system_prompt": "STILL_CHANGED"}
+
+    with pytest.raises(RuntimeError, match="evaluation failed") as exc_info:
+        async with PromptSandbox(BrokenRestoreTarget(), {"system_prompt": "CANDIDATE"}):
+            raise RuntimeError("evaluation failed")
+
+    notes = getattr(exc_info.value, "__notes__", [])
+    assert any("PromptSandbox restore failed: baseline prompt restoration failed" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_prompt_sandbox_raises_restore_error_without_original_exception() -> None:
+    class BrokenRestoreTarget:
+        def __init__(self) -> None:
+            self.prompts = {"system_prompt": "BASELINE"}
+
+        async def read_all(self) -> dict[str, str]:
+            return dict(self.prompts)
+
+        async def write_all(self, prompts: dict[str, str]) -> None:
+            self.prompts = dict(prompts)
+            if prompts == {"system_prompt": "BASELINE"}:
+                self.prompts = {"system_prompt": "STILL_CHANGED"}
+
+    with pytest.raises(SourceRestoreError, match="baseline prompt restoration failed"):
+        async with PromptSandbox(BrokenRestoreTarget(), {"system_prompt": "CANDIDATE"}):
+            pass
 
 
 @pytest.mark.asyncio

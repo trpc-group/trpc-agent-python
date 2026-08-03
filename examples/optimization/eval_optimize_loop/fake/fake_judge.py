@@ -12,6 +12,9 @@ from trpc_agent_sdk.evaluation._evaluator_base import Evaluator
 from trpc_agent_sdk.evaluation._evaluator_registry import EVALUATOR_REGISTRY
 
 
+_FAKE_RUBRIC_REGISTERED = False
+
+
 @dataclass(frozen=True)
 class FakeRubricResult:
     score: float
@@ -135,4 +138,8 @@ class FakeRubricEvaluator(Evaluator):
 
 def register_fake_rubric_evaluator() -> None:
     """Register the example-only evaluator with the SDK's existing registry."""
+    global _FAKE_RUBRIC_REGISTERED
+    if _FAKE_RUBRIC_REGISTERED:
+        return
     EVALUATOR_REGISTRY.register("fake_rubric_score", FakeRubricEvaluator)
+    _FAKE_RUBRIC_REGISTERED = True

@@ -115,6 +115,11 @@ def test_fake_rubric_scores_exact_response_and_required_argument_deterministical
     assert score_fake_response('{"route":"order_lookup","tool":"lookup_order","arguments":{"order_id":"A100"}}', EXPECTED_ORDER) == 0.25
 
 
+def test_fake_rubric_registration_is_idempotent() -> None:
+    register_fake_rubric_evaluator()
+    register_fake_rubric_evaluator()
+
+
 @pytest.mark.asyncio
 async def test_registry_evaluates_fake_evalset_with_both_metrics_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TRPC_AGENT_API_KEY", raising=False)

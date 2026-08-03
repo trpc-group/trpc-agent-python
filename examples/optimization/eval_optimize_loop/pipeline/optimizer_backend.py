@@ -10,7 +10,7 @@ from typing import Any, Awaitable, Callable, Protocol
 from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
 from ..fake.fake_agent import FakeSupportAgent
-from .config import canonical_sha256
+from .config import canonical_sha256, sanitize_config
 from .models import CandidateRecord, GateDecision
 
 
@@ -36,14 +36,26 @@ def _runtime_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     except KeyError as exc:
         raise PipelineExecutionError(f"live optimizer config is missing {exc.args[0]!r}") from exc
 
+    sensitive_names = {
+        "apikey",
+        "authtoken",
+        "authorizationtoken",
+        "accesstoken",
+        "refreshtoken",
+        "bearertoken",
+        "secret",
+        "password",
+        "credential",
+    }
+
+    def is_sensitive_key(key: object) -> bool:
+        normalized = "".join(character for character in str(key).lower() if character.isalnum())
+        return any(normalized == name or normalized.endswith(name) for name in sensitive_names)
+
     def reject_literal_secrets(value: object, path: tuple[str, ...] = ()) -> None:
         if isinstance(value, dict):
             for key, nested in value.items():
-                normalized = "".join(character for character in str(key).lower() if character.isalnum())
-                is_secret = normalized == "key" or normalized.endswith("key") or any(
-                    marker in normalized for marker in ("token", "secret", "password", "credential")
-                )
-                if is_secret and isinstance(nested, str) and not (nested.startswith("${") and nested.endswith("}")):
+                if is_sensitive_key(key) and isinstance(nested, str) and not (nested.startswith("${") and nested.endswith("}")):
                     raise PipelineExecutionError(f"runtime config refuses literal secret at {'.'.join((*path, str(key)))}")
                 reject_literal_secrets(nested, (*path, str(key)))
         elif isinstance(value, list):
@@ -95,7 +107,10 @@ class AgentOptimizerBackend:
         optimizer_dir = output_dir / "optimizer" / "agent_optimizer"
         optimizer_dir.mkdir(parents=True, exist_ok=True)
         runtime_path = optimizer_dir / "_optimizer.runtime.json"
-        runtime_path.write_text(json.dumps(_runtime_config(self._raw_config), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        runtime_path.write_text(
+            json.dumps(sanitize_config(_runtime_config(self._raw_config)), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
         with tempfile.TemporaryDirectory(prefix="trpc-agent-issue91-live-") as temporary_dir:
             prompt_dir = Path(temporary_dir)

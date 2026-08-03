@@ -20,6 +20,7 @@ from examples.optimization.eval_optimize_loop.pipeline.models import (
     SplitReport,
 )
 from examples.optimization.eval_optimize_loop.pipeline.reporter import write_reports
+from trpc_agent_sdk.evaluation._eval_config import EvalConfig
 
 
 def _case(eval_id: str, *, passed: bool, score: float) -> CaseSnapshot:
@@ -96,10 +97,7 @@ async def test_evaluate_split_rejects_missing_eval_case_results(monkeypatch: pyt
         ),
         encoding="utf-8",
     )
-    (tmp_path / "optimizer.json").write_text(
-        json.dumps({"evaluate": {"metrics": [{"metric_name": "fake_rubric_score", "threshold": 0.75}]}}),
-        encoding="utf-8",
-    )
+    eval_config = EvalConfig.model_validate({"metrics": [{"metric_name": "fake_rubric_score", "threshold": 0.75}]})
 
     async def incomplete_evaluate_eval_set(
         *_args: object,
@@ -116,6 +114,55 @@ async def test_evaluate_split_rejects_missing_eval_case_results(monkeypatch: pyt
         await evaluate_split(
             eval_set_path,
             call_agent=call_agent,
+            eval_config=eval_config,
+            split="train",
+            metric_weights={"fake_rubric_score": 1.0},
+        )
+
+
+@pytest.mark.asyncio
+async def test_evaluate_split_uses_explicit_eval_config_without_adjacent_optimizer_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    eval_set_path = tmp_path / "nested" / "train.evalset.json"
+    eval_set_path.parent.mkdir()
+    eval_set_path.write_text(
+        json.dumps(
+            {
+                "eval_set_id": "fake",
+                "eval_cases": [
+                    {
+                        "eval_id": "case_one",
+                        "conversation": [
+                            {
+                                "user_content": {"role": "user", "parts": [{"text": "one"}]},
+                                "final_response": {"role": "model", "parts": [{"text": "{}"}]},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    eval_config = EvalConfig.model_validate({"metrics": [{"metric_name": "fake_rubric_score", "threshold": 0.75}]})
+
+    async def complete_evaluate_eval_set(
+        *_args: object,
+        **_kwargs: object,
+    ) -> tuple[None, None, None, dict[str, list[object]]]:
+        return None, None, None, {}
+
+    monkeypatch.setattr(evaluator_module.AgentEvaluator, "evaluate_eval_set", complete_evaluate_eval_set)
+
+    async def call_agent(_query: str) -> str:
+        return "{}"
+
+    with pytest.raises(ValueError, match="missing=\\['case_one'\\]"):
+        await evaluate_split(
+            eval_set_path,
+            call_agent=call_agent,
+            eval_config=eval_config,
             split="train",
             metric_weights={"fake_rubric_score": 1.0},
         )

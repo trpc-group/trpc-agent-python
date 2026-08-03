@@ -36,9 +36,19 @@ def _is_sensitive_key(key: object) -> bool:
     )
 
 
+def _is_env_placeholder(value: object) -> bool:
+    return isinstance(value, str) and value.startswith("${") and value.endswith("}")
+
+
 def sanitize_config(value: object) -> object:
     if isinstance(value, dict):
-        return {key: "***REDACTED***" if _is_sensitive_key(key) else sanitize_config(item) for key, item in value.items()}
+        sanitized: dict[object, object] = {}
+        for key, item in value.items():
+            if _is_sensitive_key(key):
+                sanitized[key] = item if _is_env_placeholder(item) else "***REDACTED***"
+            else:
+                sanitized[key] = sanitize_config(item)
+        return sanitized
     if isinstance(value, list):
         return [sanitize_config(item) for item in value]
     return value

@@ -1,13 +1,13 @@
 {
   "attribution_summary": {},
   "audit_references": {
-    "candidate_reports_path": "audit\\candidate_reports.json",
+    "candidate_reports_path": "audit/candidate_reports.json",
     "config_snapshot_path": "input.snapshot.json",
     "environment_snapshot_path": "environment.snapshot.json",
-    "gate_decisions_path": "audit\\gate_decisions.json",
+    "gate_decisions_path": "audit/gate_decisions.json",
     "input_snapshot_path": "input.snapshot.json",
-    "normalized_reports_path": "audit\\normalized_reports.json",
-    "raw_reports_path": "audit\\raw_reports.json"
+    "normalized_reports_path": "audit/normalized_reports.json",
+    "raw_reports_path": "audit/raw_reports.json"
   },
   "baseline_train": {
     "aggregate_score": 0.20000000000000004,

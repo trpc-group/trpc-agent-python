@@ -10,6 +10,8 @@ from examples.optimization.eval_optimize_loop.pipeline.audit import (
     write_input_snapshot,
 )
 from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeline_config
+from examples.optimization.eval_optimize_loop.pipeline.models import OptimizationReport
+from examples.optimization.eval_optimize_loop.pipeline.reporter import write_reports, write_secret_free_json
 from trpc_agent_sdk.evaluation import TargetPrompt
 
 
@@ -196,3 +198,22 @@ def test_environment_snapshot_excludes_arbitrary_environment_variables(monkeypat
     assert "ARBITRARY_SECRET" not in snapshot
     assert "must-not-appear" not in snapshot
     assert json.loads(snapshot)["mode"] == "trace"
+
+
+def test_report_json_serializes_audit_reference_paths_as_posix(tmp_path: Path) -> None:
+    report = OptimizationReport.empty(mode="fake", seed=42)
+
+    json_path, _ = write_reports(report, tmp_path)
+
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    references = payload["audit_references"]
+    assert references["candidate_reports_path"] == "audit/candidate_reports.json"
+    assert all("\\" not in value for value in references.values())
+
+
+def test_secret_free_json_serializes_path_values_as_posix(tmp_path: Path) -> None:
+    path = tmp_path / "payload.json"
+
+    write_secret_free_json(path, {"audit_path": Path("audit") / "candidate_reports.json"})
+
+    assert json.loads(path.read_text(encoding="utf-8"))["audit_path"] == "audit/candidate_reports.json"

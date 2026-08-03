@@ -76,6 +76,8 @@ def _stable_trace_projection(results_by_eval_id: dict[str, list[object]]) -> dic
 
 async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
     config = load_pipeline_config(HERE / "optimizer.json", mode="fake")
+    eval_config = EvalConfig.model_validate(config.raw["evaluate"])
+    register_fake_rubric_evaluator()
     report = OptimizationReport.empty(mode="fake", seed=config.pipeline.reproducibility.seed)
     report.run_metadata = {"evaluation_source": "fixture", "independent_candidate_evaluation": True}
     with tempfile.TemporaryDirectory(prefix="trpc-agent-issue91-") as temporary_dir:
@@ -89,7 +91,13 @@ async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
         write_input_snapshot(config, target, output_dir)
         write_environment_snapshot("fake", report.seed, output_dir)
         fake_agent = FakeSupportAgent(target)
-        evaluate = lambda path, split: evaluate_split(path, call_agent=fake_agent.call_agent, split=split, metric_weights=config.pipeline.metric_weights)
+        evaluate = lambda path, split: evaluate_split(
+            path,
+            call_agent=fake_agent.call_agent,
+            eval_config=eval_config,
+            split=split,
+            metric_weights=config.pipeline.metric_weights,
+        )
         baseline_train = await evaluate(HERE / "train.evalset.json", "train")
         baseline_validation = await evaluate(HERE / "val.evalset.json", "validation")
         report.baseline_train = baseline_train
@@ -148,6 +156,8 @@ async def run_trace_pipeline(*, output_dir: Path) -> OptimizationReport:
 async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
     """Run the public optimizer API, then independently evaluate its proposals."""
     config = load_pipeline_config(HERE / "optimizer.json", mode="live")
+    eval_config = EvalConfig.model_validate(config.raw["evaluate"])
+    register_fake_rubric_evaluator()
     report = OptimizationReport.empty(mode="live", seed=config.pipeline.reproducibility.seed)
     report.run_metadata = {"evaluation_source": "independent_full_train_validation", "independent_candidate_evaluation": True, "write_back_default": False}
     source_prompt_dir = HERE / "agent" / "prompts"
@@ -172,6 +182,7 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
         evaluate = lambda path, split: evaluate_split(
             path,
             call_agent=fake_agent.call_agent,
+            eval_config=eval_config,
             split=split,
             metric_weights=config.pipeline.metric_weights,
         )

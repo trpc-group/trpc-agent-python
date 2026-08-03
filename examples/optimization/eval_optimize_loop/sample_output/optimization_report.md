@@ -4,7 +4,7 @@
 - Seed: `42`
 - Selected candidate: `candidate_general_fix`
 - Source integrity: `restored`
-- Audit evidence: `audit\gate_decisions.json`
+- Audit evidence: `audit/gate_decisions.json`
 
 ## Baseline
 

@@ -11,9 +11,9 @@ from .models import OptimizationReport
 
 def _json_safe(value: object) -> object:
     if isinstance(value, BaseModel):
-        return _json_safe(value.model_dump(mode="json"))
+        return _json_safe(value.model_dump(mode="python"))
     if isinstance(value, Path):
-        return str(value)
+        return value.as_posix()
     if isinstance(value, dict):
         return {str(key): _json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -74,7 +74,10 @@ def write_reports(
     write_audit_artifacts(report, output_dir, raw_payload=raw_payload, normalized_payload=normalized_payload)
     json_path = output_dir / "optimization_report.json"
     markdown_path = output_dir / "optimization_report.md"
-    json_path.write_text(json.dumps(sanitize_config(report.model_dump(mode="json")), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    json_path.write_text(
+        json.dumps(sanitize_config(_json_safe(report)), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     lines = [
         "# Optimization Report",
         "",
@@ -82,7 +85,7 @@ def write_reports(
         f"- Seed: `{report.seed}`",
         f"- Selected candidate: `{report.selected_candidate_id or 'none'}`",
         f"- Source integrity: `{report.source_integrity}`",
-        f"- Audit evidence: `{report.audit_references.gate_decisions_path}`",
+        f"- Audit evidence: `{report.audit_references.gate_decisions_path.as_posix()}`",
         "",
         "## Baseline",
         "",
