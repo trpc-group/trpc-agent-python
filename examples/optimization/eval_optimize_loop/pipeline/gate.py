@@ -62,36 +62,60 @@ def evaluate_gate(
     candidate_failed = candidate_failed or []
     critical_case_ids = critical_case_ids or []
 
-    checks = []
-
-    # Check 1: Overall improvement
+    # Compute all checks up-front so every decision path carries full audit
+    # detail (no early return drops the remaining checks).
     improvement = candidate_pass_rate - baseline_pass_rate
-    checks.append({
-        "check": "improvement_threshold",
-        "passed": improvement >= min_improvement,
-        "detail": f"Improvement: {improvement:+.2%} (threshold: {min_improvement:+.0%})",
-    })
+    newly_failed = set(candidate_failed) - set(baseline_failed)
+    critical_train_regressed = set(critical_case_ids) & newly_failed
+    critical_val_regressed = set(critical_case_ids) & set(validation_new_failed or [])
+    critical_regressed = critical_train_regressed | critical_val_regressed
 
-    # Check 2: No regression (candidate worse than baseline)
+    checks = [
+        {
+            "check": "improvement_threshold",
+            "passed": improvement >= min_improvement,
+            "detail": f"Improvement: {improvement:+.2%} (threshold: {min_improvement:+.0%})",
+        },
+        {
+            "check": "no_degradation",
+            "passed": improvement >= 0,
+            "detail": (f"No regression" if improvement >= 0
+                       else f"Candidate pass rate degraded by {abs(improvement):.1%}"),
+        },
+        {
+            "check": "critical_cases",
+            "passed": len(critical_regressed) == 0,
+            "detail": (f"No critical cases regressed" if len(critical_regressed) == 0
+                       else f"Critical cases regressed — train: {sorted(critical_train_regressed) or 'none'}, "
+                            f"validation: {sorted(critical_val_regressed) or 'none'}"),
+        },
+        {
+            "check": "new_failures",
+            "passed": len(newly_failed) == 0,
+            "detail": (f"No new failures" if len(newly_failed) == 0
+                       else f"New failures: {newly_failed}"),
+        },
+        {
+            "check": "overfitting",
+            "passed": validation_new_failures == 0,
+            "detail": (f"No validation regression"
+                       if validation_new_failures == 0
+                       else f"Candidate introduces {validation_new_failures} new failure(s) on validation set"),
+        },
+        {
+            "check": "cost_budget",
+            "passed": optimization_cost <= max_cost,
+            "detail": f"Cost: ${optimization_cost:.2f} / ${max_cost:.2f}",
+        },
+    ]
+
+    # Decisions (kept in original priority order)
     if improvement < 0:
         return GateResult(
             decision=GateDecision.REJECT,
             reason=f"Candidate pass rate degraded by {abs(improvement):.1%} — rejecting",
             details={"improvement": improvement, "checks": checks},
         )
-
-    # Check 3: Critical case protection (train + validation regressions)
-    newly_failed = set(candidate_failed) - set(baseline_failed)
-    critical_train_regressed = set(critical_case_ids) & newly_failed
-    critical_val_regressed = set(critical_case_ids) & set(validation_new_failed or [])
-    critical_regressed = critical_train_regressed | critical_val_regressed
-    checks.append({
-        "check": "critical_cases",
-        "passed": len(critical_regressed) == 0,
-        "detail": (f"No critical cases regressed" if len(critical_regressed) == 0
-                   else f"Critical cases regressed — train: {sorted(critical_train_regressed) or 'none'}, "
-                        f"validation: {sorted(critical_val_regressed) or 'none'}"),
-    })
 
     if critical_regressed:
         return GateResult(
@@ -106,36 +130,12 @@ def evaluate_gate(
             },
         )
 
-    # Check 4: New hard failures
-    checks.append({
-        "check": "new_failures",
-        "passed": len(newly_failed) == 0,
-        "detail": (f"No new failures" if len(newly_failed) == 0
-                   else f"New failures: {newly_failed}"),
-    })
-
-    # Check 5: Overfitting detection — 候选在验证集上新增失败 → 拒绝
-    checks.append({
-        "check": "overfitting",
-        "passed": validation_new_failures == 0,
-        "detail": (f"No validation regression"
-                   if validation_new_failures == 0
-                   else f"Candidate introduces {validation_new_failures} new failure(s) on validation set"),
-    })
-
     if validation_new_failures > 0:
         return GateResult(
             decision=GateDecision.REJECT,
             reason=f"Overfitting: candidate introduces {validation_new_failures} new failure(s) on validation set",
             details={"validation_new_failures": validation_new_failures, "checks": checks},
         )
-
-    # Check 6: Cost budget
-    checks.append({
-        "check": "cost_budget",
-        "passed": optimization_cost <= max_cost,
-        "detail": f"Cost: ${optimization_cost:.2f} / ${max_cost:.2f}",
-    })
 
     if optimization_cost > max_cost:
         return GateResult(

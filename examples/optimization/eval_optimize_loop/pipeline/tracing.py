@@ -93,6 +93,7 @@ class AuditTracer:
         self._active_stage: str | None = None
         self._stage_start: float = 0.0
         self._pipeline_start = time.monotonic()
+        self._finalized = False
 
     def start_stage(self, stage_name: str) -> None:
         """Begin timing a pipeline stage."""
@@ -157,18 +158,27 @@ class AuditTracer:
         }
 
     def finalize(self) -> AuditTrail:
-        """Complete the audit trail and return it."""
-        self._audit.total_duration_s = round(
-            time.monotonic() - self._pipeline_start, 1
-        )
+        """Complete the audit trail and return it.
 
-        # Build reproduce command unless a full one was injected at construction
-        # (run_pipeline.py provides one covering all non-default CLI args).
-        if not self._audit.reproduce_command:
-            parts = [f"python run_pipeline.py --mode {self._audit.mode}"]
-            if self._audit.seed != 42:
-                parts.append(f"--seed {self._audit.seed}")
-            self._audit.reproduce_command = " ".join(parts)
+        Idempotent: only the first call freezes total_duration_s and the
+        reproduce command, so the report (via to_dict) and the terminal
+        summary see identical values.
+        """
+        if not self._finalized:
+            self._audit.total_duration_s = round(
+                time.monotonic() - self._pipeline_start, 1
+            )
+
+            # Build reproduce command unless a full one was injected at
+            # construction (run_pipeline.py provides one covering all
+            # non-default CLI args).
+            if not self._audit.reproduce_command:
+                parts = [f"python run_pipeline.py --mode {self._audit.mode}"]
+                if self._audit.seed != 42:
+                    parts.append(f"--seed {self._audit.seed}")
+                self._audit.reproduce_command = " ".join(parts)
+
+            self._finalized = True
 
         return self._audit
 

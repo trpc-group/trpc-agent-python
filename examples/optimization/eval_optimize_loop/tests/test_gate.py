@@ -81,6 +81,23 @@ class TestEvaluateGate:
         assert result.decision == GateDecision.REJECT
         assert "degraded" in result.reason.lower()
 
+    def test_reject_degradation_includes_all_checks(self):
+        # 即使 improvement<0 提前 REJECT，审计里也必须包含全部 6 项 check。
+        result = evaluate_gate(
+            baseline_pass_rate=0.8, candidate_pass_rate=0.6,
+            baseline_metrics={}, candidate_metrics={},
+            critical_case_ids=["critical_001"],
+            baseline_failed=[], candidate_failed=["critical_001"],
+            validation_new_failures=2,
+            max_cost=5.0, optimization_cost=15.0,
+        )
+        assert result.decision == GateDecision.REJECT
+        check_names = [c["check"] for c in result.details["checks"]]
+        assert check_names == [
+            "improvement_threshold", "no_degradation", "critical_cases",
+            "new_failures", "overfitting", "cost_budget",
+        ]
+
     def test_reject_critical_case(self):
         result = evaluate_gate(
             baseline_pass_rate=0.5, candidate_pass_rate=0.6,

@@ -127,6 +127,22 @@ class TestRunOptimizeFake:
         result = run_optimize_fake(attribution, config)
         assert result.total_iterations <= 2
 
+    def test_converged_when_all_categories_fixed(self, sample_baseline):
+        # 3 个失败类别、max_iterations=3 恰好全修 → 视为收敛
+        attribution = attribute_failures(sample_baseline.__dict__, {})
+        assert len(attribution.by_category) == 3
+        result = run_optimize_fake(attribution, load_pipeline_config(max_iterations=3))
+        assert result.total_iterations == 3
+        assert result.converged is True
+
+    def test_not_converged_when_capped_by_iterations(self, sample_baseline):
+        # max_iterations=1 只修了 3 类中的 1 类 → 未收敛
+        attribution = attribute_failures(sample_baseline.__dict__, {})
+        assert len(attribution.by_category) == 3
+        result = run_optimize_fake(attribution, load_pipeline_config(max_iterations=1))
+        assert result.total_iterations == 1
+        assert result.converged is False
+
     def test_optimized_fields_present(self, sample_baseline):
         attribution = attribute_failures(sample_baseline.__dict__, {})
         config = load_pipeline_config()
