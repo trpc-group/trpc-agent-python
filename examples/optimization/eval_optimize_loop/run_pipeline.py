@@ -57,6 +57,58 @@ from pipeline.optimize import (
 from pipeline.tracing import AuditTracer
 
 
+def build_reproduce_command(args: argparse.Namespace) -> str:
+    """Build a complete reproduce command from CLI args.
+
+    Only non-default args are appended, so a default run stays minimal
+    while non-default configurations can be reproduced exactly.
+    """
+    parts = [f"python run_pipeline.py --mode {args.mode}"]
+    if args.seed != 42:
+        parts.append(f"--seed {args.seed}")
+    if args.scenario != "fix_attributed":
+        parts.append(f"--scenario {args.scenario}")
+    if args.max_iterations != 3:
+        parts.append(f"--max-iterations {args.max_iterations}")
+    if args.min_improvement != 0.05:
+        parts.append(f"--min-improvement {args.min_improvement}")
+    if args.max_cost != 10.0:
+        parts.append(f"--max-cost {args.max_cost}")
+    if args.output_dir != "sample_output":
+        parts.append(f"--output-dir {args.output_dir}")
+    if args.train_evalset != "data/train.evalset.json":
+        parts.append(f"--train-evalset {args.train_evalset}")
+    if args.val_evalset != "data/val.evalset.json":
+        parts.append(f"--val-evalset {args.val_evalset}")
+    if args.holdout_evalset != "data/holdout.evalset.json":
+        parts.append(f"--holdout-evalset {args.holdout_evalset}")
+    if args.optimizer_config != "data/optimizer.json":
+        parts.append(f"--optimizer-config {args.optimizer_config}")
+    if args.val_regression_cases:
+        parts.append(f"--val-regression-cases {args.val_regression_cases}")
+    if args.critical_cases:
+        parts.append(f"--critical-cases {args.critical_cases}")
+    if args.verbose:
+        parts.append("--verbose")
+    if args.ci:
+        parts.append("--ci")
+    return " ".join(parts)
+
+
+def ci_exit_code(decision: GateDecision, ci_mode: bool) -> int:
+    """Map a gate decision to the process exit code in CI mode.
+
+    0 = accepted (or CI disabled), 1 = rejected, 2 = needs review.
+    """
+    if not ci_mode:
+        return 0
+    if decision == GateDecision.REJECT:
+        return 1
+    if decision == GateDecision.NEEDS_REVIEW:
+        return 2
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Evaluation + Optimization Closed-Loop Pipeline",
@@ -85,12 +137,14 @@ Examples:
     parser.add_argument("--output-dir", default="sample_output")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--ci", action="store_true",
-                        help="CI mode: exit non-zero on gate rejection")
+                        help="CI mode: exit 1 on gate rejection, 2 on needs-review")
     parser.add_argument("--scenario", default="fix_attributed",
                         choices=["fix_attributed", "noop", "overfit"],
                         help="Candidate generation strategy (default: fix_attributed)")
     parser.add_argument("--val-regression-cases", default="",
                         help="Comma-separated val case ids to regress in overfit scenario")
+    parser.add_argument("--critical-cases", default="",
+                        help="Comma-separated case ids that must not regress on train or validation")
     args = parser.parse_args()
 
     # Generate task ID
@@ -111,10 +165,16 @@ Examples:
         scenario=args.scenario,
         holdout_evalset=args.holdout_evalset,
         val_regression_cases=[x.strip() for x in args.val_regression_cases.split(",") if x.strip()],
+        critical_case_ids=[x.strip() for x in args.critical_cases.split(",") if x.strip()],
     )
 
     # Initialize audit tracer
-    tracer = AuditTracer(seed=cfg.seed, mode=cfg.mode, algorithm=cfg.algorithm)
+    tracer = AuditTracer(
+        seed=cfg.seed,
+        mode=cfg.mode,
+        algorithm=cfg.algorithm,
+        reproduce_command=build_reproduce_command(args),
+    )
     errors: list[str] = []
 
     # ═══════════════════════════════════════════════════════════════
@@ -283,6 +343,7 @@ Examples:
         max_cost=cfg.max_cost_budget,
         optimization_cost=optimization_cost,
         validation_new_failures=validation.new_failures,
+        validation_new_failed=[d.eval_id for d in validation.deltas if d.change == "new_fail"],
     )
     tracer.end_stage("gate")
     gate_icon = {"accept": "[ACCEPT]", "reject": "[REJECT]", "needs_review": "[REVIEW]"}
@@ -368,11 +429,8 @@ Examples:
     print(f"  Seed:     {cfg.seed}")
     print(f"  Reproduce: {final_audit.reproduce_command}")
 
-    # CI mode exit code
-    if cfg.ci_mode and gate.decision == GateDecision.REJECT:
-        return 1
-
-    return 0
+    # CI mode exit code: 1 = rejected, 2 = needs review
+    return ci_exit_code(gate.decision, cfg.ci_mode)
 
 
 if __name__ == "__main__":

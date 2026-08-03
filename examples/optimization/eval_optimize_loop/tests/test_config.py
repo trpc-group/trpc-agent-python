@@ -134,3 +134,11 @@ class TestPipelineConfig:
     def test_ci_mode(self):
         cfg = load_pipeline_config(ci_mode=True)
         assert cfg.ci_mode is True
+
+    def test_critical_case_ids_override(self):
+        cfg = load_pipeline_config(critical_case_ids=["c1", "c2"])
+        assert cfg.critical_case_ids == ["c1", "c2"]
+
+    def test_critical_case_ids_default_empty(self):
+        cfg = load_pipeline_config()
+        assert cfg.critical_case_ids == []

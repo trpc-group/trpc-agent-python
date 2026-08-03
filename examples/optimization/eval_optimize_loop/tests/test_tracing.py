@@ -123,6 +123,21 @@ class TestAuditTracer:
         # Default seed 42 should be omitted from reproduce command
         assert "--seed 42" not in audit.reproduce_command
 
+    def test_injected_reproduce_command_is_preserved(self):
+        # run_pipeline.py injects a full command covering all non-default args;
+        # finalize() must not overwrite it with the minimal fallback.
+        injected = ("python run_pipeline.py --mode fake --scenario overfit "
+                    "--max-iterations 5 --seed 99")
+        tracer = AuditTracer(seed=99, mode="fake", reproduce_command=injected)
+        audit = tracer.finalize()
+        assert audit.reproduce_command == injected
+
+    def test_injected_reproduce_command_survives_to_dict(self):
+        injected = "python run_pipeline.py --mode live --max-iterations 7"
+        tracer = AuditTracer(mode="live", reproduce_command=injected)
+        audit_dict = tracer.to_dict()
+        assert audit_dict["reproducibility"]["reproduce_command"] == injected
+
     def test_to_dict_structure(self):
         tracer = AuditTracer(seed=42, mode="fake")
         tracer.start_stage("baseline")

@@ -92,6 +92,35 @@ class TestEvaluateGate:
         assert result.decision == GateDecision.REJECT
         assert "Critical case" in result.reason
 
+    def test_reject_critical_case_on_validation(self):
+        # A critical case regressing only on the validation set must trigger
+        # rejection even when train has no new failures.
+        result = evaluate_gate(
+            baseline_pass_rate=0.5, candidate_pass_rate=0.6,
+            baseline_metrics={}, candidate_metrics={},
+            critical_case_ids=["critical_001"],
+            baseline_failed=[],
+            candidate_failed=[],
+            validation_new_failed=["critical_001"],
+        )
+        assert result.decision == GateDecision.REJECT
+        assert "Critical case" in result.reason
+        assert "critical_001" in result.reason
+        assert result.details["critical_val_regressed"] == ["critical_001"]
+
+    def test_accept_when_no_critical_val_regression(self):
+        # Non-critical validation regressions still reject via overfitting,
+        # but the critical-cases check itself passes.
+        result = evaluate_gate(
+            baseline_pass_rate=0.5, candidate_pass_rate=0.7,
+            baseline_metrics={}, candidate_metrics={},
+            critical_case_ids=["critical_001"],
+            validation_new_failed=["ordinary_002"],
+            validation_new_failures=1,
+        )
+        assert result.decision == GateDecision.REJECT
+        assert "Overfitting" in result.reason
+
     def test_reject_over_budget(self):
         result = evaluate_gate(
             baseline_pass_rate=0.5, candidate_pass_rate=0.9,

@@ -37,6 +37,7 @@ def evaluate_gate(
     max_cost: float = 10.0,
     optimization_cost: float = 0.0,
     validation_new_failures: int = 0,
+    validation_new_failed: list[str] | None = None,
 ) -> GateResult:
     """Evaluate whether to accept the optimized candidate.
 
@@ -46,12 +47,13 @@ def evaluate_gate(
         baseline_metrics: Per-metric scores for baseline.
         candidate_metrics: Per-metric scores for candidate.
         min_improvement: Minimum absolute improvement required.
-        critical_case_ids: Cases that must not regress.
+        critical_case_ids: Cases that must not regress (on train or validation).
         baseline_failed: Case IDs that failed in baseline.
         candidate_failed: Case IDs that failed after optimization.
         max_cost: Maximum optimization budget.
         optimization_cost: Actual optimization cost.
         validation_new_failures: Candidate 在验证集上新增的失败数（过拟合检测）。
+        validation_new_failed: 在验证集上新增失败的 case id 列表，用于关键 case 保护。
 
     Returns:
         GateResult with accept/reject/needs_review decision.
@@ -78,21 +80,30 @@ def evaluate_gate(
             details={"improvement": improvement, "checks": checks},
         )
 
-    # Check 3: Critical case protection
+    # Check 3: Critical case protection (train + validation regressions)
     newly_failed = set(candidate_failed) - set(baseline_failed)
-    critical_regressed = set(critical_case_ids) & newly_failed
+    critical_train_regressed = set(critical_case_ids) & newly_failed
+    critical_val_regressed = set(critical_case_ids) & set(validation_new_failed or [])
+    critical_regressed = critical_train_regressed | critical_val_regressed
     checks.append({
         "check": "critical_cases",
         "passed": len(critical_regressed) == 0,
         "detail": (f"No critical cases regressed" if len(critical_regressed) == 0
-                   else f"Critical cases regressed: {critical_regressed}"),
+                   else f"Critical cases regressed — train: {sorted(critical_train_regressed) or 'none'}, "
+                        f"validation: {sorted(critical_val_regressed) or 'none'}"),
     })
 
     if critical_regressed:
         return GateResult(
             decision=GateDecision.REJECT,
-            reason=f"Critical case(s) regressed: {critical_regressed}",
-            details={"critical_regressed": list(critical_regressed), "checks": checks},
+            reason=f"Critical case(s) regressed — train: {sorted(critical_train_regressed) or 'none'}, "
+                   f"validation: {sorted(critical_val_regressed) or 'none'}",
+            details={
+                "critical_regressed": list(critical_regressed),
+                "critical_train_regressed": list(critical_train_regressed),
+                "critical_val_regressed": list(critical_val_regressed),
+                "checks": checks,
+            },
         )
 
     # Check 4: New hard failures

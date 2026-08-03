@@ -80,11 +80,13 @@ class AuditTracer:
         seed: int = 42,
         mode: str = "fake",
         algorithm: str = "gepa_reflective",
+        reproduce_command: str = "",
     ):
         self._audit = AuditTrail(
             seed=seed,
             mode=mode,
             algorithm=algorithm,
+            reproduce_command=reproduce_command,
             python_version=platform.python_version(),
             platform_info=f"{platform.system()} {platform.release()}",
         )
@@ -160,11 +162,13 @@ class AuditTracer:
             time.monotonic() - self._pipeline_start, 1
         )
 
-        # Build reproduce command
-        parts = [f"python run_pipeline.py --mode {self._audit.mode}"]
-        if self._audit.seed != 42:
-            parts.append(f"--seed {self._audit.seed}")
-        self._audit.reproduce_command = " ".join(parts)
+        # Build reproduce command unless a full one was injected at construction
+        # (run_pipeline.py provides one covering all non-default CLI args).
+        if not self._audit.reproduce_command:
+            parts = [f"python run_pipeline.py --mode {self._audit.mode}"]
+            if self._audit.seed != 42:
+                parts.append(f"--seed {self._audit.seed}")
+            self._audit.reproduce_command = " ".join(parts)
 
         return self._audit
 
