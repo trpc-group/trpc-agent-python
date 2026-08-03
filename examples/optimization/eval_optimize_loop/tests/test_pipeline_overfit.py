@@ -117,14 +117,15 @@ class TestOverfittingDetection:
         )
         assert r1_gate.decision == GateDecision.ACCEPT
 
-        # After round 2: should detect degradation
+        # After round 2: val degraded → validate.py 上报 validation_new_failures，
+        # gate 据此 REJECT（过拟合早停）
         r2_gate = evaluate_gate(
             baseline_pass_rate=baseline_train,
             candidate_pass_rate=round2_train,
             baseline_metrics={"val": baseline_val},
             candidate_metrics={"val": round2_val},
             min_improvement=0.1,
+            validation_new_failures=2,
         )
-        # Gate itself doesn't directly check val score degradation
-        # (that's validate.py's job), but it will flag the candidate
-        # if no improvement is detected
+        assert r2_gate.decision == GateDecision.REJECT
+        assert "Overfitting" in r2_gate.reason

@@ -91,6 +91,16 @@ class TestBuildReproduceCommand:
         assert "--ci" in cmd
         assert "--verbose" in cmd
 
+    def test_paths_with_spaces_are_quoted(self):
+        # 路径含空格/shell 元字符时，复现命令必须可原样重放
+        cmd = build_reproduce_command(_ns(
+            output_dir="my results dir",
+            train_evalset="data/my train.json",
+            val_regression_cases="v1,v2",
+        ))
+        assert "--output-dir 'my results dir'" in cmd
+        assert "--train-evalset 'data/my train.json'" in cmd
+
     def test_full_non_default_run(self):
         cmd = build_reproduce_command(_ns(
             mode="live", seed=7, scenario="noop", max_iterations=5,

@@ -16,6 +16,7 @@ Usage:
 import argparse
 import asyncio
 import os
+import shlex
 import sys
 import time
 import uuid
@@ -61,13 +62,14 @@ def build_reproduce_command(args: argparse.Namespace) -> str:
     """Build a complete reproduce command from CLI args.
 
     Only non-default args are appended, so a default run stays minimal
-    while non-default configurations can be reproduced exactly.
+    while non-default configurations can be reproduced exactly. String
+    values are shell-quoted so paths with spaces/metacharacters replay.
     """
-    parts = [f"python run_pipeline.py --mode {args.mode}"]
+    parts = [f"python run_pipeline.py --mode {shlex.quote(args.mode)}"]
     if args.seed != 42:
         parts.append(f"--seed {args.seed}")
     if args.scenario != "fix_attributed":
-        parts.append(f"--scenario {args.scenario}")
+        parts.append(f"--scenario {shlex.quote(args.scenario)}")
     if args.max_iterations != 3:
         parts.append(f"--max-iterations {args.max_iterations}")
     if args.min_improvement != 0.05:
@@ -75,19 +77,19 @@ def build_reproduce_command(args: argparse.Namespace) -> str:
     if args.max_cost != 10.0:
         parts.append(f"--max-cost {args.max_cost}")
     if args.output_dir != "sample_output":
-        parts.append(f"--output-dir {args.output_dir}")
+        parts.append(f"--output-dir {shlex.quote(args.output_dir)}")
     if args.train_evalset != "data/train.evalset.json":
-        parts.append(f"--train-evalset {args.train_evalset}")
+        parts.append(f"--train-evalset {shlex.quote(args.train_evalset)}")
     if args.val_evalset != "data/val.evalset.json":
-        parts.append(f"--val-evalset {args.val_evalset}")
+        parts.append(f"--val-evalset {shlex.quote(args.val_evalset)}")
     if args.holdout_evalset != "data/holdout.evalset.json":
-        parts.append(f"--holdout-evalset {args.holdout_evalset}")
+        parts.append(f"--holdout-evalset {shlex.quote(args.holdout_evalset)}")
     if args.optimizer_config != "data/optimizer.json":
-        parts.append(f"--optimizer-config {args.optimizer_config}")
+        parts.append(f"--optimizer-config {shlex.quote(args.optimizer_config)}")
     if args.val_regression_cases:
-        parts.append(f"--val-regression-cases {args.val_regression_cases}")
+        parts.append(f"--val-regression-cases {shlex.quote(args.val_regression_cases)}")
     if args.critical_cases:
-        parts.append(f"--critical-cases {args.critical_cases}")
+        parts.append(f"--critical-cases {shlex.quote(args.critical_cases)}")
     if args.verbose:
         parts.append("--verbose")
     if args.ci:
@@ -167,6 +169,11 @@ Examples:
         val_regression_cases=[x.strip() for x in args.val_regression_cases.split(",") if x.strip()],
         critical_case_ids=[x.strip() for x in args.critical_cases.split(",") if x.strip()],
     )
+
+    # output_dir 路径安全：拒绝 `..` 越界（CI 模式尤其需要，避免任意文件写入）
+    if ".." in os.path.normpath(cfg.output_dir).split(os.sep):
+        print(f"  ❌ output-dir 含 '..' 越界路径，拒绝: {cfg.output_dir}")
+        return 1
 
     # Initialize audit tracer
     tracer = AuditTracer(

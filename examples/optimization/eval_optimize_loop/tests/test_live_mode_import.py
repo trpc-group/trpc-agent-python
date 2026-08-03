@@ -19,27 +19,29 @@ from pipeline.optimize import OptimizeResult, run_optimize_live
 
 
 class TestLiveModeRobustness:
-    def test_run_baseline_sdk_never_raises(self, data_dir):
-        """run_baseline_sdk 对真实 evalset 不抛异常（成功或降级）。"""
-        cfg = load_pipeline_config(mode="fake")
+    def test_run_baseline_sdk_falls_back_when_sdk_missing(self, monkeypatch, data_dir):
+        """SDK 不可用时 run_baseline_sdk 确定性降级：带 errors、total=0，不抛异常。"""
+        import sys
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", None)
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation._eval_metrics", None)
         result = asyncio.run(run_baseline_sdk(str(data_dir / "train.evalset.json")))
-        # 要么 SDK 成功，要么降级到 trace comparator，都应有结果
-        assert result.total_cases > 0 or result.errors
+        assert result.errors
+        assert result.total_cases == 0
 
     def test_run_baseline_sdk_missing_file(self):
         """不存在的 evalset → errors，不崩。"""
         result = asyncio.run(run_baseline_sdk("nonexistent/path.json"))
         assert result.errors
 
-    def test_run_optimize_live_never_raises(self, data_dir):
-        """run_optimize_live 不抛异常（SDK 失败返回 errors）。"""
-        cfg = load_pipeline_config(
-            mode="live",
-            optimizer_config=str(data_dir / "optimizer.json"),
-        )
+    def test_run_optimize_live_reports_errors_when_sdk_missing(self, monkeypatch, data_dir):
+        """SDK 不可用时 run_optimize_live 返回 OptimizeResult 且 errors 非空（确定性）。"""
+        import sys
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", None)
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation._eval_metrics", None)
+        cfg = load_pipeline_config(mode="live")
         result = asyncio.run(run_optimize_live(str(data_dir / "optimizer.json"), cfg))
         assert isinstance(result, OptimizeResult)
-        # 无论成功还是失败都返回 OptimizeResult
+        assert result.errors
 
     def test_fake_pipeline_performance(self, data_dir):
         """fake 模式完整 pipeline < 3 秒（验收标准 #5：≤3 分钟，巨大余量）。"""
