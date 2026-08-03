@@ -89,8 +89,8 @@ class TestAttributeFailures:
             sample_baseline.__dict__,
             all_fail_baseline.__dict__,
         )
-        # train has 3 failures, val has 4
-        assert report.total_failures >= 3
+        # train 3 失败 + val 4 失败 → 精确断言聚合契约（>=3 会漏掉 val 被丢弃的回归）
+        assert report.total_failures == 7
 
     def test_entries_have_required_fields(self, sample_baseline):
         report = attribute_failures(sample_baseline.__dict__, {})

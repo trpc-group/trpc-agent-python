@@ -18,8 +18,7 @@ class TestOverfittingDetection:
         # val 新增失败（validation_new_failures>0）→ 过拟合 REJECT
         result = evaluate_gate(
             baseline_pass_rate=0.5, candidate_pass_rate=0.8,
-            baseline_metrics={"val_pass_rate": 0.7},
-            candidate_metrics={"val_pass_rate": 0.3},  # Val degraded
+            baseline_metrics={}, candidate_metrics={},  # 仅审计，不参与决策
             min_improvement=0.1,
             baseline_failed=[],
             candidate_failed=["val_critical_001"],  # New failure on val

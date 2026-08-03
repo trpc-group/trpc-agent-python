@@ -217,7 +217,11 @@ async def run_baseline_sdk(
         result.failed_case_ids = failed_case_ids
         result.pass_rate = passed / total if total > 0 else 0.0
         result.per_case_results = per_case
-        result.metric_breakdown = {"overall_pass_rate": result.pass_rate}
+        # 与 run_baseline_fake 的键集合对齐（SDK 路径没有 per-case score，用 pass_rate 兜底）
+        result.metric_breakdown = {
+            "overall_pass_rate": result.pass_rate,
+            "final_response_avg_score": result.pass_rate,
+        }
         return result
 
     except ImportError:
