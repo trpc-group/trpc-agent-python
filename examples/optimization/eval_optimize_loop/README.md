@@ -26,8 +26,11 @@ echo $?   # → 1（REJECT）
 python run_pipeline.py --mode fake --scenario noop --ci
 echo $?   # → 2（NEEDS_REVIEW）
 
-# Live mode：真实 SDK AgentOptimizer（需配置 TRPC_AGENT_API_KEY）
-# 未配置时自动降级到离线 trace 回放，不会崩溃
+# Live mode：SDK 接线 + 离线确定性 agent（当前为占位实现，非真实 LLM 端到端优化）
+# - baseline 走 SDK AgentEvaluator 的 trace 回放（无需 API key）
+# - 优化用 AgentOptimizer，但 reflection_lm 默认 fake，不会调用真实 LLM
+# - 验证/门控基于场景模拟候选（报告会显式标注），结果仅作参考
+# 配置 TRPC_AGENT_API_KEY 后可用真实模型，未配置时自动降级，不会崩溃
 python run_pipeline.py --mode live
 
 # 详细输出
@@ -169,7 +172,7 @@ python run_pipeline.py --mode fake --scenario noop --ci; echo $?     # → 2
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `--mode` | `fake` | 执行模式：`fake`（零成本离线）或 `live`（真实 SDK）|
+| `--mode` | `fake` | 执行模式：`fake`（零成本离线）或 `live`（SDK 接线 + 离线确定性 agent，验证/门控为模拟）|
 | `--scenario` | `fix_attributed` | 候选场景：`fix_attributed` / `noop` / `overfit` |
 | `--train-evalset` | `data/train.evalset.json` | 训练评测集路径 |
 | `--val-evalset` | `data/val.evalset.json` | 验证评测集路径 |
