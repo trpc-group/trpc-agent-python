@@ -95,6 +95,32 @@ def attribute_failures(
     return report
 
 
+def _entry_from_case(case: dict) -> AttributionEntry:
+    """把一个失败 case 转换为 AttributionEntry（category/evidence/confidence/detail）。
+
+    两个失败提取路径共用，避免 per_case→AttributionEntry 逻辑重复漂移。
+    """
+    case_id = case.get("eval_id", "unknown")
+    reason = case.get("reason", "")
+    # 优先使用 comparator 提供的 category/evidence（更准确）
+    raw_cat = case.get("category", "")
+    if raw_cat and raw_cat in _CATEGORY_MAP:
+        category = _CATEGORY_MAP[raw_cat]
+        evidence = case.get("evidence", "") or reason
+    else:
+        category = _categorize_failure(reason)
+        evidence = reason
+    score = case.get("score", 0.7)
+    confidence = max(0.5, min(0.95, score)) if isinstance(score, (int, float)) else 0.7
+    return AttributionEntry(
+        case_id=case_id,
+        category=category,
+        confidence=round(confidence, 2),
+        detail=reason or "Failed without specific reason",
+        evidence=evidence,
+    )
+
+
 def _extract_failures(result: dict) -> list[AttributionEntry]:
     """Extract failure attributions from a baseline result dict."""
     entries = []
@@ -104,24 +130,7 @@ def _extract_failures(result: dict) -> list[AttributionEntry]:
     for case in per_case:
         case_id = case.get("eval_id", "unknown")
         if case_id in failed_ids or not case.get("pass", True):
-            reason = case.get("reason", "")
-            # 优先使用 comparator 提供的 category/evidence（更准确）
-            raw_cat = case.get("category", "")
-            if raw_cat and raw_cat in _CATEGORY_MAP:
-                category = _CATEGORY_MAP[raw_cat]
-                evidence = case.get("evidence", "") or reason
-            else:
-                category = _categorize_failure(reason)
-                evidence = reason
-            score = case.get("score", 0.7)
-            confidence = max(0.5, min(0.95, score)) if isinstance(score, (int, float)) else 0.7
-            entries.append(AttributionEntry(
-                case_id=case_id,
-                category=category,
-                confidence=round(confidence, 2),
-                detail=reason or "Failed without specific reason",
-                evidence=evidence,
-            ))
+            entries.append(_entry_from_case(case))
 
     return entries
 
@@ -134,23 +143,7 @@ def _attribute_from_cases(per_case: list, failed_ids: list[str]) -> list[Attribu
         # 与 _extract_failures 判定一致：在 failed_ids 或 pass=False 都算失败，
         # 避免 "pass=False 但未进 failed_case_ids" 的 case 被漏归因。
         if case_id in failed_ids or not case.get("pass", True):
-            reason = case.get("reason", "")
-            raw_cat = case.get("category", "")
-            if raw_cat and raw_cat in _CATEGORY_MAP:
-                category = _CATEGORY_MAP[raw_cat]
-                evidence = case.get("evidence", "") or reason
-            else:
-                category = _categorize_failure(reason)
-                evidence = reason
-            score = case.get("score", 0.7)
-            confidence = max(0.5, min(0.95, score)) if isinstance(score, (int, float)) else 0.7
-            entries.append(AttributionEntry(
-                case_id=case_id,
-                category=category,
-                confidence=round(confidence, 2),
-                detail=reason or "Failed without specific reason",
-                evidence=evidence,
-            ))
+            entries.append(_entry_from_case(case))
     return entries
 
 

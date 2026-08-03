@@ -235,6 +235,8 @@ Examples:
     try:
         train_data = load_evalset(cfg.train_evalset)
         val_data = load_evalset(cfg.val_evalset)
+        # 同时校验 optimizer 配置存在与结构（fake/live 两模式配置错误都在 Stage 1 暴露）
+        load_optimizer_json(cfg.optimizer_config)
     except (FileNotFoundError, ValueError) as e:
         print(f"  ❌ Configuration error: {e}")
         tracer.add_error(str(e))
