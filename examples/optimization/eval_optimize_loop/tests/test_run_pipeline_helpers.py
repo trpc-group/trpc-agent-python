@@ -8,9 +8,14 @@ are testable without running the full pipeline.
 import argparse
 import os
 
-from pipeline.gate import GateDecision
+from pipeline.gate import GateDecision, GateResult
 
-from run_pipeline import build_reproduce_command, ci_exit_code, is_output_dir_allowed
+from run_pipeline import (
+    build_reproduce_command,
+    ci_exit_code,
+    is_output_dir_allowed,
+    live_gate_downgrade,
+)
 
 
 def _ns(**overrides) -> argparse.Namespace:
@@ -143,6 +148,39 @@ class TestIsOutputDirAllowed:
 
     def test_rejects_traversal(self):
         assert is_output_dir_allowed("../../../../../../etc") is False
+
+
+class TestLiveGateDowngrade:
+    """Tests for live_gate_downgrade() — live 下不可比评分驱动的决策降级。"""
+
+    def _gate(self, decision):
+        return GateResult(decision=decision, reason="r", details={"checks": []})
+
+    def test_fake_mode_unchanged(self):
+        g = self._gate(GateDecision.ACCEPT)
+        out = live_gate_downgrade(g, live=False, optimization_cost=0.0, max_cost_budget=10.0)
+        assert out.decision == GateDecision.ACCEPT
+
+    def test_live_accept_downgraded(self):
+        g = self._gate(GateDecision.ACCEPT)
+        out = live_gate_downgrade(g, live=True, optimization_cost=0.0, max_cost_budget=10.0)
+        assert out.decision == GateDecision.NEEDS_REVIEW
+
+    def test_live_reject_downgraded(self):
+        g = self._gate(GateDecision.REJECT)
+        out = live_gate_downgrade(g, live=True, optimization_cost=0.0, max_cost_budget=10.0)
+        assert out.decision == GateDecision.NEEDS_REVIEW
+
+    def test_live_cost_reject_kept(self):
+        # 成本超预算是真实约束，与评分口径无关 → 保留 REJECT
+        g = self._gate(GateDecision.REJECT)
+        out = live_gate_downgrade(g, live=True, optimization_cost=15.0, max_cost_budget=10.0)
+        assert out.decision == GateDecision.REJECT
+
+    def test_live_reject_within_budget_downgraded(self):
+        g = self._gate(GateDecision.REJECT)
+        out = live_gate_downgrade(g, live=True, optimization_cost=5.0, max_cost_budget=10.0)
+        assert out.decision == GateDecision.NEEDS_REVIEW
 
 
 class TestCiExitCode:

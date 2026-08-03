@@ -288,7 +288,9 @@ def run_validation_trace(
                    for c in baseline_val.per_case_results}
         eligible = [c for c in val_cases
                     if _case_is_perturbable(c)
-                    and bl_pass.get(str(c.get("eval_id", "")), True)]
+                    # 显式要求 baseline 已知且通过：未知 case 不默认当通过，
+                    # 避免选到 case id 漂移/无 parts 的 case 导致扰动失败
+                    and bl_pass.get(str(c.get("eval_id", ""))) is True]
         pool = eligible or val_cases
         effective_regression = [str(c.get("eval_id", "")) for c in pool[:2]]
 
