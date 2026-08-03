@@ -232,14 +232,26 @@ Examples:
         except Exception as _e:
             _eval_config = None
             print(f"  ⚠️  EvalConfig 加载失败（将降级到 trace comparator）: {_e}")
-        baseline_train = asyncio.run(
-            run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent,
-                             eval_config=_eval_config)
-        )
-        baseline_val = asyncio.run(
-            run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent,
-                             eval_config=_eval_config)
-        )
+        try:
+            baseline_train = asyncio.run(
+                run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent,
+                                 eval_config=_eval_config)
+            )
+            baseline_val = asyncio.run(
+                run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent,
+                                 eval_config=_eval_config)
+            )
+        except Exception as _e:
+            # 与 fake 模式一致：SDK 未捕获的异常（RuntimeError 等）也优雅降级，
+            # 避免整个 pipeline 崩溃（errors 会在下方统一打印/记录）
+            print(f"  ⚠️  live baseline 异常，降级到 trace comparator: {_e}")
+            from pipeline.baseline import run_baseline_fake
+            baseline_train = run_baseline_fake(cfg.train_evalset, cfg)
+            baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
+            _msg = (f"live baseline failed ({type(_e).__name__}: {_e}); "
+                    f"fell back to trace comparator")
+            baseline_train.errors = [_msg]
+            baseline_val.errors = [_msg]
 
     if baseline_train.errors:
         for e in baseline_train.errors:
@@ -310,10 +322,20 @@ Examples:
         optimize_result = run_optimize_fake(attribution, cfg, scenario=cfg.scenario)
     else:
         print("  [live] AgentOptimizer (GEPA) — 离线确定性 call_agent 或真实 API")
-        from agent.agent import build_call_agent
-        optimize_result = asyncio.run(
-            run_optimize_live(cfg.optimizer_config, cfg, call_agent=build_call_agent())
-        )
+        try:
+            from agent.agent import build_call_agent
+            optimize_result = asyncio.run(
+                run_optimize_live(cfg.optimizer_config, cfg,
+                                  call_agent=build_call_agent())
+            )
+        except Exception as _e:
+            # 与 fake 模式一致：SDK 未捕获的异常也优雅降级，不崩溃
+            print(f"  ⚠️  live optimize 异常，降级为空结果: {_e}")
+            from pipeline.optimize import OptimizeResult
+            optimize_result = OptimizeResult(algorithm=cfg.algorithm)
+            optimize_result.errors = [
+                f"live optimize failed ({type(_e).__name__}: {_e})"
+            ]
 
     if optimize_result.errors:
         for e in optimize_result.errors:
@@ -385,6 +407,23 @@ Examples:
         validation_new_failures=validation.new_failures,
         validation_new_failed=[d.eval_id for d in validation.deltas if d.change == "new_fail"],
     )
+
+    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不同，
+    # overfitting 的 new_failures 可能是评分差异而非真实回归 → 降级为 NEEDS_REVIEW，
+    # 避免不可比评分触发 CI 阻断。
+    if (cfg.mode == "live" and gate.decision == GateDecision.REJECT
+            and validation.is_overfitting):
+        gate = GateResult(
+            decision=GateDecision.NEEDS_REVIEW,
+            reason=("live mode: overfitting REJECT downgraded to review — "
+                    f"baseline=SDK vs candidate=trace-comparator scoring differ: {gate.reason}"),
+            details=gate.details,
+        )
+        tracer.add_warning(
+            "live mode: overfitting REJECT downgraded to NEEDS_REVIEW "
+            "(incomparable SDK/comparator scoring)"
+        )
+
     tracer.end_stage("gate")
     gate_icon = {"accept": "[ACCEPT]", "reject": "[REJECT]", "needs_review": "[REVIEW]"}
     print(f"  {gate_icon.get(gate.decision.value, '[????]')} {gate.decision.value.upper()}: {gate.reason}")

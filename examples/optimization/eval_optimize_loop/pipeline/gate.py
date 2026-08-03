@@ -44,8 +44,8 @@ def evaluate_gate(
     Args:
         baseline_pass_rate: Pass rate before optimization.
         candidate_pass_rate: Pass rate after optimization.
-        baseline_metrics: Per-metric scores for baseline.
-        candidate_metrics: Per-metric scores for candidate.
+        baseline_metrics: Per-metric scores for baseline（仅用于审计记录，不参与决策）。
+        candidate_metrics: Per-metric scores for candidate（仅用于审计记录，不参与决策）。
         min_improvement: Minimum absolute improvement required.
         critical_case_ids: Cases that must not regress (on train or validation).
         baseline_failed: Case IDs that failed in baseline.
