@@ -81,8 +81,10 @@ def run_validation_fake(
     all_ids = set(baseline_map.keys()) | set(candidate_map.keys())
 
     for case_id in sorted(all_ids):
-        bl_pass = baseline_map.get(case_id, True)
-        cd_pass = candidate_map.get(case_id, True)
+        # 缺失侧默认 False（保守）：单侧缺失的 case 不被默认当"通过"，
+        # 避免把新增失败/回归伪装成 unchanged
+        bl_pass = baseline_map.get(case_id, False)
+        cd_pass = candidate_map.get(case_id, False)
 
         if not bl_pass and cd_pass:
             change = "new_pass"

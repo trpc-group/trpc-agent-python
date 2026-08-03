@@ -112,6 +112,7 @@ async def run_baseline_sdk(
     call_agent: Any = None,
     eval_config: Any = None,
     optimizer_config_path: str | None = None,
+    config: Any = None,
 ) -> BaselineResult:
     """Run baseline evaluation using the real SDK AgentEvaluator.
 
@@ -126,6 +127,7 @@ async def run_baseline_sdk(
             （或默认 data/optimizer.json）加载。
         optimizer_config_path: 可选，用户指定的 optimizer.json 路径；
             避免静默改用默认配置的 metrics/阈值。
+        config: 可选，PipelineConfig；降级回退时用它而非默认配置。
 
     Returns:
         BaselineResult from actual AgentEvaluator run.
@@ -193,7 +195,9 @@ async def run_baseline_sdk(
             if not case_passed and not case_failed:
                 continue  # 该 case 全部 NOT_EVALUATED
             total += 1
-            ok = case_passed  # 任一 run 通过即视为 case 通过（宽松聚合）
+            # 全部 run 通过才算 case 通过；任一 run 失败即失败，避免"一过一败"
+            # 的 flaky 结果被宽松聚合掩盖、抬高 baseline pass_rate。
+            ok = case_passed and not case_failed
             if ok:
                 passed += 1
             else:
@@ -228,8 +232,10 @@ async def run_baseline_sdk(
         # SDK 不可用 → 与其它降级路径一致回退到 trace comparator，
         # 使 run_pipeline 的 "fell back to trace comparator" 告警与真实状态相符。
         # 保留 fake 回退自身的原始错误（如 evalset 缺失），不覆盖真实根因。
+        # 用调用方传入的 config（而非默认 PipelineConfig）保持用户配置。
         from .config import PipelineConfig
-        fallback = run_baseline_fake(evalset_path, PipelineConfig())
+        _cfg = config or PipelineConfig()
+        fallback = run_baseline_fake(evalset_path, _cfg)
         fallback.errors = [
             "SDK AgentEvaluator not available — fell back to trace comparator"
         ] + fallback.errors
@@ -241,7 +247,8 @@ async def run_baseline_sdk(
         # "SDK 评分正常"。保留 fake 自身错误。其余非预期异常（AttributeError 等
         # pipeline bug）向上抛出。
         from .config import PipelineConfig
-        fallback = run_baseline_fake(evalset_path, PipelineConfig())
+        _cfg = config or PipelineConfig()
+        fallback = run_baseline_fake(evalset_path, _cfg)
         fallback.errors = [
             f"SDK AgentEvaluator rejected evalset ({type(e).__name__}: {e}); "
             f"result is trace-comparator scored, NOT SDK scoring"

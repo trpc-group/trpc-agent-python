@@ -252,7 +252,7 @@ class TestLiveModeContract:
             os.unlink(path)
 
     def test_baseline_aggregates_multiple_runs_per_case(self, monkeypatch):
-        """num_runs>1：按 case 聚合，total 不重复计、failed_case_ids 无重复。"""
+        """num_runs>1：按 case 聚合且全部 run 通过才算通过（flaky 失败不被掩盖）。"""
         import sys
         import pipeline.baseline as baseline_mod
         import tempfile, json, os
@@ -276,11 +276,11 @@ class TestLiveModeContract:
             EvalStatus = _Status
 
         async def _fake_evaluate(eval_set, **kwargs):
-            # c1: 一次 PASSED 一次 FAILED → case 通过（宽松聚合）
-            # c2: 两次 FAILED → case 失败
+            # c1: 一次 PASSED 一次 FAILED → 混合结果视为失败（flaky 不被掩盖）
+            # c2: 两次 PASSED → 通过
             results = {
                 "c1": [_CaseResult(_Status.PASSED), _CaseResult(_Status.FAILED, "x")],
-                "c2": [_CaseResult(_Status.FAILED, "bad"), _CaseResult(_Status.FAILED, "bad")],
+                "c2": [_CaseResult(_Status.PASSED), _CaseResult(_Status.PASSED)],
             }
             return (None, [], [], results)
 
@@ -309,7 +309,7 @@ class TestLiveModeContract:
             assert result.total_cases == 2
             assert result.passed_cases == 1
             assert result.failed_cases == 1
-            assert result.failed_case_ids == ["c2"]  # 无重复
+            assert result.failed_case_ids == ["c1"]  # 混合结果计失败，无重复
         finally:
             os.unlink(path)
 
