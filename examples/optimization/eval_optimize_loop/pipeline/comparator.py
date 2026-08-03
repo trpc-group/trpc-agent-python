@@ -407,9 +407,11 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         eq_nums = []
         for _m in re.finditer(r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final):
             _num = float(_m.group(1).replace(",", ""))
-            _ctx = act_final[max(0, _m.start() - 15): _m.end() + 30].lower()
-            if any(w in _ctx for w in ("wrong", "not ", "incorrect", "mistake", "error",
-                                       "invalid", "is not", "no,", "not,")):
+            # 否定语境只看候选紧邻的后文（前文不查：前面句子的 "not " 常属
+            # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）
+            _after = act_final[_m.end(): _m.end() + 20].lower()
+            if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
+                                         "error", "invalid", "no,", "not,")):
                 continue
             eq_nums.append(_num)
         candidates = eq_nums if eq_nums else [act_nums[-1]] if act_nums else []
