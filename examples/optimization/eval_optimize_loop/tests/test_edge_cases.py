@@ -204,9 +204,9 @@ class TestInvalidJsonEvalset:
                 f.write("garbage content not json")
                 path = f.name
 
-            # run_baseline_fake uses json.load internally → will raise
-            with pytest.raises(json.JSONDecodeError):
-                run_baseline_fake(path, pipeline_config)
+            # 解析失败 → 优雅返回 errors（与缺失文件行为一致），而非抛异常崩溃
+            result = run_baseline_fake(path, pipeline_config)
+            assert result.errors
         finally:
             if path:
                 os.unlink(path)

@@ -2,28 +2,12 @@
 
 import json
 import os
-import sys
 from dataclasses import dataclass, field
 from typing import Any
 
 from .comparator import TraceMatcher, FailureCategory, default_matcher
 from .config import PipelineConfig
-
-
-def _ensure_repo_root_in_path() -> None:
-    """确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）。
-
-    pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）。
-    仅当项目根不在 sys.path 时插入；失败时记录 warning 而非静默吞掉。
-    """
-    try:
-        _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
-        _repo_root = os.path.abspath(
-            os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
-        if _repo_root not in sys.path:
-            sys.path.insert(0, _repo_root)
-    except Exception as e:  # pragma: no cover — 极端路径异常
-        print(f"  ⚠️  warning: 无法将项目根加入 sys.path: {e}")
+from ._paths import ensure_repo_root_in_path
 
 
 @dataclass
@@ -65,8 +49,12 @@ def run_baseline_fake(evalset_path: str, config: PipelineConfig) -> BaselineResu
     if not os.path.exists(evalset_path):
         return BaselineResult(errors=[f"Evalset not found: {evalset_path}"])
 
-    with open(evalset_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(evalset_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        # 与缺失文件一致：解析失败也优雅返回 errors，而非抛 JSONDecodeError 崩溃
+        return BaselineResult(errors=[f"Failed to parse evalset {evalset_path}: {e}"])
 
     eval_set_id = data.get("eval_set_id", os.path.basename(evalset_path))
     cases = data.get("eval_cases", [])
@@ -141,7 +129,7 @@ async def run_baseline_sdk(
     try:
         # 确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）。
         # pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）
-        _ensure_repo_root_in_path()
+        ensure_repo_root_in_path()
 
         from trpc_agent_sdk.evaluation import AgentEvaluator, EvalSet
         from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
@@ -209,9 +197,11 @@ async def run_baseline_sdk(
         return BaselineResult(
             errors=["SDK AgentEvaluator not available — use fake mode"]
         )
-    except Exception as e:
-        # SDK 评测失败（如 evalset schema 不兼容）时，降级到 trace comparator 评测，
-        # 保证 live 模式仍有有意义的 baseline，pipeline 不中断。
+    except (ValueError, KeyError, TypeError) as e:
+        # SDK 评测失败（如 evalset schema 不兼容、字段缺失）时，降级到 trace
+        # comparator 评测，保证 live 模式仍有有意义的 baseline、pipeline 不中断。
+        # 其余非预期异常（AttributeError 等 pipeline 自身 bug）不再吞掉，向上抛出，
+        # 避免把代码缺陷伪装成 "SDK 失败"。
         from .config import PipelineConfig
         fallback = run_baseline_fake(evalset_path, PipelineConfig())
         fallback.errors = [

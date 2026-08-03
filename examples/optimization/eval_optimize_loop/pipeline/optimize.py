@@ -8,32 +8,13 @@ Records per-round optimization results for audit trail.
 """
 
 import os
-import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from .attribution import AttributionReport
 from .config import PipelineConfig
-
-
-def _ensure_import_paths() -> None:
-    """确保 example 目录与项目根在 sys.path（live SDK 需要）。
-
-    - example 目录：`from agent.agent import build_call_agent`
-    - 项目根：`from trpc_agent_sdk import ...`（源码包）
-    仅当缺失时插入，失败记录 warning。
-    """
-    try:
-        _pipeline_dir = os.path.dirname(os.path.abspath(__file__))
-        _example_dir = os.path.abspath(os.path.join(_pipeline_dir, os.pardir))
-        _repo_root = os.path.abspath(
-            os.path.join(_pipeline_dir, os.pardir, os.pardir, os.pardir, os.pardir))
-        for _p in (_example_dir, _repo_root):
-            if _p not in sys.path:
-                sys.path.insert(0, _p)
-    except Exception as e:  # pragma: no cover — 极端路径异常
-        print(f"  ⚠️  warning: 无法设置导入路径: {e}")
+from ._paths import ensure_example_and_repo_in_path
 
 
 @dataclass
@@ -202,7 +183,7 @@ async def run_optimize_live(
 
     try:
         # 确保项目根与 example 目录在 sys.path
-        _ensure_import_paths()
+        ensure_example_and_repo_in_path()
         from trpc_agent_sdk.evaluation import AgentOptimizer, TargetPrompt
 
         if call_agent is None:
