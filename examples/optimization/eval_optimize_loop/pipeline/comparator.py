@@ -407,21 +407,31 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         # 支持 = $386.66、= 100、= $15,353.13（千分位逗号）等货币/百分号答案格式。
         # 排除否定语境（"= 15 is wrong, real = 14"）中的候选：这些是被纠正的中间值，
         # 若保留会被误匹配期望数字而误判通过。
+        eq_candidates = list(re.finditer(
+            r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final))
         eq_nums = []
-        for _m in re.finditer(r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final):
+        for _m in eq_candidates:
             _num = float(_m.group(1).replace(",", ""))
             # 否定语境只看候选紧邻的后文（前文不查：前面句子的 "not " 常属
             # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）；
             # 只用明确指向该候选的否定词（去掉 error/invalid/no,/not, 等
             # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16。
-            # 窗口 25 字符 + 补充变体（not right/should be/false）覆盖
-            # "= 15 . The previous value is incorrect" 类稍远否定
-            _after = act_final[_m.end(): _m.end() + 25].lower()
+            # 窗口 40 字符 + 补充变体（not right/should be/false）覆盖
+            # "= 15 . The previous value is incorrect" 类较远否定（25 字符
+            # 窗口只到 "is "，incorrect 落在窗口外会漏判）
+            _after = act_final[_m.end(): _m.end() + 40].lower()
             if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
                                          "not right", "should be", "false")):
                 continue
             eq_nums.append(_num)
-        candidates = eq_nums if eq_nums else [act_nums[-1]] if act_nums else []
+        if eq_nums:
+            candidates = eq_nums
+        elif eq_candidates:
+            # 存在 = 数字但全部被否定语境排除：不能回退 act_nums[-1]——
+            # 最后一个数字可能就是被否定的中间值（如 "= 15 . ... incorrect"）
+            candidates = []
+        else:
+            candidates = [act_nums[-1]] if act_nums else []
         if any(abs(a - exp_bare) <= 1e-6 for a in candidates):
             answer_ok = True
         else:

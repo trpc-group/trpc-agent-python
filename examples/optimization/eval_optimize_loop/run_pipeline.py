@@ -354,7 +354,9 @@ Examples:
                     "(train/val use SDK) — not directly comparable")
             print(f"  Holdout pass rate: {holdout_result.pass_rate:.1%} "
                   f"({holdout_result.passed_cases}/{holdout_result.total_cases})")
-            tracer.add_cost(0.0, "holdout")
+            # category 用 "evaluation"（add_cost 仅识别该值归入评估桶，
+            # 其他值会落入 optimization 桶，语义错误）
+            tracer.add_cost(0.0, "evaluation")
         except Exception as e:
             print(f"  ⚠️  Holdout 评分失败: {e}")
             tracer.add_warning(f"Holdout eval failed: {e}")
