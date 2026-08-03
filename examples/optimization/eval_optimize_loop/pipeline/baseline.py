@@ -67,7 +67,7 @@ def run_baseline_fake(evalset_path: str, config: PipelineConfig) -> BaselineResu
     score_sum = 0.0
 
     for case in cases:
-        case_id = case.get("eval_id", "unknown")
+        case_id = str(case.get("eval_id", "unknown"))
         verdict = matcher.evaluate(case)
         is_pass = verdict.passed
 

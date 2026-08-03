@@ -130,6 +130,7 @@ def generate_md_report(
         f"{candidate_val_rate:.1%} | {candidate_val_rate - baseline_val.pass_rate:+.1%} |"
         if candidate_val_rate is not None
         else f"| Val Pass Rate | {baseline_val.pass_rate:.1%} | — | — |",
+        *([f"", f"**Note**: {audit['improvement_note']}"] if audit.get("improvement_note") else []),
         f"",
         f"## Gate Decision",
         f"",
