@@ -403,6 +403,7 @@ Examples:
     print("[5/7] Validating candidate on validation set...")
     tracer.start_stage("validate")
 
+    _scenario_error = ""
     try:
         validation = run_validation_trace(
             cfg.train_evalset,
@@ -416,6 +417,8 @@ Examples:
     except ValueError as _ve:
         # 场景配置边界（如 overfit + 空 val 集）显式报错时，不崩溃：
         # 记录为 warning，并构造"有新增失败"的结果让 gate 拒绝/需审查，继续出报告。
+        # 标记场景错误，后续 gate reason 反映真实原因而非误报 "Overfitting"。
+        _scenario_error = str(_ve)
         print(f"  ⚠️  Validation scenario error: {_ve}")
         tracer.add_warning(f"Validation scenario error: {_ve}")
         validation = ValidationResult(
@@ -468,6 +471,17 @@ Examples:
         validation_new_failures=validation.new_failures,
         validation_new_failed=[d.eval_id for d in validation.deltas if d.change == "new_fail"],
     )
+
+    # overfit 场景配置错误（空 val / 回归 case 不可扰动）被 run_validation_trace 报错时，
+    # gate 的 overfitting REJECT 是"合成 delta"导致的——改写 reason 反映真实原因，
+    # 避免把场景配置错误误报为真实的过拟合。
+    if _scenario_error:
+        gate = GateResult(
+            decision=GateDecision.REJECT,
+            reason=f"Validation scenario configuration error: {_scenario_error}",
+            details=gate.details,
+        )
+        tracer.add_warning(f"Gate rejected due to scenario config error: {_scenario_error}")
 
     # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比：
     # 除"成本超预算"外，依赖 pass-rate 差值的 ACCEPT/REJECT 一律降级 NEEDS_REVIEW。
