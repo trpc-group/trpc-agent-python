@@ -401,11 +401,17 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         # 注意：期望"答案在开头"（如 "0.75 = 75/100"）由 Phase 2 数据归一化
         # 统一为 =后/末尾格式，这里不做过度猜测。
         act_nums = extract_numbers(act_final)
-        # 支持 = $386.66、= 100、= $15,353.13（千分位逗号）等货币/百分号答案格式
-        eq_nums = [
-            float(m.replace(",", ""))
-            for m in re.findall(r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final)
-        ]
+        # 支持 = $386.66、= 100、= $15,353.13（千分位逗号）等货币/百分号答案格式。
+        # 排除否定语境（"= 15 is wrong, real = 14"）中的候选：这些是被纠正的中间值，
+        # 若保留会被误匹配期望数字而误判通过。
+        eq_nums = []
+        for _m in re.finditer(r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final):
+            _num = float(_m.group(1).replace(",", ""))
+            _ctx = act_final[max(0, _m.start() - 15): _m.end() + 30].lower()
+            if any(w in _ctx for w in ("wrong", "not ", "incorrect", "mistake", "error",
+                                       "invalid", "is not", "no,", "not,")):
+                continue
+            eq_nums.append(_num)
         candidates = eq_nums if eq_nums else [act_nums[-1]] if act_nums else []
         if any(abs(a - exp_bare) <= 1e-6 for a in candidates):
             answer_ok = True
