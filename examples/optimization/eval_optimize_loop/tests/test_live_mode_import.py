@@ -295,6 +295,51 @@ class TestLiveModeContract:
         assert result.optimized_fields == []
         assert any("did not succeed" in e for e in result.errors)
 
+    def test_optimize_clears_artifacts_on_empty_status(self, monkeypatch):
+        """SDK status 为空串（未确知成功）时同样清空产物并记录 error。"""
+        import sys
+        import pipeline.optimize as optimize_mod
+
+        class _FakeOptimizeResult:
+            total_llm_cost = 1.0
+            total_rounds = 1
+            status = ""
+            best_prompts = {"system": "should be discarded"}
+            rounds = []
+
+        async def _fake_optimize(**kwargs):
+            return _FakeOptimizeResult()
+
+        class _FakeAgentOptimizer:
+            @staticmethod
+            async def optimize(**kwargs):
+                return await _fake_optimize(**kwargs)
+
+        class _FakeTargetPrompt:
+            def add_path(self, *args, **kwargs):
+                pass
+
+        class _FakeEvalModule:
+            AgentOptimizer = _FakeAgentOptimizer
+            TargetPrompt = _FakeTargetPrompt
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._optimize_config",
+            type("M", (), {}),
+        )
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        cfg = load_pipeline_config(mode="live")
+        result = asyncio.run(optimize_mod.run_optimize_live("opt.json", cfg, call_agent=object()))
+        assert result.converged is False
+        assert result.best_prompt == {}
+        assert result.optimized_fields == []
+        assert any("did not succeed" in e for e in result.errors)
+
     def test_optimize_maps_sdk_fields(self, monkeypatch):
         """SDK OptimizeResult 字段 → 我们的 OptimizeResult（total_llm_cost 等）。"""
         import sys

@@ -256,13 +256,12 @@ Examples:
     if baseline_train.errors:
         for e in baseline_train.errors:
             print(f"  ⚠️  Train: {e}")
+            # 降级是预期行为：记录为 warning，不混入 audit.errors（避免误判致命错误）
             tracer.add_warning(e)
-            errors.append(e)
     if baseline_val.errors:
         for e in baseline_val.errors:
             print(f"  ⚠️  Val: {e}")
             tracer.add_warning(e)
-            errors.append(e)
 
     # live 模式下 SDK 评估降级为 trace comparator 时显式提示，
     # 避免把 fallback 结果误当作真实 SDK 评分。

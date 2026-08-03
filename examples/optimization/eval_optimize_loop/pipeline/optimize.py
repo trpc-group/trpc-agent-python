@@ -223,8 +223,9 @@ async def run_optimize_live(
             result.best_prompt = dict(best_prompts)
             result.optimized_fields = list(best_prompts.keys())
 
-        if opt_status and opt_status != 'SUCCEEDED':
-            # 失败/取消的运行：清空优化产物，避免把失败运行的 "best" 当可回写产物
+        if opt_status != 'SUCCEEDED':
+            # 非成功（含 status 为空/未提供）的运行：清空优化产物，避免把
+            # 失败/未确知成功的 "best" 当可回写产物
             result.best_prompt = {}
             result.optimized_fields = []
             result.errors.append(
