@@ -206,6 +206,11 @@ async def run_baseline_sdk(
                 "evidence": "",
             })
 
+        if total == 0 and not result.errors:
+            # 全部 case 都是 NOT_EVALUATED：空评分不能静默当合法 baseline
+            result.errors.append(
+                "all SDK EvalCaseResults were NOT_EVALUATED — no baseline scored")
+
         result.total_cases = total
         result.passed_cases = passed
         result.failed_cases = total - passed
@@ -216,9 +221,12 @@ async def run_baseline_sdk(
         return result
 
     except ImportError:
-        return BaselineResult(
-            errors=["SDK AgentEvaluator not available — use fake mode"]
-        )
+        # SDK 不可用 → 与其它降级路径一致回退到 trace comparator，
+        # 使 run_pipeline 的 "fell back to trace comparator" 告警与真实状态相符
+        from .config import PipelineConfig
+        fallback = run_baseline_fake(evalset_path, PipelineConfig())
+        fallback.errors = ["SDK AgentEvaluator not available — fell back to trace comparator"]
+        return fallback
     except (ValueError, KeyError, TypeError) as e:
         # SDK 评测失败（如 evalset schema 不兼容、字段缺失）时，降级到 trace
         # comparator 评测，保证 live 模式仍有有意义的 baseline、pipeline 不中断。

@@ -210,6 +210,7 @@ Examples:
     except (FileNotFoundError, ValueError) as e:
         print(f"  ❌ Configuration error: {e}")
         tracer.add_error(str(e))
+        tracer.end_stage("config")  # 保证审计阶段闭合
         return 1
     tracer.record_input_file("train_evalset", cfg.train_evalset)
     tracer.record_input_file("val_evalset", cfg.val_evalset)
@@ -262,8 +263,9 @@ Examples:
             baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
             _msg = (f"live baseline failed ({type(_e).__name__}: {_e}); "
                     f"fell back to trace comparator")
-            baseline_train.errors = [_msg]
-            baseline_val.errors = [_msg]
+            # 保留 fake 回退自身的原始错误（如文件缺失/解析失败），不覆盖
+            baseline_train.errors = [_msg] + baseline_train.errors
+            baseline_val.errors = [_msg] + baseline_val.errors
 
     if baseline_train.errors:
         for e in baseline_train.errors:
