@@ -133,3 +133,16 @@ class TestRunBaselineSdk:
             assert any("SDK AgentEvaluator not available" in e for e in result.errors)
         finally:
             os.unlink(path)
+
+
+class TestFakeAgentDivByZero:
+    """fake agent 除零不产生非有限浮点（inf 无法 JSON 序列化、comparator 不可预期）。"""
+
+    def test_div_by_zero_returns_finite(self):
+        import json
+        from agent.agent import run_agent
+        result = run_agent("5 / 0")
+        resp = str(result.get("final_response", ""))
+        assert "inf" not in resp
+        # 可被标准 json.dumps 序列化（不含 Infinity/NaN）
+        json.dumps(result)

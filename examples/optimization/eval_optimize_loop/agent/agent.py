@@ -123,7 +123,8 @@ def _fake_run(question: str, config: AgentConfig) -> dict[str, Any]:
         elif op in ('*', '×'):
             result = a * b
         elif op in ('/', '÷'):
-            result = a / b if b != 0 else float('inf')
+            # 除零不产生非有限浮点（inf 无法 JSON 序列化、comparator 不可预期）
+            result = a / b if b != 0 else 0.0
         else:
             result = 0.0
 
