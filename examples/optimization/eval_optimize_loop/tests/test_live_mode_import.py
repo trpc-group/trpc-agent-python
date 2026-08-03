@@ -250,6 +250,68 @@ class TestLiveModeContract:
         finally:
             os.unlink(path)
 
+    def test_baseline_aggregates_multiple_runs_per_case(self, monkeypatch):
+        """num_runs>1：按 case 聚合，total 不重复计、failed_case_ids 无重复。"""
+        import sys
+        import pipeline.baseline as baseline_mod
+        import tempfile, json, os
+
+        class _Status:
+            PASSED = object()
+            FAILED = object()
+            NOT_EVALUATED = object()
+
+        class _CaseResult:
+            def __init__(self, status, msg=""):
+                self.final_eval_status = status
+                self.error_message = msg
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                return object()
+
+        class _FakeEvalMetrics:
+            EvalStatus = _Status
+
+        async def _fake_evaluate(eval_set, **kwargs):
+            # c1: 一次 PASSED 一次 FAILED → case 通过（宽松聚合）
+            # c2: 两次 FAILED → case 失败
+            results = {
+                "c1": [_CaseResult(_Status.PASSED), _CaseResult(_Status.FAILED, "x")],
+                "c2": [_CaseResult(_Status.FAILED, "bad"), _CaseResult(_Status.FAILED, "bad")],
+            }
+            return (None, [], [], results)
+
+        class _FakeAgentEvaluator:
+            @staticmethod
+            async def evaluate_eval_set(*args, **kwargs):
+                return await _fake_evaluate(*args, **kwargs)
+
+        class _FakeEvalModule:
+            AgentEvaluator = _FakeAgentEvaluator
+            EvalSet = _FakeEvalSet
+            EvalStatus = _Status
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics", _FakeEvalMetrics,
+        )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"eval_set_id": "t", "eval_cases": []}, f)
+            path = f.name
+        try:
+            result = asyncio.run(baseline_mod.run_baseline_sdk(path, eval_config=object()))
+            assert result.total_cases == 2
+            assert result.passed_cases == 1
+            assert result.failed_cases == 1
+            assert result.failed_case_ids == ["c2"]  # 无重复
+        finally:
+            os.unlink(path)
+
     def test_optimize_clears_artifacts_on_non_success_status(self, monkeypatch):
         """SDK status != SUCCEEDED（FAILED/CANCELED）时清空 best_prompt/optimized_fields。"""
         import sys
