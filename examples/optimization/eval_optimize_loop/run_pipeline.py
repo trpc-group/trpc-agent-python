@@ -235,6 +235,15 @@ Examples:
             tracer.add_warning(e)
             errors.append(e)
 
+    # live 模式下 SDK 评估降级为 trace comparator 时显式提示，
+    # 避免把 fallback 结果误当作真实 SDK 评分。
+    if cfg.mode == "live" and (baseline_train.errors or baseline_val.errors):
+        print("  ⚠️  live baseline fell back to trace comparator — "
+              "pass rates are not real SDK scoring")
+        tracer.add_warning(
+            "live baseline fell back to trace comparator (SDK errors above) — "
+            "pass rates are not real SDK scoring")
+
     tracer.end_stage("baseline")
     print(f"  Train pass rate: {baseline_train.pass_rate:.1%} "
           f"({baseline_train.passed_cases}/{baseline_train.total_cases})")

@@ -17,8 +17,11 @@ def build_call_agent() -> Callable[[str], Awaitable[str]]:
 
     AgentOptimizer.optimize 的 `call_agent` 参数要求
     `Callable[[str], Awaitable[str]]`（输入用户问题，返回 agent 最终回复）。
-    此处包装 run_agent，模型为 "fake" 时确定性离线执行（无需 API key），
-    配置真实模型时可跑真实 LLM。
+
+    注意：当前为"离线确定性 agent"占位实现——`run_agent` 始终走 fake 分支
+    （确定性 md5 计算），`_live_run` 尚未实现；即便设置了 API key 也不会调用
+    真实 LLM。`--mode live` 的 baseline 走 SDK AgentEvaluator 的 trace 回放、
+    优化走 AgentOptimizer，但底层 agent 仍是确定性 fake，真实模型接入待后续实现。
 
     Returns:
         Async callable: user question → final response text。
