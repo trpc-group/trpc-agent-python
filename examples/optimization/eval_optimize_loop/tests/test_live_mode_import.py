@@ -20,13 +20,14 @@ from pipeline.optimize import OptimizeResult, run_optimize_live
 
 class TestLiveModeRobustness:
     def test_run_baseline_sdk_falls_back_when_sdk_missing(self, monkeypatch, data_dir):
-        """SDK 不可用时 run_baseline_sdk 确定性降级：带 errors、total=0，不抛异常。"""
+        """SDK 不可用时 run_baseline_sdk 确定性降级到 trace comparator：带 errors、不抛异常。"""
         import sys
         monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", None)
         monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation._eval_metrics", None)
         result = asyncio.run(run_baseline_sdk(str(data_dir / "train.evalset.json")))
         assert result.errors
-        assert result.total_cases == 0
+        assert any("SDK AgentEvaluator not available" in e for e in result.errors)
+        assert result.total_cases > 0  # 降级到 fake 后仍有真实评分
 
     def test_run_baseline_sdk_missing_file(self):
         """不存在的 evalset → errors，不崩。"""
