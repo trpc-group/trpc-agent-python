@@ -247,6 +247,12 @@ Examples:
     if os.path.exists(cfg.holdout_evalset):
         try:
             holdout_result = run_baseline_fake(cfg.holdout_evalset, cfg)
+            if cfg.mode == "live":
+                print("  ⚠️  holdout 由 trace comparator 评分（live 下 train/val 走 SDK），"
+                      "与 baseline 语义不可比")
+                tracer.add_warning(
+                    "holdout scored via trace comparator in live mode "
+                    "(train/val use SDK) — not directly comparable")
             print(f"  Holdout pass rate: {holdout_result.pass_rate:.1%} "
                   f"({holdout_result.passed_cases}/{holdout_result.total_cases})")
             tracer.add_cost(0.0, "holdout")
