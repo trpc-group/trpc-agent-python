@@ -226,7 +226,7 @@ def generate_md_report(
 
 def _baseline_to_dict(bl: BaselineResult) -> dict:
     """Convert BaselineResult to serializable dict."""
-    return {
+    d = {
         "evalset_id": bl.evalset_id,
         "pass_rate": bl.pass_rate,
         "total_cases": bl.total_cases,
@@ -235,6 +235,11 @@ def _baseline_to_dict(bl: BaselineResult) -> dict:
         "failed_case_ids": bl.failed_case_ids,
         "metric_breakdown": bl.metric_breakdown,
     }
+    # 带上 errors：空评分（如 evalset 缺失 / all NOT_EVALUATED）时报告能说明原因，
+    # 而不是显示 pass_rate:0/total_cases:0 却无任何提示。
+    if bl.errors:
+        d["errors"] = list(bl.errors)
+    return d
 
 
 def _validation_to_dict(v: ValidationResult) -> dict:

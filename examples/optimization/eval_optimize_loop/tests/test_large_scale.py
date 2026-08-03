@@ -154,9 +154,9 @@ class TestLargeEvalset:
             cfg = load_pipeline_config()
             result = run_baseline_fake(path, cfg)
             assert result.total_cases == 50
-            # With 30% fail ratio and conversation-based pass detection
-            assert result.passed_cases >= 0
-            assert result.failed_cases >= 0
+            # 30% fail_ratio：应真实检出失败与通过（非恒真断言，能捕获 comparator 退化）
+            assert result.failed_cases >= 10
+            assert result.passed_cases > 0
             assert result.passed_cases + result.failed_cases == 50
         finally:
             os.unlink(path)

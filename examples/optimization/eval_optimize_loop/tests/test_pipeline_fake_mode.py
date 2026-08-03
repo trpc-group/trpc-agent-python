@@ -85,6 +85,12 @@ class TestFullPipelineFakeMode:
         )
         data = json.loads(report)
         assert "task_id" in data
+        # 7 阶段集成：校验各阶段真实产出（避免"只要报告能生成就算过"的恒真测试）
+        assert bl_train.pass_rate > 0
+        assert attr.total_failures > 0
+        assert opt_result.total_iterations > 0
+        assert gate.decision == GateDecision.ACCEPT
+        assert data["gate"]["decision"] == "accept"
 
     def test_pipeline_with_overfitting_rejection(self, data_dir):
         cfg = load_pipeline_config(mode="fake")
