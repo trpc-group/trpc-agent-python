@@ -1,18 +1,10 @@
 {
   "evaluate": {
     "metrics": [
-      {"metric_name": "final_response_avg_score", "threshold": 0.7},
+      {"metric_name": "final_response_avg_score", "threshold": 0.7, "criterion": {"text": {"match": "contains"}}},
       {"metric_name": "response_match_score", "threshold": 0.5}
     ],
-    "num_runs": 1,
-    "criteria": {
-      "final_response_avg_score": {
-        "compare_mode": "contains"
-      },
-      "response_match_score": {
-        "method": "rouge-1"
-      }
-    }
+    "num_runs": 1
   },
   "optimize": {
     "algorithm": {
