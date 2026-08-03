@@ -137,15 +137,21 @@ def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
     支持隐藏样本的真实评分（验收标准 #2）。
     """
     new_case = _copy_case(case)
+    case_id = str(case.get("eval_id", ""))
 
-    # 优先使用 case 自带的 candidate_conversation（真实回放）
-    if "candidate_conversation" in case:
+    # 优先使用 case 自带的 candidate_conversation（真实回放）。
+    # 例外：overfit 场景被选为 val 回归目标的 case——隐藏样本回放通常通过，
+    # 若跳过扰动则没有 val 退化，会落到 new_failures==0 的报错。
+    _is_overfit_val_target = (
+        scenario == "overfit" and not is_train
+        and case_id in (val_regression_cases or [])
+    )
+    if "candidate_conversation" in case and not _is_overfit_val_target:
         new_case["actual_conversation"] = case["candidate_conversation"]
         return new_case
 
     conversation = case.get("conversation", [])
     actual = case.get("actual_conversation", [])
-    case_id = str(case.get("eval_id", ""))
 
     if scenario == "noop":
         # 无变化：保持 baseline actual
@@ -324,10 +330,12 @@ def run_validation_trace(
     deltas = []
     all_ids = set(baseline_map.keys()) | {c.get("eval_id", "") for c in candidate_val.per_case_results}
     for case_id in sorted(all_ids):
-        bl_pass = baseline_map.get(case_id, True)
+        # 缺失侧默认 False（保守，与 run_validation_fake 一致）：case id 漂移/新增时
+        # 不把"baseline 未评测"的 case 默认当通过，避免漏掉回归信号
+        bl_pass = baseline_map.get(case_id, False)
         cd_pass = next(
-            (c.get("pass", True) for c in candidate_val.per_case_results if c.get("eval_id") == case_id),
-            True,
+            (c.get("pass", False) for c in candidate_val.per_case_results if c.get("eval_id") == case_id),
+            False,
         )
         if not bl_pass and cd_pass:
             change = "new_pass"
