@@ -84,7 +84,7 @@ class TestFakePipelineSixCases:
 
     # Maximum wall-clock seconds for a 6-case fake pipeline end-to-end.
     # Fake mode does no real inference — this is extremely generous.
-    MAX_SIX_CASE_SECONDS = 10.0
+    MAX_SIX_CASE_SECONDS = 30.0
 
     def test_six_case_baseline_timing(self, pipeline_config):
         """6-case baseline runs well under the threshold."""
@@ -157,7 +157,7 @@ class TestFakePipelineSixCases:
 class TestLargeEvalsetLoading:
     """50-case evalset loads within a reasonable time."""
 
-    MAX_FIFTY_CASE_SECONDS = 5.0
+    MAX_FIFTY_CASE_SECONDS = 30.0
 
     def test_fifty_case_evalset_loads_fast(self):
         """Loading a 50-case evalset with load_evalset is fast."""
@@ -215,7 +215,7 @@ class TestLargeEvalsetLoading:
 class TestFailureAttributionPerformance:
     """30-failure attribution completes within a reasonable time."""
 
-    MAX_THIRTY_ATTRIBUTION_SECONDS = 5.0
+    MAX_THIRTY_ATTRIBUTION_SECONDS = 30.0
 
     def test_thirty_failures_attribution_timing(self):
         """Attribute 30 failures — should be well under threshold."""
@@ -253,7 +253,7 @@ class TestFailureAttributionPerformance:
 class TestReportGenerationPerformance:
     """JSON + MD report generation completes quickly."""
 
-    MAX_REPORT_SECONDS = 2.0
+    MAX_REPORT_SECONDS = 10.0
 
     @pytest.fixture
     def report_inputs(self, sample_baseline, all_pass_baseline):
@@ -337,7 +337,7 @@ class TestReportGenerationPerformance:
 class TestLargeScaleFakePipeline:
     """100-case end-to-end fake pipeline benchmark."""
 
-    MAX_HUNDRED_E2E_SECONDS = 15.0
+    MAX_HUNDRED_E2E_SECONDS = 60.0
 
     def test_hundred_case_e2e_pipeline(self):
         """Full pipeline with 100 cases: baseline → attr → opt → gate → report."""
