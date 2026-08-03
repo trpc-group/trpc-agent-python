@@ -27,7 +27,7 @@ def canonical_sha256(value: object) -> str:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
-def _is_sensitive_key(key: object) -> bool:
+def is_sensitive_config_key(key: object) -> bool:
     normalized = "".join(character for character in str(key).lower() if character.isalnum())
     return (
         normalized in {"authorization", "cookie", "token", "key"}
@@ -44,7 +44,7 @@ def sanitize_config(value: object) -> object:
     if isinstance(value, dict):
         sanitized: dict[object, object] = {}
         for key, item in value.items():
-            if _is_sensitive_key(key):
+            if is_sensitive_config_key(key):
                 sanitized[key] = item if _is_env_placeholder(item) else "***REDACTED***"
             else:
                 sanitized[key] = sanitize_config(item)

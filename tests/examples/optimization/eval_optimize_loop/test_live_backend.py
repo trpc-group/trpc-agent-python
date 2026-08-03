@@ -77,6 +77,8 @@ async def test_live_backend_uses_sanitized_config_temporary_target_and_archives_
     ("secret_path", "secret_payload"),
     [
         ("auth_token", {"evaluate": {}, "optimize": {"auth_token": "plain-token"}}),
+        ("token", {"evaluate": {}, "optimize": {"token": "plain-token"}}),
+        ("key", {"evaluate": {}, "optimize": {"key": "plain-key"}}),
         (
             "headers.authorization_token",
             {"evaluate": {}, "optimize": {"headers": {"authorization_token": "plain-token"}}},
