@@ -182,6 +182,16 @@ class TestLiveGateDowngrade:
         out = live_gate_downgrade(g, live=True, optimization_cost=5.0, max_cost_budget=10.0)
         assert out.decision == GateDecision.NEEDS_REVIEW
 
+    def test_live_scenario_config_error_reject_kept(self):
+        # 场景配置错误是真实配置问题（非评分口径）→ live 下也保留 REJECT 与根因
+        g = GateResult(
+            decision=GateDecision.REJECT,
+            reason="Validation scenario configuration error: empty val set",
+            details={"reason_code": "scenario_config_error"},
+        )
+        out = live_gate_downgrade(g, live=True, optimization_cost=5.0, max_cost_budget=10.0)
+        assert out.decision == GateDecision.REJECT
+
 
 class TestCiExitCode:
     """Tests for ci_exit_code()."""

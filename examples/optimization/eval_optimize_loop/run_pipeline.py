@@ -140,7 +140,8 @@ def live_gate_downgrade(gate: GateResult, *, live: bool,
     """
     if (live and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
             and not (gate.decision == GateDecision.REJECT
-                     and optimization_cost > max_cost_budget)):
+                     and (optimization_cost > max_cost_budget
+                          or (gate.details or {}).get("reason_code") == "scenario_config_error"))):
         return GateResult(
             decision=GateDecision.NEEDS_REVIEW,
             reason=("live mode: " + gate.decision.value.upper()
@@ -479,7 +480,10 @@ Examples:
         gate = GateResult(
             decision=GateDecision.REJECT,
             reason=f"Validation scenario configuration error: {_scenario_error}",
-            details=gate.details,
+            details={
+                **(gate.details or {}),
+                "reason_code": "scenario_config_error",
+            },
         )
         tracer.add_warning(f"Gate rejected due to scenario config error: {_scenario_error}")
 
@@ -581,7 +585,11 @@ Examples:
     print(f"  Seed:     {cfg.seed}")
     print(f"  Reproduce: {final_audit.reproduce_command}")
 
-    # CI mode exit code: 1 = rejected, 2 = needs review
+    # CI mode exit code: 1 = rejected, 2 = needs review。
+    # live 模式下 baseline=SDK 与候选=comparator 评分不可比，gate 恒被降级为
+    # NEEDS_REVIEW——此时 CI 仅作 informational，退出 0，避免 --mode live --ci 恒失败。
+    if cfg.mode == "live" and gate.decision == GateDecision.NEEDS_REVIEW:
+        return 0
     return ci_exit_code(gate.decision, cfg.ci_mode)
 
 
