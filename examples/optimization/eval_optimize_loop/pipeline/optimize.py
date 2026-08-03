@@ -250,8 +250,11 @@ async def run_optimize_live(
             f"SDK AgentOptimizer not available: {e}. "
             f"Install with: pip install trpc-agent-python[gepa]"
         )
-    except Exception as e:
+    except (ValueError, KeyError, TypeError) as e:
+        # 已知的 SDK 评测/字段问题 → 记录 error 并返回空结果
         result.errors.append(f"Optimization failed: {e}")
+    # 其余非预期异常（AttributeError 等 pipeline 自身 bug）向上抛出，
+    # 由 run_pipeline 的 try/except 捕获降级，避免把代码缺陷伪装成"优化失败"
 
     return result
 

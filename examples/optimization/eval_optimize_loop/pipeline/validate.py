@@ -186,7 +186,8 @@ def _perturb_case(case: dict) -> list[dict]:
         return case.get("actual_conversation", [])
     perturbed = _copy_case(conversation)
     for inv in perturbed:
-        parts = inv.get("final_response", {}).get("parts", [])
+        # final_response 可能显式为 None（部分 evalset schema 允许）→ 用 `or {}` 防护
+        parts = (inv.get("final_response") or {}).get("parts", [])
         if parts:
             parts[0]["text"] = "[过拟合退化] 回复被错误改写，与期望不一致。"
     return perturbed
