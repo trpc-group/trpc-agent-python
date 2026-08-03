@@ -96,7 +96,13 @@ def _generate_mock_evalset(num_cases: int, seed: int = 42,
 
         # Compute expected answer
         if topic == "math":
-            expected = str(a + b) if "Multiply" not in template else str(a * b)
+            # 按运算符判断，避免 "Multiply" 大小写子串误判乘除
+            if "/" in template:
+                expected = str(round(a / b, 1))
+            elif "*" in template:
+                expected = str(a * b)
+            else:
+                expected = str(a + b)
         elif topic == "reasoning":
             expected = str(a * b) if "cost" in template else str(round(a / b, 1))
         elif topic == "chinese":

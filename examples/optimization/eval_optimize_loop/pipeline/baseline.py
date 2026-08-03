@@ -111,6 +111,7 @@ async def run_baseline_sdk(
     *,
     call_agent: Any = None,
     eval_config: Any = None,
+    optimizer_config_path: str | None = None,
 ) -> BaselineResult:
     """Run baseline evaluation using the real SDK AgentEvaluator.
 
@@ -121,7 +122,10 @@ async def run_baseline_sdk(
     Args:
         evalset_path: Path to .evalset.json file.
         call_agent: 可选，真实 agent 调用入口（async callable）。
-        eval_config: 可选，SDK EvalConfig。缺省时从 data/optimizer.json 加载。
+        eval_config: 可选，SDK EvalConfig。缺省时从 optimizer_config_path
+            （或默认 data/optimizer.json）加载。
+        optimizer_config_path: 可选，用户指定的 optimizer.json 路径；
+            避免静默改用默认配置的 metrics/阈值。
 
     Returns:
         BaselineResult from actual AgentEvaluator run.
@@ -144,13 +148,15 @@ async def run_baseline_sdk(
             result.errors.append(f"Evalset not found: {evalset_path}")
             return result
 
-        # eval_config 必填；缺省时从默认 data/optimizer.json 的 evaluate 段加载
+        # eval_config 必填；缺省时从用户 optimizer_config_path 加载，
+        # 未指定才回退到默认 data/optimizer.json（避免静默改用默认配置评分）
         if eval_config is None:
             from .config import load_optimize_config
-            _default_opt = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                "data", "optimizer.json")
-            eval_config = load_optimize_config(_default_opt)
+            if optimizer_config_path is None:
+                optimizer_config_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "optimizer.json")
+            eval_config = load_optimize_config(optimizer_config_path)
 
         with open(evalset_path, encoding="utf-8") as f:
             eval_set = EvalSet.model_validate_json(f.read())

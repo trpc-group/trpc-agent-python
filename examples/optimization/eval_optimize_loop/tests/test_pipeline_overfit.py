@@ -15,7 +15,7 @@ class TestOverfittingDetection:
     def test_train_up_val_down_rejected(self):
         """Gate should REJECT when train improves but val degrades."""
         # Train baseline at 50%, candidate at 80% (big improvement on train)
-        # But critical case from val fails
+        # val 新增失败（validation_new_failures>0）→ 过拟合 REJECT
         result = evaluate_gate(
             baseline_pass_rate=0.5, candidate_pass_rate=0.8,
             baseline_metrics={"val_pass_rate": 0.7},
@@ -23,9 +23,10 @@ class TestOverfittingDetection:
             min_improvement=0.1,
             baseline_failed=[],
             candidate_failed=["val_critical_001"],  # New failure on val
+            validation_new_failures=1,
         )
-        # Should reject due to new failure
-        assert result.decision != GateDecision.ACCEPT
+        assert result.decision == GateDecision.REJECT
+        assert "Overfitting" in result.reason
 
     def test_train_up_val_up_accepted(self):
         """Both train and val improve → should accept."""
