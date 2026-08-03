@@ -38,6 +38,7 @@ SKIPPED_EXAMPLES=(
     "examples/skills_hub/run_agent.py"
     "examples/skills_with_container/run_agent.py"
     "examples/skills_with_cube/run_agent.py"
+    "examples/skills_code_review_agent/run_agent.py"
 )
 
 show_usage() {
