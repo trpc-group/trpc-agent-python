@@ -47,7 +47,7 @@ Reasons: candidate passed all independent gate rules
 | Rule | Passed | Actual | Expected |
 | --- | --- | ---: | ---: |
 | `evaluation_complete` | yes | `complete` | `complete` |
-| `validation_case_deltas_complete` | yes | `{'expected': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq'], 'actual': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq']}` | `one unique delta per validation case` |
+| `validation_case_deltas_complete` | yes | `{"actual": ["val_json_generalization", "val_refund_critical", "val_stable_faq"], "expected": ["val_json_generalization", "val_refund_critical", "val_stable_faq"]}` | `one unique delta per validation case` |
 | `validation_score_delta_available` | yes | `0.33333333333333337` | `number` |
 | `validation_pass_rate_delta_available` | yes | `0.33333333333333337` | `number` |
 | `validation_score_improved` | yes | `0.33333333333333337` | `0.05` |
@@ -78,7 +78,7 @@ Reasons: validation aggregate score must improve; tie policy rejects a non-impro
 | Rule | Passed | Actual | Expected |
 | --- | --- | ---: | ---: |
 | `evaluation_complete` | yes | `complete` | `complete` |
-| `validation_case_deltas_complete` | yes | `{'expected': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq'], 'actual': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq']}` | `one unique delta per validation case` |
+| `validation_case_deltas_complete` | yes | `{"actual": ["val_json_generalization", "val_refund_critical", "val_stable_faq"], "expected": ["val_json_generalization", "val_refund_critical", "val_stable_faq"]}` | `one unique delta per validation case` |
 | `validation_score_delta_available` | yes | `0.0` | `number` |
 | `validation_pass_rate_delta_available` | yes | `0.0` | `number` |
 | `validation_score_improved` | no | `0.0` | `0.05` |
@@ -109,7 +109,7 @@ Reasons: new hard failures are not allowed; validation regressions exceed the li
 | Rule | Passed | Actual | Expected |
 | --- | --- | ---: | ---: |
 | `evaluation_complete` | yes | `complete` | `complete` |
-| `validation_case_deltas_complete` | yes | `{'expected': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq'], 'actual': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq']}` | `one unique delta per validation case` |
+| `validation_case_deltas_complete` | yes | `{"actual": ["val_json_generalization", "val_refund_critical", "val_stable_faq"], "expected": ["val_json_generalization", "val_refund_critical", "val_stable_faq"]}` | `one unique delta per validation case` |
 | `validation_score_delta_available` | yes | `0.06666666666666676` | `number` |
 | `validation_pass_rate_delta_available` | yes | `0.0` | `number` |
 | `validation_score_improved` | yes | `0.06666666666666676` | `0.05` |

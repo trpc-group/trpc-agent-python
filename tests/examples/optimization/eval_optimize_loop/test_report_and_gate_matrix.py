@@ -16,6 +16,7 @@ from examples.optimization.eval_optimize_loop.pipeline.models import (
     OptimizationReport,
     SplitReport,
 )
+from examples.optimization.eval_optimize_loop.pipeline.reporter import write_reports
 from examples.optimization.eval_optimize_loop.run_pipeline import run_fake_pipeline, run_trace_pipeline
 
 
@@ -121,6 +122,37 @@ def test_winner_prefers_fewer_critical_regressions_when_policy_allows_them() -> 
         )
 
     assert select_winner([candidate("two-critical", 2), candidate("one-critical", 1)]) == "one-critical"
+
+
+def test_markdown_report_escapes_gate_rule_table_cells(tmp_path: Path) -> None:
+    report = OptimizationReport.empty(mode="fake", seed=42)
+    report.candidates.append(
+        CandidateReport(
+            candidate_id="candidate_pipe",
+            accepted=False,
+            reasons=["contains pipe"],
+            gate=GateDecision(
+                accepted=False,
+                risk_level="medium",
+                reasons=["contains pipe"],
+                rules=[
+                    GateRuleResult(
+                        rule="validation_case_deltas_complete",
+                        passed=False,
+                        actual={"expected": ["a|b"], "actual": ["c"]},
+                        expected="one | unique delta per validation case",
+                        reason="pipe value",
+                    )
+                ],
+            ),
+        )
+    )
+
+    _, markdown_path = write_reports(report, tmp_path)
+
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "a\\|b" in markdown
+    assert "one \\| unique delta per validation case" in markdown
 
 
 @pytest.mark.asyncio

@@ -21,6 +21,19 @@ def _json_safe(value: object) -> object:
     return value
 
 
+def _markdown_text(value: object) -> str:
+    if isinstance(value, (dict, list, tuple)):
+        text = json.dumps(_json_safe(value), ensure_ascii=False, sort_keys=True)
+    else:
+        text = str(value)
+    return text.replace("|", "\\|").replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
+
+
+def _markdown_code(value: object) -> str:
+    escaped = _markdown_text(value).replace("`", "\\`")
+    return f"`{escaped}`"
+
+
 def write_secret_free_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sanitize_config(_json_safe(payload)), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -107,7 +120,8 @@ def write_reports(
         for case in baseline_failures:
             attribution = case.failure_attribution
             lines.append(
-                f"| `{case.eval_id}` | `{attribution.primary_type.value}` | `{attribution.source}` | {'; '.join(attribution.evidence)} |"
+                f"| {_markdown_code(case.eval_id)} | {_markdown_code(attribution.primary_type.value)} | "
+                f"{_markdown_code(attribution.source)} | {_markdown_text('; '.join(attribution.evidence))} |"
             )
     lines.extend([
         "",
@@ -121,7 +135,7 @@ def write_reports(
         status = "ACCEPT" if candidate.accepted else "REJECT"
         train_score = f"{candidate.train.aggregate_score:.3f}" if candidate.train else "-"
         validation_score = f"{candidate.validation.aggregate_score:.3f}" if candidate.validation else "-"
-        lines.append(f"| `{candidate.candidate_id}` | {status} | {train_score} | {validation_score} |")
+        lines.append(f"| {_markdown_code(candidate.candidate_id)} | {status} | {train_score} | {validation_score} |")
         section = [
             "",
             f"### `{candidate.candidate_id}`",
@@ -135,13 +149,19 @@ def write_reports(
             "| --- | --- | ---: | --- |",
         ]
         for delta in candidate.validation_case_deltas:
-            section.append(f"| `{delta.eval_id}` | {delta.transition} | {delta.score_delta:+.3f} | {'yes' if delta.critical else 'no'} |")
+            section.append(
+                f"| {_markdown_code(delta.eval_id)} | {_markdown_text(delta.transition)} | "
+                f"{delta.score_delta:+.3f} | {'yes' if delta.critical else 'no'} |"
+            )
         section.extend(["", "#### Gate rules", "", "| Rule | Passed | Actual | Expected |", "| --- | --- | ---: | ---: |"])
         if candidate.gate:
             for rule in candidate.gate.rules:
-                section.append(f"| `{rule.rule}` | {'yes' if rule.passed else 'no'} | `{rule.actual}` | `{rule.expected}` |")
+                section.append(
+                    f"| {_markdown_code(rule.rule)} | {'yes' if rule.passed else 'no'} | "
+                    f"{_markdown_code(rule.actual)} | {_markdown_code(rule.expected)} |"
+                )
             if candidate.gate.warnings:
-                section.append(f"\nWarnings: {'; '.join(candidate.gate.warnings)}")
+                section.append(f"\nWarnings: {_markdown_text('; '.join(candidate.gate.warnings))}")
         candidate_sections.extend(section)
     lines.extend([
         "",
