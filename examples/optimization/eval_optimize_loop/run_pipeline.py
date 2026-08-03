@@ -48,7 +48,11 @@ from pipeline.config import (
 from pipeline.baseline import BaselineResult, run_baseline_fake
 from pipeline.attribution import attribute_failures, AttributionReport
 from pipeline.gate import evaluate_gate, GateDecision, GateResult
-from pipeline.validate import run_validation_trace, ValidationResult
+from pipeline.validate import (
+    run_validation_trace,
+    ValidationDelta,
+    ValidationResult,
+)
 from pipeline.report import generate_json_report, generate_md_report
 from pipeline.optimize import (
     run_optimize_fake,
@@ -112,13 +116,14 @@ def ci_exit_code(decision: GateDecision, ci_mode: bool) -> int:
 
 
 def is_output_dir_allowed(output_dir: str) -> bool:
-    """output_dir 必须解析到仓库根目录内（防任意文件写入）。
+    """output_dir 必须解析到仓库根目录的严格子目录（防任意文件写入）。
 
-    拒绝 `..` 越界与外部绝对路径；`_REPO_ROOT` 为项目根（3 级上跳）。
+    拒绝 `..` 越界、外部绝对路径，以及直接写到仓库根（会污染根目录）。
+    `_REPO_ROOT` 为项目根（3 级上跳）。
     """
     _root_abs = os.path.realpath(_REPO_ROOT)
     _out_abs = os.path.realpath(output_dir)
-    return _out_abs == _root_abs or _out_abs.startswith(_root_abs + os.sep)
+    return _out_abs.startswith(_root_abs + os.sep)
 
 
 def main() -> int:
@@ -361,15 +366,35 @@ Examples:
     print("[5/7] Validating candidate on validation set...")
     tracer.start_stage("validate")
 
-    validation = run_validation_trace(
-        cfg.train_evalset,
-        cfg.val_evalset,
-        baseline_val,
-        optimize_result,
-        cfg,
-        scenario=cfg.scenario,
-        val_regression_cases=cfg.val_regression_cases,
-    )
+    try:
+        validation = run_validation_trace(
+            cfg.train_evalset,
+            cfg.val_evalset,
+            baseline_val,
+            optimize_result,
+            cfg,
+            scenario=cfg.scenario,
+            val_regression_cases=cfg.val_regression_cases,
+        )
+    except ValueError as _ve:
+        # 场景配置边界（如 overfit + 空 val 集）显式报错时，不崩溃：
+        # 记录为 warning，并构造"有新增失败"的结果让 gate 拒绝/需审查，继续出报告。
+        print(f"  ⚠️  Validation scenario error: {_ve}")
+        tracer.add_warning(f"Validation scenario error: {_ve}")
+        validation = ValidationResult(
+            baseline=baseline_val,
+            candidate=None,
+            deltas=[
+                ValidationDelta(
+                    eval_id="__scenario_error__",
+                    baseline_passed=True,
+                    candidate_passed=False,
+                    change="new_fail",
+                )
+            ],
+        )
+        validation.candidate_train = baseline_train
+        errors.append(str(_ve))
     candidate_train = validation.candidate_train or baseline_train
     tracer.end_stage("validate")
     print(f"  New passes: {validation.new_passes}, "
@@ -407,21 +432,33 @@ Examples:
         validation_new_failed=[d.eval_id for d in validation.deltas if d.change == "new_fail"],
     )
 
-    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不同，
-    # overfitting 的 new_failures 可能是评分差异而非真实回归 → 降级为 NEEDS_REVIEW，
-    # 避免不可比评分触发 CI 阻断。
-    if (cfg.mode == "live" and gate.decision == GateDecision.REJECT
-            and validation.is_overfitting):
-        gate = GateResult(
-            decision=GateDecision.NEEDS_REVIEW,
-            reason=("live mode: overfitting REJECT downgraded to review — "
-                    f"baseline=SDK vs candidate=trace-comparator scoring differ: {gate.reason}"),
-            details=gate.details,
-        )
-        tracer.add_warning(
-            "live mode: overfitting REJECT downgraded to NEEDS_REVIEW "
-            "(incomparable SDK/comparator scoring)"
-        )
+    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比：
+    # - ACCEPT（improvement 来自不可比差值）→ 降级 NEEDS_REVIEW，不误判真实提升
+    # - overfitting REJECT（new_failures 可能是评分差异）→ 降级 NEEDS_REVIEW
+    # 避免不可比评分触发 ACCEPT 或 CI 阻断。
+    if cfg.mode == "live":
+        if gate.decision == GateDecision.ACCEPT:
+            gate = GateResult(
+                decision=GateDecision.NEEDS_REVIEW,
+                reason=("live mode: ACCEPT downgraded to review — "
+                        f"baseline=SDK vs candidate=trace-comparator scoring differ: {gate.reason}"),
+                details=gate.details,
+            )
+            tracer.add_warning(
+                "live mode: ACCEPT downgraded to NEEDS_REVIEW "
+                "(incomparable SDK/comparator scoring)"
+            )
+        elif gate.decision == GateDecision.REJECT and validation.is_overfitting:
+            gate = GateResult(
+                decision=GateDecision.NEEDS_REVIEW,
+                reason=("live mode: overfitting REJECT downgraded to review — "
+                        f"baseline=SDK vs candidate=trace-comparator scoring differ: {gate.reason}"),
+                details=gate.details,
+            )
+            tracer.add_warning(
+                "live mode: overfitting REJECT downgraded to NEEDS_REVIEW "
+                "(incomparable SDK/comparator scoring)"
+            )
 
     tracer.end_stage("gate")
     gate_icon = {"accept": "[ACCEPT]", "reject": "[REJECT]", "needs_review": "[REVIEW]"}

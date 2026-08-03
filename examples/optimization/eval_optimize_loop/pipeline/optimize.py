@@ -113,8 +113,9 @@ def run_optimize_fake(
     # overfit 场景：模拟"记住 train"，对归因类别做过度修复（第 2 轮起引入退化）
     max_rounds = min(config.max_iterations, len(categories_to_fix))
     if scenario == "overfit":
-        # 过拟合候选：修复更多轮次但代价更高，validate 阶段会显示 val 回归
-        max_rounds = min(max_rounds + 1, len(categories_to_fix) + 1)
+        # 过拟合候选：可多修一轮，但轮数仍以类别数为上界，
+        # 避免 `categories_to_fix[i % len(...)]` 取模重复"修复"同一类别造成收敛误判
+        max_rounds = min(max_rounds + 1, len(categories_to_fix))
 
     optimized_fields = set()
     prompt_changes: dict[str, str] = {}

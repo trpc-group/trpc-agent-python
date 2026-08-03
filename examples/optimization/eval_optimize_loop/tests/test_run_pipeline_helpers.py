@@ -132,6 +132,10 @@ class TestIsOutputDirAllowed:
     def test_rejects_absolute_path_outside_repo(self):
         assert is_output_dir_allowed("/tmp/pr139_out") is False
 
+    def test_rejects_repo_root_itself(self):
+        # 严格子目录：不允许直接写到仓库根（污染根目录）
+        assert is_output_dir_allowed(self._repo_root()) is False
+
     def test_rejects_path_escape(self):
         import os
         outside = os.path.join(os.path.dirname(self._repo_root()), "escaped")
