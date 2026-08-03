@@ -140,7 +140,7 @@ def live_gate_downgrade(gate: GateResult, *, live: bool,
     """
     if (live and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
             and not (gate.decision == GateDecision.REJECT
-                     and (optimization_cost > max_cost_budget
+                     and (("budget" in (gate.details or {}))
                           or (gate.details or {}).get("reason_code") == "scenario_config_error"))):
         return GateResult(
             decision=GateDecision.NEEDS_REVIEW,
