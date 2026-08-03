@@ -249,8 +249,9 @@ Examples:
         except Exception as _e:
             # 与 fake 模式一致：SDK 未捕获的异常（RuntimeError 等）也优雅降级，
             # 避免整个 pipeline 崩溃（errors 会在下方统一打印/记录）
+            # 注意：不能在这里 from-import run_baseline_fake（会使该名字在 main()
+            # 内变为局部变量，fake 路径未赋值即用 → UnboundLocalError）
             print(f"  ⚠️  live baseline 异常，降级到 trace comparator: {_e}")
-            from pipeline.baseline import run_baseline_fake
             baseline_train = run_baseline_fake(cfg.train_evalset, cfg)
             baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
             _msg = (f"live baseline failed ({type(_e).__name__}: {_e}); "
@@ -334,8 +335,9 @@ Examples:
             )
         except Exception as _e:
             # 与 fake 模式一致：SDK 未捕获的异常也优雅降级，不崩溃
+            # （OptimizeResult 已在模块顶部导入，此处不能重复 from-import，
+            #   否则会在 main() 内遮蔽为局部变量）
             print(f"  ⚠️  live optimize 异常，降级为空结果: {_e}")
-            from pipeline.optimize import OptimizeResult
             optimize_result = OptimizeResult(algorithm=cfg.algorithm)
             optimize_result.errors = [
                 f"live optimize failed ({type(_e).__name__}: {_e})"
