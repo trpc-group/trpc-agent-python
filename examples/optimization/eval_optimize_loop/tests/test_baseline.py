@@ -70,6 +70,12 @@ class TestRunBaselineFake:
             result = run_baseline_fake(path, pipeline_config)
             assert result.total_cases == 2
             assert result.passed_cases == 2
+            # 补强：逐 case 断言 pass 语义（legacy 无 actual_conversation 按通过处理），
+            # 防止 comparator 语义回归时假通过
+            by_id = {r["eval_id"]: r for r in result.per_case_results}
+            assert len(by_id) == 2
+            assert by_id["c1"]["pass"] is True
+            assert by_id["c2"]["pass"] is True
         finally:
             os.unlink(path)
 
@@ -85,6 +91,11 @@ class TestRunBaselineFake:
             result = run_baseline_fake(path, pipeline_config)
             assert "fail_case" in result.failed_case_ids
             assert "pass_case" not in result.failed_case_ids
+            # 补强：fail_case 缺 conversation → 应判 MISSING_EXPECTED_OUTPUT 失败
+            by_id = {r["eval_id"]: r for r in result.per_case_results}
+            assert by_id["fail_case"]["pass"] is False
+            assert by_id["fail_case"]["category"] == "missing_expected_output"
+            assert by_id["pass_case"]["pass"] is True
         finally:
             os.unlink(path)
 

@@ -185,12 +185,13 @@ def _case_passes(case: dict) -> bool:
 
 
 def _case_is_perturbable(case: dict) -> bool:
-    """case 是否可被 _perturb_case 真正扰动（conversation[0] 有 final_response.parts）。"""
+    """case 是否可被 _perturb_case 真正扰动（任一 invocation 有 final_response.parts）。
+
+    与 _perturb_case 遍历所有 invocation 的行为对齐：首条无 parts 但后续
+    invocation 有 parts 的多轮 case 同样可扰动。
+    """
     conv = case.get("conversation") or []
-    if not conv:
-        return False
-    parts = (conv[0].get("final_response") or {}).get("parts") or []
-    return bool(parts)
+    return any(((inv.get("final_response") or {}).get("parts") or []) for inv in conv)
 
 
 def _perturb_case(case: dict) -> list[dict]:
@@ -299,8 +300,14 @@ def run_validation_trace(
                     # 显式要求 baseline 已知且通过：未知 case 不默认当通过，
                     # 避免选到 case id 漂移/无 parts 的 case 导致扰动失败
                     and bl_pass.get(str(c.get("eval_id", ""))) is True]
-        pool = eligible or val_cases
-        effective_regression = [str(c.get("eval_id", "")) for c in pool[:2]]
+        if not eligible:
+            # 不回退到 val_cases：回退会选入不可扰动/baseline 失败的 case，
+            # 扰动后不产生 new_fail，只会把问题延后成一次笼统报错
+            raise ValueError(
+                "overfit scenario: no val case is both perturbable (has "
+                "final_response.parts) and baseline-passed; cannot demonstrate "
+                "val regression")
+        effective_regression = [str(c.get("eval_id", "")) for c in eligible[:2]]
 
     if strat == "overfit" and not effective_regression:
         # 空 val 集 / 未指定回归 case：overfit 场景无法演示"val 退化"，
