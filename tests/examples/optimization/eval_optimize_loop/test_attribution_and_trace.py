@@ -302,3 +302,33 @@ def test_trace_cli_writes_report_paths(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "JSON report:" in result.stdout
     assert "Markdown report:" in result.stdout
+
+
+def test_trace_config_loader_reports_missing_required_keys(tmp_path: Path) -> None:
+    from examples.optimization.eval_optimize_loop.run_pipeline import _load_trace_config
+
+    config_path = tmp_path / "trace_config.json"
+    config_path.write_text(json.dumps({"evaluate": {"metrics": []}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="trace config requires missing keys: metric_weights, seed"):
+        _load_trace_config(config_path)
+
+
+def test_trace_cli_reports_malformed_trace_config_as_input_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import examples.optimization.eval_optimize_loop.run_pipeline as run_pipeline
+
+    original_loader = run_pipeline._load_trace_config
+
+    def broken_loader(_trace_config_path: Path):
+        raise ValueError("trace config requires missing keys: metric_weights")
+
+    monkeypatch.setattr(run_pipeline, "_load_trace_config", broken_loader)
+    monkeypatch.setattr("sys.argv", ["run_pipeline.py", "--mode", "trace", "--output-dir", str(tmp_path)])
+
+    try:
+        assert run_pipeline.main() == 2
+        assert "trace config requires missing keys: metric_weights" in capsys.readouterr().err
+    finally:
+        monkeypatch.setattr(run_pipeline, "_load_trace_config", original_loader)

@@ -74,6 +74,26 @@ def _stable_trace_projection(results_by_eval_id: dict[str, list[object]]) -> dic
     }
 
 
+def _load_trace_config(trace_config_path: Path) -> tuple[dict[str, object], EvalConfig, dict[str, float], int]:
+    config_payload = json.loads(trace_config_path.read_text(encoding="utf-8"))
+    required_keys = ("evaluate", "metric_weights", "seed")
+    missing = [key for key in required_keys if key not in config_payload]
+    if missing:
+        raise ValueError("trace config requires missing keys: " + ", ".join(missing))
+    eval_config = EvalConfig.model_validate(config_payload["evaluate"])
+    metric_weights = config_payload["metric_weights"]
+    if not isinstance(metric_weights, dict):
+        raise ValueError("trace config metric_weights must be an object")
+    try:
+        normalized_weights = {str(name): float(weight) for name, weight in metric_weights.items()}
+    except (TypeError, ValueError) as exc:
+        raise ValueError("trace config metric_weights must contain numeric values") from exc
+    seed = config_payload["seed"]
+    if not isinstance(seed, int):
+        raise ValueError("trace config seed must be an integer")
+    return config_payload, eval_config, normalized_weights, seed
+
+
 async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
     config = load_pipeline_config(HERE / "optimizer.json", mode="fake")
     eval_config = EvalConfig.model_validate(config.raw["evaluate"])
@@ -119,8 +139,7 @@ async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
 async def run_trace_pipeline(*, output_dir: Path) -> OptimizationReport:
     """Evaluate recorded trace conversations without loading an agent or optimizer."""
     trace_dir = HERE / "trace"
-    config_payload = json.loads((trace_dir / "trace_config.json").read_text(encoding="utf-8"))
-    eval_config = EvalConfig.model_validate(config_payload["evaluate"])
+    config_payload, eval_config, metric_weights, seed = _load_trace_config(trace_dir / "trace_config.json")
     eval_set = EvalSet.model_validate_json((trace_dir / "trace.evalset.json").read_text(encoding="utf-8"))
     register_fake_rubric_evaluator()
     _, _, _, results_by_eval_id = await AgentEvaluator.evaluate_eval_set(
@@ -132,13 +151,13 @@ async def run_trace_pipeline(*, output_dir: Path) -> OptimizationReport:
     normalized = normalize_eval_results(
         results_by_eval_id,
         split="validation",
-        metric_weights=config_payload["metric_weights"],
+        metric_weights=metric_weights,
     )
     cases = [
         case if case.passed else case.model_copy(update={"failure_attribution": attribute_case(case)})
         for _, case in sorted(normalized.items())
     ]
-    report = OptimizationReport.empty(mode="trace", seed=config_payload["seed"])
+    report = OptimizationReport.empty(mode="trace", seed=seed)
     report.run_metadata = {"evaluation_source": "recorded_trace", "independent_candidate_evaluation": False}
     report.baseline_validation = SplitReport.from_cases(cases)
     report.attribution_summary = _attribution_summary(report.baseline_validation)
