@@ -228,11 +228,12 @@ async def run_baseline_sdk(
         }
         return result
 
-    except ImportError:
-        # SDK 不可用 → 与其它降级路径一致回退到 trace comparator，
-        # 使 run_pipeline 的 "fell back to trace comparator" 告警与真实状态相符。
-        # 保留 fake 回退自身的原始错误（如 evalset 缺失），不覆盖真实根因。
-        # 用调用方传入的 config（而非默认 PipelineConfig）保持用户配置。
+    except ImportError as e:
+        # 仅当缺失的是 trpc_agent_sdk（预期降级）才回退到 trace comparator；
+        # 其它 ImportError（如将来代码里的拼写/导入 bug）向上抛出，避免被伪装成
+        # "SDK 不可用"。保留 fake 回退自身的原始错误，不覆盖真实根因。
+        if not (e.name or "").startswith("trpc_agent_sdk"):
+            raise
         from .config import PipelineConfig
         _cfg = config or PipelineConfig()
         fallback = run_baseline_fake(evalset_path, _cfg)
