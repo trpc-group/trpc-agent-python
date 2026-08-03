@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "eval_optimize_loop_real_train",
+  "name": "eval_optimize_loop (real) - train",
+  "description": "3 条训练 case：中文+问候（可优化成功）、精确实时数据（优化无效）。所有 case 用全局 llm_rubric 判据。",
+  "eval_cases": [
+    {
+      "eval_id": "train_cn",
+      "conversation": [
+        {
+          "invocation_id": "rt1",
+          "user_content": {"parts": [{"text": "北京有哪些值得一去的博物馆？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应使用中文并以问候语开头"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_greet",
+      "conversation": [
+        {
+          "invocation_id": "rt2",
+          "user_content": {"parts": [{"text": "我想查一下我的快递到哪了"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应以问候语开头"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_dead",
+      "conversation": [
+        {
+          "invocation_id": "rt3",
+          "user_content": {"parts": [{"text": "请告诉我现在的精确北京时间，精确到秒。"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复须包含真实精确的实时时间（到秒）"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "trainer", "state": {}}
+    }
+  ]
+}

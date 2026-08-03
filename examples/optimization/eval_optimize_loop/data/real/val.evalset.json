@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "eval_optimize_loop_real_val",
+  "name": "eval_optimize_loop (real) - val",
+  "description": "3 条验证 case：中文+问候（可优化成功）、纯问候哨兵 val_robust（优化后退化样本）。",
+  "eval_cases": [
+    {
+      "eval_id": "val_cn",
+      "conversation": [
+        {
+          "invocation_id": "rv1",
+          "user_content": {"parts": [{"text": "如何用 Python 读取一个文件？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应使用中文"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_greet",
+      "conversation": [
+        {
+          "invocation_id": "rv2",
+          "user_content": {"parts": [{"text": "我想订一张去上海的机票"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应以问候语开头"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_robust",
+      "conversation": [
+        {
+          "invocation_id": "rv3",
+          "user_content": {"parts": [{"text": "你好"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应为自然中文问候（非 JSON、非强相关天气）"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "validator", "state": {}}
+    }
+  ]
+}

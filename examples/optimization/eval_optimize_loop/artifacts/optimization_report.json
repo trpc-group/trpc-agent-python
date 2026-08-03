@@ -1,0 +1,670 @@
+{
+  "meta": {
+    "seed": 42,
+    "started_at": "2026-07-21T10:46:53.186200+00:00",
+    "finished_at": "2026-07-21T10:46:53.193741+00:00",
+    "duration_seconds": 0.008,
+    "config_path": "/home/ybj/trpc-agent-python/examples/optimization/eval_optimize_loop/config/optimizer.json",
+    "baseline_prompt_path": "/home/ybj/trpc-agent-python/examples/optimization/eval_optimize_loop/prompts/baseline_system.md",
+    "train_path": "/home/ybj/trpc-agent-python/examples/optimization/eval_optimize_loop/data/train.evalset.json",
+    "val_path": "/home/ybj/trpc-agent-python/examples/optimization/eval_optimize_loop/data/val.evalset.json",
+    "budget": {
+      "max_metric_calls": 50,
+      "timeout_seconds": 150
+    },
+    "mode": "fake_model + fake_judge + call_agent (no API key required)"
+  },
+  "baseline": {
+    "train_pass_rate": 0.0,
+    "val_pass_rate": 0.3333,
+    "train_cases": {
+      "train_weather": {
+        "pass": false,
+        "score": 0.0
+      },
+      "train_format": {
+        "pass": false,
+        "score": 0.0
+      },
+      "train_dead": {
+        "pass": false,
+        "score": 0.0
+      }
+    },
+    "val_cases": {
+      "val_robust": {
+        "pass": true,
+        "score": 1.0
+      },
+      "val_format": {
+        "pass": false,
+        "score": 0.0
+      },
+      "val_weather": {
+        "pass": false,
+        "score": 0.0
+      }
+    },
+    "failure_attribution": {
+      "final_mismatch": 1,
+      "tool_call_error": 2,
+      "param_error": 0,
+      "llm_rubric": 0,
+      "knowledge_recall": 0,
+      "format_error": 2
+    },
+    "attributions": [
+      {
+        "eval_id": "train_weather",
+        "query": "北京天气怎么样？",
+        "passed": false,
+        "failure_type": "tool_call_error",
+        "reason": "天气类问题应当调用 weather 工具以获取实时天气，但回复中未见 [TOOL] 调用，导致天气知识未被召回，最终回复为兜底话术。",
+        "regression": false,
+        "actual_excerpt": "[FINAL] 抱歉，我暂时无法获取天气信息。\n[FMT] text\n"
+      },
+      {
+        "eval_id": "train_format",
+        "query": "请用 JSON 格式回复我",
+        "passed": false,
+        "failure_type": "format_error",
+        "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+        "regression": false,
+        "actual_excerpt": "[FINAL] 这是一份示例结构化数据。\n[FMT] text\n"
+      },
+      {
+        "eval_id": "train_dead",
+        "query": "请告诉我宇宙的终极答案",
+        "passed": false,
+        "failure_type": "final_mismatch",
+        "reason": "最终回复与期望不匹配：期望包含 '[FINAL] 宇宙终极答案是 42'，实际回复未满足该条件。",
+        "regression": false,
+        "actual_excerpt": "[FINAL] 我已收到您的请求。\n[FMT] text\n"
+      },
+      {
+        "eval_id": "val_weather",
+        "query": "上海天气如何？",
+        "passed": false,
+        "failure_type": "tool_call_error",
+        "reason": "天气类问题应当调用 weather 工具以获取实时天气，但回复中未见 [TOOL] 调用，导致天气知识未被召回，最终回复为兜底话术。",
+        "regression": false,
+        "actual_excerpt": "[FINAL] 抱歉，我暂时无法获取天气信息。\n[FMT] text\n"
+      },
+      {
+        "eval_id": "val_format",
+        "query": "用 JSON 格式输出一份菜单",
+        "passed": false,
+        "failure_type": "format_error",
+        "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+        "regression": false,
+        "actual_excerpt": "[FINAL] 这是一份示例结构化数据。\n[FMT] text\n"
+      },
+      {
+        "eval_id": "val_robust",
+        "query": "你好",
+        "passed": true,
+        "failure_type": null,
+        "reason": "",
+        "regression": false,
+        "actual_excerpt": "[FINAL] 我已收到您的请求。\n[FMT] text\n"
+      }
+    ]
+  },
+  "candidates": [
+    {
+      "label": "candidate_1",
+      "prompt": "回答天气类问题时必须调用 weather 工具并直接给出天气结论。",
+      "train_pass_rate": 0.3333,
+      "val_pass_rate": 0.6667,
+      "train_cases": {
+        "train_format": {
+          "pass": false,
+          "score": 0.0
+        },
+        "train_dead": {
+          "pass": false,
+          "score": 0.0
+        },
+        "train_weather": {
+          "pass": true,
+          "score": 1.0
+        }
+      },
+      "val_cases": {
+        "val_format": {
+          "pass": false,
+          "score": 0.0
+        },
+        "val_robust": {
+          "pass": true,
+          "score": 1.0
+        },
+        "val_weather": {
+          "pass": true,
+          "score": 1.0
+        }
+      },
+      "gate": {
+        "accept": true,
+        "val_score_before": 0.3333,
+        "val_score_after": 0.6667,
+        "improvement": 0.3333,
+        "reasons": [
+          "验证集总分提升 0.3333 -> 0.6667 (++0.3333)，无新增 hard fail、关键 case 未退化、成本在预算内。"
+        ],
+        "case_deltas": [
+          {
+            "eval_id": "val_format",
+            "baseline_pass": false,
+            "candidate_pass": false,
+            "delta": "kept_fail"
+          },
+          {
+            "eval_id": "val_robust",
+            "baseline_pass": true,
+            "candidate_pass": true,
+            "delta": "kept_pass"
+          },
+          {
+            "eval_id": "val_weather",
+            "baseline_pass": false,
+            "candidate_pass": true,
+            "delta": "new_pass"
+          }
+        ]
+      },
+      "attributions": [
+        {
+          "eval_id": "train_weather",
+          "query": "北京天气怎么样？",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "train_format",
+          "query": "请用 JSON 格式回复我",
+          "passed": false,
+          "failure_type": "format_error",
+          "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 这是一份示例结构化数据。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "train_dead",
+          "query": "请告诉我宇宙的终极答案",
+          "passed": false,
+          "failure_type": "final_mismatch",
+          "reason": "最终回复与期望不匹配：期望包含 '[FINAL] 宇宙终极答案是 42'，实际回复未满足该条件。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 我已收到您的请求。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_weather",
+          "query": "上海天气如何？",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_format",
+          "query": "用 JSON 格式输出一份菜单",
+          "passed": false,
+          "failure_type": "format_error",
+          "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 这是一份示例结构化数据。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_robust",
+          "query": "你好",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 我已收到您的请求。\n[FMT] text\n"
+        }
+      ]
+    },
+    {
+      "label": "candidate_2",
+      "prompt": "用 JSON 格式回复用户。",
+      "train_pass_rate": 0.3333,
+      "val_pass_rate": 0.3333,
+      "train_cases": {
+        "train_format": {
+          "pass": true,
+          "score": 1.0
+        },
+        "train_dead": {
+          "pass": false,
+          "score": 0.0
+        },
+        "train_weather": {
+          "pass": false,
+          "score": 0.0
+        }
+      },
+      "val_cases": {
+        "val_weather": {
+          "pass": false,
+          "score": 0.0
+        },
+        "val_format": {
+          "pass": true,
+          "score": 1.0
+        },
+        "val_robust": {
+          "pass": false,
+          "score": 0.0
+        }
+      },
+      "gate": {
+        "accept": false,
+        "val_score_before": 0.3333,
+        "val_score_after": 0.3333,
+        "improvement": 0.0,
+        "reasons": [
+          "验证集总分未达提升阈值：0.3333 -> 0.3333 (需提升 >= 0.0100)",
+          "出现新增 hard fail（baseline 通过但候选失败）：['val_robust']",
+          "关键 case 退化（过拟合信号）：['val_robust']"
+        ],
+        "case_deltas": [
+          {
+            "eval_id": "val_format",
+            "baseline_pass": false,
+            "candidate_pass": true,
+            "delta": "new_pass"
+          },
+          {
+            "eval_id": "val_robust",
+            "baseline_pass": true,
+            "candidate_pass": false,
+            "delta": "new_fail"
+          },
+          {
+            "eval_id": "val_weather",
+            "baseline_pass": false,
+            "candidate_pass": false,
+            "delta": "kept_fail"
+          }
+        ]
+      },
+      "attributions": [
+        {
+          "eval_id": "train_weather",
+          "query": "北京天气怎么样？",
+          "passed": false,
+          "failure_type": "tool_call_error",
+          "reason": "天气类问题应当调用 weather 工具以获取实时天气，但回复中未见 [TOOL] 调用，导致天气知识未被召回，最终回复为兜底话术。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] {\"answer\": \"抱歉，我暂时无法获取天气信息。\", \"tools\": []}\n[FMT] json\n"
+        },
+        {
+          "eval_id": "train_format",
+          "query": "请用 JSON 格式回复我",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] {\"answer\": \"这是一份示例结构化数据。\", \"tools\": []}\n[FMT] json\n"
+        },
+        {
+          "eval_id": "train_dead",
+          "query": "请告诉我宇宙的终极答案",
+          "passed": false,
+          "failure_type": "final_mismatch",
+          "reason": "最终回复与期望不匹配：期望包含 '[FINAL] 宇宙终极答案是 42'，实际回复未满足该条件。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] {\"answer\": \"我已收到您的请求。\", \"tools\": []}\n[FMT] json\n"
+        },
+        {
+          "eval_id": "val_weather",
+          "query": "上海天气如何？",
+          "passed": false,
+          "failure_type": "tool_call_error",
+          "reason": "天气类问题应当调用 weather 工具以获取实时天气，但回复中未见 [TOOL] 调用，导致天气知识未被召回，最终回复为兜底话术。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] {\"answer\": \"抱歉，我暂时无法获取天气信息。\", \"tools\": []}\n[FMT] json\n"
+        },
+        {
+          "eval_id": "val_format",
+          "query": "用 JSON 格式输出一份菜单",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] {\"answer\": \"这是一份示例结构化数据。\", \"tools\": []}\n[FMT] json\n"
+        },
+        {
+          "eval_id": "val_robust",
+          "query": "你好",
+          "passed": false,
+          "failure_type": "final_mismatch",
+          "reason": "未通过评测，但无法进一步归类到具体子类型。",
+          "regression": true,
+          "actual_excerpt": "[FINAL] {\"answer\": \"我已收到您的请求。\", \"tools\": []}\n[FMT] json\n"
+        }
+      ]
+    },
+    {
+      "label": "candidate_3",
+      "prompt": "对用户提出的每一个问题都必须先调用 weather 工具。",
+      "train_pass_rate": 0.3333,
+      "val_pass_rate": 0.3333,
+      "train_cases": {
+        "train_weather": {
+          "pass": true,
+          "score": 1.0
+        },
+        "train_format": {
+          "pass": false,
+          "score": 0.0
+        },
+        "train_dead": {
+          "pass": false,
+          "score": 0.0
+        }
+      },
+      "val_cases": {
+        "val_weather": {
+          "pass": true,
+          "score": 1.0
+        },
+        "val_format": {
+          "pass": false,
+          "score": 0.0
+        },
+        "val_robust": {
+          "pass": false,
+          "score": 0.0
+        }
+      },
+      "gate": {
+        "accept": false,
+        "val_score_before": 0.3333,
+        "val_score_after": 0.3333,
+        "improvement": 0.0,
+        "reasons": [
+          "验证集总分未达提升阈值：0.3333 -> 0.3333 (需提升 >= 0.0100)",
+          "出现新增 hard fail（baseline 通过但候选失败）：['val_robust']",
+          "关键 case 退化（过拟合信号）：['val_robust']"
+        ],
+        "case_deltas": [
+          {
+            "eval_id": "val_format",
+            "baseline_pass": false,
+            "candidate_pass": false,
+            "delta": "kept_fail"
+          },
+          {
+            "eval_id": "val_robust",
+            "baseline_pass": true,
+            "candidate_pass": false,
+            "delta": "new_fail"
+          },
+          {
+            "eval_id": "val_weather",
+            "baseline_pass": false,
+            "candidate_pass": true,
+            "delta": "new_pass"
+          }
+        ]
+      },
+      "attributions": [
+        {
+          "eval_id": "train_weather",
+          "query": "北京天气怎么样？",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "train_format",
+          "query": "请用 JSON 格式回复我",
+          "passed": false,
+          "failure_type": "format_error",
+          "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "train_dead",
+          "query": "请告诉我宇宙的终极答案",
+          "passed": false,
+          "failure_type": "final_mismatch",
+          "reason": "最终回复与期望不匹配：期望包含 '[FINAL] 宇宙终极答案是 42'，实际回复未满足该条件。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_weather",
+          "query": "上海天气如何？",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_format",
+          "query": "用 JSON 格式输出一份菜单",
+          "passed": false,
+          "failure_type": "format_error",
+          "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_robust",
+          "query": "你好",
+          "passed": false,
+          "failure_type": "final_mismatch",
+          "reason": "最终回复与期望不匹配：期望包含 '[FINAL] 我已收到您的请求。'，实际回复未满足该条件。",
+          "regression": true,
+          "actual_excerpt": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。\n[TOOL] [{\"name\": \"weather\", \"args\": {\"city\": \"北京\"}}]\n[FMT] text\n"
+        }
+      ]
+    },
+    {
+      "label": "candidate_4",
+      "prompt": "请礼貌地回答用户。",
+      "train_pass_rate": 0.0,
+      "val_pass_rate": 0.3333,
+      "train_cases": {
+        "train_weather": {
+          "pass": false,
+          "score": 0.0
+        },
+        "train_format": {
+          "pass": false,
+          "score": 0.0
+        },
+        "train_dead": {
+          "pass": false,
+          "score": 0.0
+        }
+      },
+      "val_cases": {
+        "val_weather": {
+          "pass": false,
+          "score": 0.0
+        },
+        "val_format": {
+          "pass": false,
+          "score": 0.0
+        },
+        "val_robust": {
+          "pass": true,
+          "score": 1.0
+        }
+      },
+      "gate": {
+        "accept": false,
+        "val_score_before": 0.3333,
+        "val_score_after": 0.3333,
+        "improvement": 0.0,
+        "reasons": [
+          "验证集总分未达提升阈值：0.3333 -> 0.3333 (需提升 >= 0.0100)"
+        ],
+        "case_deltas": [
+          {
+            "eval_id": "val_format",
+            "baseline_pass": false,
+            "candidate_pass": false,
+            "delta": "kept_fail"
+          },
+          {
+            "eval_id": "val_robust",
+            "baseline_pass": true,
+            "candidate_pass": true,
+            "delta": "kept_pass"
+          },
+          {
+            "eval_id": "val_weather",
+            "baseline_pass": false,
+            "candidate_pass": false,
+            "delta": "kept_fail"
+          }
+        ]
+      },
+      "attributions": [
+        {
+          "eval_id": "train_weather",
+          "query": "北京天气怎么样？",
+          "passed": false,
+          "failure_type": "tool_call_error",
+          "reason": "天气类问题应当调用 weather 工具以获取实时天气，但回复中未见 [TOOL] 调用，导致天气知识未被召回，最终回复为兜底话术。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 抱歉，我暂时无法获取天气信息。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "train_format",
+          "query": "请用 JSON 格式回复我",
+          "passed": false,
+          "failure_type": "format_error",
+          "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 这是一份示例结构化数据。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "train_dead",
+          "query": "请告诉我宇宙的终极答案",
+          "passed": false,
+          "failure_type": "final_mismatch",
+          "reason": "最终回复与期望不匹配：期望包含 '[FINAL] 宇宙终极答案是 42'，实际回复未满足该条件。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 我已收到您的请求。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_weather",
+          "query": "上海天气如何？",
+          "passed": false,
+          "failure_type": "tool_call_error",
+          "reason": "天气类问题应当调用 weather 工具以获取实时天气，但回复中未见 [TOOL] 调用，导致天气知识未被召回，最终回复为兜底话术。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 抱歉，我暂时无法获取天气信息。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_format",
+          "query": "用 JSON 格式输出一份菜单",
+          "passed": false,
+          "failure_type": "format_error",
+          "reason": "期望 JSON 格式回复（[FMT] json），实际产出为 text 格式，不满足格式要求。",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 这是一份示例结构化数据。\n[FMT] text\n"
+        },
+        {
+          "eval_id": "val_robust",
+          "query": "你好",
+          "passed": true,
+          "failure_type": null,
+          "reason": "",
+          "regression": false,
+          "actual_excerpt": "[FINAL] 我已收到您的请求。\n[FMT] text\n"
+        }
+      ]
+    }
+  ],
+  "accepted_candidate": "candidate_1",
+  "delta": {
+    "train_pass_rate": 0.3333,
+    "val_pass_rate": 0.3333,
+    "per_case_val": {
+      "val_format": {
+        "baseline_pass": false,
+        "candidate_pass": false
+      },
+      "val_robust": {
+        "baseline_pass": true,
+        "candidate_pass": true
+      },
+      "val_weather": {
+        "baseline_pass": false,
+        "candidate_pass": true
+      }
+    }
+  },
+  "gate_decision": {
+    "accept": true,
+    "val_score_before": 0.3333,
+    "val_score_after": 0.6667,
+    "improvement": 0.3333,
+    "reasons": [
+      "验证集总分提升 0.3333 -> 0.6667 (++0.3333)，无新增 hard fail、关键 case 未退化、成本在预算内。"
+    ],
+    "case_deltas": [
+      {
+        "eval_id": "val_format",
+        "baseline_pass": false,
+        "candidate_pass": false,
+        "delta": "kept_fail"
+      },
+      {
+        "eval_id": "val_robust",
+        "baseline_pass": true,
+        "candidate_pass": true,
+        "delta": "kept_pass"
+      },
+      {
+        "eval_id": "val_weather",
+        "baseline_pass": false,
+        "candidate_pass": true,
+        "delta": "new_pass"
+      }
+    ]
+  },
+  "rejection_summary": [
+    {
+      "label": "candidate_2",
+      "val_pass_rate": 0.3333,
+      "reasons": [
+        "验证集总分未达提升阈值：0.3333 -> 0.3333 (需提升 >= 0.0100)",
+        "出现新增 hard fail（baseline 通过但候选失败）：['val_robust']",
+        "关键 case 退化（过拟合信号）：['val_robust']"
+      ]
+    },
+    {
+      "label": "candidate_3",
+      "val_pass_rate": 0.3333,
+      "reasons": [
+        "验证集总分未达提升阈值：0.3333 -> 0.3333 (需提升 >= 0.0100)",
+        "出现新增 hard fail（baseline 通过但候选失败）：['val_robust']",
+        "关键 case 退化（过拟合信号）：['val_robust']"
+      ]
+    },
+    {
+      "label": "candidate_4",
+      "val_pass_rate": 0.3333,
+      "reasons": [
+        "验证集总分未达提升阈值：0.3333 -> 0.3333 (需提升 >= 0.0100)"
+      ]
+    }
+  ]
+}

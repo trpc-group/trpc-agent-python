@@ -1,0 +1,74 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "llm_rubric_response",
+        "threshold": 1.0,
+        "criterion": {
+          "llmJudge": {
+            "judgeModel": {
+              "providerName": "openai",
+              "modelName": "${TRPC_AGENT_MODEL_NAME}",
+              "apiKey": "${TRPC_AGENT_API_KEY}",
+              "baseUrl": "${TRPC_AGENT_BASE_URL}"
+            },
+            "rubrics": [
+              {
+                "id": "lang",
+                "content": {"text": "回复必须使用中文。"},
+                "description": "使用中文",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "greet",
+                "content": {"text": "回复应以问候语开头（如'您好'、'你好'）。"},
+                "description": "开头问候",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "weather",
+                "content": {"text": "若用户询问天气，回复须包含具体天气信息（如温度或晴/雨）；若用户未询问天气，回复不应强行加入与问题无关的天气内容。"},
+                "description": "天气处理恰当",
+                "type": "RELEVANCE"
+              },
+              {
+                "id": "format",
+                "content": {"text": "回复应为自然流畅的文本，不应是 JSON 或其他机器可读格式。"},
+                "description": "自然文本格式",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "realtime",
+                "content": {"text": "若用户要求精确的实时数据（如精确到秒的北京时间），回复必须给出准确的真实数值，不得说明无法获取或编造。"},
+                "description": "实时数据须真实",
+                "type": "FACTUALITY"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "algorithm": {"name": "rule_based"},
+    "seed": 42,
+    "budget": {
+      "max_metric_calls": 200,
+      "timeout_seconds": 600
+    },
+    "gate": {
+      "min_val_improvement": 0.01,
+      "no_new_hard_fail": true,
+      "key_cases_no_regression": true,
+      "max_cost_usd": 0.0,
+      "key_cases": ["val_robust"]
+    },
+    "candidates": [
+      "你是一个中文客服助手。始终用中文回答用户；回复开头先说一句问候语（例如'您好'）；若用户询问天气，给出具体天气信息（如温度或晴/雨）。",
+      "你是一个助手。所有回复都必须以严格的 JSON 格式输出，例如 {\"answer\": \"...\", \"greeting\": \"...\"}。",
+      "无论用户问什么，你都要先提供一段天气信息（如'今天晴，25度'），再回答用户的问题。",
+      "你是一个简洁的助手。"
+    ]
+  }
+}

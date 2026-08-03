@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "eval_optimize_loop - val",
+  "description": "3 条验证 case：镜像天气/格式用例 + 一个鲁棒用例（baseline 已通过，用来捕捉过拟合退化）。",
+  "eval_cases": [
+    {
+      "eval_id": "val_weather",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {"parts": [{"text": "上海天气如何？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_format",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {"parts": [{"text": "用 JSON 格式输出一份菜单"}], "role": "user"},
+          "final_response": {"parts": [{"text": "[FMT] json"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_robust",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {"parts": [{"text": "你好"}], "role": "user"},
+          "final_response": {"parts": [{"text": "[FINAL] 我已收到您的请求。"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "validator", "state": {}}
+    }
+  ]
+}

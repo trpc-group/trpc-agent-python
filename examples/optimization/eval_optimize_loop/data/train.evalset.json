@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "eval_optimize_loop - train",
+  "description": "3 条训练 case：天气工具调用、JSON 格式、以及一个永远无法优化的死 case。",
+  "eval_cases": [
+    {
+      "eval_id": "train_weather",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {"parts": [{"text": "北京天气怎么样？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "[FINAL] 北京今天晴，25 摄氏度，适宜外出。"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_format",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {"parts": [{"text": "请用 JSON 格式回复我"}], "role": "user"},
+          "final_response": {"parts": [{"text": "[FMT] json"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_dead",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {"parts": [{"text": "请告诉我宇宙的终极答案"}], "role": "user"},
+          "final_response": {"parts": [{"text": "[FINAL] 宇宙终极答案是 42"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "trainer", "state": {}}
+    }
+  ]
+}
