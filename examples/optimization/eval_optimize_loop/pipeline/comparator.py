@@ -504,7 +504,9 @@ def compare_case(case: dict) -> CaseVerdict:
         )
 
     if not actual:
-        # legacy 兼容：无 actual_conversation 视为通过（无分歧证据）
+        # legacy 兼容：无 actual_conversation 视为通过（无分歧证据）。
+        # detail 显式标注"未评测"，使审计（per_case.reason）能区分
+        # 真实通过与未评测按通过处理，避免静默抬高 pass_rate
         exp_user, exp_final = _conversation_texts(conversation[0]) if conversation else ("", "")
         return CaseVerdict(
             eval_id=eval_id,
@@ -512,7 +514,7 @@ def compare_case(case: dict) -> CaseVerdict:
             score=1.0,
             expected_final=exp_final,
             actual_final="",
-            detail="legacy case 无 actual_conversation，按通过处理",
+            detail="未评测（legacy：无 actual_conversation），按通过处理",
         )
 
     # 逐 invocation 比较（取两方最小长度对齐）
