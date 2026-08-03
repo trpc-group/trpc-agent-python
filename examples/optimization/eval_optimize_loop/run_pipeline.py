@@ -270,11 +270,11 @@ Examples:
             _eval_config = None
             print(f"  ⚠️  EvalConfig 加载失败（将降级到 trace comparator）: {_e}")
         try:
-            # 合并为一次 asyncio.run：train/val 在同一事件循环内并发跑，
-            # 避免重复创建/销毁事件循环（对绑定 loop 的资源更安全）。
-            # 注意：asyncio.run 只接受 coroutine，需用内层 async 函数包住。
-            # train/val 顺序执行而非 gather 并发：SDK AgentEvaluator 的
-            # 并发可重入性未验证，顺序执行避免共享状态相互干扰。
+            # train/val 在同一个 asyncio.run 内顺序执行（而非 gather 并发：
+            # SDK AgentEvaluator 的并发可重入性未验证，顺序执行避免共享状态
+            # 相互干扰）。注意：Stage 4 的 optimize 是第二次独立 asyncio.run——
+            # 当前 call_agent 为确定性 fake、不绑定 loop 资源，故分开无碍；
+            # 后续接入绑定 loop 的真实 agent 时需合并为同一事件循环。
             async def _run_live_baselines():
                 train = await run_baseline_sdk(
                     cfg.train_evalset, call_agent=_call_agent,
