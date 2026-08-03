@@ -43,6 +43,46 @@ class TestLiveModeRobustness:
         assert isinstance(result, OptimizeResult)
         assert result.errors
 
+    def test_run_baseline_sdk_re_raises_non_sdk_exceptions(self, monkeypatch, tmp_path):
+        """非 SDK 异常（AttributeError 等 pipeline bug）应向上抛出，而非静默降级为 fake。"""
+        import sys
+        import pipeline.baseline as baseline_mod
+        import tempfile, json, os
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                return object()
+
+        async def _fake_evaluate(eval_set, **kwargs):
+            raise AttributeError("bug in pipeline code, not an SDK failure")
+
+        class _FakeAgentEvaluator:
+            @staticmethod
+            async def evaluate_eval_set(*args, **kwargs):
+                return await _fake_evaluate(*args, **kwargs)
+
+        class _FakeEvalModule:
+            AgentEvaluator = _FakeAgentEvaluator
+            EvalSet = _FakeEvalSet
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"eval_set_id": "t", "eval_cases": []}, f)
+            path = f.name
+        try:
+            with pytest.raises(AttributeError):
+                asyncio.run(baseline_mod.run_baseline_sdk(path, eval_config=object()))
+        finally:
+            os.unlink(path)
+
     def test_fake_pipeline_performance(self, data_dir):
         """fake 模式完整 pipeline < 3 秒（验收标准 #5：≤3 分钟，巨大余量）。"""
         import time

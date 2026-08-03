@@ -2,8 +2,9 @@
 
 import json
 import os
-import sys
 from dataclasses import dataclass, field
+
+from ._paths import ensure_repo_root_in_path
 
 
 @dataclass
@@ -60,22 +61,6 @@ def load_optimizer_json(path: str) -> dict:
     return data
 
 
-def _ensure_repo_root_in_path() -> None:
-    """确保项目根在 sys.path（trpc_agent_sdk 是源码包，位于项目根）。
-
-    pipeline/ → eval_optimize_loop → optimization → examples → 项目根（4 级）。
-    失败时记录 warning。
-    """
-    try:
-        _cfg_dir = os.path.dirname(os.path.abspath(__file__))
-        _repo_root = os.path.abspath(
-            os.path.join(_cfg_dir, os.pardir, os.pardir, os.pardir, os.pardir))
-        if _repo_root not in sys.path:
-            sys.path.insert(0, _repo_root)
-    except Exception as e:  # pragma: no cover — 极端路径异常
-        print(f"  ⚠️  warning: 无法将项目根加入 sys.path: {e}")
-
-
 def load_optimize_config(path: str) -> "EvalConfig":
     """用 SDK 加载 optimizer.json，返回其 evaluate 段（EvalConfig）。
 
@@ -88,7 +73,7 @@ def load_optimize_config(path: str) -> "EvalConfig":
     Returns:
         SDK EvalConfig 实例（optimizer.json 的 evaluate 段）。
     """
-    _ensure_repo_root_in_path()
+    ensure_repo_root_in_path()
     from trpc_agent_sdk.evaluation._optimize_config import load_optimize_config as _sdk_load
     return _sdk_load(path).evaluate
 
