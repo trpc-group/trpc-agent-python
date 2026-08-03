@@ -168,26 +168,37 @@ async def run_baseline_sdk(
         per_case = []
         total = 0
         for case_id, results in (case_results or {}).items():
+            # 以 case 为单位聚合：num_runs>1 时每个 case 有多个 result，
+            # 避免 total 按"运行数"统计、failed_case_ids 出现重复。
+            case_passed = False
+            case_failed = False
+            fail_reason = ""
             for cr in results:
                 st = getattr(cr, "final_eval_status", None)
                 if st == EvalStatus.NOT_EVALUATED:
                     # 未评测（如缺少 trace 数据）≠ 失败：跳过，不计入 total 也不计失败，
                     # 避免虚增失败数、拉低 pass_rate、污染 gate 的 improvement 判定。
                     continue
-                total += 1
-                ok = st == EvalStatus.PASSED
-                if ok:
-                    passed += 1
+                if st == EvalStatus.PASSED:
+                    case_passed = True
                 else:
-                    failed_case_ids.append(case_id)
-                reason = getattr(cr, "error_message", "") or ("" if ok else "failed")
-                per_case.append({
-                    "eval_id": case_id,
-                    "pass": ok,
-                    "reason": reason,
-                    "category": "",
-                    "evidence": "",
-                })
+                    case_failed = True
+                    fail_reason = getattr(cr, "error_message", "") or "failed"
+            if not case_passed and not case_failed:
+                continue  # 该 case 全部 NOT_EVALUATED
+            total += 1
+            ok = case_passed  # 任一 run 通过即视为 case 通过（宽松聚合）
+            if ok:
+                passed += 1
+            else:
+                failed_case_ids.append(case_id)
+            per_case.append({
+                "eval_id": case_id,
+                "pass": ok,
+                "reason": fail_reason if not ok else "",
+                "category": "",
+                "evidence": "",
+            })
 
         result.total_cases = total
         result.passed_cases = passed

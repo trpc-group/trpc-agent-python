@@ -238,14 +238,14 @@ Examples:
             _eval_config = None
             print(f"  ⚠️  EvalConfig 加载失败（将降级到 trace comparator）: {_e}")
         try:
-            baseline_train = asyncio.run(
+            # 合并为一次 asyncio.run：train/val 在同一事件循环内并发跑，
+            # 避免重复创建/销毁事件循环（对绑定 loop 的资源更安全）
+            baseline_train, baseline_val = asyncio.run(asyncio.gather(
                 run_baseline_sdk(cfg.train_evalset, call_agent=_call_agent,
-                                 eval_config=_eval_config)
-            )
-            baseline_val = asyncio.run(
+                                 eval_config=_eval_config),
                 run_baseline_sdk(cfg.val_evalset, call_agent=_call_agent,
-                                 eval_config=_eval_config)
-            )
+                                 eval_config=_eval_config),
+            ))
         except Exception as _e:
             # 与 fake 模式一致：SDK 未捕获的异常（RuntimeError 等）也优雅降级，
             # 避免整个 pipeline 崩溃（errors 会在下方统一打印/记录）
