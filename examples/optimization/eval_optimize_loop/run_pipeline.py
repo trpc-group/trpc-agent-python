@@ -442,33 +442,24 @@ Examples:
         validation_new_failed=[d.eval_id for d in validation.deltas if d.change == "new_fail"],
     )
 
-    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比：
-    # - ACCEPT（improvement 来自不可比差值）→ 降级 NEEDS_REVIEW，不误判真实提升
-    # - overfitting REJECT（new_failures 可能是评分差异）→ 降级 NEEDS_REVIEW
-    # 避免不可比评分触发 ACCEPT 或 CI 阻断。
-    if cfg.mode == "live":
-        if gate.decision == GateDecision.ACCEPT:
-            gate = GateResult(
-                decision=GateDecision.NEEDS_REVIEW,
-                reason=("live mode: ACCEPT downgraded to review — "
-                        f"baseline=SDK vs candidate=trace-comparator scoring differ: {gate.reason}"),
-                details=gate.details,
-            )
-            tracer.add_warning(
-                "live mode: ACCEPT downgraded to NEEDS_REVIEW "
-                "(incomparable SDK/comparator scoring)"
-            )
-        elif gate.decision == GateDecision.REJECT and validation.is_overfitting:
-            gate = GateResult(
-                decision=GateDecision.NEEDS_REVIEW,
-                reason=("live mode: overfitting REJECT downgraded to review — "
-                        f"baseline=SDK vs candidate=trace-comparator scoring differ: {gate.reason}"),
-                details=gate.details,
-            )
-            tracer.add_warning(
-                "live mode: overfitting REJECT downgraded to NEEDS_REVIEW "
-                "(incomparable SDK/comparator scoring)"
-            )
+    # live 模式下 baseline=SDK 评分、候选=trace comparator 重评，口径不可比。
+    # 除"成本超预算"（真实约束、与评分口径无关）外，依赖 pass-rate 差值的
+    # ACCEPT 与各类 REJECT（退化/关键 case/过拟合/新增失败）一律降级
+    # NEEDS_REVIEW，避免不可比评分误判 ACCEPT 或触发 CI 阻断。
+    if (cfg.mode == "live"
+            and gate.decision in (GateDecision.ACCEPT, GateDecision.REJECT)
+            and not (gate.decision == GateDecision.REJECT and "exceeds budget" in gate.reason)):
+        gate = GateResult(
+            decision=GateDecision.NEEDS_REVIEW,
+            reason=("live mode: " + gate.decision.value.upper()
+                    + " downgraded to review — baseline=SDK vs "
+                    f"candidate=trace-comparator scoring differ: {gate.reason}"),
+            details=gate.details,
+        )
+        tracer.add_warning(
+            "live mode: gate decision downgraded to NEEDS_REVIEW "
+            "(incomparable SDK/comparator scoring)"
+        )
 
     tracer.end_stage("gate")
     gate_icon = {"accept": "[ACCEPT]", "reject": "[REJECT]", "needs_review": "[REVIEW]"}

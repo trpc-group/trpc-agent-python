@@ -176,6 +176,15 @@ def _case_passes(case: dict) -> bool:
     return matcher.evaluate(case).passed
 
 
+def _case_is_perturbable(case: dict) -> bool:
+    """case 是否可被 _perturb_case 真正扰动（conversation[0] 有 final_response.parts）。"""
+    conv = case.get("conversation") or []
+    if not conv:
+        return False
+    parts = (conv[0].get("final_response") or {}).get("parts") or []
+    return bool(parts)
+
+
 def _perturb_case(case: dict) -> list[dict]:
     """扰动 case 的 actual_conversation，制造退化（val 回归场景）。
 
@@ -272,7 +281,11 @@ def run_validation_trace(
     # 避免"train 提升 + val 无退化"被误 ACCEPT（reviewer 指出的问题）
     effective_regression = val_regression_cases
     if strat == "overfit" and not effective_regression and val_cases:
-        effective_regression = [str(c.get("eval_id", "")) for c in val_cases[:2]]
+        # 只选"可扰动"的 case（conversation[0].final_response.parts 存在）作为回归候选，
+        # 避免选到无法制造退化的 case 落到下方 new_failures==0 的报错。
+        perturbable = [c for c in val_cases if _case_is_perturbable(c)]
+        pool = perturbable or val_cases
+        effective_regression = [str(c.get("eval_id", "")) for c in pool[:2]]
 
     if strat == "overfit" and not effective_regression:
         # 空 val 集 / 未指定回归 case：overfit 场景无法演示"val 退化"，
