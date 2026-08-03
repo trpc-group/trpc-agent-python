@@ -1,6 +1,7 @@
 """Gold-verdict 归因精度锁 — 锁定 comparator 在真实 evalset 上的判定与归因。
 
 验收标准 #4：失败归因分类准确率 ≥ 75%，且每个失败 case 至少给出一个可解释原因。
+本测试锁定的阈值更严：≥90%（见 test_attribution_accuracy）。
 
 本测试维护一份 {eval_id: (passed, category)} 的黄金表，parametrize 遍历
 train + large_train 的所有 case，断言 comparator 的判定与黄金表一致。
@@ -160,7 +161,7 @@ def test_gold_covers_all_cases():
 
 
 def test_attribution_accuracy():
-    """归因准确率 ≥ 90%（验收标准 #4 要求 ≥75%）。"""
+    """归因准确率锁定 ≥ 90%（比验收标准 #4 的 ≥75% 更严）。"""
     correct = 0
     total = 0
     for c in _all_cases():

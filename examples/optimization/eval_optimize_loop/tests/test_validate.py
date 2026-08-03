@@ -1,5 +1,7 @@
 """Tests for validation comparison module."""
 
+import json
+
 import pytest
 
 from pipeline.baseline import BaselineResult
@@ -8,6 +10,7 @@ from pipeline.validate import (
     ValidationDelta,
     ValidationResult,
     run_validation_fake,
+    run_validation_trace,
 )
 
 
@@ -173,3 +176,44 @@ class TestRunValidationFake:
         assert result.new_passes == 0
         assert result.new_failures == 0
         assert result.unchanged == 3
+
+
+class TestRunValidationTraceOverfitGuard:
+    """run_validation_trace 在 overfit 场景的边界数据上应显式报错而非误 ACCEPT。"""
+
+    def _write(self, path, cases):
+        path.write_text(json.dumps({"eval_set_id": "t", "eval_cases": cases}))
+
+    def _baseline_val(self):
+        return BaselineResult(
+            evalset_id="val", pass_rate=1.0, total_cases=0,
+            passed_cases=0, failed_cases=0, per_case_results=[],
+        )
+
+    def test_overfit_empty_val_raises(self, tmp_path):
+        """空 val 集：overfit 无法演示退化 → 显式 ValueError（避免误 ACCEPT）。"""
+        train = tmp_path / "train.evalset.json"
+        val = tmp_path / "val.evalset.json"
+        self._write(train, [{"eval_id": "c1", "conversation": [], "actual_conversation": []}])
+        self._write(val, [])
+        opt = type("R", (), {"candidate_strategy": "overfit"})()
+
+        with pytest.raises(ValueError, match="overfit scenario requires"):
+            run_validation_trace(
+                str(train), str(val), self._baseline_val(), opt,
+                load_pipeline_config(), scenario="overfit",
+            )
+
+    def test_overfit_no_regression_cases_raises(self, tmp_path):
+        """未指定回归 case 且 val 集为空时同样报错。"""
+        train = tmp_path / "train.evalset.json"
+        val = tmp_path / "val.evalset.json"
+        self._write(train, [{"eval_id": "c1", "conversation": [], "actual_conversation": []}])
+        self._write(val, [])
+        opt = type("R", (), {"candidate_strategy": "overfit"})()
+
+        with pytest.raises(ValueError, match="overfit scenario requires"):
+            run_validation_trace(
+                str(train), str(val), self._baseline_val(), opt,
+                load_pipeline_config(), scenario="overfit", val_regression_cases=[],
+            )

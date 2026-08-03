@@ -273,6 +273,13 @@ def run_validation_trace(
     if strat == "overfit" and not effective_regression and val_cases:
         effective_regression = [str(c.get("eval_id", "")) for c in val_cases[:2]]
 
+    if strat == "overfit" and not effective_regression:
+        # 空 val 集 / 未指定回归 case：overfit 场景无法演示"val 退化"，
+        # 否则会变成 "train 全记住 + val 无退化" 而被 gate 误 ACCEPT。
+        raise ValueError(
+            "overfit scenario requires at least one val case to regress; "
+            "val set is empty or --val-regression-cases not provided")
+
     # 生成候选 actuals
     candidate_train_cases = [
         _apply_scenario(c, strat, is_train=True, val_regression_cases=effective_regression)
@@ -319,4 +326,12 @@ def run_validation_trace(
     )
     # 附上候选 train 结果供报告使用
     result.candidate_train = candidate_train
+
+    if strat == "overfit" and result.new_failures == 0:
+        # 指定的回归 case 未产生 new_fail（如缺少 final_response.parts 无法扰动），
+        # 会让过拟合候选被 gate 误 ACCEPT，违反验收标准 #3 → 显式报错。
+        raise ValueError(
+            "overfit scenario did not produce any validation regression — "
+            f"selected cases may lack final_response.parts: {effective_regression}")
+
     return result
