@@ -271,6 +271,37 @@ class TestLiveModeRobustness:
         assert elapsed < 3.0, f"baseline 耗时 {elapsed:.2f}s 超限"
         assert baseline.total_cases == 34
 
+    def test_fake_pipeline_main_end_to_end(self, monkeypatch, data_dir):
+        """fake 模式 rp.main() 端到端跑完 7 阶段，退出码 0 且生成报告。
+
+        reviewer Critical/Warning：此前无 fake main() 集成测试（测试只手工
+        拼接各 stage，绕过 main() 编排），导致 Stage 4 引用未定义变量的
+        回归漏入 PR。此测试锁定主入口可完整运行并产出报告。
+        """
+        import os as _os
+        import shutil as _shutil
+        import sys as _sys
+        import run_pipeline as rp
+        from pipeline._paths import find_repo_root
+
+        _repo_root = find_repo_root(str(Path(__file__).resolve().parent))
+        assert _repo_root is not None
+        _out_dir = _os.path.join(_repo_root, "sample_output_e2e_test")
+        monkeypatch.setattr(_sys, "argv", [
+            "run_pipeline.py", "--mode", "fake",
+            "--train-evalset", str(data_dir / "train.evalset.json"),
+            "--val-evalset", str(data_dir / "val.evalset.json"),
+            "--optimizer-config", str(data_dir / "optimizer.json"),
+            "--output-dir", _out_dir,
+        ])
+        try:
+            code = rp.main()
+            assert code == 0
+            assert _os.path.isfile(_os.path.join(_out_dir, "optimization_report.json"))
+            assert _os.path.isfile(_os.path.join(_out_dir, "optimization_report.md"))
+        finally:
+            _shutil.rmtree(_out_dir, ignore_errors=True)
+
 
 class TestBuildCallAgent:
     def test_build_call_agent(self):

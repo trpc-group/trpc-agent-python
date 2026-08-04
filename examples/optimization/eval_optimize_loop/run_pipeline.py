@@ -503,6 +503,15 @@ def main() -> int:
     optimized_fields = optimize_result.optimized_fields
     tracer.add_cost(optimization_cost, "optimization")
     tracer.end_stage("optimization")
+    # best_score 口径标注：live 模式 RoundRecord.score 映射 SDK
+    # validation_pass_rate，fake 模式是模拟 train 评分，二者不可比——在
+    # 打印/报告/审计中显式标注口径（reviewer Warning）。必须在 Stage 4
+    # 打印前计算（此前误放到 Stage 7 才赋值，此处引用会 UnboundLocalError，
+    # 导致默认 fake 模式崩溃，reviewer Critical）。
+    _best_score_metric = (
+        "validation_pass_rate (SDK round)" if cfg.mode == "live"
+        else "train_pass_rate (simulated round)"
+    )
     print(f"  Algorithm: {optimize_result.algorithm}")
     print(f"  Scenario: {cfg.scenario}")
     print(f"  Iterations: {optimize_result.total_iterations}")
@@ -645,13 +654,7 @@ def main() -> int:
         improvement=improvement,
     )
 
-    # best_score 口径标注：live 模式 RoundRecord.score 映射 SDK
-    # validation_pass_rate，fake 模式是模拟 train 评分，二者不可比——
-    # 在报告/审计中显式标注，避免 Best score 两模式口径混读（reviewer Warning）。
-    _best_score_metric = (
-        "validation_pass_rate (SDK round)" if cfg.mode == "live"
-        else "train_pass_rate (simulated round)"
-    )
+    # _best_score_metric 已在 Stage 4 计算（供打印与报告共用），此处直接引用。
     optimization_info = {
         "algorithm": optimize_result.algorithm,
         "mode": cfg.mode,
