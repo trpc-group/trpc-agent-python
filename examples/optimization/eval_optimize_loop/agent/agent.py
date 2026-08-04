@@ -31,6 +31,11 @@ def build_call_agent() -> Callable[[str], Awaitable[str]]:
 
     async def _call(question: str) -> str:
         result = run_agent(question, config=config)
+        err = result.get("error")
+        if err:
+            # _live_run 未实现时返回空响应 + error 键：若不检查会静默丢弃
+            # "live 未实现"，空响应被下游当合法结果（reviewer Warning）。
+            raise RuntimeError(f"agent live run failed: {err}")
         return str(result.get("final_response", ""))
 
     return _call

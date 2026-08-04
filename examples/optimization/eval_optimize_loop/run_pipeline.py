@@ -651,6 +651,11 @@ Examples:
         # 且此时所有阶段已跑完——提前显式报错，避免结果静默丢失
         raise ValueError(
             f"output_dir '{cfg.output_dir}' is a file, not a directory")
+    # Stage 1 校验后到写入间存在 TOCTOU 窗口（目录被替换为指向仓库外的符号
+    # 链接）；写入前用 realpath 再校验一次，避免跟随写入受限位置（reviewer Warning）。
+    if not is_output_dir_allowed(cfg.output_dir):
+        raise ValueError(
+            f"output_dir '{cfg.output_dir}' escaped repo root before write")
     os.makedirs(cfg.output_dir, exist_ok=True)
     with open(json_path, "w", encoding="utf-8") as f:
         f.write(json_report)

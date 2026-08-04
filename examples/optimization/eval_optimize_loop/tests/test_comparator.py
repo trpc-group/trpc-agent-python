@@ -209,6 +209,18 @@ class TestCompareInvocations:
         assert not ok
         assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
 
+    def test_trace_matcher_numeric_tolerance_effective(self):
+        """TraceMatcher 自定义 numeric_tolerance 真正生效，非静默忽略
+        （reviewer Warning：硬编码阈值被忽略的问题）。"""
+        case = _mk_case("42", "answer is 42.001")
+        # 默认 1e-6：42 vs 42.001 差 0.001 → 不匹配
+        ok, _ = compare_invocations(case["conversation"][0], case["actual_conversation"][0])
+        assert not ok
+        # 自定义 0.01：42 vs 42.001 差 0.001 → 匹配
+        m = TraceMatcher(numeric_tolerance=0.01)
+        v = m.evaluate(case)
+        assert v.passed
+
     def test_format_number_only(self):
         """ONLY-number 但实际带 prose → format_not_as_required。"""
         case = _mk_case(

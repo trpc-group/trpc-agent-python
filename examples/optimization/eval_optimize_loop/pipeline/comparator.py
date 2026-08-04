@@ -403,10 +403,17 @@ def _check_format(user_text: str, expected_final: str, actual_final: str) -> tup
 # ─────────────────────────────────────────────────────────────────────
 
 
-def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
+def compare_invocations(expected: dict, actual: dict, *,
+                        numeric_tolerance: float = 1e-6,
+                        contains_len_threshold: int = 20) -> tuple[bool, str]:
     """比较一条期望 invocation 与一条实际 invocation。
 
-    返回 (是否通过, 失败类别或空串)。
+    Args:
+        numeric_tolerance: 数字答案的精确匹配容差（绝对差）。
+        contains_len_threshold: 期望归一化文本 ≤ 此长度按"类答案"处理。
+
+    Returns:
+        (是否通过, 失败类别或空串)。
     """
     exp_user, exp_final = _get_invocation_parts(expected)
     act_user, act_final = _get_invocation_parts(actual)
@@ -477,11 +484,11 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
             candidates = []
         else:
             candidates = [act_nums[-1]] if act_nums else []
-        if any(abs(a - exp_bare) <= 1e-6 for a in candidates):
+        if any(abs(a - exp_bare) <= numeric_tolerance for a in candidates):
             answer_ok = True
         else:
             answer_reason = f"expected numeric {exp_bare} not found as answer in actual"
-    elif len(exp_norm) <= 20 and _unit_is_word(exp_final):
+    elif len(exp_norm) <= contains_len_threshold and _unit_is_word(exp_final):
         # 期望是"数字+真实单位词"（如 "785.40 cubic cm"、"48厘米"、"10%"）：
         # 用数字比较（含舍入容差），且单位词必须作为独立单位 token 出现在实际中。
         # 绝不裸用 contains，避免"48厘米"命中"48平方厘米"、"米"命中"厘米"。
@@ -489,14 +496,14 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         exp_num = _first_number(exp_final)
         unit_part = _unit_of(exp_final)
         act_num = _last_number(act_final)
-        if act_num is not None and (abs(act_num - exp_num) <= 1e-6 or _round_close(act_num, exp_num)):
+        if act_num is not None and (abs(act_num - exp_num) <= numeric_tolerance or _round_close(act_num, exp_num)):
             if not _unit_present_as_word(unit_part, act_norm):
                 answer_reason = f"expected unit '{unit_part}' not found as a complete unit in actual"
             else:
                 answer_ok = True
         else:
             answer_reason = f"expected numeric-with-unit {exp_num}, actual ends with {act_num}"
-    elif len(exp_norm) <= 20:
+    elif len(exp_norm) <= contains_len_threshold:
         # 类答案期望：归一化 contains 或期望数字子集
         # （兼容实际为长解释、答案数字散布在推导中的场景）
         if exp_norm in act_norm:
@@ -504,7 +511,7 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         else:
             exp_nums = extract_numbers(exp_final)
             act_nums = extract_numbers(act_final)
-            if exp_nums and all(any(abs(e - a) <= 1e-6 for a in act_nums) for e in exp_nums):
+            if exp_nums and all(any(abs(e - a) <= numeric_tolerance for a in act_nums) for e in exp_nums):
                 answer_ok = True
             else:
                 answer_reason = f"expected answer '{exp_final}' not matched in actual"
@@ -515,7 +522,7 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
         else:
             exp_nums = extract_numbers(exp_final)
             act_nums = extract_numbers(act_final)
-            if exp_nums and all(any(abs(e - a) <= 1e-6 for a in act_nums) for e in exp_nums):
+            if exp_nums and all(any(abs(e - a) <= numeric_tolerance for a in act_nums) for e in exp_nums):
                 answer_ok = True
             else:
                 answer_reason = f"expected explanation not matched; expected numbers {exp_nums} not all in actual {act_nums}"
@@ -547,8 +554,14 @@ def _conversation_texts(invocation: dict) -> tuple[str, str]:
     return _get_invocation_parts(invocation)
 
 
-def compare_case(case: dict) -> CaseVerdict:
-    """对一个 evalset case 做完整评测，返回 CaseVerdict。"""
+def compare_case(case: dict, *,
+                 numeric_tolerance: float = 1e-6,
+                 contains_len_threshold: int = 20) -> CaseVerdict:
+    """对一个 evalset case 做完整评测，返回 CaseVerdict。
+
+    透传 numeric_tolerance / contains_len_threshold 给 compare_invocations，
+    使 TraceMatcher 的可调字段真正生效（reviewer Warning：硬编码阈值被静默忽略）。
+    """
     eval_id = str(case.get("eval_id") or "unknown")
     conversation = case.get("conversation") or []
     actual = case.get("actual_conversation") or []
@@ -588,7 +601,11 @@ def compare_case(case: dict) -> CaseVerdict:
     for i in range(n):
         exp = conversation[i]
         act = actual[i]
-        ok, cat = compare_invocations(exp, act)
+        ok, cat = compare_invocations(
+            exp, act,
+            numeric_tolerance=numeric_tolerance,
+            contains_len_threshold=contains_len_threshold,
+        )
         scores.append(1.0 if ok else 0.0)
         if not ok:
             _, exp_final = _conversation_texts(exp)
@@ -677,8 +694,12 @@ class TraceMatcher:
     contains_len_threshold: int = 20   # 期望归一化文本 ≤ 此长度按"类答案"处理
 
     def evaluate(self, case: dict) -> CaseVerdict:
-        """对 case 做评测。"""
-        return compare_case(case)
+        """对 case 做评测（透传可调阈值，确保配置生效）。"""
+        return compare_case(
+            case,
+            numeric_tolerance=self.numeric_tolerance,
+            contains_len_threshold=self.contains_len_threshold,
+        )
 
     def evaluate_batch(self, cases: list[dict]) -> list[CaseVerdict]:
         """批量评测。"""
