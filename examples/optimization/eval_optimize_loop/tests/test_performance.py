@@ -28,10 +28,22 @@ from pipeline.validate import run_validation_fake, ValidationResult
 # ---------------------------------------------------------------------------
 
 def _make_case(eval_id: str, has_conversation: bool = True) -> dict:
-    """Build a minimal evalset case dict."""
+    """Build a minimal evalset case dict.
+
+    has_conversation=True 时同时提供 actual_conversation（与期望一致），使
+    case 成为"真实评测且通过"而非 legacy 未评测（无 actual_conversation 的
+    case 现标记 unreviewed、不计入 pass_rate）。
+    """
     case = {"eval_id": eval_id, "eval_mode": "trace"}
     if has_conversation:
         case["conversation"] = [
+            {
+                "invocation_id": "inv-1",
+                "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                "final_response": {"parts": [{"text": "a"}], "role": "model"},
+            }
+        ]
+        case["actual_conversation"] = [
             {
                 "invocation_id": "inv-1",
                 "user_content": {"parts": [{"text": "q"}], "role": "user"},

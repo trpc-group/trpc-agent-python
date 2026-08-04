@@ -286,7 +286,10 @@ class TestBackwardCompatibility:
                         {"eval_id": "m1", "eval_mode": "trace",
                          "conversation": [{"invocation_id": "i1",
                                            "user_content": {"parts": [{"text": "?"}], "role": "user"},
-                                           "final_response": {"parts": [{"text": "!"}], "role": "model"}}]}
+                                           "final_response": {"parts": [{"text": "!"}], "role": "model"}}],
+                         "actual_conversation": [{"invocation_id": "i1",
+                                                  "user_content": {"parts": [{"text": "?"}], "role": "user"},
+                                                  "final_response": {"parts": [{"text": "!"}], "role": "model"}}]}
                     ],
                 }, f)
                 path = f.name
@@ -311,7 +314,10 @@ class TestBackwardCompatibility:
                         {"eval_id": "e1", "eval_mode": "trace",
                          "conversation": [{"invocation_id": "i1",
                                            "user_content": {"parts": [{"text": "x"}], "role": "user"},
-                                           "final_response": {"parts": [{"text": "y"}], "role": "model"}}]}
+                                           "final_response": {"parts": [{"text": "y"}], "role": "model"}}],
+                         "actual_conversation": [{"invocation_id": "i1",
+                                                  "user_content": {"parts": [{"text": "x"}], "role": "user"},
+                                                  "final_response": {"parts": [{"text": "y"}], "role": "model"}}]}
                     ],
                     # Older fields that newer code should ignore
                     "version": "1.0",
@@ -345,6 +351,11 @@ class TestBackwardCompatibility:
                             "tags": ["math", "addition"],
                             "priority": "high",
                             "conversation": [
+                                {"invocation_id": "i1",
+                                 "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                 "final_response": {"parts": [{"text": "a"}], "role": "model"}}
+                            ],
+                            "actual_conversation": [
                                 {"invocation_id": "i1",
                                  "user_content": {"parts": [{"text": "q"}], "role": "user"},
                                  "final_response": {"parts": [{"text": "a"}], "role": "model"}}

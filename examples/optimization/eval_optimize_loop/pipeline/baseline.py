@@ -58,7 +58,7 @@ def run_baseline_fake(evalset_path: str, config: PipelineConfig) -> BaselineResu
 
     eval_set_id = data.get("eval_set_id", os.path.basename(evalset_path))
     cases = data.get("eval_cases", [])
-    total = len(cases)
+    total = 0
 
     matcher = default_matcher()
     passed = 0
@@ -71,6 +71,24 @@ def run_baseline_fake(evalset_path: str, config: PipelineConfig) -> BaselineResu
         verdict = matcher.evaluate(case)
         is_pass = verdict.passed
 
+        if verdict.unreviewed:
+            # legacy 未评测（无 actual_conversation）：不计入 pass_rate，
+            # 与 SDK 路径 NOT_EVALUATED 一致，避免未评测样本虚高通过率、
+            # 污染 gate 的 improvement 判定。per_case 保留标注供审计区分。
+            per_case.append({
+                "eval_id": case_id,
+                "pass": is_pass,
+                "score": round(verdict.score, 4),
+                "reason": verdict.detail or "未评测",
+                "category": str(verdict.category) if verdict.category else "",
+                "evidence": verdict.evidence,
+                "expected_final": verdict.expected_final,
+                "actual_final": verdict.actual_final,
+                "unreviewed": True,
+            })
+            continue
+
+        total += 1
         if is_pass:
             passed += 1
         else:

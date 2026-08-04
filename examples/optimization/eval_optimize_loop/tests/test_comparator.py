@@ -175,6 +175,29 @@ class TestCompareInvocations:
         assert not ok
         assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
 
+    def test_unit_word_substring_mismatch(self):
+        """单位词互为子串时不得误通过（锁定"绝不裸用 contains"语义）。
+
+        期望单位必须是实际中的独立单位词：厘米⊂平方厘米、米⊂厘米、
+        m⊂cm 都不算单位匹配。
+        """
+        for exp, act in (("48厘米", "48平方厘米"), ("48米", "48厘米"), ("48m", "48cm")):
+            ok, cat = compare_invocations(
+                _mk_case(exp, act)["conversation"][0],
+                _mk_case(exp, act)["actual_conversation"][0],
+            )
+            assert not ok, f"期望 {exp} / 实际 {act} 不应误通过"
+            assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
+
+    def test_unit_word_exact_match_still_passes(self):
+        """单位词完全相等（含派生单位自身）仍通过。"""
+        for exp, act in (("48厘米", "48厘米"), ("48平方米", "48平方米"), ("48cm", "48 cm")):
+            ok, cat = compare_invocations(
+                _mk_case(exp, act)["conversation"][0],
+                _mk_case(exp, act)["actual_conversation"][0],
+            )
+            assert ok, f"期望 {exp} / 实际 {act} 应通过"
+
     def test_format_number_only(self):
         """ONLY-number 但实际带 prose → format_not_as_required。"""
         case = _mk_case(
@@ -223,13 +246,26 @@ class TestCompareCase:
         assert not v.passed and v.category == FailureCategory.MISSING_EXPECTED_OUTPUT
 
     def test_legacy_no_actual(self):
-        """无 actual_conversation → 通过（legacy 兼容）。"""
+        """无 actual_conversation → 通过（legacy 兼容），但标记 unreviewed。"""
         case = {
             "eval_id": "x",
             "conversation": [{"final_response": {"parts": [{"text": "42"}]}}],
         }
         v = compare_case(case)
         assert v.passed
+        assert v.unreviewed is True
+        assert v.detail.startswith("未评测")
+
+    def test_actual_present_not_unreviewed(self):
+        """有 actual_conversation 且通过 → 不算未评测，计入 pass_rate。"""
+        case = {
+            "eval_id": "x",
+            "conversation": [{"final_response": {"parts": [{"text": "42"}]}}],
+            "actual_conversation": [{"final_response": {"parts": [{"text": "42"}]}}],
+        }
+        v = compare_case(case)
+        assert v.passed
+        assert v.unreviewed is False
 
     def test_multiple_invocations_score(self):
         """多 invocation 时 score 为均值。"""

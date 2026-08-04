@@ -25,8 +25,11 @@ def find_repo_root(start_dir: str | None = None) -> str | None:
     current = os.path.abspath(start_dir or os.path.dirname(os.path.abspath(__file__)))
     first_marker = None
     while True:
+        # .git 在 git worktree/submodule 场景是 gitlink 文件而非目录：
+        # isdir + isfile 双判定兜底，避免漏判仓库根
         if (os.path.exists(os.path.join(current, "pyproject.toml"))
-                or os.path.isdir(os.path.join(current, ".git"))):
+                or os.path.isdir(os.path.join(current, ".git"))
+                or os.path.isfile(os.path.join(current, ".git"))):
             if first_marker is None:
                 first_marker = current
             else:

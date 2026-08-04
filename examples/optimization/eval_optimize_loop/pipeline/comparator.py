@@ -155,6 +155,37 @@ def _unit_is_word(text: str) -> bool:
     return not any(ch.isdigit() for ch in unit)
 
 
+# 单位修饰字符：出现在单位词前会使其成为更大/派生单位词（面积/体积派生、
+# 子单位前缀、科学前缀），判定为"单位被吞并"而非独立单位词出现。
+_UNIT_MODIFIER_CJK = "平方立厘毫微纳千兆"
+_UNIT_MODIFIER_ASCII = set("cmknuM")  # c=centi m=milli k=kilo n=nano u=micro M=mega
+
+
+def _unit_present_as_word(unit_part: str, act_norm: str) -> bool:
+    """单位词必须以"独立单位"出现在实际中，而非更大/派生单位词的子串。
+
+    normalize 已剥空白（"48 cubic cm"→"48cubiccm"），裸 contains 会把
+    "厘米" 误命中 "48平方厘米"、"米" 命中 "48厘米"、"m" 命中 "48cm"，
+    与注释承诺"绝不裸用 contains"矛盾。这里检查 unit_part 每次出现处的
+    前邻字符：若是常见单位修饰符（平方/立方、厘/毫/千等子单位前缀、
+    c/m/k 等科学前缀），说明它只是更大单位词的一部分 → 不匹配；
+    紧邻数字等普通字符（如 "32个苹果" 的 "个"）视为独立单位词 → 匹配。
+    """
+    if not unit_part:
+        return True
+    if unit_part not in act_norm:
+        return False
+    for m in re.finditer(re.escape(unit_part), act_norm):
+        if m.start() == 0:
+            continue
+        prev = act_norm[m.start() - 1]
+        if prev in _UNIT_MODIFIER_CJK:
+            return False
+        if prev.isascii() and prev.lower() in _UNIT_MODIFIER_ASCII:
+            return False
+    return True
+
+
 def _is_numeric_only(text: str) -> bool:
     """判断文本归一化后是否纯数字（允许小数/负数）。"""
     if not text:
@@ -180,6 +211,7 @@ class CaseVerdict:
     evidence: str = ""          # 触发该结论的证据（期望 vs 实际摘录）
     expected_final: str = ""
     actual_final: str = ""
+    unreviewed: bool = False    # legacy 未评测（无 actual_conversation）：按通过但不计入 pass_rate
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -438,15 +470,15 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
             answer_reason = f"expected numeric {exp_bare} not found as answer in actual"
     elif len(exp_norm) <= 20 and _unit_is_word(exp_final):
         # 期望是"数字+真实单位词"（如 "785.40 cubic cm"、"48厘米"、"10%"）：
-        # 用数字比较（含舍入容差），且单位词（归一化后的非数字部分）必须出现在实际中。
-        # 绝不裸用 contains，避免"48厘米"命中"48平方厘米"。
+        # 用数字比较（含舍入容差），且单位词必须作为独立单位 token 出现在实际中。
+        # 绝不裸用 contains，避免"48厘米"命中"48平方厘米"、"米"命中"厘米"。
         # 单位词必须不含数字（排除 "30 and 20" → and20、"Length 10" → width5 等多数字场景）。
         exp_num = _first_number(exp_final)
         unit_part = _unit_of(exp_final)
         act_num = _last_number(act_final)
         if act_num is not None and (abs(act_num - exp_num) <= 1e-6 or _round_close(act_num, exp_num)):
-            if unit_part and unit_part not in act_norm:
-                answer_reason = f"expected unit '{unit_part}' not found in actual"
+            if not _unit_present_as_word(unit_part, act_norm):
+                answer_reason = f"expected unit '{unit_part}' not found as a complete unit in actual"
             else:
                 answer_ok = True
         else:
@@ -520,8 +552,10 @@ def compare_case(case: dict) -> CaseVerdict:
 
     if not actual:
         # legacy 兼容：无 actual_conversation 视为通过（无分歧证据）。
-        # detail 显式标注"未评测"，使审计（per_case.reason）能区分
-        # 真实通过与未评测按通过处理，避免静默抬高 pass_rate
+        # unreviewed 标记使 pass_rate 统计时排除该 case（与 SDK 路径
+        # NOT_EVALUATED 一致），避免未评测样本虚高通过率、污染 gate 的
+        # improvement 判定；detail 仍标注"未评测"，供审计（per_case.reason）
+        # 区分真实通过与未评测按通过处理。
         exp_user, exp_final = _conversation_texts(conversation[0]) if conversation else ("", "")
         return CaseVerdict(
             eval_id=eval_id,
@@ -530,6 +564,7 @@ def compare_case(case: dict) -> CaseVerdict:
             expected_final=exp_final,
             actual_final="",
             detail="未评测（legacy：无 actual_conversation），按通过处理",
+            unreviewed=True,
         )
 
     # 逐 invocation 比较（取两方最小长度对齐）

@@ -233,7 +233,7 @@ def _perturb_case(case: dict) -> list[dict]:
 
 def _evaluate_cases(cases: list[dict], eval_set_id: str, matcher: TraceMatcher) -> BaselineResult:
     """用 TraceMatcher 批量评估 cases，返回 BaselineResult。"""
-    total = len(cases)
+    total = 0
     passed = 0
     failed_ids: list[str] = []
     per_case: list[dict] = []
@@ -242,6 +242,23 @@ def _evaluate_cases(cases: list[dict], eval_set_id: str, matcher: TraceMatcher) 
     for case in cases:
         verdict = matcher.evaluate(case)
         case_id = str(case.get("eval_id", "unknown"))
+        if verdict.unreviewed:
+            # legacy 未评测（无 actual_conversation）：不计入 pass_rate，
+            # 与 SDK 路径 NOT_EVALUATED 一致，避免未评测样本虚高通过率、
+            # 污染 gate 的 improvement 判定。per_case 保留标注供审计。
+            per_case.append({
+                "eval_id": case_id,
+                "pass": verdict.passed,
+                "score": round(verdict.score, 4),
+                "reason": verdict.detail or "未评测",
+                "category": str(verdict.category) if verdict.category else "",
+                "evidence": verdict.evidence,
+                "expected_final": verdict.expected_final,
+                "actual_final": verdict.actual_final,
+                "unreviewed": True,
+            })
+            continue
+        total += 1
         if verdict.passed:
             passed += 1
         else:

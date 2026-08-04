@@ -59,6 +59,9 @@ class TestRunBaselineFake:
             os.unlink(path)
 
     def test_all_cases_with_conversation_pass(self, pipeline_config, temp_json_file):
+        # legacy 无 actual_conversation 的 case 按通过处理但不计入 pass_rate
+        # （unreviewed=True，与 SDK 路径 NOT_EVALUATED 一致），避免未评测样本
+        # 虚高通过率、污染 gate 的 improvement 判定。
         path = temp_json_file({
             "eval_set_id": "test",
             "eval_cases": [
@@ -68,14 +71,16 @@ class TestRunBaselineFake:
         })
         try:
             result = run_baseline_fake(path, pipeline_config)
-            assert result.total_cases == 2
-            assert result.passed_cases == 2
-            # 补强：逐 case 断言 pass 语义（legacy 无 actual_conversation 按通过处理），
-            # 防止 comparator 语义回归时假通过
+            assert result.total_cases == 0
+            assert result.passed_cases == 0
+            assert result.pass_rate == 0.0
+            # 未评测 case 仍保留在 per_case 供审计，标记 unreviewed=True
             by_id = {r["eval_id"]: r for r in result.per_case_results}
             assert len(by_id) == 2
             assert by_id["c1"]["pass"] is True
+            assert by_id["c1"]["unreviewed"] is True
             assert by_id["c2"]["pass"] is True
+            assert by_id["c2"]["unreviewed"] is True
         finally:
             os.unlink(path)
 

@@ -222,7 +222,8 @@ Examples:
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--ci", action="store_true",
                         help=("CI mode: exit 1 on gate rejection, 2 on needs-review; "
-                              "live mode is informational only (NEEDS_REVIEW exits 0)"))
+                              "live mode NEEDS_REVIEW is informational (exit 0) unless "
+                              "a critical case regresses/overfits (still exits 2)"))
     parser.add_argument("--scenario", default="fix_attributed",
                         choices=["fix_attributed", "noop", "overfit"],
                         help="Candidate generation strategy (default: fix_attributed)")

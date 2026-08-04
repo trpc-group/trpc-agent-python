@@ -20,10 +20,22 @@ from pipeline.report import generate_json_report, generate_md_report
 # ---------------------------------------------------------------------------
 
 def _make_case(eval_id: str, has_conversation: bool = True) -> dict:
-    """Build a minimal evalset case dict."""
+    """Build a minimal evalset case dict.
+
+    has_conversation=True 时同时提供 actual_conversation（与期望一致），使
+    case 成为"真实评测且通过"而非 legacy 未评测（无 actual_conversation 的
+    case 现标记 unreviewed、不计入 pass_rate）。
+    """
     case = {"eval_id": eval_id, "eval_mode": "trace"}
     if has_conversation:
         case["conversation"] = [
+            {
+                "invocation_id": "inv-1",
+                "user_content": {"parts": [{"text": "hello"}], "role": "user"},
+                "final_response": {"parts": [{"text": "hi"}], "role": "model"},
+            }
+        ]
+        case["actual_conversation"] = [
             {
                 "invocation_id": "inv-1",
                 "user_content": {"parts": [{"text": "hello"}], "role": "user"},
@@ -305,6 +317,19 @@ class TestUnicodeInCases:
                         "eval_id": "u1",
                         "eval_mode": "trace",
                         "conversation": [
+                            {
+                                "invocation_id": "inv-u1",
+                                "user_content": {
+                                    "parts": [{"text": "你好世界 🌍"}],
+                                    "role": "user",
+                                },
+                                "final_response": {
+                                    "parts": [{"text": "こんにちは 🎉"}],
+                                    "role": "model",
+                                },
+                            }
+                        ],
+                        "actual_conversation": [
                             {
                                 "invocation_id": "inv-u1",
                                 "user_content": {

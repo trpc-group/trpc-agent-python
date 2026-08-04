@@ -121,7 +121,13 @@ class TestFullPipelineFakeMode:
         path = temp_json_file({
             "eval_set_id": "single",
             "eval_cases": [
-                {"eval_id": "only_case", "conversation": [{"text": "2+2"}]},
+                {"eval_id": "only_case",
+                 "conversation": [{"invocation_id": "i1",
+                                   "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                   "final_response": {"parts": [{"text": "2+2"}], "role": "model"}}],
+                 "actual_conversation": [{"invocation_id": "i1",
+                                          "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                          "final_response": {"parts": [{"text": "2+2"}], "role": "model"}}]},
             ],
         })
         try:
@@ -137,8 +143,20 @@ class TestFullPipelineFakeMode:
         path = temp_json_file({
             "eval_set_id": "perfect",
             "eval_cases": [
-                {"eval_id": "c1", "conversation": [{"text": "q"}]},
-                {"eval_id": "c2", "conversation": [{"text": "q"}]},
+                {"eval_id": "c1",
+                 "conversation": [{"invocation_id": "i1",
+                                   "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                   "final_response": {"parts": [{"text": "a"}], "role": "model"}}],
+                 "actual_conversation": [{"invocation_id": "i1",
+                                          "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                          "final_response": {"parts": [{"text": "a"}], "role": "model"}}]},
+                {"eval_id": "c2",
+                 "conversation": [{"invocation_id": "i1",
+                                   "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                   "final_response": {"parts": [{"text": "a"}], "role": "model"}}],
+                 "actual_conversation": [{"invocation_id": "i1",
+                                          "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                          "final_response": {"parts": [{"text": "a"}], "role": "model"}}]},
             ],
         })
         try:
