@@ -126,9 +126,7 @@ def is_output_dir_allowed(output_dir: str) -> bool:
     return _out_abs.startswith(_root_abs + os.sep)
 
 
-def live_gate_downgrade(gate: GateResult, *, live: bool,
-                        optimization_cost: float,
-                        max_cost_budget: float) -> GateResult:
+def live_gate_downgrade(gate: GateResult, *, live: bool) -> GateResult:
     """live 模式下把不可比评分驱动的 ACCEPT/REJECT 降级为 NEEDS_REVIEW。
 
     baseline=SDK 评分、候选=trace comparator 重评，口径不可比；除"成本超预算"
@@ -514,8 +512,6 @@ Examples:
     # 除"成本超预算"外，依赖 pass-rate 差值的 ACCEPT/REJECT 一律降级 NEEDS_REVIEW。
     _downgraded = live_gate_downgrade(
         gate, live=(cfg.mode == "live"),
-        optimization_cost=optimization_cost,
-        max_cost_budget=cfg.max_cost_budget,
     )
     if _downgraded.decision != gate.decision:
         gate = _downgraded
@@ -562,6 +558,10 @@ Examples:
     md_path = os.path.join(cfg.output_dir, "optimization_report.md")
     tracer.set_output_files(json_path, md_path)
 
+    # report 阶段先闭合再冻结审计：to_dict() 内部会 finalize() 冻结
+    # total_duration_s，必须在 end_stage("report") 之后调用，否则 timing
+    # 缺 report 条目且总耗时不含报告生成。
+    tracer.end_stage("report")
     audit_dict = tracer.to_dict()
     # Enrich audit with backward-compatible fields
     audit_dict.update({
@@ -605,7 +605,6 @@ Examples:
         f.write(json_report)
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_report)
-    tracer.end_stage("report")
     print(f"  Reports written to {json_path}, {md_path}")
 
     # ═══════════════════════════════════════════════════════════════

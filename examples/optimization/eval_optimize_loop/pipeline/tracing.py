@@ -165,8 +165,10 @@ class AuditTracer:
         summary see identical values.
         """
         if not self._finalized:
+            # 保留到毫秒精度：round(..., 1) 会把毫秒级流水线（如 fake 模式）
+            # 的总耗时抹成 0.0，导致审计报告 total_duration_s 失真。
             self._audit.total_duration_s = round(
-                time.monotonic() - self._pipeline_start, 1
+                time.monotonic() - self._pipeline_start, 3
             )
 
             # Build reproduce command unless a full one was injected at

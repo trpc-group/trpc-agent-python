@@ -153,41 +153,47 @@ class TestIsOutputDirAllowed:
 class TestLiveGateDowngrade:
     """Tests for live_gate_downgrade() — live 下不可比评分驱动的决策降级。"""
 
-    def _gate(self, decision):
-        return GateResult(decision=decision, reason="r", details={"checks": []})
+    def _gate(self, decision, checks=None):
+        return GateResult(decision=decision, reason="r",
+                          details={"checks": checks if checks is not None else []})
 
     def test_fake_mode_unchanged(self):
         g = self._gate(GateDecision.ACCEPT)
-        out = live_gate_downgrade(g, live=False, optimization_cost=0.0, max_cost_budget=10.0)
+        out = live_gate_downgrade(g, live=False)
         assert out.decision == GateDecision.ACCEPT
 
     def test_live_accept_downgraded(self):
         g = self._gate(GateDecision.ACCEPT)
-        out = live_gate_downgrade(g, live=True, optimization_cost=0.0, max_cost_budget=10.0)
+        out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.NEEDS_REVIEW
 
     def test_live_reject_downgraded(self):
         g = self._gate(GateDecision.REJECT)
-        out = live_gate_downgrade(g, live=True, optimization_cost=0.0, max_cost_budget=10.0)
+        out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.NEEDS_REVIEW
 
-    def test_live_cost_reject_kept(self):
-        # 成本超预算是真实约束（gate.details 含 budget 键），与评分口径无关 → 保留 REJECT
-        g = GateResult(decision=GateDecision.REJECT, reason="r",
-                       details={"checks": [], "budget": 10.0})
-        out = live_gate_downgrade(g, live=True, optimization_cost=15.0, max_cost_budget=10.0)
+    def test_live_cost_reject_kept_with_real_check(self):
+        # 真实 evaluate_gate 结构：cost_budget check passed=False = 成本超预算，
+        # 是真实约束、与评分口径无关 → live 下保留 REJECT
+        g = self._gate(GateDecision.REJECT,
+                       checks=[{"check": "cost_budget", "passed": False}])
+        out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.REJECT
 
     def test_live_reject_within_budget_downgraded(self):
-        g = self._gate(GateDecision.REJECT)
-        out = live_gate_downgrade(g, live=True, optimization_cost=5.0, max_cost_budget=10.0)
+        # 成本未超（cost_budget passed=True）→ 纯评分驱动 REJECT，降级
+        g = self._gate(GateDecision.REJECT,
+                       checks=[{"check": "cost_budget", "passed": True}])
+        out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.NEEDS_REVIEW
 
-    def test_live_overfit_reject_over_budget_downgraded(self):
-        # 过拟合 REJECT（details 无 budget）即使成本数值超预算也应降级：
-        # 豁免只看 gate 真实原因（budget 键），避免把评分驱动的 REJECT 误保留
-        g = self._gate(GateDecision.REJECT)
-        out = live_gate_downgrade(g, live=True, optimization_cost=15.0, max_cost_budget=10.0)
+    def test_live_overfit_reject_within_budget_downgraded(self):
+        # 过拟合 REJECT：成本未超（checks 里 cost_budget passed=True）、
+        # details 无 budget 键 → 评分驱动，live 下降级
+        g = self._gate(GateDecision.REJECT,
+                       checks=[{"check": "overfitting", "passed": False},
+                               {"check": "cost_budget", "passed": True}])
+        out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.NEEDS_REVIEW
 
     def test_live_scenario_config_error_reject_kept(self):
@@ -197,7 +203,7 @@ class TestLiveGateDowngrade:
             reason="Validation scenario configuration error: empty val set",
             details={"reason_code": "scenario_config_error"},
         )
-        out = live_gate_downgrade(g, live=True, optimization_cost=5.0, max_cost_budget=10.0)
+        out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.REJECT
 
 
