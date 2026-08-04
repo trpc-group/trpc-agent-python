@@ -28,3 +28,6 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+# eval-optimize-loop sample run outputs（运行产物，不跟踪，避免默认输出覆盖入库文件产生 git 脏文件）
+examples/optimization/eval_optimize_loop/sample_output/

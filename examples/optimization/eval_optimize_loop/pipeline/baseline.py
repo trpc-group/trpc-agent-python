@@ -162,13 +162,24 @@ async def run_baseline_sdk(
 
         with open(evalset_path, encoding="utf-8") as f:
             eval_set = EvalSet.model_validate_json(f.read())
-        # trace 模式离线评测：evaluate_eval_set 返回 per-case 结果
-        _, _, _, case_results = await AgentEvaluator.evaluate_eval_set(
+        # trace 模式离线评测：evaluate_eval_set 返回 per-case 结果。
+        # 先对返回值做长度/结构校验：SDK 接口结构变更（如新增/调整返回字段）
+        # 在这里显式失败并向上抛出，而不是在后续 unpack 时抛 ValueError 被
+        # except ValueError 分支降级为 comparator——避免把 SDK 结构变更伪装成
+        # "可继续的 trace 基线"。
+        _ret = await AgentEvaluator.evaluate_eval_set(
             eval_set,
             call_agent=call_agent,
             eval_config=eval_config,
             print_detailed_results=False,
         )
+        if not isinstance(_ret, (tuple, list)) or len(_ret) != 4:
+            raise ValueError(
+                "SDK evaluate_eval_set returned unexpected shape "
+                f"({type(_ret).__name__}, len="
+                f"{len(_ret) if isinstance(_ret, (tuple, list)) else 'n/a'}), "
+                "expected a 4-tuple")
+        _, _, _, case_results = _ret
 
         # case_results: dict[str, list[EvalCaseResult]] — case_id → results
         passed = 0

@@ -26,8 +26,16 @@ from datetime import datetime, timezone
 # （repo root 含 trpc_agent_sdk 源码包，live 模式需要）
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
-# eval_optimize_loop → optimization → examples → trpc-agent-python（3 级）
-_REPO_ROOT = os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir, os.pardir))
+
+try:
+    from pipeline._paths import find_repo_root as _find_repo_root
+except Exception:  # pragma: no cover — pipeline 包本身不可导入时回退硬编码
+    _find_repo_root = None
+
+# 用 pyproject.toml/.git 标记文件向上锚定仓库根，替代硬编码 3 级 pardir
+# （example 目录被移动/嵌套层级变化时，硬编码会把 sys.path 指向错误路径）
+_REPO_ROOT = (_find_repo_root(_HERE) if _find_repo_root is not None else None) \
+    or os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir, os.pardir))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 

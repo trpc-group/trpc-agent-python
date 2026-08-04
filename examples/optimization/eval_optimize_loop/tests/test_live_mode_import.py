@@ -119,6 +119,48 @@ class TestLiveModeRobustness:
         finally:
             os.unlink(path)
 
+    def test_run_baseline_sdk_re_raises_on_bad_return_shape(self, monkeypatch, tmp_path):
+        """SDK evaluate_eval_set 返回非 4 元组（接口结构变更）应向上抛 ValueError，
+        而非静默降级为 trace comparator 伪装成可继续基线（reviewer Warning ② 落地）。"""
+        import sys
+        import pipeline.baseline as baseline_mod
+        import tempfile, json, os
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                return object()
+
+        async def _fake_evaluate(eval_set, **kwargs):
+            return (None, [], [])  # 只有 3 项，缺 case_results
+
+        class _FakeAgentEvaluator:
+            @staticmethod
+            async def evaluate_eval_set(*args, **kwargs):
+                return await _fake_evaluate(*args, **kwargs)
+
+        class _FakeEvalModule:
+            AgentEvaluator = _FakeAgentEvaluator
+            EvalSet = _FakeEvalSet
+            EvalStatus = type("S", (), {})
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"eval_set_id": "t", "eval_cases": []}, f)
+            path = f.name
+        try:
+            with pytest.raises(ValueError, match="unexpected shape"):
+                asyncio.run(baseline_mod.run_baseline_sdk(path, eval_config=object()))
+        finally:
+            os.unlink(path)
+
     def test_fake_pipeline_performance(self, data_dir):
         """fake 模式完整 pipeline < 3 秒（验收标准 #5：≤3 分钟，巨大余量）。"""
         import time
