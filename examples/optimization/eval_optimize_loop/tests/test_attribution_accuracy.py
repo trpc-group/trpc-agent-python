@@ -31,7 +31,7 @@ def _run_attribution(data_dir, evalset_name: str):
         val_evalset=str(data_dir / "val.evalset.json"),
     )
     baseline = run_baseline_fake(str(data_dir / evalset_name), cfg)
-    attribution = attribute_failures(baseline.__dict__, baseline.__dict__)
+    attribution = attribute_failures(baseline.__dict__, {})
     return attribution
 
 
@@ -39,7 +39,7 @@ def test_attribution_accuracy_on_train(data_dir):
     """train 集归因准确率 ≥ 90%（对照黄金表）。"""
     cfg = load_pipeline_config(mode="fake")
     baseline = run_baseline_fake(str(data_dir / "train.evalset.json"), cfg)
-    attribution = attribute_failures(baseline.__dict__, baseline.__dict__)
+    attribution = attribute_failures(baseline.__dict__, {})
 
     correct = 0
     total = 0
@@ -62,7 +62,7 @@ def test_attribution_accuracy_on_large_train(data_dir):
     """large_train 集归因准确率 ≥ 90%。"""
     cfg = load_pipeline_config(mode="fake")
     baseline = run_baseline_fake(str(data_dir / "large_train.evalset.json"), cfg)
-    attribution = attribute_failures(baseline.__dict__, baseline.__dict__)
+    attribution = attribute_failures(baseline.__dict__, {})
 
     correct = 0
     total = 0
@@ -85,7 +85,7 @@ def test_every_failure_has_detail_and_evidence(data_dir):
     """每个失败 case 的归因都带 detail + evidence（可解释性）。"""
     cfg = load_pipeline_config(mode="fake")
     baseline = run_baseline_fake(str(data_dir / "train.evalset.json"), cfg)
-    attribution = attribute_failures(baseline.__dict__, baseline.__dict__)
+    attribution = attribute_failures(baseline.__dict__, {})
 
     for entry in attribution.entries:
         assert entry.detail, f"case {entry.case_id} 缺少 detail"
@@ -97,7 +97,7 @@ def test_failure_categories_covered(data_dir):
     """train 集归因应覆盖多个失败类别（非全 unknown）。"""
     cfg = load_pipeline_config(mode="fake")
     baseline = run_baseline_fake(str(data_dir / "train.evalset.json"), cfg)
-    attribution = attribute_failures(baseline.__dict__, baseline.__dict__)
+    attribution = attribute_failures(baseline.__dict__, {})
 
     categories = set(str(e.category) for e in attribution.entries)
     assert len(categories) >= 2, f"归因类别过少: {categories}"

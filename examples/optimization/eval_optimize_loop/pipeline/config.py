@@ -3,6 +3,7 @@
 import json
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 from ._paths import ensure_repo_root_in_path
 
@@ -62,7 +63,7 @@ def load_optimizer_json(path: str) -> dict:
     return data
 
 
-def load_optimize_config(path: str) -> "EvalConfig":
+def load_optimize_config(path: str) -> Any:
     """用 SDK 加载 optimizer.json，返回其 evaluate 段（EvalConfig）。
 
     供 live 模式 baseline 评测使用（SDK 的 evaluate_eval_set 要求必填
