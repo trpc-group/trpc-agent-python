@@ -664,6 +664,13 @@ def main() -> int:
         "converged": optimize_result.converged,
         "best_score": optimize_result.best_score,
         "best_score_metric": _best_score_metric,
+        # 结构化输出：best_score 必须与 metric 同结构消费，避免下游只看单一
+        # 数值把 fake（train 模拟分）与 live（validation 分）等同比较
+        # （reviewer Warning）。
+        "best_score_info": {
+            "value": optimize_result.best_score,
+            "metric": _best_score_metric,
+        },
     }
 
     # 报告路径已知后立即登记，确保 to_dict() 序列化的 audit.output_files 非空
@@ -689,14 +696,22 @@ def main() -> int:
         "errors": errors,
         "reproduce_command": audit_dict["reproducibility"]["reproduce_command"],
     })
-    # Holdout 结果（可选）写入审计，供报告展示
+    # Holdout 结果（可选）写入审计，供报告展示。
+    # holdout 恒由 trace comparator 评分（fake/live 均如此）；live 下 train/val
+    # 走 SDK 评分，口径不可比——显式标注 scored_via 与 not_comparable_note，
+    # 避免报告消费者把 holdout.pass_rate 当作与 baseline 可比（reviewer Warning）。
     if holdout_result is not None:
         audit_dict["holdout"] = {
             "evalset_id": holdout_result.evalset_id,
             "pass_rate": holdout_result.pass_rate,
             "passed_cases": holdout_result.passed_cases,
             "total_cases": holdout_result.total_cases,
+            "scored_via": "trace_comparator",
         }
+        if cfg.mode == "live":
+            audit_dict["holdout"]["not_comparable_note"] = (
+                "holdout scored via trace comparator in live mode "
+                "(train/val use SDK); pass_rate is not comparable to baseline")
 
     json_report = generate_json_report(
         task_id, baseline_train, baseline_val,

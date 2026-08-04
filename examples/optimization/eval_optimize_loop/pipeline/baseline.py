@@ -191,12 +191,16 @@ async def run_baseline_sdk(
             eval_config=eval_config,
             print_detailed_results=False,
         )
-        if not isinstance(_ret, (tuple, list)) or len(_ret) != 4:
+        # 先判类型再取 len：非 tuple/list 没有 len 可读，分开判定使意图清晰
+        # （reviewer Suggestion）。
+        if not isinstance(_ret, (tuple, list)):
             raise ValueError(
                 "SDK evaluate_eval_set returned unexpected shape "
-                f"({type(_ret).__name__}, len="
-                f"{len(_ret) if isinstance(_ret, (tuple, list)) else 'n/a'}), "
-                "expected a 4-tuple")
+                f"({type(_ret).__name__}), expected a 4-tuple")
+        if len(_ret) != 4:
+            raise ValueError(
+                "SDK evaluate_eval_set returned unexpected shape "
+                f"(len={len(_ret)}), expected a 4-tuple")
         _, _, _, case_results = _ret
 
         # case_results: dict[str, list[EvalCaseResult]] — case_id → results

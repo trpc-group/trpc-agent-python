@@ -237,6 +237,11 @@ async def run_optimize_live(
         # 用 wait_for 加超时：真实网络/LLM 调用可能卡顿，避免整条 live 流水线
         # 无限挂起（超时抛 TimeoutError，下方 except 写入 result.errors）
         try:
+            # SDK 会向 output_dir 写入 result.json / best_prompts/ / rounds/ /
+            # run.log 等产物；与 pipeline 自身报告（optimization_report.json/md）
+            # 混放会让目录来源混杂、审计难以区分（reviewer Warning）。指定独立
+            # 子目录 sdk_artifacts/，仍位于调用方已校验的仓库内 output_dir 下。
+            sdk_output_dir = os.path.join(config.output_dir, "sdk_artifacts")
             opt_result = await asyncio.wait_for(
                 AgentOptimizer.optimize(
                     config_path=optimizer_config_path,
@@ -244,7 +249,7 @@ async def run_optimize_live(
                     target_prompt=target,
                     train_dataset_path=config.train_evalset,
                     validation_dataset_path=config.val_evalset,
-                    output_dir=config.output_dir,
+                    output_dir=sdk_output_dir,
                 ),
                 timeout=_optimize_timeout,
             )

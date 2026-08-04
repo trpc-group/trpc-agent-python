@@ -297,8 +297,20 @@ class TestLiveModeRobustness:
         try:
             code = rp.main()
             assert code == 0
-            assert _os.path.isfile(_os.path.join(_out_dir, "optimization_report.json"))
-            assert _os.path.isfile(_os.path.join(_out_dir, "optimization_report.md"))
+            _json_path = _os.path.join(_out_dir, "optimization_report.json")
+            _md_path = _os.path.join(_out_dir, "optimization_report.md")
+            assert _os.path.isfile(_json_path)
+            assert _os.path.isfile(_md_path)
+            # holdout 口径标注（reviewer Warning）：审计里显式 scored_via，
+            # 避免消费者把 trace comparator 分当成 SDK baseline 分
+            import json as _json
+            with open(_json_path, encoding="utf-8") as _f:
+                _rep = _json.load(_f)
+            _hold = _rep.get("audit", {}).get("holdout", {})
+            assert _hold.get("scored_via") == "trace_comparator"
+            # best_score 与 metric 同结构输出（reviewer Warning）
+            _opt = _rep.get("optimizer", {})
+            assert _opt.get("best_score_info", {}).get("metric")
         finally:
             _shutil.rmtree(_out_dir, ignore_errors=True)
 
