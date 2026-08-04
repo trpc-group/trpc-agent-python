@@ -242,6 +242,20 @@ class TestCompareInvocations:
             assert not ok, f"期望 15 不应匹配被否定的实际: {act}"
             assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
 
+    def test_comparison_operator_not_an_answer_equals(self):
+        """`==`/`>=` 比较表达式中的 = 不作答案候选（reviewer Warning）。
+
+        `x == 42, answer = 10` 中 42 是比较操作数而非答案：期望 42 不得
+        误判通过；只有独立赋值等号 `= 10` 后的 10 是候选。修前 eq_candidates
+        会把 `== 42`/`>= 42` 的 = 当答案等号 → 候选含 42 → 误判通过。
+        """
+        for act in ("x == 42, answer = 10", "10 >= 42, answer = 10"):
+            case = _mk_case("42", act)
+            ok, cat = compare_invocations(
+                case["conversation"][0], case["actual_conversation"][0])
+            assert not ok, f"期望 42 不应匹配比较操作数: {act}"
+            assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
+
     def test_trace_matcher_numeric_tolerance_effective(self):
         """TraceMatcher 自定义 numeric_tolerance 真正生效，非静默忽略
         （reviewer Warning：硬编码阈值被忽略的问题）。"""

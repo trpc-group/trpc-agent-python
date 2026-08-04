@@ -398,6 +398,36 @@ class TestLiveModeRobustness:
         finally:
             _shutil.rmtree(_out_dir, ignore_errors=True)
 
+    def test_fake_main_default_paths_from_example_dir(self, monkeypatch):
+        """从 example 目录以默认相对路径（--mode fake，不传路径参数）跑 main()。
+
+        reviewer Warning①：holdout 默认 `data/holdout.evalset.json` 曾按 CWD
+        解析，从仓库根运行会静默跳过；锚定后默认相对路径在 example 目录下
+        全部可用。同时覆盖 CI reviewer Warning③"按文档默认命令从 example 目录
+        运行"的真实入口（CI 冒烟 step 之外的本地回归锁定）。
+        """
+        import json as _json
+        import shutil as _shutil
+        import sys as _sys
+        import run_pipeline as rp
+        from pathlib import Path as _Path
+
+        _example = _Path(rp.__file__).resolve().parent
+        monkeypatch.chdir(_example)
+        monkeypatch.setattr(_sys, "argv", ["run_pipeline.py", "--mode", "fake"])
+        try:
+            code = rp.main()
+            assert code == 0
+            _json_path = _example / "sample_output" / "optimization_report.json"
+            assert _json_path.is_file()
+            with open(_json_path, encoding="utf-8") as _f:
+                _rep = _json.load(_f)
+            # holdout 被评分而非静默跳过（W1 锚定生效）
+            _hold = _rep.get("audit", {}).get("holdout", {})
+            assert _hold.get("scored_via") == "trace_comparator"
+        finally:
+            _shutil.rmtree(_example / "sample_output", ignore_errors=True)
+
     def test_scenario_error_no_overfitting_misreport(self, monkeypatch, data_dir, capsys):
         """overfit 场景配置错误路径：不得误报 "Overfitting detected"。
 

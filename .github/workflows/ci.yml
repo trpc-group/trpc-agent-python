@@ -84,6 +84,14 @@ jobs:
         run: |
           pytest -q examples/optimization/eval_optimize_loop/tests/ -p no:warnings
 
+      # reviewer Warning：CI 从仓库根跑 example tests 依赖 conftest 的绝对路径
+      # （data_dir / ...），未覆盖"按文档默认命令从 example 目录运行
+      # run_pipeline.py"的真实入口。补默认参数（不传显式路径）冒烟，验证相对
+      # 路径（data/...）在 example 目录下按文档可用。fake 模式离线确定性、<3s。
+      - name: Smoke-test example default entrypoint
+        run: python run_pipeline.py --mode fake
+        working-directory: examples/optimization/eval_optimize_loop
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         env:

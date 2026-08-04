@@ -67,6 +67,7 @@ from pipeline.optimize import (
     run_optimize_fake,
     run_optimize_live,
     OptimizeResult,
+    _anchor_to_example_dir,
 )
 from pipeline.tracing import AuditTracer
 
@@ -432,11 +433,14 @@ def main() -> int:
           f"({baseline_val.passed_cases}/{baseline_val.total_cases})")
 
     # Holdout 集评分（可选）：加载 holdout evalset 并用 comparator 评分，
-    # 结果写入审计字典供报告展示
+    # 结果写入审计字典供报告展示。holdout 相对路径与 live 模式其它路径
+    # （prompt_dir/train/val/output_dir）同口径锚定到 example 目录：从仓库根等
+    # 非 example 目录运行时不会被 CWD 差异导致静默跳过（reviewer Warning）。
+    _holdout_path = _anchor_to_example_dir(cfg.holdout_evalset)
     holdout_result = None
-    if os.path.exists(cfg.holdout_evalset):
+    if os.path.exists(_holdout_path):
         try:
-            holdout_result = run_baseline_fake(cfg.holdout_evalset, cfg)
+            holdout_result = run_baseline_fake(_holdout_path, cfg)
             if cfg.mode == "live":
                 print("  ⚠️  holdout 由 trace comparator 评分（live 下 train/val 走 SDK），"
                       "与 baseline 语义不可比")

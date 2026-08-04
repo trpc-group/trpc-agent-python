@@ -459,8 +459,11 @@ def compare_invocations(expected: dict, actual: dict, *,
         # 支持 = $386.66、= 100、= $15,353.13（千分位逗号）等货币/百分号答案格式。
         # 排除否定语境（"= 15 is wrong, real = 14"）中的候选：这些是被纠正的中间值，
         # 若保留会被误匹配期望数字而误判通过。
+        # 等号须为"独立赋值等号"（前不为 <,>,!,= 且后不为 =）：`>= 42`/`<= 42`/
+        # `!= 42`/`x == 42` 里的 = 属于比较/相等运算符，不作答案候选，避免把
+        # "10 >= 42" 这类实际回复误判为 "= 42" 而误通过（reviewer Warning）。
         eq_candidates = list(re.finditer(
-            r"=\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final))
+            r"(?<![<>!=])=(?!=)\s*[$€£]?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)", act_final))
         eq_nums = []
         for _m in eq_candidates:
             _num = float(_m.group(1).replace(",", ""))
