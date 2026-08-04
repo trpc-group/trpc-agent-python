@@ -145,6 +145,7 @@ class TestLiveModeRobustness:
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
             "--output-dir", _out_dir,
+            "--holdout-evalset", str(data_dir / "holdout.evalset.json"),
         ])
         with pytest.raises(ValueError, match="evalset validation failed"):
             rp.main()
@@ -185,6 +186,7 @@ class TestLiveModeRobustness:
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
             "--output-dir", _out_dir,
+            "--holdout-evalset", str(data_dir / "holdout.evalset.json"),
         ])
         with pytest.raises(AttributeError, match="bug in pipeline code"):
             rp.main()
@@ -214,6 +216,7 @@ class TestLiveModeRobustness:
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
             "--output-dir", _out_dir,
+            "--holdout-evalset", str(data_dir / "holdout.evalset.json"),
         ])
         with pytest.raises(AttributeError, match="bug in pipeline code"):
             rp.main()
@@ -293,6 +296,7 @@ class TestLiveModeRobustness:
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
             "--output-dir", _out_dir,
+            "--holdout-evalset", str(data_dir / "holdout.evalset.json"),
         ])
         try:
             code = rp.main()
@@ -337,6 +341,7 @@ class TestLiveModeRobustness:
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
             "--output-dir", _out_dir,
+            "--holdout-evalset", str(data_dir / "holdout.evalset.json"),
         ])
         try:
             code = rp.main()
