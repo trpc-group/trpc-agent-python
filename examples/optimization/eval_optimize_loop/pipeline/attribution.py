@@ -6,20 +6,11 @@ case failed.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 
-
-class FailureCategory(str, Enum):
-    """Root cause categories for evaluation failures."""
-    FINAL_RESPONSE_MISMATCH = "final_response_mismatch"
-    TOOL_CALL_ERROR = "tool_call_error"
-    WRONG_TOOL_SELECTED = "wrong_tool_selected"
-    TOOL_PARAMETER_ERROR = "tool_parameter_error"
-    LLM_RUBRIC_NOT_MET = "llm_rubric_not_met"
-    KNOWLEDGE_RECALL_INSUFFICIENT = "knowledge_recall_insufficient"
-    FORMAT_NOT_AS_REQUIRED = "format_not_as_required"
-    MISSING_EXPECTED_OUTPUT = "missing_expected_output"
-    UNKNOWN = "unknown"
+# 单一来源：复用 comparator 定义的 FailureCategory，避免同名异类
+# （comparator 的 str 子类 vs 本模块曾经的 str, Enum）长期混淆、类型不兼容
+# （reviewer Suggestion）。
+from .comparator import FailureCategory
 
 
 @dataclass
@@ -147,7 +138,7 @@ def _attribute_from_cases(per_case: list, failed_ids: list[str]) -> list[Attribu
     return entries
 
 
-# 字符串类别名 → FailureCategory 枚举映射
+# 字符串类别名 → FailureCategory 类别常量映射（单一来源：comparator）
 _CATEGORY_MAP = {
     "final_response_mismatch": FailureCategory.FINAL_RESPONSE_MISMATCH,
     "tool_call_error": FailureCategory.TOOL_CALL_ERROR,

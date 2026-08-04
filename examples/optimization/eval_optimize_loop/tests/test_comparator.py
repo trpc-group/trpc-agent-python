@@ -209,6 +209,27 @@ class TestCompareInvocations:
         assert not ok
         assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
 
+    def test_negation_beyond_80_char_window(self):
+        """否定词在 >80 字符（原固定 80 窗口之外）：仍须捕获，不误判通过。
+
+        否定窗口改为"到下一个 = 候选为止"的语境段，远距离否定也能命中
+        （reviewer Warning ④）。同时验证后续独立候选不受影响。"""
+        # 否定词距候选 >80 字符（填充 100 个 x），且候选仍应被排除
+        far = "= 15, " + "x" * 100 + " the earlier value is incorrect"
+        case = _mk_case("15", far)
+        ok, cat = compare_invocations(case["conversation"][0], case["actual_conversation"][0])
+        assert not ok
+        assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
+
+    def test_negation_segment_does_not_affect_next_candidate(self):
+        """被否定的 `= 15` 不吞掉后续独立候选 `= 14`：14 仍应被正确匹配。"""
+        case = _mk_case(
+            "14",
+            "= 15 is wrong (earlier miscalculation), the correct value is = 14",
+        )
+        ok, cat = compare_invocations(case["conversation"][0], case["actual_conversation"][0])
+        assert ok
+
     def test_trace_matcher_numeric_tolerance_effective(self):
         """TraceMatcher 自定义 numeric_tolerance 真正生效，非静默忽略
         （reviewer Warning：硬编码阈值被忽略的问题）。"""

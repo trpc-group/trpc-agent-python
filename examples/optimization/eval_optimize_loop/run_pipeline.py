@@ -58,6 +58,7 @@ from pipeline.attribution import attribute_failures, AttributionReport
 from pipeline.gate import evaluate_gate, GateDecision, GateResult
 from pipeline.validate import (
     run_validation_trace,
+    EvalsetLoadError,
     ValidationDelta,
     ValidationResult,
 )
@@ -376,6 +377,12 @@ def main() -> int:
             # （"宁可失败，不假装可继续"），这里不能降级为 trace comparator——
             # 会把校验失败伪装成合法基线，污染下游 gate 决策。
             raise
+        except (AttributeError, TypeError):
+            # pipeline 自身 bug（缺键/对 None 取属性/类型误用）不降级：直接抛出
+            # 暴露根因，与 Stage 4 optimize 对同类异常的处理策略一致，避免把
+            # live 路径下的代码缺陷伪装成 "SDK baseline 失败、已降级"
+            # （reviewer Warning）。
+            raise
         except Exception as _e:
             # 与 fake 模式一致：SDK 未捕获的其它异常（RuntimeError 等）也优雅降级，
             # 避免整个 pipeline 崩溃（errors 会在下方统一打印/记录）
@@ -499,7 +506,8 @@ def main() -> int:
     print(f"  Algorithm: {optimize_result.algorithm}")
     print(f"  Scenario: {cfg.scenario}")
     print(f"  Iterations: {optimize_result.total_iterations}")
-    print(f"  Best score: {optimize_result.best_score:.3f}")
+    print(f"  Best score: {optimize_result.best_score:.3f} "
+          f"({_best_score_metric})")
     print(f"  Cost: ${optimization_cost:.4f}")
     if cfg.verbose and optimize_result.rounds:
         for r in optimize_result.rounds:
@@ -522,6 +530,13 @@ def main() -> int:
             scenario=cfg.scenario,
             val_regression_cases=cfg.val_regression_cases,
         )
+    except EvalsetLoadError as _le:
+        # 数据加载错误（evalset 缺失/JSON 损坏）是硬性失败，不能合成假 delta
+        # 伪装成"场景配置错误"（reviewer Warning）：显式记录并失败退出。
+        print(f"  ❌ Validation evalset load error: {_le}")
+        tracer.add_error(f"Validation evalset load error: {_le}")
+        tracer.end_stage("validate")
+        return 1
     except ValueError as _ve:
         # 场景配置边界（如 overfit + 空 val 集）显式报错时，不崩溃：
         # 记录为 warning，并构造"有新增失败"的结果让 gate 拒绝/需审查，继续出报告。
@@ -630,6 +645,13 @@ def main() -> int:
         improvement=improvement,
     )
 
+    # best_score 口径标注：live 模式 RoundRecord.score 映射 SDK
+    # validation_pass_rate，fake 模式是模拟 train 评分，二者不可比——
+    # 在报告/审计中显式标注，避免 Best score 两模式口径混读（reviewer Warning）。
+    _best_score_metric = (
+        "validation_pass_rate (SDK round)" if cfg.mode == "live"
+        else "train_pass_rate (simulated round)"
+    )
     optimization_info = {
         "algorithm": optimize_result.algorithm,
         "mode": cfg.mode,
@@ -638,6 +660,7 @@ def main() -> int:
         "total_iterations": optimize_result.total_iterations,
         "converged": optimize_result.converged,
         "best_score": optimize_result.best_score,
+        "best_score_metric": _best_score_metric,
     }
 
     # 报告路径已知后立即登记，确保 to_dict() 序列化的 audit.output_files 非空

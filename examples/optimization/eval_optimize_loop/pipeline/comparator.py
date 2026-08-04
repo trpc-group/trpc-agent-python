@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # ─────────────────────────────────────────────────────────────────────
-# Section: 类别枚举（与 attribution.py 的 FailureCategory 保持同名兼容）
+# Section: 类别常量（FailureCategory 单一来源；attribution.py 复用本定义）
 # ─────────────────────────────────────────────────────────────────────
 
 
@@ -468,10 +468,12 @@ def compare_invocations(expected: dict, actual: dict, *,
             # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）；
             # 只用明确指向该候选的否定词（去掉 error/invalid/no,/not, 等
             # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16。
-            # 窗口 80 字符 + 补充变体（not right/should be/false）覆盖
-            # "= 15 . The previous value is incorrect" 类较远否定。已知边界：
-            # 否定词落在 80 字符窗口外仍会漏判（启发式近似，reviewer Warning ③）。
-            _after = act_final[_m.end(): _m.end() + 80].lower()
+            # 语境段取"到下一个 = 候选为止"，替代原固定 80 字符窗口——否定词
+            # 落在窗口外（远距离否定）仍被捕获，避免漏判通过（reviewer Warning ④）。
+            _rest = act_final[_m.end():]
+            _next_eq = _rest.find("=")
+            _segment = _rest if _next_eq == -1 else _rest[: _next_eq]
+            _after = _segment.lower()
             if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
                                          "not right", "should be", "false")):
                 continue

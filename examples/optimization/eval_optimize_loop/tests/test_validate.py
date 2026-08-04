@@ -7,6 +7,7 @@ import pytest
 from pipeline.baseline import BaselineResult
 from pipeline.config import load_pipeline_config
 from pipeline.validate import (
+    EvalsetLoadError,
     ValidationDelta,
     ValidationResult,
     run_validation_fake,
@@ -308,3 +309,25 @@ class TestRunValidationTraceOverfitGuard:
         )
         # 自动选出 int id 的 case 扰动 → 产生 val 回归（而非误抛空集错误）
         assert result.new_failures >= 1
+
+
+class TestEvalsetLoadError:
+    """evalset 数据加载错误与场景配置错误区分（reviewer Warning）。"""
+
+    def test_missing_train_evalset_raises_evalset_load_error(self, data_dir):
+        """数据加载失败抛 EvalsetLoadError（而非被笼统归为场景配置错误）。"""
+        from pipeline.baseline import run_baseline_fake
+        from pipeline.optimize import OptimizeResult
+        cfg = load_pipeline_config()
+        baseline_val = run_baseline_fake(str(data_dir / "val.evalset.json"), cfg)
+        opt = OptimizeResult()
+        with pytest.raises(EvalsetLoadError, match="failed to load evalset"):
+            run_validation_trace(
+                str(data_dir / "nonexistent_train.json"),
+                str(data_dir / "val.evalset.json"),
+                baseline_val, opt, cfg,
+            )
+
+    def test_evalset_load_error_is_valueerror_subclass(self):
+        """EvalsetLoadError 是 ValueError 子类：场景错误分支不受影响。"""
+        assert issubclass(EvalsetLoadError, ValueError)

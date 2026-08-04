@@ -189,6 +189,35 @@ class TestLiveModeRobustness:
         with pytest.raises(AttributeError, match="bug in pipeline code"):
             rp.main()
 
+    def test_live_baseline_pipeline_bug_not_silently_degraded(self, monkeypatch, data_dir):
+        """live baseline：pipeline 自身 bug（AttributeError）不得被 run_pipeline
+        兜底 except Exception 静默降级到 trace comparator（reviewer Warning：
+        与 Stage 4 optimize 对同类异常 re-raise 的策略不一致）。"""
+        import os as _os
+        import sys as _sys
+        import run_pipeline as rp
+        import pipeline.baseline as baseline_mod
+        from pipeline._paths import find_repo_root
+
+        _repo_root = find_repo_root(str(Path(__file__).resolve().parent))
+        assert _repo_root is not None
+
+        async def _boom(*args, **kwargs):
+            # async 函数：asyncio.run 正常执行并抛 AttributeError
+            raise AttributeError("bug in pipeline code")
+
+        monkeypatch.setattr(baseline_mod, "run_baseline_sdk", _boom)
+        _out_dir = _os.path.join(_repo_root, "sample_output_live_test")
+        monkeypatch.setattr(_sys, "argv", [
+            "run_pipeline.py", "--mode", "live",
+            "--train-evalset", str(data_dir / "train.evalset.json"),
+            "--val-evalset", str(data_dir / "val.evalset.json"),
+            "--optimizer-config", str(data_dir / "optimizer.json"),
+            "--output-dir", _out_dir,
+        ])
+        with pytest.raises(AttributeError, match="bug in pipeline code"):
+            rp.main()
+
     def test_run_baseline_sdk_re_raises_on_bad_return_shape(self, monkeypatch, tmp_path):
         """SDK evaluate_eval_set 返回非 4 元组（接口结构变更）应向上抛 ValueError，
         而非静默降级为 trace comparator 伪装成可继续基线（reviewer Warning ② 落地）。"""

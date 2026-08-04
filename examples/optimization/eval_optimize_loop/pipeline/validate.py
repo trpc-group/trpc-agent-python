@@ -14,6 +14,15 @@ from .comparator import TraceMatcher, default_matcher
 from .config import PipelineConfig
 
 
+class EvalsetLoadError(ValueError):
+    """evalset 数据加载失败（文件缺失/JSON 损坏/IO 错误）。
+
+    与"场景配置边界错误"区分：数据错误是硬性失败，应由 run_pipeline 显式
+    记录并失败退出，而非被当作 scenario configuration error 合成假 delta
+    触发 REJECT（reviewer Warning）。
+    """
+
+
 @dataclass
 class ValidationDelta:
     """Per-case comparison between baseline and candidate."""
@@ -127,14 +136,16 @@ def run_validation_fake(
 def _load_cases(path: str) -> list[dict]:
     """加载 evalset 的 cases 列表。
 
-    缺失/损坏文件抛 ValueError（场景错误路径，与 run_baseline_fake 的
-    优雅 errors 语义对齐），而不是裸 FileNotFoundError/JSONDecodeError。
+    缺失/损坏文件抛 EvalsetLoadError（ValueError 子类），与 run_baseline_fake
+    的"返回 errors"语义区分——数据加载错误是硬性失败，由 run_pipeline 显式
+    记录并失败，而非当作场景配置错误继续合成 delta（reviewer Warning）。
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
-        raise ValueError(f"failed to load evalset {path}: {type(e).__name__}: {e}")
+        raise EvalsetLoadError(
+            f"failed to load evalset {path}: {type(e).__name__}: {e}")
     return data.get("eval_cases", [])
 
 
