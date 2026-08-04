@@ -44,6 +44,40 @@ class TestLiveModeRobustness:
         assert isinstance(result, OptimizeResult)
         assert result.errors
 
+    def test_run_baseline_sdk_re_raises_validation_error(self, monkeypatch, tmp_path):
+        """evalset/配置校验失败（ValueError，含 pydantic ValidationError）应重新抛出，
+        而非降级为 trace comparator 伪装成"可继续的基线"（reviewer Warning ②）。"""
+        import sys
+        import pipeline.baseline as baseline_mod
+        import tempfile, json, os
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                raise ValueError("evalset validation failed: bad case format")
+
+        class _FakeEvalModule:
+            AgentEvaluator = None
+            EvalSet = _FakeEvalSet
+            EvalStatus = type("S", (), {})
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"eval_set_id": "t", "eval_cases": []}, f)
+            path = f.name
+        try:
+            with pytest.raises(ValueError, match="evalset validation failed"):
+                asyncio.run(baseline_mod.run_baseline_sdk(path, eval_config=object()))
+        finally:
+            os.unlink(path)
+
     def test_run_baseline_sdk_re_raises_non_sdk_exceptions(self, monkeypatch, tmp_path):
         """非 SDK 异常（AttributeError 等 pipeline bug）应向上抛出，而非静默降级为 fake。"""
         import sys

@@ -158,6 +158,33 @@ def live_gate_downgrade(gate: GateResult, *, live: bool) -> GateResult:
     return gate
 
 
+def live_gate_exit_code(gate: GateResult, ci_mode: bool) -> int:
+    """live 模式下 NEEDS_REVIEW 的退出码。
+
+    live 下 baseline=SDK、候选=comparator 评分口径不可比，gate 恒被降级为
+    NEEDS_REVIEW，CI 默认仅作 informational（exit 0）。但关键 case 回归
+    （details.critical_regressed）与过拟合（details.validation_new_failures）
+    是硬性失败信号，即使降级也保留非零退出码（--ci 下为 2），
+    避免 --mode live --ci 把真实退化静默放过。
+
+    Args:
+        gate: 已经过 live_gate_downgrade 处理的 gate。
+        ci_mode: 是否 CI 模式。
+
+    Returns:
+        退出码（0/1/2）。
+    """
+    if gate.decision != GateDecision.NEEDS_REVIEW:
+        return ci_exit_code(gate.decision, ci_mode)
+    _d = gate.details or {}
+    if _d.get("critical_regressed") or _d.get("validation_new_failures"):
+        # 硬性失败信号：即使降级为 NEEDS_REVIEW 也不豁免非零退出码
+        print("  ⚠️  live informational override: critical-case regression or "
+              "overfitting detected — NOT exiting 0 (see --ci help)")
+        return ci_exit_code(GateDecision.NEEDS_REVIEW, ci_mode)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Evaluation + Optimization Closed-Loop Pipeline",
@@ -623,9 +650,10 @@ Examples:
 
     # CI mode exit code: 1 = rejected, 2 = needs review。
     # live 模式下 baseline=SDK 与候选=comparator 评分不可比，gate 恒被降级为
-    # NEEDS_REVIEW——此时 CI 仅作 informational，退出 0，避免 --mode live --ci 恒失败。
-    if cfg.mode == "live" and gate.decision == GateDecision.NEEDS_REVIEW:
-        return 0
+    # NEEDS_REVIEW——默认仅作 informational 退出 0；但 critical case 回归/
+    # 过拟合属硬性失败信号，由 live_gate_exit_code 保留非零退出码，避免 --ci 静默绿。
+    if cfg.mode == "live":
+        return live_gate_exit_code(gate, cfg.ci_mode)
     return ci_exit_code(gate.decision, cfg.ci_mode)
 
 
