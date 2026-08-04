@@ -138,7 +138,11 @@ async def _run_real(
 
 def _print_result(mode: str, prepared: object, result: object) -> None:
     print(f"Completed {mode} pipeline: {prepared.workspace.run_dir}")
-    print(f"Candidate: {result.candidate.candidate_id} ({result.scenario})")
+    candidate_line = f"Candidate: {result.candidate.candidate_id}"
+    scenario = getattr(result, "scenario", None)
+    if scenario is not None:
+        candidate_line += f" ({scenario})"
+    print(candidate_line)
     print(_format_snapshot("Baseline train", result.baseline_train))
     print(_format_snapshot("Baseline validation", result.baseline_validation))
     print(_format_snapshot("Candidate train", result.candidate_train))
