@@ -140,6 +140,37 @@ class TestLiveModeRobustness:
         with pytest.raises(ValueError, match="evalset validation failed"):
             rp.main()
 
+    def test_live_optimize_bug_exception_not_silently_degraded(self, monkeypatch, data_dir):
+        """live optimize：pipeline 自身 bug（AttributeError）不得被 run_pipeline 兜底
+        except Exception 静默降级为空结果（reviewer Warning：宽泛 except 掩盖根因）。"""
+        import sys as _sys
+        import run_pipeline as rp
+        import pipeline.baseline as baseline_mod
+        from pipeline.baseline import BaselineResult
+
+        async def _fake_sdk(*args, **kwargs):
+            return BaselineResult(
+                evalset_id="t", pass_rate=1.0, total_cases=1,
+                passed_cases=1, failed_cases=0,
+                per_case_results=[{"eval_id": "c1", "pass": True}],
+            )
+
+        async def _boom(*args, **kwargs):
+            raise AttributeError("bug in pipeline code")
+
+        monkeypatch.setattr(baseline_mod, "run_baseline_sdk", _fake_sdk)
+        # run_optimize_live 是 run_pipeline 模块级导入（绑定在模块命名空间），
+        # 须 patch rp 而非 pipeline.optimize
+        monkeypatch.setattr(rp, "run_optimize_live", _boom)
+        monkeypatch.setattr(_sys, "argv", [
+            "run_pipeline.py", "--mode", "live",
+            "--train-evalset", str(data_dir / "train.evalset.json"),
+            "--val-evalset", str(data_dir / "val.evalset.json"),
+            "--optimizer-config", str(data_dir / "optimizer.json"),
+        ])
+        with pytest.raises(AttributeError, match="bug in pipeline code"):
+            rp.main()
+
     def test_run_baseline_sdk_re_raises_on_bad_return_shape(self, monkeypatch, tmp_path):
         """SDK evaluate_eval_set 返回非 4 元组（接口结构变更）应向上抛 ValueError，
         而非静默降级为 trace comparator 伪装成可继续基线（reviewer Warning ② 落地）。"""

@@ -218,7 +218,10 @@ async def run_optimize_live(
             if not (_rl.provider_name and _rl.model_name):
                 print("  ⚠️  reflection_lm 未配置真实 LLM（provider_name/model_name 为空），"
                       "live GEPA 优化将失败并降级为空结果")
-        except Exception as _e:
+        except (ImportError, AttributeError) as _e:
+            # 仅收窄到预期降级：SDK 不可用（ImportError）/ 配置缺字段（AttributeError）。
+            # 其它异常（TypeError/ValueError 等真实 bug）向上传播暴露根因，
+            # 而非被静默吞成"无法检查配置"（reviewer Warning）。
             print(f"  ⚠️  无法检查 reflection_lm 配置（{type(_e).__name__}: {_e}）")
 
         # Run optimization（async，需 await；显式传 call_agent）。
