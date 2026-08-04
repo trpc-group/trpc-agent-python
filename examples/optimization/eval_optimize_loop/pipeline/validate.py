@@ -1,0 +1,462 @@
+"""Validation — re-evaluate candidate prompts on the validation set.
+
+Compares baseline vs candidate on the held-out validation set to detect
+overfitting (train improvement without val improvement).
+"""
+
+import copy
+import json
+import os
+from dataclasses import dataclass, field
+
+from .baseline import BaselineResult
+from .comparator import TraceMatcher, default_matcher
+from .config import PipelineConfig
+
+
+class EvalsetLoadError(ValueError):
+    """evalset 数据加载失败（文件缺失/JSON 损坏/IO 错误）。
+
+    与"场景配置边界错误"区分：数据错误是硬性失败，应由 run_pipeline 显式
+    记录并失败退出，而非被当作 scenario configuration error 合成假 delta
+    触发 REJECT（reviewer Warning）。
+    """
+
+
+@dataclass
+class ValidationDelta:
+    """Per-case comparison between baseline and candidate."""
+    eval_id: str
+    baseline_passed: bool
+    candidate_passed: bool
+    change: str          # "new_pass", "new_fail", "improved", "degraded", "unchanged"
+
+
+@dataclass
+class ValidationResult:
+    """Validation set comparison results."""
+    baseline: BaselineResult | None = None
+    candidate: BaselineResult | None = None
+    candidate_train: BaselineResult | None = None
+    deltas: list[ValidationDelta] = field(default_factory=list)
+    # 场景配置错误（overfit + 空 val 等）时由 run_pipeline 标记：
+    # deltas 中的合成 new_fail 仅用于触发 gate 拒绝，不代表真实过拟合，
+    # 报告/审计据此不展示误导性的 overfitting 结论
+    scenario_error: str = ""
+
+    @property
+    def new_passes(self) -> int:
+        return sum(1 for d in self.deltas if d.change == "new_pass")
+
+    @property
+    def new_failures(self) -> int:
+        return sum(1 for d in self.deltas if d.change == "new_fail")
+
+    @property
+    def unchanged(self) -> int:
+        return sum(1 for d in self.deltas if d.change == "unchanged")
+
+    @property
+    def is_overfitting(self) -> bool:
+        """Overfitting: candidate introduces new failures that weren't in baseline."""
+        return self.new_failures > 0
+
+
+def run_validation_fake(
+    val_evalset_path: str,
+    baseline_val: BaselineResult,
+    candidate_baseline: BaselineResult,
+    config: PipelineConfig,
+) -> ValidationResult:
+    """Run validation comparison in fake mode.
+
+    Args:
+        val_evalset_path: Path to validation evalset.
+        baseline_val: Baseline evaluation on validation set.
+        candidate_baseline: Candidate evaluation on validation set (simulated).
+        config: Pipeline configuration.
+
+    Returns:
+        ValidationResult with per-case deltas.
+    """
+    # In fake mode, the candidate results are simulated
+    # We create deltas by comparing baseline vs candidate per-case results
+    baseline_map = {
+        c.get("eval_id"): c.get("pass", True)
+        for c in baseline_val.per_case_results
+    }
+    candidate_map = {
+        c.get("eval_id"): c.get("pass", False)
+        for c in candidate_baseline.per_case_results
+    }
+
+    if baseline_map and not candidate_map:
+        # 候选侧完全没有评测结果：逐 case 对比会把 baseline 通过 case 全判
+        # new_fail → 误判过拟合 REJECT。这是空候选/未评测异常，显式报错而
+        # 非产出虚假回归（reviewer Critical）。
+        raise ValueError(
+            "candidate val has no evaluated cases; cannot compare against "
+            "baseline without fabricating regressions")
+
+    deltas = []
+    all_ids = set(baseline_map.keys()) | set(candidate_map.keys())
+
+    for case_id in sorted(all_ids):
+        # 缺失侧默认 False（保守）：单侧缺失的 case 不被默认当"通过"，
+        # 避免把新增失败/回归伪装成 unchanged
+        bl_pass = baseline_map.get(case_id, False)
+        cd_pass = candidate_map.get(case_id, False)
+
+        if not bl_pass and cd_pass:
+            change = "new_pass"
+        elif bl_pass and not cd_pass:
+            change = "new_fail"
+        else:
+            change = "unchanged"
+
+        deltas.append(ValidationDelta(
+            eval_id=case_id,
+            baseline_passed=bl_pass,
+            candidate_passed=cd_pass,
+            change=change,
+        ))
+
+    return ValidationResult(
+        baseline=baseline_val,
+        candidate=candidate_baseline,
+        deltas=deltas,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Section: 候选评估（场景驱动的真实评分）
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _load_cases(path: str) -> list[dict]:
+    """加载 evalset 的 cases 列表。
+
+    缺失/损坏文件抛 EvalsetLoadError（ValueError 子类），与 run_baseline_fake
+    的"返回 errors"语义区分——数据加载错误是硬性失败，由 run_pipeline 显式
+    记录并失败，而非当作场景配置错误继续合成 delta（reviewer Warning）。
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+        raise EvalsetLoadError(
+            f"failed to load evalset {path}: {type(e).__name__}: {e}")
+    return data.get("eval_cases", [])
+
+
+def _copy_case(case: dict) -> dict:
+    """深拷贝一个 case，避免修改原始数据。"""
+    return copy.deepcopy(case)
+
+
+def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
+                    val_regression_cases: list[str] | None = None) -> dict:
+    """根据场景生成候选 actual_conversation。
+
+    - fix_attributed：train 上失败的 case 全部用期望替换实际（修复成功，
+      不区分失败类别——不参考 attribution 结果）。
+      非失败 case 保持不变。
+    - noop：候选 actual = baseline actual（无变化）。
+    - overfit：train 全部用期望（"记住"训练集）；val 上指定回归 case 扰动（退化）。
+
+    支持 case 携带可选的 `candidate_conversation` 字段：若存在则优先回放该内容，
+    支持隐藏样本的真实评分（验收标准 #2）。
+    """
+    new_case = _copy_case(case)
+    case_id = str(case.get("eval_id", ""))
+
+    # 优先使用 case 自带的 candidate_conversation（真实回放）。
+    # 例外：overfit 场景被选为 val 回归目标的 case——隐藏样本回放通常通过，
+    # 若跳过扰动则没有 val 退化，会落到 new_failures==0 的报错。
+    _is_overfit_val_target = (
+        scenario == "overfit" and not is_train
+        and case_id in (val_regression_cases or [])
+    )
+    # noop 契约是"候选与 baseline 完全一致"：candidate_conversation 覆盖会破坏
+    # 该语义（即使与 actual_conversation 不同也会被回放 → 虚假 new_pass/new_fail，
+    # 污染 gate 的回归/提升判定）。noop 场景跳过覆盖（reviewer Warning）。
+    if (scenario != "noop" and "candidate_conversation" in case
+            and not _is_overfit_val_target):
+        new_case["actual_conversation"] = case["candidate_conversation"]
+        return new_case
+
+    conversation = case.get("conversation", [])
+    actual = case.get("actual_conversation", [])
+
+    if scenario == "noop":
+        # 无变化：保持 baseline actual
+        return new_case
+
+    if scenario == "fix_attributed":
+        # 修复所有 train 失败 case（用期望替换实际；不按归因类别过滤）
+        failed = not _case_passes(case)
+        if is_train and failed:
+            new_case["actual_conversation"] = conversation
+        return new_case
+
+    if scenario == "overfit":
+        if is_train:
+            # train 全部"记住"期望 → train 提升
+            if conversation:
+                new_case["actual_conversation"] = conversation
+        else:
+            # val 指定回归 case 扰动 → val 退化
+            if val_regression_cases and case_id in val_regression_cases:
+                new_case["actual_conversation"] = _perturb_case(case)
+        return new_case
+
+    return new_case
+
+
+def _case_passes(case: dict) -> bool:
+    """用 TraceMatcher 判断 case 当前是否通过。"""
+    matcher = default_matcher()
+    return matcher.evaluate(case).passed
+
+
+def _case_is_perturbable(case: dict) -> bool:
+    """case 是否可被 _perturb_case 真正扰动（任一 invocation 有 final_response.parts）。
+
+    与 _perturb_case 遍历所有 invocation 的行为对齐：首条无 parts 但后续
+    invocation 有 parts 的多轮 case 同样可扰动。
+    """
+    conv = case.get("conversation") or []
+    return any(((inv.get("final_response") or {}).get("parts") or []) for inv in conv)
+
+
+def _perturb_case(case: dict) -> list[dict]:
+    """扰动 case 的 actual_conversation，制造退化（val 回归场景）。
+
+    把最终回复替换为固定错误文本，确保与期望不一致。
+    """
+    conversation = case.get("conversation", [])
+    if not conversation:
+        return case.get("actual_conversation", [])
+    perturbed = _copy_case(conversation)
+    modified = False
+    for inv in perturbed:
+        # final_response 可能显式为 None（部分 evalset schema 允许）→ 用 `or {}` 防护
+        parts = (inv.get("final_response") or {}).get("parts", [])
+        if parts:
+            parts[0]["text"] = "[过拟合退化] 回复被错误改写，与期望不一致。"
+            modified = True
+    if not modified:
+        # 没有任何 invocation 可扰动：返回未改动的 conversation 会让调用方
+        # 误以为扰动成功（候选 val 仍通过 → 落到 new_failures==0 的笼统报错）。
+        # 显式失败以暴露"不可扰动"的真实根因。
+        raise ValueError(
+            "case cannot be perturbed: no invocation has final_response.parts")
+    return perturbed
+
+
+def _evaluate_cases(cases: list[dict], eval_set_id: str, matcher: TraceMatcher) -> BaselineResult:
+    """用 TraceMatcher 批量评估 cases，返回 BaselineResult。"""
+    total = 0
+    passed = 0
+    failed_ids: list[str] = []
+    per_case: list[dict] = []
+    score_sum = 0.0
+
+    for case in cases:
+        verdict = matcher.evaluate(case)
+        case_id = str(case.get("eval_id", "unknown"))
+        if verdict.unreviewed:
+            # legacy 未评测（无 actual_conversation）：不计入 pass_rate，
+            # 与 SDK 路径 NOT_EVALUATED 一致，避免未评测样本虚高通过率、
+            # 污染 gate 的 improvement 判定。per_case 保留标注供审计。
+            per_case.append({
+                "eval_id": case_id,
+                "pass": verdict.passed,
+                "score": round(verdict.score, 4),
+                "reason": verdict.detail or "未评测",
+                "category": str(verdict.category) if verdict.category else "",
+                "evidence": verdict.evidence,
+                "expected_final": verdict.expected_final,
+                "actual_final": verdict.actual_final,
+                "unreviewed": True,
+            })
+            continue
+        total += 1
+        if verdict.passed:
+            passed += 1
+        else:
+            failed_ids.append(case_id)
+        score_sum += verdict.score
+        per_case.append({
+            "eval_id": case_id,
+            "pass": verdict.passed,
+            "score": round(verdict.score, 4),
+            "reason": verdict.detail or ("passed" if verdict.passed else "failed"),
+            "category": str(verdict.category) if verdict.category else "",
+            "evidence": verdict.evidence,
+            "expected_final": verdict.expected_final,
+            "actual_final": verdict.actual_final,
+        })
+
+    return BaselineResult(
+        evalset_id=eval_set_id,
+        pass_rate=passed / total if total > 0 else 0.0,
+        total_cases=total,
+        passed_cases=passed,
+        failed_cases=total - passed,
+        failed_case_ids=failed_ids,
+        metric_breakdown={
+            "overall_pass_rate": passed / total if total > 0 else 0.0,
+            "final_response_avg_score": round(score_sum / total, 4) if total > 0 else 0.0,
+        },
+        per_case_results=per_case,
+    )
+
+
+def run_validation_trace(
+    train_evalset_path: str,
+    val_evalset_path: str,
+    baseline_val: BaselineResult,
+    optimizer_result,
+    config: PipelineConfig,
+    *,
+    scenario: str = "fix_attributed",
+    val_regression_cases: list[str] | None = None,
+) -> ValidationResult:
+    """场景驱动的候选评估（带 per_case_results）。
+
+    根据候选场景生成候选 actuals，用 TraceMatcher 重评 train 和 val，
+    与 baseline 逐 case 对比，检测过拟合（val 新增失败）。
+
+    Args:
+        train_evalset_path: 训练集路径。
+        val_evalset_path: 验证集路径。
+        baseline_val: baseline 在 val 上的结果。
+        optimizer_result: 优化阶段结果（含 candidate_strategy / fixed_categories）。
+        config: Pipeline 配置。
+        scenario: 候选生成策略。
+        val_regression_cases: overfit 场景下要扰动的 val case id 列表。
+
+    Returns:
+        ValidationResult with candidate train/val per-case deltas.
+    """
+    matcher = default_matcher()
+    train_cases = _load_cases(train_evalset_path)
+    val_cases = _load_cases(val_evalset_path)
+
+    strat = scenario or getattr(optimizer_result, "candidate_strategy", "fix_attributed")
+
+    # overfit 场景且未指定回归 case 时，自动选前 2 个 val case 扰动，
+    # 避免"train 提升 + val 无退化"被误 ACCEPT（reviewer 指出的问题）
+    effective_regression = val_regression_cases
+    if strat == "overfit" and effective_regression:
+        # 用户显式指定回归 case：先做可扰动性预检，给出指向性根因，避免
+        # _perturb_case 的 ValueError 被下游笼统转成 scenario_error、根因淹没。
+        non_perturbable = [
+            str(c.get("eval_id", "")) for c in val_cases
+            if str(c.get("eval_id", "")) in effective_regression
+            and not _case_is_perturbable(c)
+        ]
+        if non_perturbable:
+            raise ValueError(
+                "overfit scenario: specified regression case(s) not perturbable "
+                "(no invocation has final_response.parts): %s"
+                % ", ".join(sorted(non_perturbable)))
+    if strat == "overfit" and not effective_regression and val_cases:
+        # 优先选"可扰动 且 baseline 通过"的 case（扰动后才能产生 new_fail）；
+        # 只选可扰动的会选到 baseline 已失败的 case，扰动后仍不产生 new_fail，
+        # 落到下方 new_failures==0 的报错。
+        # 键统一 str() 归一化（与下方 delta 计算一致）：evalset 存在非字符串
+        # eval_id（如整数）时按原始类型查询会查不到 → eligible 误空
+        # （reviewer Warning）。
+        bl_pass = {str(c.get("eval_id")): c.get("pass", True)
+                   for c in baseline_val.per_case_results}
+        eligible = [c for c in val_cases
+                    if _case_is_perturbable(c)
+                    # 显式要求 baseline 已知且通过：未知 case 不默认当通过，
+                    # 避免选到 case id 漂移/无 parts 的 case 导致扰动失败
+                    and bl_pass.get(str(c.get("eval_id", ""))) is True]
+        if not eligible:
+            # 不回退到 val_cases：回退会选入不可扰动/baseline 失败的 case，
+            # 扰动后不产生 new_fail，只会把问题延后成一次笼统报错
+            raise ValueError(
+                "overfit scenario: no val case is both perturbable (has "
+                "final_response.parts) and baseline-passed; cannot demonstrate "
+                "val regression")
+        effective_regression = [str(c.get("eval_id", "")) for c in eligible[:2]]
+
+    if strat == "overfit" and not effective_regression:
+        # 空 val 集 / 未指定回归 case：overfit 场景无法演示"val 退化"，
+        # 否则会变成 "train 全记住 + val 无退化" 而被 gate 误 ACCEPT。
+        raise ValueError(
+            "overfit scenario requires at least one val case to regress; "
+            "val set is empty or --val-regression-cases not provided")
+
+    # 生成候选 actuals
+    candidate_train_cases = [
+        _apply_scenario(c, strat, is_train=True, val_regression_cases=effective_regression)
+        for c in train_cases
+    ]
+    candidate_val_cases = [
+        _apply_scenario(c, strat, is_train=False, val_regression_cases=effective_regression)
+        for c in val_cases
+    ]
+
+    candidate_train = _evaluate_cases(candidate_train_cases, "candidate-train", matcher)
+    candidate_val = _evaluate_cases(candidate_val_cases, "candidate-val", matcher)
+
+    # 计算 delta（与 baseline val 对比）。
+    # eval_id 统一 str 归一化（候选侧已 str()），避免非字符串 id 时两侧失配导致全判 new_fail
+    baseline_map = {
+        str(c.get("eval_id")): c.get("pass", True)
+        for c in baseline_val.per_case_results
+    }
+    candidate_map = {
+        str(c.get("eval_id")): c.get("pass", False)
+        for c in candidate_val.per_case_results
+    }
+
+    if baseline_map and not candidate_map:
+        # 候选 val 没有任何已评测 case（如候选 actual 全缺失/全 unreviewed）：
+        # 逐 case 对比会把 baseline 通过 case 全判 new_fail → 误过拟合 REJECT。
+        # 与 run_validation_fake 一致：显式报错而非产出虚假回归（reviewer Critical）。
+        raise ValueError(
+            "candidate val has no evaluated cases; cannot compare against "
+            "baseline without fabricating regressions")
+
+    deltas = []
+    all_ids = set(baseline_map.keys()) | set(candidate_map.keys())
+    for case_id in sorted(all_ids):
+        # 缺失侧默认 False（保守，与 run_validation_fake 一致）：case id 漂移/新增时
+        # 不把"baseline 未评测"的 case 默认当通过，避免漏掉回归信号
+        bl_pass = baseline_map.get(case_id, False)
+        cd_pass = candidate_map.get(case_id, False)
+        if not bl_pass and cd_pass:
+            change = "new_pass"
+        elif bl_pass and not cd_pass:
+            change = "new_fail"
+        else:
+            change = "unchanged"
+        deltas.append(ValidationDelta(
+            eval_id=case_id,
+            baseline_passed=bl_pass,
+            candidate_passed=cd_pass,
+            change=change,
+        ))
+
+    result = ValidationResult(
+        baseline=baseline_val,
+        candidate=candidate_val,
+        deltas=deltas,
+    )
+    # 附上候选 train 结果供报告使用
+    result.candidate_train = candidate_train
+
+    if strat == "overfit" and result.new_failures == 0:
+        # 指定的回归 case 未产生 new_fail（如缺少 final_response.parts 无法扰动），
+        # 会让过拟合候选被 gate 误 ACCEPT，违反验收标准 #3 → 显式报错。
+        raise ValueError(
+            "overfit scenario did not produce any validation regression — "
+            f"selected cases may lack final_response.parts: {effective_regression}")
+
+    return result

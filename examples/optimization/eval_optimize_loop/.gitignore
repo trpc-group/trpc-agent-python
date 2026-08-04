@@ -1,0 +1,19 @@
+# SDK live 运行产物（本地生成，不入库）
+baseline_prompts/
+best_prompts/
+config.snapshot.json
+result.json
+summary.txt
+rounds/
+run.log
+__pycache__/
+*.pyc
+
+# 示例输出（保留 optimization_report 作为参考，其余本地产物忽略）
+sample_output/baseline_prompts/
+sample_output/best_prompts/
+sample_output/config.snapshot.json
+sample_output/result.json
+sample_output/summary.txt
+sample_output/rounds/
+sample_output/run.log
