@@ -129,6 +129,19 @@ def _round_close(a: float, b: float, rel_tol: float = 0.01) -> bool:
     return abs(a - b) / abs(b) <= rel_tol
 
 
+def _numbers_close(exp_num: float, act_num: float,
+                   rel_tol: float = _ROUND_TOLERANCE) -> bool:
+    """工具结果数值比较：真正的相对容差（默认 0.5%），基准取 max(1, |act|)。
+
+    旧实现 `abs(exp-act) > _ROUND_TOLERANCE * max(1, |exp|)` 是随期望放大的
+    绝对容差：exp=1e5 时容差达 500，会放行明显错误结果；对小数又过严。
+    相对容差避免这两个问题（reviewer Warning）。
+    """
+    if act_num == 0:
+        return abs(exp_num - act_num) <= rel_tol
+    return abs(exp_num - act_num) / max(1.0, abs(act_num)) <= rel_tol
+
+
 def _unit_of(text: str) -> str:
     """提取期望文本中数值后面的单位部分（归一化后）。
 
@@ -300,7 +313,7 @@ def _compare_tools(
             act_num = _last_number(act_res)
             if exp_num is not None and act_num is not None:
                 # 双方都是数字 → 数值容差比较（容忍舍入差异）
-                if abs(exp_num - act_num) > _ROUND_TOLERANCE * max(1.0, abs(exp_num)):
+                if not _numbers_close(exp_num, act_num):
                     return False, FailureCategory.TOOL_CALL_ERROR, f"tool '{exp_name or i}' result mismatch ({exp_num} vs {act_num})"
             else:
                 # 非数字 → 宽松字符串包含
@@ -331,8 +344,8 @@ def _tool_result_vs_answer(
     if last_result is None:
         return True, ""
     # 工具结果与期望不符（相对容差），且最终答案也不符 → 工具结果错误使用
-    result_mismatch = abs(last_result - exp_num) > _ROUND_TOLERANCE * max(1.0, abs(exp_num))
-    answer_mismatch = act_num is None or abs(act_num - exp_num) > _ROUND_TOLERANCE * max(1.0, abs(exp_num))
+    result_mismatch = not _numbers_close(exp_num, last_result)
+    answer_mismatch = act_num is None or not _numbers_close(exp_num, act_num)
     if result_mismatch and answer_mismatch:
         return False, FailureCategory.TOOL_CALL_ERROR
     return True, ""
@@ -448,10 +461,10 @@ def compare_invocations(expected: dict, actual: dict) -> tuple[bool, str]:
             # 整句否定，如 "answer is not 15. It is = 14"，误杀正确答案 14）；
             # 只用明确指向该候选的否定词（去掉 error/invalid/no,/not, 等
             # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16。
-            # 窗口 40 字符 + 补充变体（not right/should be/false）覆盖
-            # "= 15 . The previous value is incorrect" 类较远否定（25 字符
-            # 窗口只到 "is "，incorrect 落在窗口外会漏判）
-            _after = act_final[_m.end(): _m.end() + 40].lower()
+            # 窗口 80 字符 + 补充变体（not right/should be/false）覆盖
+            # "= 15 . The previous value is incorrect" 类较远否定。已知边界：
+            # 否定词落在 80 字符窗口外仍会漏判（启发式近似，reviewer Warning ③）。
+            _after = act_final[_m.end(): _m.end() + 80].lower()
             if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
                                          "not right", "should be", "false")):
                 continue

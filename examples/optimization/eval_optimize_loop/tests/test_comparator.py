@@ -198,6 +198,17 @@ class TestCompareInvocations:
             )
             assert ok, f"期望 {exp} / 实际 {act} 应通过"
 
+    def test_negation_beyond_short_window(self):
+        """否定词在 40~80 字符窗口（原 40 窗口会漏判）：被否定的中间值不得
+        误判为通过（reviewer Warning ③）。"""
+        case = _mk_case(
+            "15",
+            "= 15, I double-checked carefully and found the earlier value incorrect",
+        )
+        ok, cat = compare_invocations(case["conversation"][0], case["actual_conversation"][0])
+        assert not ok
+        assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
+
     def test_format_number_only(self):
         """ONLY-number 但实际带 prose → format_not_as_required。"""
         case = _mk_case(

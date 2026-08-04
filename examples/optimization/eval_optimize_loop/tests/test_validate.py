@@ -283,3 +283,28 @@ class TestRunValidationTraceOverfitGuard:
         )
         assert all(d.change == "unchanged" for d in result.deltas)
         assert result.new_failures == 0
+
+    def test_overfit_non_string_eval_id_selection(self, tmp_path):
+        """overfit 自动选回归 case：val 集含非字符串 eval_id(整数) 时，
+        str() 归一化一致、不误抛 'no perturbable case'（reviewer Warning）。"""
+        train = tmp_path / "train.evalset.json"
+        val = tmp_path / "val.evalset.json"
+        conv = [{"invocation_id": "i1",
+                 "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                 "final_response": {"parts": [{"text": "a"}], "role": "model"}}]
+        # int eval_id + 可扰动 + baseline 通过
+        self._write(train, [{"eval_id": "c1", "conversation": [], "actual_conversation": []}])
+        self._write(val, [{"eval_id": 1, "conversation": conv, "actual_conversation": conv}])
+        opt = type("R", (), {"candidate_strategy": "overfit"})()
+        bl = BaselineResult(
+            evalset_id="val", pass_rate=1.0, total_cases=1,
+            passed_cases=1, failed_cases=0,
+            per_case_results=[{"eval_id": 1, "pass": True}],
+        )
+
+        result = run_validation_trace(
+            str(train), str(val), bl, opt,
+            load_pipeline_config(), scenario="overfit",
+        )
+        # 自动选出 int id 的 case 扰动 → 产生 val 回归（而非误抛空集错误）
+        assert result.new_failures >= 1

@@ -397,7 +397,11 @@ Examples:
             # 其他值会落入 optimization 桶，语义错误）
             tracer.add_cost(0.0, "evaluation")
         except Exception as e:
+            # holdout 虽为可选信息，但异常（含 comparator/数据结构变更引入的 bug）
+            # 应记入 errors 供审计，而非仅作为可忽略的 warning 静默掩盖
+            # （reviewer Warning）。
             print(f"  ⚠️  Holdout 评分失败: {e}")
+            tracer.add_error(f"Holdout eval failed ({type(e).__name__}): {e}")
             tracer.add_warning(f"Holdout eval failed: {e}")
 
     # ═══════════════════════════════════════════════════════════════

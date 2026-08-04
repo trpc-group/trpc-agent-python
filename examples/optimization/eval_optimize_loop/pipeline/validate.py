@@ -355,7 +355,10 @@ def run_validation_trace(
         # 优先选"可扰动 且 baseline 通过"的 case（扰动后才能产生 new_fail）；
         # 只选可扰动的会选到 baseline 已失败的 case，扰动后仍不产生 new_fail，
         # 落到下方 new_failures==0 的报错。
-        bl_pass = {c.get("eval_id"): c.get("pass", True)
+        # 键统一 str() 归一化（与下方 delta 计算一致）：evalset 存在非字符串
+        # eval_id（如整数）时按原始类型查询会查不到 → eligible 误空
+        # （reviewer Warning）。
+        bl_pass = {str(c.get("eval_id")): c.get("pass", True)
                    for c in baseline_val.per_case_results}
         eligible = [c for c in val_cases
                     if _case_is_perturbable(c)
