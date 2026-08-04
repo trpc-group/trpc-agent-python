@@ -11,35 +11,32 @@ import os
 from pipeline.gate import GateDecision, GateResult
 
 from run_pipeline import (
+    build_parser,
     build_reproduce_command,
     ci_exit_code,
     is_output_dir_allowed,
+    is_output_file_allowed,
     live_gate_downgrade,
     live_gate_exit_code,
 )
 
 
+def _parser() -> argparse.ArgumentParser:
+    """返回真实 CLI parser（与 main() 共用同一个构建函数）。"""
+    return build_parser()
+
+
 def _ns(**overrides) -> argparse.Namespace:
-    """Build a Namespace with argparse defaults, overridable per test."""
-    defaults = dict(
-        mode="fake",
-        seed=42,
-        scenario="fix_attributed",
-        max_iterations=3,
-        min_improvement=0.05,
-        max_cost=10.0,
-        output_dir="sample_output",
-        train_evalset="data/train.evalset.json",
-        val_evalset="data/val.evalset.json",
-        holdout_evalset="data/holdout.evalset.json",
-        optimizer_config="data/optimizer.json",
-        val_regression_cases="",
-        critical_cases="",
-        verbose=False,
-        ci=False,
-    )
-    defaults.update(overrides)
-    return argparse.Namespace(**defaults)
+    """Build a Namespace from the real parser defaults, overridable per test.
+
+    从 `parser.parse_args([])` 推导默认值（而非硬编码字面量）：与
+    build_reproduce_command 从 parser.get_default 推导默认值的设计一致，
+    测试才不至于与 parser 默认值漂移（reviewer Warning）。
+    """
+    ns = _parser().parse_args([])
+    for k, v in overrides.items():
+        setattr(ns, k, v)
+    return ns
 
 
 class TestBuildReproduceCommand:
@@ -48,6 +45,25 @@ class TestBuildReproduceCommand:
     def test_default_run_is_minimal(self):
         cmd = build_reproduce_command(_ns())
         assert cmd == "python run_pipeline.py --mode fake"
+
+    def test_reproduce_command_matches_parser_defaults(self):
+        """parser 实际默认值下的最小命令必须与 build_reproduce_command 一致。
+
+        防三处默认值漂移（argparse / build_reproduce_command / PipelineConfig）：
+        一旦某参数 `parser.add_argument(..., default=...)` 被改动而本函数未同步，
+        复现命令会失真——此测试用纯 parser 默认值断言最小命令，锁定不漂移。
+        """
+        parser = _parser()
+        args = parser.parse_args([])  # 全部走 parser 声明的默认值
+        cmd = build_reproduce_command(args, parser)
+        assert cmd == "python run_pipeline.py --mode fake"
+        # 所有非默认值参数都不得出现
+        for _token in ("--seed", "--scenario", "--max-iterations",
+                       "--min-improvement", "--max-cost", "--output-dir",
+                       "--train-evalset", "--val-evalset", "--holdout-evalset",
+                       "--optimizer-config", "--val-regression-cases",
+                       "--critical-cases", "--verbose", "--ci"):
+            assert _token not in cmd, f"{_token} 不应出现在默认复现命令中: {cmd}"
 
     def test_live_mode_always_included(self):
         cmd = build_reproduce_command(_ns(mode="live"))
@@ -149,6 +165,35 @@ class TestIsOutputDirAllowed:
 
     def test_rejects_traversal(self):
         assert is_output_dir_allowed("../../../../../../etc") is False
+
+
+class TestIsOutputFileAllowed:
+    """Tests for is_output_file_allowed() — 报告文件防符号链接越界写。
+
+    is_output_dir_allowed 只校验目录；若目录内预置指向仓库外的符号链接文件，
+    open(w) 会跟随写出仓库外。is_output_file_allowed 用 realpath 解析后拒绝。
+    """
+
+    def _repo_root(self) -> str:
+        import os
+        _here = os.path.dirname(os.path.abspath(__file__))  # eval_optimize_loop/tests
+        # tests → eval_optimize_loop → optimization → examples → 仓库根（4 级）
+        return os.path.realpath(os.path.join(_here, os.pardir, os.pardir, os.pardir, os.pardir))
+
+    def test_accepts_repo_internal_file(self):
+        _p = os.path.join(self._repo_root(), "results", "optimization_report.json")
+        assert is_output_file_allowed(_p) is True
+
+    def test_rejects_file_outside_repo(self):
+        assert is_output_file_allowed("/tmp/outside_report.json") is False
+
+    def test_rejects_symlink_resolving_outside(self, tmp_path):
+        # 仓库内路径若被预置为指向仓库外目标的符号链接，realpath 解析后必须拒绝
+        _link = tmp_path / "optimization_report.json"
+        _outside = tmp_path / "outside_target.json"
+        _outside.write_text("{}", encoding="utf-8")
+        os.symlink(str(_outside), str(_link))
+        assert is_output_file_allowed(str(_link)) is False
 
 
 class TestLiveGateDowngrade:

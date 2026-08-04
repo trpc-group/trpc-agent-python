@@ -99,9 +99,20 @@ def load_evalset(path: str) -> dict:
 
 
 def load_pipeline_config(**overrides) -> PipelineConfig:
-    """Load pipeline configuration with optional overrides."""
+    """Load pipeline configuration with optional overrides.
+
+    未知 override key（拼写错误 / 未在 PipelineConfig 声明的字段）抛 TypeError，
+    而非被 hasattr 静默忽略——静默忽略会让配置不生效却无任何提示，问题以
+    "行为不符预期"的形式隐蔽出现（reviewer Warning）。None 值保持跳过语义
+    （不覆盖默认值）。
+    """
     cfg = PipelineConfig()
     for k, v in overrides.items():
-        if v is not None and hasattr(cfg, k):
-            setattr(cfg, k, v)
+        if v is None:
+            continue
+        if not hasattr(cfg, k):
+            raise TypeError(
+                f"unknown PipelineConfig override key {k!r} "
+                f"(typo, or field not declared on PipelineConfig)")
+        setattr(cfg, k, v)
     return cfg

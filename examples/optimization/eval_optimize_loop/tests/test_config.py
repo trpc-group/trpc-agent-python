@@ -142,3 +142,14 @@ class TestPipelineConfig:
     def test_critical_case_ids_default_empty(self):
         cfg = load_pipeline_config()
         assert cfg.critical_case_ids == []
+
+    def test_unknown_override_raises(self):
+        """未知 override key（拼写错误/未声明字段）必须显式抛错，
+        而非被 hasattr 静默忽略导致配置不生效（reviewer Warning）。"""
+        with pytest.raises(TypeError, match="unknown"):
+            load_pipeline_config(min_improvent_threshold=0.10)  # 拼写错误
+
+    def test_none_override_keeps_default(self):
+        """None 值保持跳过语义：不覆盖默认值，也不触发未知 key 报错。"""
+        cfg = load_pipeline_config(seed=None)
+        assert cfg.seed == 42

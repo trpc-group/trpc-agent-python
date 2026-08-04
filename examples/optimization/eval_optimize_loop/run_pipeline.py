@@ -70,41 +70,100 @@ from pipeline.optimize import (
 from pipeline.tracing import AuditTracer
 
 
-def build_reproduce_command(args: argparse.Namespace) -> str:
+def build_parser() -> argparse.ArgumentParser:
+    """构建 CLI parser（独立函数，供 main() 与测试共用）。
+
+    build_reproduce_command 通过 `parser.get_default(...)` 推导默认值，
+    避免默认值在 argparse / build_reproduce_command / 测试三处分散硬编码、
+    一处改动其它两处漂移导致复现命令失真（reviewer Warning）。
+    """
+    parser = argparse.ArgumentParser(
+        description="Evaluation + Optimization Closed-Loop Pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python run_pipeline.py --mode fake
+  python run_pipeline.py --mode fake --verbose
+  python run_pipeline.py --mode fake --ci
+  python run_pipeline.py --mode fake --max-iterations 5
+  python run_pipeline.py --output-dir ./results
+        """,
+    )
+    parser.add_argument("--mode", default="fake", choices=["fake", "live"],
+                        help="Execution mode (default: fake)")
+    parser.add_argument("--train-evalset", default="data/train.evalset.json")
+    parser.add_argument("--val-evalset", default="data/val.evalset.json")
+    parser.add_argument("--holdout-evalset", default="data/holdout.evalset.json",
+                        help="Holdout set (optional, scored in report)")
+    parser.add_argument("--optimizer-config", default="data/optimizer.json")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--max-iterations", type=int, default=3,
+                        help="Maximum optimization iterations (default: 3)")
+    parser.add_argument("--min-improvement", type=float, default=0.05)
+    parser.add_argument("--max-cost", type=float, default=10.0)
+    parser.add_argument("--output-dir", default="sample_output")
+    parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument("--ci", action="store_true",
+                        help=("CI mode: exit 1 on gate rejection, 2 on needs-review; "
+                              "live mode NEEDS_REVIEW is informational (exit 0) unless "
+                              "a critical case regresses/overfits (still exits 2)"))
+    parser.add_argument("--scenario", default="fix_attributed",
+                        choices=["fix_attributed", "noop", "overfit"],
+                        help="Candidate generation strategy (default: fix_attributed)")
+    parser.add_argument("--val-regression-cases", default="",
+                        help="Comma-separated val case ids to regress in overfit scenario")
+    parser.add_argument("--critical-cases", default="",
+                        help="Comma-separated case ids that must not regress on train or validation")
+    return parser
+
+
+def build_reproduce_command(args: argparse.Namespace,
+                            parser: argparse.ArgumentParser | None = None) -> str:
     """Build a complete reproduce command from CLI args.
 
     Only non-default args are appended, so a default run stays minimal
     while non-default configurations can be reproduced exactly. String
     values are shell-quoted so paths with spaces/metacharacters replay.
+
+    Defaults 从 `parser.get_default(...)` 推导而非硬编码字面量：argparse
+    默认值变更时本函数自动跟随，避免三处默认值漂移导致复现命令失真
+    （reviewer Warning）。parser 为 None 时回退到 build_parser()。
     """
+    if parser is None:
+        parser = build_parser()
+
+    def _non_default(name: str, value: object) -> bool:
+        """value 是否异于该参数在 argparse 中声明的默认值。"""
+        return value != parser.get_default(name)
+
     parts = [f"python run_pipeline.py --mode {shlex.quote(args.mode)}"]
-    if args.seed != 42:
+    if _non_default("seed", args.seed):
         parts.append(f"--seed {args.seed}")
-    if args.scenario != "fix_attributed":
+    if _non_default("scenario", args.scenario):
         parts.append(f"--scenario {shlex.quote(args.scenario)}")
-    if args.max_iterations != 3:
+    if _non_default("max_iterations", args.max_iterations):
         parts.append(f"--max-iterations {args.max_iterations}")
-    if args.min_improvement != 0.05:
+    if _non_default("min_improvement", args.min_improvement):
         parts.append(f"--min-improvement {args.min_improvement}")
-    if args.max_cost != 10.0:
+    if _non_default("max_cost", args.max_cost):
         parts.append(f"--max-cost {args.max_cost}")
-    if args.output_dir != "sample_output":
+    if _non_default("output_dir", args.output_dir):
         parts.append(f"--output-dir {shlex.quote(args.output_dir)}")
-    if args.train_evalset != "data/train.evalset.json":
+    if _non_default("train_evalset", args.train_evalset):
         parts.append(f"--train-evalset {shlex.quote(args.train_evalset)}")
-    if args.val_evalset != "data/val.evalset.json":
+    if _non_default("val_evalset", args.val_evalset):
         parts.append(f"--val-evalset {shlex.quote(args.val_evalset)}")
-    if args.holdout_evalset != "data/holdout.evalset.json":
+    if _non_default("holdout_evalset", args.holdout_evalset):
         parts.append(f"--holdout-evalset {shlex.quote(args.holdout_evalset)}")
-    if args.optimizer_config != "data/optimizer.json":
+    if _non_default("optimizer_config", args.optimizer_config):
         parts.append(f"--optimizer-config {shlex.quote(args.optimizer_config)}")
-    if args.val_regression_cases:
+    if _non_default("val_regression_cases", args.val_regression_cases):
         parts.append(f"--val-regression-cases {shlex.quote(args.val_regression_cases)}")
-    if args.critical_cases:
+    if _non_default("critical_cases", args.critical_cases):
         parts.append(f"--critical-cases {shlex.quote(args.critical_cases)}")
-    if args.verbose:
+    if _non_default("verbose", args.verbose):
         parts.append("--verbose")
-    if args.ci:
+    if _non_default("ci", args.ci):
         parts.append("--ci")
     return " ".join(parts)
 
@@ -132,6 +191,19 @@ def is_output_dir_allowed(output_dir: str) -> bool:
     _root_abs = os.path.realpath(_REPO_ROOT)
     _out_abs = os.path.realpath(output_dir)
     return _out_abs.startswith(_root_abs + os.sep)
+
+
+def is_output_file_allowed(file_path: str) -> bool:
+    """最终报告文件路径必须解析到仓库根内（realpath 解析符号链接）。
+
+    is_output_dir_allowed 只校验输出目录本身落在仓库内；若该目录里预置了
+    指向仓库外的符号链接文件（如 optimization_report.json → /tmp/out.json），
+    open(..., "w") 会跟随链接写出仓库外。写入前对最终文件路径再做 realpath
+    校验，拒绝越界（reviewer Suggestion：弱威胁模型，作防御纵深）。
+    """
+    _root_abs = os.path.realpath(_REPO_ROOT)
+    _f_abs = os.path.realpath(file_path)
+    return _f_abs.startswith(_root_abs + os.sep)
 
 
 def live_gate_downgrade(gate: GateResult, *, live: bool) -> GateResult:
@@ -194,43 +266,7 @@ def live_gate_exit_code(gate: GateResult, ci_mode: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Evaluation + Optimization Closed-Loop Pipeline",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python run_pipeline.py --mode fake
-  python run_pipeline.py --mode fake --verbose
-  python run_pipeline.py --mode fake --ci
-  python run_pipeline.py --mode fake --max-iterations 5
-  python run_pipeline.py --output-dir ./results
-        """,
-    )
-    parser.add_argument("--mode", default="fake", choices=["fake", "live"],
-                        help="Execution mode (default: fake)")
-    parser.add_argument("--train-evalset", default="data/train.evalset.json")
-    parser.add_argument("--val-evalset", default="data/val.evalset.json")
-    parser.add_argument("--holdout-evalset", default="data/holdout.evalset.json",
-                        help="Holdout set (optional, scored in report)")
-    parser.add_argument("--optimizer-config", default="data/optimizer.json")
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--max-iterations", type=int, default=3,
-                        help="Maximum optimization iterations (default: 3)")
-    parser.add_argument("--min-improvement", type=float, default=0.05)
-    parser.add_argument("--max-cost", type=float, default=10.0)
-    parser.add_argument("--output-dir", default="sample_output")
-    parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument("--ci", action="store_true",
-                        help=("CI mode: exit 1 on gate rejection, 2 on needs-review; "
-                              "live mode NEEDS_REVIEW is informational (exit 0) unless "
-                              "a critical case regresses/overfits (still exits 2)"))
-    parser.add_argument("--scenario", default="fix_attributed",
-                        choices=["fix_attributed", "noop", "overfit"],
-                        help="Candidate generation strategy (default: fix_attributed)")
-    parser.add_argument("--val-regression-cases", default="",
-                        help="Comma-separated val case ids to regress in overfit scenario")
-    parser.add_argument("--critical-cases", default="",
-                        help="Comma-separated case ids that must not regress on train or validation")
+    parser = build_parser()
     args = parser.parse_args()
 
     # Generate task ID
@@ -266,7 +302,7 @@ Examples:
         seed=cfg.seed,
         mode=cfg.mode,
         algorithm=cfg.algorithm,
-        reproduce_command=build_reproduce_command(args),
+        reproduce_command=build_reproduce_command(args, parser),
     )
     errors: list[str] = []
 
@@ -656,6 +692,13 @@ Examples:
     if not is_output_dir_allowed(cfg.output_dir):
         raise ValueError(
             f"output_dir '{cfg.output_dir}' escaped repo root before write")
+    # 目录合法不等于文件合法：目录内可能预置指向仓库外的符号链接文件，
+    # open(w) 会跟随写出仓库外。写入前对最终报告路径再做 realpath 校验
+    # （reviewer Suggestion：弱威胁模型，防御纵深）。
+    for _report_path in (json_path, md_path):
+        if not is_output_file_allowed(_report_path):
+            raise ValueError(
+                f"output report path '{_report_path}' escaped repo root before write")
     os.makedirs(cfg.output_dir, exist_ok=True)
     with open(json_path, "w", encoding="utf-8") as f:
         f.write(json_report)
