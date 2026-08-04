@@ -119,6 +119,27 @@ class TestLiveModeRobustness:
         finally:
             os.unlink(path)
 
+    def test_live_validation_error_not_silently_degraded(self, monkeypatch, data_dir):
+        """live 编排：evalset 校验失败（run_baseline_sdk 抛 ValueError）时，
+        run_pipeline 按 SDK 契约 re-raise，不得被 except Exception 静默降级到
+        trace comparator（reviewer Warning：宽泛异常捕获吞掉 ValueError）。"""
+        import sys as _sys
+        import run_pipeline as rp
+        import pipeline.baseline as baseline_mod
+
+        async def _boom(*args, **kwargs):
+            raise ValueError("evalset validation failed: bad case format")
+
+        monkeypatch.setattr(baseline_mod, "run_baseline_sdk", _boom)
+        monkeypatch.setattr(_sys, "argv", [
+            "run_pipeline.py", "--mode", "live",
+            "--train-evalset", str(data_dir / "train.evalset.json"),
+            "--val-evalset", str(data_dir / "val.evalset.json"),
+            "--optimizer-config", str(data_dir / "optimizer.json"),
+        ])
+        with pytest.raises(ValueError, match="evalset validation failed"):
+            rp.main()
+
     def test_run_baseline_sdk_re_raises_on_bad_return_shape(self, monkeypatch, tmp_path):
         """SDK evaluate_eval_set 返回非 4 元组（接口结构变更）应向上抛 ValueError，
         而非静默降级为 trace comparator 伪装成可继续基线（reviewer Warning ② 落地）。"""

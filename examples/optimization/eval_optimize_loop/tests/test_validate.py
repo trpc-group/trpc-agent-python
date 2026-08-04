@@ -217,3 +217,19 @@ class TestRunValidationTraceOverfitGuard:
                 str(train), str(val), self._baseline_val(), opt,
                 load_pipeline_config(), scenario="overfit", val_regression_cases=[],
             )
+
+    def test_overfit_specified_unperturbable_case_raises(self, tmp_path):
+        """用户显式指定不可扰动的回归 case → 指向性 ValueError（根因不被笼统
+        scenario_error 淹没）。"""
+        train = tmp_path / "train.evalset.json"
+        val = tmp_path / "val.evalset.json"
+        self._write(train, [{"eval_id": "c1", "conversation": [], "actual_conversation": []}])
+        # val case 有 conversation 但无 final_response.parts → 不可扰动
+        self._write(val, [{"eval_id": "c1", "conversation": [{"text": "hi"}]}])
+        opt = type("R", (), {"candidate_strategy": "overfit"})()
+
+        with pytest.raises(ValueError, match="not perturbable"):
+            run_validation_trace(
+                str(train), str(val), self._baseline_val(), opt,
+                load_pipeline_config(), scenario="overfit", val_regression_cases=["c1"],
+            )

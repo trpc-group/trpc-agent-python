@@ -326,6 +326,19 @@ def run_validation_trace(
     # overfit 场景且未指定回归 case 时，自动选前 2 个 val case 扰动，
     # 避免"train 提升 + val 无退化"被误 ACCEPT（reviewer 指出的问题）
     effective_regression = val_regression_cases
+    if strat == "overfit" and effective_regression:
+        # 用户显式指定回归 case：先做可扰动性预检，给出指向性根因，避免
+        # _perturb_case 的 ValueError 被下游笼统转成 scenario_error、根因淹没。
+        non_perturbable = [
+            str(c.get("eval_id", "")) for c in val_cases
+            if str(c.get("eval_id", "")) in effective_regression
+            and not _case_is_perturbable(c)
+        ]
+        if non_perturbable:
+            raise ValueError(
+                "overfit scenario: specified regression case(s) not perturbable "
+                "(no invocation has final_response.parts): %s"
+                % ", ".join(sorted(non_perturbable)))
     if strat == "overfit" and not effective_regression and val_cases:
         # 优先选"可扰动 且 baseline 通过"的 case（扰动后才能产生 new_fail）；
         # 只选可扰动的会选到 baseline 已失败的 case，扰动后仍不产生 new_fail，

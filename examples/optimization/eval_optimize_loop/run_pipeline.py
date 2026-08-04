@@ -335,8 +335,13 @@ Examples:
                 return train, val
 
             baseline_train, baseline_val = asyncio.run(_run_live_baselines())
+        except ValueError:
+            # evalset/配置校验失败：run_baseline_sdk 按契约显式 re-raise
+            # （"宁可失败，不假装可继续"），这里不能降级为 trace comparator——
+            # 会把校验失败伪装成合法基线，污染下游 gate 决策。
+            raise
         except Exception as _e:
-            # 与 fake 模式一致：SDK 未捕获的异常（RuntimeError 等）也优雅降级，
+            # 与 fake 模式一致：SDK 未捕获的其它异常（RuntimeError 等）也优雅降级，
             # 避免整个 pipeline 崩溃（errors 会在下方统一打印/记录）
             # 注意：不能在这里 from-import run_baseline_fake（会使该名字在 main()
             # 内变为局部变量，fake 路径未赋值即用 → UnboundLocalError）
