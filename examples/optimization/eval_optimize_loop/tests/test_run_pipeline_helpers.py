@@ -264,3 +264,41 @@ class TestCiExitCode:
 
     def test_needs_review_returns_two(self):
         assert ci_exit_code(GateDecision.NEEDS_REVIEW, ci_mode=True) == 2
+
+
+class TestFindRepoRoot:
+    """Tests for pipeline._paths.find_repo_root() — 标记文件锚定仓库根。
+
+    reviewer Warning③：repo-root 定位依赖硬编码目录层级，example 目录被移动
+    或嵌套层级变化时会把 sys.path 指向错误路径。改为向上查找 pyproject.toml
+    或 .git 标记文件锚定。
+    """
+
+    def test_finds_repo_root_by_pyproject(self, tmp_path):
+        from pipeline import _paths
+        root = tmp_path / "repo"
+        (root / "pipeline").mkdir(parents=True)
+        (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        assert _paths.find_repo_root(str(root / "pipeline")) == str(root)
+
+    def test_finds_repo_root_by_git_dir(self, tmp_path):
+        from pipeline import _paths
+        root = tmp_path / "repo"
+        (root / "src").mkdir(parents=True)
+        (root / ".git").mkdir()
+        assert _paths.find_repo_root(str(root / "src")) == str(root)
+
+    def test_prefers_innermost_marker(self, tmp_path):
+        # 嵌套多个标记文件：应返回离 start_dir 最近的（最内层）目录
+        from pipeline import _paths
+        outer = tmp_path / "outer"
+        (outer / "inner").mkdir(parents=True)
+        (outer / "pyproject.toml").write_text("", encoding="utf-8")
+        (outer / "inner" / "pyproject.toml").write_text("", encoding="utf-8")
+        assert _paths.find_repo_root(str(outer / "inner")) == str(outer / "inner")
+
+    def test_returns_none_when_no_marker(self, tmp_path):
+        from pipeline import _paths
+        d = tmp_path / "no_marker"
+        d.mkdir()
+        assert _paths.find_repo_root(str(d)) is None
