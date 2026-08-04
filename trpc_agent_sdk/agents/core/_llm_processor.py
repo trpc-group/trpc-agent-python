@@ -18,6 +18,8 @@ import time
 from typing import AsyncGenerator
 from typing import Optional
 
+from opentelemetry import trace
+
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
@@ -28,6 +30,8 @@ from trpc_agent_sdk.planners import default_planning_processor
 from trpc_agent_sdk.telemetry import report_call_llm
 from trpc_agent_sdk.telemetry import trace_call_llm
 from trpc_agent_sdk.telemetry import tracer
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
 
 class LlmProcessor:
@@ -83,9 +87,12 @@ class LlmProcessor:
 
             # Step 2: Call the model and process responses with telemetry tracing.
             terminal_event: Optional[Event] = None
-            with tracer.start_as_current_span('call_llm'):
+            with tracer.start_as_current_span('call_llm') as call_llm_span:
                 event_id = Event.new_id()
                 final_llm_response = None
+                latest_llm_response = None
+                partial_thought_parts: list[str] = []
+                partial_text_parts: list[str] = []
                 aggregated_raw_function_calls: list[dict] = []
                 aggregated_event_function_calls: list[dict] = []
                 instruction = getattr(context.agent, 'instruction', None)
@@ -100,17 +107,44 @@ class LlmProcessor:
                             "args": getattr(call, "args", None),
                         })
 
+                def _build_interrupted_content() -> Optional[Content]:
+                    """Join streamed partial deltas for the interrupted call_llm trace."""
+                    parts: list[Part] = []
+                    thought_text = "".join(partial_thought_parts)
+                    visible_text = "".join(partial_text_parts)
+                    if thought_text:
+                        thought_part = Part(text=thought_text)
+                        thought_part.thought = True
+                        parts.append(thought_part)
+                    if visible_text:
+                        parts.append(Part(text=visible_text))
+                    if latest_llm_response is not None and latest_llm_response.content is not None:
+                        for part in latest_llm_response.content.parts or []:
+                            if part.function_call:
+                                parts.append(part)
+                    if parts:
+                        return Content(role="model", parts=parts)
+                    if latest_llm_response is not None and latest_llm_response.content is not None:
+                        return latest_llm_response.content
+                    return None
+
                 t_start = time.monotonic()
                 t_first_token: Optional[float] = None
                 metrics_error_type: Optional[str] = None
                 try:
                     async for llm_response in self.model.generate_async(request, stream=stream, ctx=context):
+                        latest_llm_response = llm_response
                         if t_first_token is None and llm_response.has_content():
                             t_first_token = time.monotonic()
                         # Collect raw model-level function calls from every chunk.
                         raw_calls = []
                         if llm_response.content and llm_response.content.parts:
                             for part in llm_response.content.parts:
+                                if llm_response.partial and part.text:
+                                    if part.thought:
+                                        partial_thought_parts.append(part.text)
+                                    else:
+                                        partial_text_parts.append(part.text)
                                 if part.function_call:
                                     raw_calls.append(part.function_call)
                         _append_function_calls(aggregated_raw_function_calls, raw_calls)
@@ -130,40 +164,45 @@ class LlmProcessor:
 
                         if not llm_response.partial:
                             final_llm_response = llm_response
-                            # Trace before yielding because consumers stop
-                            # immediately after receiving an error event.
-                            trace_call_llm(
-                                context,
-                                event_id,
-                                request,
-                                llm_response,
-                                instruction_metadata=instruction_metadata,
-                                stream_function_calls_raw=aggregated_raw_function_calls,
-                                stream_function_calls_post_planner=aggregated_event_function_calls,
-                            )
                             terminal_event = event
                             # Finish the model stream and exit the span context
                             # before exposing the terminal event downstream.
                             continue
 
                         yield event
+                except GeneratorExit:
+                    metrics_error_type = "LlmCallGeneratorExit"
+                    final_llm_response = LlmResponse(
+                        content=_build_interrupted_content(),
+                        partial=True,
+                        error_code=metrics_error_type,
+                        error_message="LLM call stopped with GeneratorExit.",
+                        interrupted=True,
+                    )
+                    raise
                 except Exception as ex:
                     metrics_error_type = type(ex).__name__
-                    trace_call_llm(
-                        context,
-                        event_id,
-                        request,
-                        LlmResponse(
-                            error_code="LLM_CALL_ERROR",
-                            error_message=str(ex),
-                            custom_metadata={"error_type": type(ex).__name__},
-                        ),
-                        instruction_metadata=instruction_metadata,
-                        stream_function_calls_raw=aggregated_raw_function_calls,
-                        stream_function_calls_post_planner=aggregated_event_function_calls,
+                    final_llm_response = LlmResponse(
+                        content=_build_interrupted_content(),
+                        partial=True,
+                        error_code="LLM_CALL_ERROR",
+                        error_message=str(ex),
+                        custom_metadata={"error_type": type(ex).__name__},
                     )
                     raise
                 finally:
+                    response_for_trace = final_llm_response or latest_llm_response or LlmResponse()
+                    with trace.use_span(call_llm_span, end_on_exit=False):
+                        trace_call_llm(
+                            context,
+                            event_id,
+                            request,
+                            response_for_trace,
+                            instruction_metadata=instruction_metadata,
+                            stream_function_calls_raw=aggregated_raw_function_calls,
+                            stream_function_calls_post_planner=aggregated_event_function_calls,
+                        )
+
                     duration_s = time.monotonic() - t_start
                     ttft_s = (t_first_token - t_start) if t_first_token is not None else duration_s
                     report_call_llm(

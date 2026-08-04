@@ -242,3 +242,126 @@ class TestCallLlmAsync:
 
         assert event.error_code == "STREAMING_ERROR"
         assert mock_trace.call_args.args[3].error_message == "rate limit exceeded"
+
+    def test_partial_stream_close_traces_accumulated_text_and_error(self, invocation_context):
+        m = MockLLMModel(model_name="test-llmproc-model")
+        m._responses = [
+            LlmResponse(content=Content(parts=[Part(text="part1")]), partial=True),
+            LlmResponse(content=Content(parts=[Part(text="part2")]), partial=True),
+        ]
+        proc = LlmProcessor(m)
+        request = LlmRequest()
+
+        async def run():
+            stream = proc.call_llm_async(request, invocation_context, stream=True)
+            events = [await anext(stream), await anext(stream)]
+            await stream.aclose()
+            return events
+
+        with patch("trpc_agent_sdk.agents.core._llm_processor.report_call_llm") as mock_report, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm") as mock_trace, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.tracer"):
+            events = asyncio.run(run())
+
+        assert all(event.partial is True for event in events)
+        mock_trace.assert_called_once()
+        assert mock_trace.call_args.args[2] is request
+        response = mock_trace.call_args.args[3]
+        assert response.error_code == "LlmCallGeneratorExit"
+        assert response.error_message == "LLM call stopped with GeneratorExit."
+        assert response.interrupted is True
+        assert response.partial is True
+        assert response.content.role == "model"
+        assert response.content.parts[0].text == "part1part2"
+        assert response.custom_metadata is None
+        assert mock_report.call_args.args[2] is response
+        assert mock_report.call_args.kwargs["error_type"] == "LlmCallGeneratorExit"
+
+    def test_partial_stream_close_keeps_latest_function_call_content(self, invocation_context):
+        m = MockLLMModel(model_name="test-llmproc-model")
+        function_call = Part.from_function_call(name="get_weather_report", args={"city": "Beijing"})
+        m._responses = [
+            LlmResponse(content=Content(parts=[function_call]), partial=True),
+        ]
+        proc = LlmProcessor(m)
+        request = LlmRequest()
+
+        async def run():
+            stream = proc.call_llm_async(request, invocation_context, stream=True)
+            event = await anext(stream)
+            await stream.aclose()
+            return event
+
+        with patch("trpc_agent_sdk.agents.core._llm_processor.report_call_llm"), \
+             patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm") as mock_trace, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.tracer"):
+            event = asyncio.run(run())
+
+        assert event.get_function_calls()
+        response = mock_trace.call_args.args[3]
+        assert response.error_code == "LlmCallGeneratorExit"
+        assert response.content.parts[0].function_call.name == "get_weather_report"
+        assert response.content.parts[0].function_call.args == {"city": "Beijing"}
+
+    def test_partial_stream_close_joins_thought_and_visible_text(self, invocation_context):
+        m = MockLLMModel(model_name="test-llmproc-model")
+        thought1 = Part(text="I should call get_")
+        thought1.thought = True
+        thought2 = Part(text="weather_report function with")
+        thought2.thought = True
+        m._responses = [
+            LlmResponse(content=Content(parts=[thought1]), partial=True),
+            LlmResponse(content=Content(parts=[thought2]), partial=True),
+            LlmResponse(content=Content(parts=[Part(text="Let me check.")]), partial=True),
+        ]
+        proc = LlmProcessor(m)
+        request = LlmRequest()
+
+        async def run():
+            stream = proc.call_llm_async(request, invocation_context, stream=True)
+            events = [await anext(stream), await anext(stream), await anext(stream)]
+            await stream.aclose()
+            return events
+
+        with patch("trpc_agent_sdk.agents.core._llm_processor.report_call_llm"), \
+             patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm") as mock_trace, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.tracer"):
+            asyncio.run(run())
+
+        response = mock_trace.call_args.args[3]
+        assert response.error_code == "LlmCallGeneratorExit"
+        assert response.content.parts[0].text == "I should call get_weather_report function with"
+        assert response.content.parts[0].thought is True
+        assert response.content.parts[1].text == "Let me check."
+        assert not response.content.parts[1].thought
+
+    def test_stream_exception_traces_accumulated_partial_content(self, invocation_context):
+        m = MockLLMModel(model_name="test-llmproc-model")
+        proc = LlmProcessor(m)
+        request = LlmRequest()
+
+        async def failing_generate(request, stream=False, ctx=None):
+            yield LlmResponse(content=Content(parts=[Part(text="part1")]), partial=True)
+            yield LlmResponse(content=Content(parts=[Part(text="part2")]), partial=True)
+            raise RuntimeError("upstream failed")
+
+        async def run():
+            stream = proc.call_llm_async(request, invocation_context, stream=True)
+            return [await anext(stream), await anext(stream), await anext(stream)]
+
+        with patch.object(m, "generate_async", failing_generate), \
+             patch("trpc_agent_sdk.agents.core._llm_processor.report_call_llm") as mock_report, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm") as mock_trace, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.tracer"):
+            events = asyncio.run(run())
+
+        assert events[0].content.parts[0].text == "part1"
+        assert events[1].content.parts[0].text == "part2"
+        assert events[2].is_error()
+        response = mock_trace.call_args.args[3]
+        assert response.error_code == "LLM_CALL_ERROR"
+        assert response.error_message == "upstream failed"
+        assert response.partial is True
+        assert response.content.parts[0].text == "part1part2"
+        assert response.custom_metadata == {"error_type": "RuntimeError"}
+        assert mock_report.call_args.kwargs["error_type"] == "RuntimeError"

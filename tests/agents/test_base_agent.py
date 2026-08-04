@@ -34,6 +34,7 @@ class ConcreteAgent(BaseAgent):
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-base-.*"]
@@ -56,9 +57,7 @@ def register_test_model():
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test_app", user_id="user-1", session_id="s-1")
-    )
+    session = asyncio.run(service.create_session(app_name="test_app", user_id="user-1", session_id="s-1"))
     agent = ConcreteAgent(name="test_agent")
     return InvocationContext(
         session_service=service,
@@ -75,6 +74,7 @@ def invocation_context():
 
 
 class TestBuildActionStringFromEvents:
+
     def test_empty_events(self):
         assert _build_action_string_from_events([]) == ""
 
@@ -166,6 +166,7 @@ class TestBuildActionStringFromEvents:
 
 
 class TestCreateInvocationContext:
+
     def test_same_agent_keeps_branch(self, invocation_context):
         agent = invocation_context.agent
         invocation_context.branch = "existing_branch"
@@ -195,6 +196,7 @@ class TestCreateInvocationContext:
 
 
 class TestBaseAgentModelPostInit:
+
     def test_invalid_filter_name_raises(self):
         with pytest.raises(ValueError, match="not found"):
             ConcreteAgent(name="bad_agent", filters_name=["nonexistent_filter"])
@@ -208,6 +210,7 @@ class TestBaseAgentModelPostInit:
 
 
 class TestBaseAgentGetSubagents:
+
     def test_returns_sub_agents_list(self):
         child = ConcreteAgent(name="child")
         parent = ConcreteAgent(name="parent", sub_agents=[child])
@@ -216,3 +219,28 @@ class TestBaseAgentGetSubagents:
     def test_empty_sub_agents(self):
         agent = ConcreteAgent(name="solo")
         assert agent.get_subagents() == []
+
+
+class TestBaseAgentTracing:
+
+    def test_closing_stream_marks_agent_span_interrupted(self, invocation_context):
+        agent = invocation_context.agent
+
+        async def run():
+            stream = agent.run_async(invocation_context)
+            await anext(stream)
+            await stream.aclose()
+
+        with patch("trpc_agent_sdk.agents._base_agent.mark_span_error") as mock_span_error, \
+             patch("trpc_agent_sdk.agents._base_agent.report_invoke_agent") as mock_report, \
+             patch("trpc_agent_sdk.agents._base_agent.trace_agent"), \
+             patch("trpc_agent_sdk.agents._base_agent.tracer") as mock_tracer:
+            asyncio.run(run())
+
+        agent_span = mock_tracer.start_as_current_span.return_value.__enter__.return_value
+        mock_span_error.assert_called_once_with(
+            agent_span,
+            error_type="AgentGeneratorExit",
+            description="Agent execution stopped with GeneratorExit.",
+        )
+        assert mock_report.call_args.kwargs["error_type"] == "AgentGeneratorExit"

@@ -62,6 +62,21 @@ def get_trpc_agent_span_name() -> str:
     return _trpc_agent_span_name
 
 
+def mark_span_error(span: trace.Span, error_type: str, description: str) -> None:
+    """Mark a span as failed with an operation-specific error.
+
+    The caller supplies an error type and description that identify the failed
+    operation.
+
+    Args:
+        span: The failed operation's span.
+        error_type: The operation-specific error type.
+        description: The human-readable error description.
+    """
+    span.set_status(trace.StatusCode.ERROR, description)
+    span.set_attribute("error.type", error_type)
+
+
 def _join_parts_with_thought_tag(parts) -> str:
     """Join part texts, wrapping thought parts in <trace_think> tags.
 
@@ -457,6 +472,9 @@ def trace_call_llm(
         llm_response_json,
     )
 
+    # call_llm observation output is always the LlmResponse JSON above. On
+    # error, also set ERROR status (with description) and error attributes, but
+    # skip exception events so exporters keep using llm_response as output.
     error_code = getattr(llm_response, "error_code", None)
     if error_code:
         error_message = getattr(llm_response, "error_message", None)
@@ -464,18 +482,10 @@ def trace_call_llm(
         error_type = custom_metadata.get("error_type") if isinstance(custom_metadata, dict) else None
         error_type = str(error_type or error_code)
         status_description = str(error_message or error_code)
-
-        span.set_status(trace.StatusCode.ERROR, status_description)
-        span.set_attribute("error.type", error_type)
+        mark_span_error(span, error_type, status_description)
         span.set_attribute(f"{_trpc_agent_span_name}.llm.error_code", str(error_code))
         if error_message:
             span.set_attribute(f"{_trpc_agent_span_name}.llm.error_message", str(error_message))
-
-        exception_attributes = {
-            "exception.type": error_type,
-            "exception.message": status_description,
-        }
-        span.add_event("exception", exception_attributes)
 
     if stream_function_calls_raw:
         span.set_attribute(

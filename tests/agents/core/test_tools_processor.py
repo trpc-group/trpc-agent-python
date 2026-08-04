@@ -33,11 +33,13 @@ from trpc_agent_sdk.types import Content, FunctionCall, Part
 
 
 class _StubAgent(BaseAgent):
+
     async def _run_async_impl(self, ctx):
         yield
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-tools-proc-.*"]
@@ -65,9 +67,7 @@ def sample_tool(name: str, value: str) -> dict:
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test", user_id="u1", session_id="s1")
-    )
+    session = asyncio.run(service.create_session(app_name="test", user_id="u1", session_id="s1"))
     agent = _StubAgent(name="test_agent")
     ctx = InvocationContext(
         session_service=service,
@@ -86,6 +86,7 @@ def invocation_context():
 
 
 class TestToolsProcessorInit:
+
     def test_stores_tools(self):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -102,6 +103,7 @@ class TestToolsProcessorInit:
 
 
 class TestFindTool:
+
     def test_finds_matching_tool(self):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -131,6 +133,7 @@ class TestFindTool:
 
 
 class TestFindToolPublic:
+
     def test_resolves_and_finds(self, invocation_context):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -150,6 +153,7 @@ class TestFindToolPublic:
 
 
 class TestExecuteToolsSequential:
+
     def test_single_tool_call(self, invocation_context):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -198,6 +202,7 @@ class TestExecuteToolsSequential:
 
 
 class TestMergeParallelFunctionResponseEvents:
+
     def test_single_event_returns_as_is(self):
         proc = ToolsProcessor([])
         event = Event(
@@ -253,11 +258,10 @@ class TestMergeParallelFunctionResponseEvents:
 
 
 class TestToolsProcessorErrorEvent:
+
     def test_creates_error_with_function_response(self, invocation_context):
         proc = ToolsProcessor([])
-        event = proc._create_error_event(
-            invocation_context, "test_error", "Something failed", "call-1", "my_tool"
-        )
+        event = proc._create_error_event(invocation_context, "test_error", "Something failed", "call-1", "my_tool")
         assert event.error_code == "test_error"
         assert event.error_message == "Something failed"
         assert event.content is not None
@@ -272,7 +276,6 @@ class TestToolsProcessorErrorEvent:
 # ---------------------------------------------------------------------------
 # _update_streaming_tool_names
 # ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # execute_tools_async - progress-streaming tool path
@@ -335,6 +338,7 @@ class TestExecuteToolsStreamingProgress:
         assert fr.response == {"status": "done", "url": "https://x", "steps": 2}
 
     def test_streaming_tool_error_yields_error_event(self, invocation_context):
+
         async def boom(query: str):
             yield {"status": "started"}
             raise RuntimeError("kaboom")
@@ -392,8 +396,7 @@ class TestExecuteToolsStreamingProgress:
 
             # The streaming call yields partials AND its own final event.
             stream_partials = [
-                ev for ev in events
-                if ev.partial and (ev.custom_metadata or {}).get("tool_call_id") == "c-stream"
+                ev for ev in events if ev.partial and (ev.custom_metadata or {}).get("tool_call_id") == "c-stream"
             ]
             stream_finals = [
                 ev for ev in events if ev.partial is not True and ev.content and any(
@@ -426,6 +429,7 @@ class TestExecuteToolsStreamingProgress:
 
 
 class TestUpdateStreamingToolNames:
+
     def test_no_streaming_tools(self):
         proc = ToolsProcessor([])
         request = LlmRequest()
