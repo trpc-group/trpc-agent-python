@@ -45,6 +45,10 @@ class OptimizeResult:
     candidate_strategy: str = "fix_attributed"
     # 被修复的失败类别（fix_attributed 场景下）
     fixed_categories: list[str] = field(default_factory=list)
+    # best_score 的口径标注：live 为 SDK validation_pass_rate，fake 为模拟 train 分，
+    # 二者不可比——口径随结果携带，外部消费 best_score 时必须同时读它
+    # （reviewer Warning）。
+    best_score_metric: str = ""
 
     @property
     def best_score(self) -> float:
@@ -88,6 +92,8 @@ def run_optimize_fake(
     """
     result = OptimizeResult(algorithm=config.algorithm)
     result.candidate_strategy = scenario
+    # best_score 口径：fake 模式为模拟 train 评分（供 best_score 消费方区分 live）
+    result.best_score_metric = "train_pass_rate (simulated round)"
 
     if scenario == "noop":
         # 优化无效：无实际改进，返回空优化结果
@@ -159,6 +165,23 @@ def run_optimize_fake(
     return result
 
 
+def _anchor_to_example_dir(path: str) -> str:
+    """将相对路径锚定到 example 目录（pipeline/ 的上一级）。
+
+    与 prompt_dir 的锚定口径一致：live 模式从仓库根等非 example 目录
+    运行时，`data/...` 相对路径按 CWD 解析会指向不存在的位置，SDK 侧
+    FileNotFoundError 被 except 捕获记 error、优化静默失败（reviewer
+    Warning）。统一锚定后相对路径始终解析到 example 目录；绝对路径
+    （CLI 显式指定）原样返回。
+    """
+    if os.path.isabs(path):
+        return path
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        path,
+    )
+
+
 async def run_optimize_live(
     optimizer_config_path: str,
     config: PipelineConfig,
@@ -179,6 +202,8 @@ async def run_optimize_live(
         OptimizeResult from actual GEPA run.
     """
     result = OptimizeResult(algorithm=config.algorithm)
+    # best_score 口径：live 模式映射 SDK RoundRecord.validation_pass_rate
+    result.best_score_metric = "validation_pass_rate (SDK round)"
 
     try:
         # 确保项目根与 example 目录在 sys.path
@@ -192,12 +217,7 @@ async def run_optimize_live(
         # Register target prompts for optimization。
         # prompt_dir 默认为相对路径 "data/prompts"，按 CWD 解析——若非从 example 目录
         # 运行 live 会解析失败；相对路径锚定到本模块（pipeline/）的上一级即 example 目录。
-        prompt_dir = config.prompt_dir
-        if not os.path.isabs(prompt_dir):
-            prompt_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                prompt_dir,
-            )
+        prompt_dir = _anchor_to_example_dir(config.prompt_dir)
         target = TargetPrompt()
         if os.path.isdir(prompt_dir):
             for fname in os.listdir(prompt_dir):
@@ -237,8 +257,11 @@ async def run_optimize_live(
         # 其 AttributeError 应向上传播暴露根因，而非被下方 except AttributeError
         # 伪装成 "SDK issue" 降级（reviewer Warning）。SDK 产物写独立子目录
         # sdk_artifacts/（避免与 pipeline 自身报告混放）。
-        _sdk_train_path = config.train_evalset
-        _sdk_val_path = config.val_evalset
+        # train/val 相对路径与 prompt_dir 一致锚定到 example 目录：从仓库根等
+        # 非 example 目录跑 live 时，`data/...` 按 CWD 解析会 FileNotFoundError
+        # 并被 except 捕获记 error、优化静默失败（reviewer Warning）。
+        _sdk_train_path = _anchor_to_example_dir(config.train_evalset)
+        _sdk_val_path = _anchor_to_example_dir(config.val_evalset)
         sdk_output_dir = os.path.join(config.output_dir, "sdk_artifacts")
         # Run optimization（async，需 await；显式传 call_agent）。
         # 用 wait_for 加超时：真实网络/LLM 调用可能卡顿，避免整条 live 流水线

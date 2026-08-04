@@ -6,6 +6,7 @@ from pipeline.optimize import (
     OptimizeResult,
     RoundRecord,
     run_optimize_fake,
+    _anchor_to_example_dir,
     _simulate_prompt_change,
     _build_optimized_prompt,
 )
@@ -42,6 +43,9 @@ class TestOptimizeResult:
         assert result.algorithm == "gepa_reflective"
         assert result.best_score == 0.0
         assert result.converged is False
+        # 口径字段默认空；fake/live 各自在入口设置（reviewer Warning：外部消费
+        # best_score 时必须同时读 best_score_metric，避免 fake/live 误比）
+        assert result.best_score_metric == ""
 
     def test_best_score_with_rounds(self):
         result = OptimizeResult(rounds=[
@@ -156,6 +160,13 @@ class TestRunOptimizeFake:
         assert result.best_prompt
         assert "system.md" in result.best_prompt
 
+    def test_best_score_metric_is_train_simulated(self, sample_baseline):
+        # fake 模式口径：模拟 train 评分（reviewer Warning：与 live 的
+        # validation_pass_rate 口径不同，必须随结果携带标注）
+        attribution = attribute_failures(sample_baseline.__dict__, {})
+        result = run_optimize_fake(attribution, load_pipeline_config())
+        assert result.best_score_metric == "train_pass_rate (simulated round)"
+
     def test_rounds_have_increasing_scores(self, all_fail_baseline):
         attribution = attribute_failures(all_fail_baseline.__dict__, {})
         config = load_pipeline_config(max_iterations=4)
@@ -164,3 +175,35 @@ class TestRunOptimizeFake:
         # Scores should be non-decreasing (each round fixes more failures)
         for i in range(1, len(scores)):
             assert scores[i] >= scores[i - 1], f"Score decreased at round {i}"
+
+
+class TestAnchorToExampleDir:
+    """Tests for _anchor_to_example_dir() — live 相对路径锚定到 example 目录。
+
+    reviewer Warning：live 模式传给 SDK 的 train/val 相对路径（默认
+    `data/...`）按 CWD 解析，从仓库根等非 example 目录运行时 FileNotFoundError
+    并静默降级；与 prompt_dir 一致的锚定使相对路径始终解析到 example 目录。
+    """
+
+    def _example_dir(self) -> str:
+        import os
+        import pipeline.optimize as opt
+        # pipeline/optimize.py → pipeline → eval_optimize_loop（example 目录）
+        return os.path.dirname(os.path.dirname(os.path.abspath(opt.__file__)))
+
+    def test_relative_path_anchored(self):
+        import os
+        out = _anchor_to_example_dir("data/train.evalset.json")
+        assert os.path.isabs(out)
+        assert out == os.path.join(self._example_dir(), "data", "train.evalset.json")
+
+    def test_absolute_path_unchanged(self):
+        _abs = "/abs/data/train.evalset.json"
+        assert _anchor_to_example_dir(_abs) == _abs
+
+    def test_same_anchoring_as_prompt_dir(self):
+        # 与 prompt_dir 的锚定口径一致：config.prompt_dir 相对路径锚定后
+        # 与 train/val 落在同一 example 目录下（reviewer Warning 提到二者不一致）
+        import os
+        assert _anchor_to_example_dir("data/prompts") == os.path.join(
+            self._example_dir(), "data", "prompts")

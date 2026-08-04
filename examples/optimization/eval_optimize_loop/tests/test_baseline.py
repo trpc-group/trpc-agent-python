@@ -115,6 +115,57 @@ class TestRunBaselineSdk:
         # 文件不存在 → error recorded
         assert len(result.errors) > 0
 
+    def test_sdk_metric_breakdown_uses_approximated_field(self, monkeypatch, tmp_path):
+        """SDK 路径无 per-case score：final_response_avg_score 用 pass_rate 兜底时
+        必须以 *_approximated 后缀与 fake 路径同名字段隔离（reviewer Warning：
+        下游按同名字段取值会把 SDK 兜底值误当作 per-case 均值）。"""
+        import sys
+        import json
+
+        class _CR:
+            def __init__(self, status, err=""):
+                self.final_eval_status = status
+                self.error_message = err
+
+        class _FakeEvalStatus:
+            PASSED = "passed"
+            NOT_EVALUATED = "not_evaluated"
+
+        class _FakeAgentEvaluator:
+            @classmethod
+            async def evaluate_eval_set(cls, eval_set, call_agent=None,
+                                        eval_config=None,
+                                        print_detailed_results=False):
+                return None, None, None, {
+                    "c1": [_CR(_FakeEvalStatus.PASSED)],
+                    "c2": [_CR(_FakeEvalStatus.NOT_EVALUATED)],
+                }
+
+        class _FakeEvalSet:
+            @classmethod
+            def model_validate_json(cls, s):
+                return object()
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", type(
+            "M", (), {
+                "AgentEvaluator": _FakeAgentEvaluator,
+                "EvalSet": _FakeEvalSet,
+                "EvalStatus": _FakeEvalStatus,
+            }))
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("ME", (), {"EvalStatus": _FakeEvalStatus}))
+
+        path = tmp_path / "evalset.json"
+        path.write_text(json.dumps({"eval_set_id": "t", "eval_cases": []}),
+                        encoding="utf-8")
+        result = asyncio.run(run_baseline_sdk(str(path), eval_config=object()))
+        assert result.total_cases == 1  # NOT_EVALUATED 不计入
+        assert result.pass_rate == 1.0
+        # 兜底字段必须改名隔离；fake 路径的 final_response_avg_score 语义不同
+        assert "final_response_avg_score" not in result.metric_breakdown
+        assert result.metric_breakdown["final_response_avg_score_approximated"] == 1.0
+
     def test_sdk_falls_back_to_trace_comparator(self, monkeypatch):
         # SDK 不可用（强制 ImportError）→ 确定性降级到 trace comparator，产生有意义结果。
         # 仓库内有 trpc_agent_sdk 源码包，若不 monkeypatch 会走真实 SDK 路径而非降级。

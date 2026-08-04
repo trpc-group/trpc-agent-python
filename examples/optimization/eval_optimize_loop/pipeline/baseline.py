@@ -259,13 +259,13 @@ async def run_baseline_sdk(
         result.failed_case_ids = failed_case_ids
         result.pass_rate = passed / total if total > 0 else 0.0
         result.per_case_results = per_case
-        # 与 run_baseline_fake 的键集合对齐（SDK 路径没有 per-case score，用 pass_rate 兜底）
         # SDK 路径无 per-case score：final_response_avg_score 用 pass_rate 兜底，
-        # 与 fake 路径（per-case score 均值）口径不同，仅作审计字段、不参与 gate
-        # 决策（reviewer Suggestion）。
+        # 与 fake 路径（per-case score 均值）口径不同。为避免下游按同名字段误比，
+        # SDK 路径改用 *_approximated 后缀与 fake 路径字段隔离——仅作审计字段、
+        # 不参与 gate 决策（gate 只读 pass_rate）（reviewer Warning）。
         result.metric_breakdown = {
             "overall_pass_rate": result.pass_rate,
-            "final_response_avg_score": result.pass_rate,
+            "final_response_avg_score_approximated": result.pass_rate,
         }
         return result
 

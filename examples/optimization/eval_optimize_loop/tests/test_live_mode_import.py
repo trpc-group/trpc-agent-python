@@ -43,6 +43,8 @@ class TestLiveModeRobustness:
         result = asyncio.run(run_optimize_live(str(data_dir / "optimizer.json"), cfg))
         assert isinstance(result, OptimizeResult)
         assert result.errors
+        # live 口径必须随结果携带（reviewer Warning：与 fake 的模拟 train 分不可比）
+        assert result.best_score_metric == "validation_pass_rate (SDK round)"
 
     def test_run_baseline_sdk_re_raises_validation_error(self, monkeypatch, tmp_path):
         """evalset/配置校验失败（ValueError，含 pydantic ValidationError）应重新抛出，

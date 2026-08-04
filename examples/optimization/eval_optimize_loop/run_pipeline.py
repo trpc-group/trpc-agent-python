@@ -489,6 +489,8 @@ def main() -> int:
             #   否则会在 main() 内遮蔽为局部变量）
             print(f"  ⚠️  live optimize 异常，降级为空结果: {_e}")
             optimize_result = OptimizeResult(algorithm=cfg.algorithm)
+            # 降级空结果也标注口径，保证下游 _best_score_metric 非空（reviewer Warning）
+            optimize_result.best_score_metric = "validation_pass_rate (SDK round)"
             optimize_result.errors = [
                 f"live optimize failed ({type(_e).__name__}: {_e})"
             ]
@@ -505,13 +507,12 @@ def main() -> int:
     tracer.end_stage("optimization")
     # best_score 口径标注：live 模式 RoundRecord.score 映射 SDK
     # validation_pass_rate，fake 模式是模拟 train 评分，二者不可比——在
-    # 打印/报告/审计中显式标注口径（reviewer Warning）。必须在 Stage 4
-    # 打印前计算（此前误放到 Stage 7 才赋值，此处引用会 UnboundLocalError，
-    # 导致默认 fake 模式崩溃，reviewer Critical）。
-    _best_score_metric = (
-        "validation_pass_rate (SDK round)" if cfg.mode == "live"
-        else "train_pass_rate (simulated round)"
-    )
+    # 打印/报告/审计中显式标注口径（reviewer Warning）。口径由
+    # OptimizeResult.best_score_metric 单一来源携带（fake/live 各自在
+    # optimize.py 设置），此处直接引用，不再按 cfg.mode 二次推导。
+    # 必须在 Stage 4 打印前计算（此前误放到 Stage 7 才赋值，此处引用会
+    # UnboundLocalError，导致默认 fake 模式崩溃，reviewer Critical）。
+    _best_score_metric = optimize_result.best_score_metric
     print(f"  Algorithm: {optimize_result.algorithm}")
     print(f"  Scenario: {cfg.scenario}")
     print(f"  Iterations: {optimize_result.total_iterations}")
