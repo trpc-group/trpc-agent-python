@@ -573,7 +573,10 @@ def main() -> int:
     print(f"  New passes: {validation.new_passes}, "
           f"New failures: {validation.new_failures}, "
           f"Unchanged: {validation.unchanged}")
-    if validation.is_overfitting:
+    if validation.is_overfitting and not _scenario_error:
+        # _scenario_error 时 is_overfitting 由合成 __scenario_error__ new_fail delta
+        # 触发，是场景配置错误而非真实过拟合——不打印/记录 "Overfitting"，与下方
+        # gate reason 改写为 scenario configuration error 的口径保持一致（reviewer Warning）。
         print(f"  ⚠️  Overfitting detected!")
         tracer.add_warning("Overfitting detected: candidate regresses on validation set")
 

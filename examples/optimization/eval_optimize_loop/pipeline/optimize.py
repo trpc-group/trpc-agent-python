@@ -233,22 +233,24 @@ async def run_optimize_live(
             # 而非被静默吞成"无法检查配置"（reviewer Warning）。
             print(f"  ⚠️  无法检查 reflection_lm 配置（{type(_e).__name__}: {_e}）")
 
+        # 先把 SDK 调用所需参数在 try 外取出：config 属性访问属 pipeline 侧逻辑，
+        # 其 AttributeError 应向上传播暴露根因，而非被下方 except AttributeError
+        # 伪装成 "SDK issue" 降级（reviewer Warning）。SDK 产物写独立子目录
+        # sdk_artifacts/（避免与 pipeline 自身报告混放）。
+        _sdk_train_path = config.train_evalset
+        _sdk_val_path = config.val_evalset
+        sdk_output_dir = os.path.join(config.output_dir, "sdk_artifacts")
         # Run optimization（async，需 await；显式传 call_agent）。
         # 用 wait_for 加超时：真实网络/LLM 调用可能卡顿，避免整条 live 流水线
         # 无限挂起（超时抛 TimeoutError，下方 except 写入 result.errors）
         try:
-            # SDK 会向 output_dir 写入 result.json / best_prompts/ / rounds/ /
-            # run.log 等产物；与 pipeline 自身报告（optimization_report.json/md）
-            # 混放会让目录来源混杂、审计难以区分（reviewer Warning）。指定独立
-            # 子目录 sdk_artifacts/，仍位于调用方已校验的仓库内 output_dir 下。
-            sdk_output_dir = os.path.join(config.output_dir, "sdk_artifacts")
             opt_result = await asyncio.wait_for(
                 AgentOptimizer.optimize(
                     config_path=optimizer_config_path,
                     call_agent=call_agent,
                     target_prompt=target,
-                    train_dataset_path=config.train_evalset,
-                    validation_dataset_path=config.val_evalset,
+                    train_dataset_path=_sdk_train_path,
+                    validation_dataset_path=_sdk_val_path,
                     output_dir=sdk_output_dir,
                 ),
                 timeout=_optimize_timeout,

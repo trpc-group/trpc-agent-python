@@ -314,6 +314,39 @@ class TestLiveModeRobustness:
         finally:
             _shutil.rmtree(_out_dir, ignore_errors=True)
 
+    def test_scenario_error_no_overfitting_misreport(self, monkeypatch, data_dir, capsys):
+        """overfit 场景配置错误路径：不得误报 "Overfitting detected"。
+
+        合成 __scenario_error__ new_fail delta 会让 validation.is_overfitting=True，
+        但那是场景配置错误而非真实过拟合——打印/审计应只出现 scenario
+        configuration error（reviewer Warning）。
+        """
+        import os as _os
+        import shutil as _shutil
+        import sys as _sys
+        import run_pipeline as rp
+        from pipeline._paths import find_repo_root
+
+        _repo_root = find_repo_root(str(Path(__file__).resolve().parent))
+        assert _repo_root is not None
+        _out_dir = _os.path.join(_repo_root, "sample_output_e2e_test")
+        monkeypatch.setattr(_sys, "argv", [
+            "run_pipeline.py", "--mode", "fake", "--scenario", "overfit",
+            "--val-regression-cases", "bogus_case_not_in_val",
+            "--train-evalset", str(data_dir / "train.evalset.json"),
+            "--val-evalset", str(data_dir / "val.evalset.json"),
+            "--optimizer-config", str(data_dir / "optimizer.json"),
+            "--output-dir", _out_dir,
+        ])
+        try:
+            code = rp.main()
+            assert code == 0  # 非 ci 模式：scenario_config_error REJECT 退出码 0
+            _out = capsys.readouterr().out
+            assert "Overfitting detected" not in _out
+            assert "scenario configuration error" in _out
+        finally:
+            _shutil.rmtree(_out_dir, ignore_errors=True)
+
 
 class TestBuildCallAgent:
     def test_build_call_agent(self):
@@ -729,3 +762,43 @@ class TestLiveModeContract:
         assert result.best_prompt == {}
         assert result.optimized_fields == []
         assert any("AttributeError" in e for e in result.errors)
+
+    def test_optimize_pipeline_side_attribute_error_not_swallowed(self, monkeypatch):
+        """pipeline 侧 AttributeError（config 缺 output_dir）必须向上传播，
+        而非被 SDK except AttributeError 降级记 error 伪装成 "SDK issue"
+        （reviewer Warning：except AttributeError 不收窄 pipeline 自身 bug）。"""
+        import sys
+        import pipeline.optimize as optimize_mod
+
+        class _FakeAgentOptimizer:
+            @staticmethod
+            async def optimize(**kwargs):
+                return object()
+
+        class _FakeTargetPrompt:
+            def add_path(self, *args, **kwargs):
+                pass
+
+        class _FakeEvalModule:
+            AgentOptimizer = _FakeAgentOptimizer
+            TargetPrompt = _FakeTargetPrompt
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._optimize_config",
+            type("M", (), {}),
+        )
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        # config 缺 output_dir：参数组装在 try 外完成 → AttributeError 传播
+        cfg = type("C", (), {
+            "prompt_dir": "data/prompts",
+            "train_evalset": "train.json",
+            "val_evalset": "val.json",
+            "algorithm": "x",
+        })()
+        with pytest.raises(AttributeError):
+            asyncio.run(optimize_mod.run_optimize_live("opt.json", cfg, call_agent=object()))

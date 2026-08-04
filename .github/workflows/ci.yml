@@ -77,6 +77,13 @@ jobs:
         # run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term tests/
         run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
 
+      # examples/optimization/eval_optimize_loop/tests/ 不在根 pytest testpaths
+      # （tests/）覆盖范围，需显式纳入，否则该示例工程的黄金/归因/过拟合等
+      # 验收测试不会进入 CI 回归门禁（reviewer Warning）。
+      - name: Run example pipeline tests
+        run: |
+          pytest -q examples/optimization/eval_optimize_loop/tests/ -p no:warnings
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         env:
