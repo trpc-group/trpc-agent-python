@@ -214,7 +214,16 @@ async def run_optimize_live(
             _oc = _sdk_load(optimizer_config_path)
             _rl = _oc.optimize.algorithm.reflection_lm
             _timeout_cfg = getattr(_oc.optimize.algorithm, "timeout_seconds", None)
-            _optimize_timeout = float(_timeout_cfg) if _timeout_cfg is not None else _optimize_timeout
+            if _timeout_cfg is not None:
+                try:
+                    _optimize_timeout = float(_timeout_cfg)
+                except (TypeError, ValueError):
+                    # 非数值配置：回退默认超时
+                    _optimize_timeout = 600.0
+                if _optimize_timeout <= 0:
+                    # <=0 会被 asyncio.wait_for 解释为立即超时，反直觉；回退默认
+                    # 超时，避免把可运行的优化伪装成 "timed out after 0s"（reviewer Warning）。
+                    _optimize_timeout = 600.0
             if not (_rl.provider_name and _rl.model_name):
                 print("  ⚠️  reflection_lm 未配置真实 LLM（provider_name/model_name 为空），"
                       "live GEPA 优化将失败并降级为空结果")
@@ -227,17 +236,26 @@ async def run_optimize_live(
         # Run optimization（async，需 await；显式传 call_agent）。
         # 用 wait_for 加超时：真实网络/LLM 调用可能卡顿，避免整条 live 流水线
         # 无限挂起（超时抛 TimeoutError，下方 except 写入 result.errors）
-        opt_result = await asyncio.wait_for(
-            AgentOptimizer.optimize(
-                config_path=optimizer_config_path,
-                call_agent=call_agent,
-                target_prompt=target,
-                train_dataset_path=config.train_evalset,
-                validation_dataset_path=config.val_evalset,
-                output_dir=config.output_dir,
-            ),
-            timeout=_optimize_timeout,
-        )
+        try:
+            opt_result = await asyncio.wait_for(
+                AgentOptimizer.optimize(
+                    config_path=optimizer_config_path,
+                    call_agent=call_agent,
+                    target_prompt=target,
+                    train_dataset_path=config.train_evalset,
+                    validation_dataset_path=config.val_evalset,
+                    output_dir=config.output_dir,
+                ),
+                timeout=_optimize_timeout,
+            )
+        except AttributeError as _e:
+            # SDK 侧 AttributeError（接口漂移/内部缺陷）降级记 error，而非被
+            # run_pipeline 误当作 pipeline 自身 bug 上抛导致 live 崩（reviewer
+            # Warning：SDK 抛的同类异常应走降级）。pipeline 自身逻辑的
+            # AttributeError 仍向上传播暴露根因。
+            result.errors.append(
+                f"AgentOptimizer raised AttributeError (likely SDK issue): {_e}")
+            return result
 
         # Extract results（按 SDK OptimizeResult 实际字段映射）
         result.total_cost = getattr(opt_result, 'total_llm_cost', 0.0)

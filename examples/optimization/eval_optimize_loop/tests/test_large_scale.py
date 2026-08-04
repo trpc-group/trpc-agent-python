@@ -13,10 +13,11 @@ import pytest
 
 from pipeline.config import load_evalset, load_pipeline_config
 from pipeline.baseline import BaselineResult, run_baseline_fake
-from pipeline.attribution import attribute_failures, _categorize_failure
-from pipeline.gate import evaluate_gate, GateDecision
+from pipeline.attribution import attribute_failures
+from pipeline.gate import evaluate_gate
 from pipeline.report import generate_json_report, generate_md_report
 from pipeline.optimize import run_optimize_fake
+from pipeline.validate import run_validation_fake
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -178,10 +179,11 @@ class TestLargeEvalset:
             os.unlink(path)
 
     def test_massive_attribution(self):
-        """50 failures should be attributed correctly via direct BaselineResult.
+        """50 个失败 case 经 attribution 精确归类到 8 个类别。
 
-        Uses direct BaselineResult construction because run_baseline_fake
-        determines pass/fail from conversation presence, not content matching.
+        直接构造 BaselineResult 仅测 attribution 层（类别归类不依赖
+        comparator）；每个 reason 走 _categorize_failure 关键词匹配，
+        精确锁定 8 类全被识别、无漏归（reviewer Warning：阈值宽松）。
         """
         # Build 50 failed per_case_results with diverse failure reasons
         categories = [
@@ -216,15 +218,17 @@ class TestLargeEvalset:
 
         attr = attribute_failures(baseline.__dict__, {})
         assert attr.total_failures == 50
-        # All 8 categories should be represented
-        assert len(attr.by_category) >= 7
+        # 8 个类别全部被识别（精确锁定，不给关键词漂移留容差）
+        assert len(attr.by_category) == 8
+        assert sum(attr.by_category.values()) == 50
 
-    def test_diverse_categories(self, temp_json_file):
-        """Cases with different failure reasons → multiple categories."""
-        data = {
-            "eval_set_id": "multi-category",
-            "eval_cases": [],
-        }
+    def test_diverse_categories(self):
+        """不同失败 reason → 精确归类到 9 个类别（attribution 层单测）。
+
+        直接构造 BaselineResult（不经 comparator），只验证 _categorize_failure
+        对各类 reason 字符串的归类；断言精确类别数，两个 tool_call_error 归并
+        （reviewer Warning：脱离真实路径 + 阈值宽松）。
+        """
         categories = [
             "tool_call_error: timeout",
             "final_response_mismatch: expected 42 got 43",
@@ -237,28 +241,6 @@ class TestLargeEvalset:
             "unknown failure",
             "tool_call_error: connection refused",
         ]
-        for i, reason in enumerate(categories):
-            data["eval_cases"].append({
-                "eval_id": f"cat_{i}",
-                "eval_mode": "trace",
-                "conversation": [{
-                    "invocation_id": f"inv-cat-{i}",
-                    "user_content": {"parts": [{"text": f"question {i}"}], "role": "user"},
-                    "final_response": {"parts": [{"text": "expected"}], "role": "model"},
-                }],
-                "actual_conversation": [{
-                    "invocation_id": f"inv-cat-{i}",
-                    "user_content": {"parts": [{"text": f"question {i}"}], "role": "user"},
-                    "final_response": {"parts": [{"text": f"actual {i}"}], "role": "model"},
-                    "intermediate_data": {
-                        "tool_uses": [],
-                        "tool_responses": [],
-                        "intermediate_responses": [],
-                    },
-                }],
-            })
-
-        # Add per_case_results with failure reasons
         per_case = []
         for i, reason in enumerate(categories):
             per_case.append({
@@ -277,8 +259,10 @@ class TestLargeEvalset:
         )
 
         attr = attribute_failures(baseline.__dict__, {})
-        # Should have multiple distinct categories
-        assert len(attr.by_category) >= 5
+        assert attr.total_failures == 10
+        # 9 个不同类别（两个 tool_call_error 归并）
+        assert len(attr.by_category) == 9
+        assert attr.by_category["tool_call_error"] == 2
 
 
 class TestLongConversations:
@@ -508,14 +492,21 @@ class TestPipelineStress:
             # Stage 4: Optimization
             opt = run_optimize_fake(attr, cfg)
 
-            # Stage 5-6: Validate + Gate
+            # Stage 5-6: Validate + Gate — 走真实 validate 代码路径，候选不合成。
+            # fake 模式下候选与 baseline 一致（noop），真实跑 run_validation_fake
+            # 生成 per-case deltas，而非手工构造必然通过的 candidate_pass_rate
+            # （reviewer Critical：合成候选使端到端断言恒真）。
+            validation = run_validation_fake(val_path, bl_val, bl_val, cfg)
+            candidate_train = validation.candidate or bl_train
             gate = evaluate_gate(
                 baseline_pass_rate=bl_train.pass_rate,
-                candidate_pass_rate=min(1.0, bl_train.pass_rate + 0.2),
-                baseline_metrics={}, candidate_metrics={},
-                baseline_failed=bl_train.failed_case_ids,
-                candidate_failed=[],
+                candidate_pass_rate=candidate_train.pass_rate,
+                baseline_metrics=bl_train.metric_breakdown,
+                candidate_metrics=candidate_train.metric_breakdown,
+                min_improvement=cfg.min_improvement_threshold,
+                max_cost=cfg.max_cost_budget,
                 optimization_cost=opt.total_cost,
+                validation_new_failures=validation.new_failures,
             )
 
             # Stage 7: Report

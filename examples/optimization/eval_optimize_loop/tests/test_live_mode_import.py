@@ -123,19 +123,28 @@ class TestLiveModeRobustness:
         """live 编排：evalset 校验失败（run_baseline_sdk 抛 ValueError）时，
         run_pipeline 按 SDK 契约 re-raise，不得被 except Exception 静默降级到
         trace comparator（reviewer Warning：宽泛异常捕获吞掉 ValueError）。"""
+        import os as _os
         import sys as _sys
         import run_pipeline as rp
         import pipeline.baseline as baseline_mod
+        from pipeline._paths import find_repo_root
+
+        _repo_root = find_repo_root(str(Path(__file__).resolve().parent))
+        assert _repo_root is not None
 
         async def _boom(*args, **kwargs):
             raise ValueError("evalset validation failed: bad case format")
 
         monkeypatch.setattr(baseline_mod, "run_baseline_sdk", _boom)
+        # 显式传仓库内绝对 output-dir，避免依赖 CWD 解析：不在仓库根运行时
+        # is_output_dir_allowed 会 return 1 而非抛出预期异常（reviewer Warning）。
+        _out_dir = _os.path.join(_repo_root, "sample_output_live_test")
         monkeypatch.setattr(_sys, "argv", [
             "run_pipeline.py", "--mode", "live",
             "--train-evalset", str(data_dir / "train.evalset.json"),
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
+            "--output-dir", _out_dir,
         ])
         with pytest.raises(ValueError, match="evalset validation failed"):
             rp.main()
@@ -143,10 +152,15 @@ class TestLiveModeRobustness:
     def test_live_optimize_bug_exception_not_silently_degraded(self, monkeypatch, data_dir):
         """live optimize：pipeline 自身 bug（AttributeError）不得被 run_pipeline 兜底
         except Exception 静默降级为空结果（reviewer Warning：宽泛 except 掩盖根因）。"""
+        import os as _os
         import sys as _sys
         import run_pipeline as rp
         import pipeline.baseline as baseline_mod
         from pipeline.baseline import BaselineResult
+        from pipeline._paths import find_repo_root
+
+        _repo_root = find_repo_root(str(Path(__file__).resolve().parent))
+        assert _repo_root is not None
 
         async def _fake_sdk(*args, **kwargs):
             return BaselineResult(
@@ -156,17 +170,21 @@ class TestLiveModeRobustness:
             )
 
         async def _boom(*args, **kwargs):
+            # async 函数：返回协程，asyncio.run 正常执行并抛 AttributeError
             raise AttributeError("bug in pipeline code")
 
         monkeypatch.setattr(baseline_mod, "run_baseline_sdk", _fake_sdk)
         # run_optimize_live 是 run_pipeline 模块级导入（绑定在模块命名空间），
         # 须 patch rp 而非 pipeline.optimize
         monkeypatch.setattr(rp, "run_optimize_live", _boom)
+        # 显式传仓库内绝对 output-dir，避免依赖 CWD 解析（reviewer Warning）。
+        _out_dir = _os.path.join(_repo_root, "sample_output_live_test")
         monkeypatch.setattr(_sys, "argv", [
             "run_pipeline.py", "--mode", "live",
             "--train-evalset", str(data_dir / "train.evalset.json"),
             "--val-evalset", str(data_dir / "val.evalset.json"),
             "--optimizer-config", str(data_dir / "optimizer.json"),
+            "--output-dir", _out_dir,
         ])
         with pytest.raises(AttributeError, match="bug in pipeline code"):
             rp.main()
@@ -227,18 +245,35 @@ class TestLiveModeRobustness:
 
 class TestBuildCallAgent:
     def test_build_call_agent(self):
-        """build_call_agent 返回 async callable，能处理输入。"""
+        """build_call_agent 返回 async callable（reviewer Suggestion：
+        原断言 `iscoroutinefunction or callable` 恒真，等价于无断言）。"""
         from agent.agent import build_call_agent
-        call_agent = build_call_agent()
         import inspect
-        assert inspect.iscoroutinefunction(call_agent) or callable(call_agent)
+        call_agent = build_call_agent()
+        assert inspect.iscoroutinefunction(call_agent)
 
     def test_call_agent_returns_text(self):
-        """call_agent 调用返回字符串。"""
-        from agent.agent import build_call_agent, run_agent
-        # 直接测 run_agent 确定性
-        result = run_agent("What is 25 + 17?")
-        assert "final_response" in result
+        """call_agent（_call）await 后返回字符串（原测试只测 run_agent，
+        未真正验证 _call 的 async 签名与返回类型）。"""
+        from agent.agent import build_call_agent
+        import asyncio
+        call_agent = build_call_agent()
+        resp = asyncio.run(call_agent("What is 25 + 17?"))
+        assert isinstance(resp, str)
+
+    def test_call_agent_error_raises(self, monkeypatch):
+        """_call 检测 error 键并抛 RuntimeError（reviewer Suggestion：验证
+        error→raise 契约，而非仅测 run_agent 返回 dict）。"""
+        import asyncio
+        import agent.agent as agent_mod
+
+        def _fake_run(question, **kwargs):
+            return {"final_response": "", "error": "Live mode not implemented"}
+
+        monkeypatch.setattr(agent_mod, "run_agent", _fake_run)
+        call_agent = agent_mod.build_call_agent()
+        with pytest.raises(RuntimeError, match="agent live run failed"):
+            asyncio.run(call_agent("2 + 2"))
 
 
 class TestLiveModeContract:
@@ -586,3 +621,39 @@ class TestLiveModeContract:
         assert len(result.rounds) == 1
         assert result.rounds[0].score == 0.95
         assert result.rounds[0].round_index == 1
+
+    def test_optimize_sdk_attribute_error_degrades(self, monkeypatch):
+        """SDK AgentOptimizer.optimize 内部抛 AttributeError（接口漂移）→
+        run_optimize_live 降级记 error，而非上抛导致 live 崩（reviewer Warning：
+        except (AttributeError, TypeError) 误伤 SDK 缺陷）。"""
+        import sys
+        import pipeline.optimize as optimize_mod
+
+        class _FakeAgentOptimizer:
+            @staticmethod
+            async def optimize(**kwargs):
+                raise AttributeError("SDK internal: missing attribute")
+
+        class _FakeTargetPrompt:
+            def add_path(self, *args, **kwargs):
+                pass
+
+        class _FakeEvalModule:
+            AgentOptimizer = _FakeAgentOptimizer
+            TargetPrompt = _FakeTargetPrompt
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._optimize_config",
+            type("M", (), {}),
+        )
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        cfg = load_pipeline_config(mode="live")
+        result = asyncio.run(optimize_mod.run_optimize_live("opt.json", cfg, call_agent=object()))
+        assert result.best_prompt == {}
+        assert result.optimized_fields == []
+        assert any("AttributeError" in e for e in result.errors)

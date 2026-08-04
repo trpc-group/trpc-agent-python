@@ -437,8 +437,8 @@ Examples:
         except (AttributeError, TypeError):
             # pipeline 自身 bug（缺键/对 None 取属性/类型误用）不降级：直接抛出
             # 暴露根因，避免把代码缺陷伪装成"优化失败"（reviewer Warning）。
-            # optimize.py 已把 ValueError/TimeoutError 记 errors 返回，仅非预期
-            # 异常会走到这里。
+            # optimize.py 已把 ValueError/TimeoutError 及 SDK 侧 AttributeError/
+            # TypeError 记 errors 返回，逃逸到此的仅 pipeline 自身 bug。
             raise
         except Exception as _e:
             # 与 fake 模式一致：SDK 未捕获的其它异常也优雅降级，不崩溃
