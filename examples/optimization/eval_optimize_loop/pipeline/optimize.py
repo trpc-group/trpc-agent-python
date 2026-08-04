@@ -182,6 +182,20 @@ def _anchor_to_example_dir(path: str) -> str:
     )
 
 
+def _sdk_num_or_zero(v: Any) -> float:
+    """SDK 数值字段归一：属性存在但值为 `None` 时按 0 处理。
+
+    `getattr(x, 'f', default)` 的默认值只在属性**缺失**时生效；若 SDK
+    返回的 `total_llm_cost`/`total_rounds`/`validation_pass_rate` 等字段
+    值为 `None`（属性存在），None 会沿袭到 `OptimizeResult`，随后
+    run_pipeline 的 `tracer.add_cost` 内 `if usd < 0` 对 None 比较抛
+    TypeError、`best_score` 的 `max(r.score)` 同样崩溃，且都被宽泛
+    `except Exception` 降级为空结果、掩盖真实 live 产物（reviewer
+    Critical）。
+    """
+    return 0.0 if v is None else v
+
+
 async def run_optimize_live(
     optimizer_config_path: str,
     config: PipelineConfig,
@@ -262,7 +276,11 @@ async def run_optimize_live(
         # 并被 except 捕获记 error、优化静默失败（reviewer Warning）。
         _sdk_train_path = _anchor_to_example_dir(config.train_evalset)
         _sdk_val_path = _anchor_to_example_dir(config.val_evalset)
-        sdk_output_dir = os.path.join(config.output_dir, "sdk_artifacts")
+        # output_dir 与 prompt_dir/train/val 同口径锚定到 example 目录：从仓库根
+        # 跑 live 时 SDK 产物仍写进 example/sample_output/sdk_artifacts，而非仓库根
+        # 产生未被 .gitignore 覆盖的脏目录（reviewer Warning）。绝对路径原样保留。
+        sdk_output_dir = os.path.join(
+            _anchor_to_example_dir(config.output_dir), "sdk_artifacts")
         # Run optimization（async，需 await；显式传 call_agent）。
         # 用 wait_for 加超时：真实网络/LLM 调用可能卡顿，避免整条 live 流水线
         # 无限挂起（超时抛 TimeoutError，下方 except 写入 result.errors）
@@ -287,9 +305,14 @@ async def run_optimize_live(
                 f"AgentOptimizer raised AttributeError (likely SDK issue): {_e}")
             return result
 
-        # Extract results（按 SDK OptimizeResult 实际字段映射）
-        result.total_cost = getattr(opt_result, 'total_llm_cost', 0.0)
-        result.total_iterations = getattr(opt_result, 'total_rounds', 0)
+        # Extract results（按 SDK OptimizeResult 实际字段映射）。
+        # SDK 字段可能"属性存在但值为 None"：逐个 _sdk_num_or_zero 归一，
+        # 避免 None 沿袭到 total_cost（add_cost 内 `if usd < 0` 对 None 比较
+        # 抛 TypeError）与 total_iterations（reviewer Critical）。
+        result.total_cost = _sdk_num_or_zero(
+            getattr(opt_result, 'total_llm_cost', 0.0))
+        result.total_iterations = int(_sdk_num_or_zero(
+            getattr(opt_result, 'total_rounds', 0)))
         # SDK status 取值为 SUCCEEDED / FAILED / CANCELED
         opt_status = getattr(opt_result, 'status', '') or ''
         result.converged = opt_status == 'SUCCEEDED'
@@ -312,11 +335,16 @@ async def run_optimize_live(
 
         rounds = getattr(opt_result, 'rounds', None)
         if rounds:
+            # score/best_so_far 归一：SDK round 的 validation_pass_rate 为 None 时
+            # 置 0，避免 best_score 的 max(r.score) 对 None 比较抛 TypeError
+            # 并连同 live 产物一起被宽泛 except 降级（reviewer Critical）。
             result.rounds = [
                 RoundRecord(
                     round_index=getattr(r, 'round', i + 1),
-                    score=getattr(r, 'validation_pass_rate', 0.0),
-                    best_so_far=getattr(r, 'validation_pass_rate', 0.0),
+                    score=_sdk_num_or_zero(
+                        getattr(r, 'validation_pass_rate', 0.0)),
+                    best_so_far=_sdk_num_or_zero(
+                        getattr(r, 'validation_pass_rate', 0.0)),
                     prompt_changes=list(getattr(r, 'optimized_field_names', []) or []),
                 )
                 for i, r in enumerate(rounds)

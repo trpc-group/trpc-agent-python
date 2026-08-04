@@ -46,6 +46,84 @@ class TestLiveModeRobustness:
         # live 口径必须随结果携带（reviewer Warning：与 fake 的模拟 train 分不可比）
         assert result.best_score_metric == "validation_pass_rate (SDK round)"
 
+    def test_run_optimize_live_handles_none_sdk_fields(self, monkeypatch, data_dir):
+        """SDK 字段"属性存在但值为 None"时不得崩、不得把 None 沿袭到结果。
+
+        reviewer Critical：getattr 默认值只在属性缺失时生效；total_llm_cost/
+        total_rounds/validation_pass_rate 为 None 时若不做归一，total_cost 变
+        None → run_pipeline.add_cost 内 `if usd < 0` 对 None 比较抛 TypeError、
+        best_score 的 max(r.score) 同样崩溃，且都被宽泛 except 降级为空结果、
+        掩盖真实 live 产物。此处锁定归一后不崩溃且字段为 0。
+        """
+        import os
+        import sys
+
+        class _RL:
+            provider_name = ""
+            model_name = ""
+
+        class _Algo:
+            reflection_lm = _RL()
+            timeout_seconds = None
+
+        class _Opt:
+            algorithm = _Algo()
+
+        class _OC:
+            optimize = _Opt()
+
+        class _TP:
+            def add_path(self, name, path):
+                pass
+
+        class _Round:
+            round = 1
+            validation_pass_rate = None
+            optimized_field_names = ["system"]
+
+        class _OptResult:
+            total_llm_cost = None
+            total_rounds = None
+            status = "SUCCEEDED"
+            best_prompts = {"system.md": "optimized"}
+            rounds = [_Round()]
+
+        class _AO:
+            last_kwargs = {}
+
+            @classmethod
+            async def optimize(cls, **kwargs):
+                cls.last_kwargs = kwargs
+                return _OptResult()
+
+        class _FakeEvalModule:
+            AgentOptimizer = _AO
+            TargetPrompt = _TP
+            load_optimize_config = staticmethod(lambda *a, **k: _OC())
+
+        monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", _FakeEvalModule)
+        monkeypatch.setitem(
+            sys.modules, "trpc_agent_sdk.evaluation._eval_metrics",
+            type("M", (), {"EvalStatus": type("S", (), {})}),
+        )
+
+        cfg = load_pipeline_config(mode="live")
+        result = asyncio.run(run_optimize_live(
+            str(data_dir / "optimizer.json"), cfg, call_agent=lambda *a, **k: None))
+        assert isinstance(result, OptimizeResult)
+        # None 字段归一：不崩溃、不沿袭 None
+        assert result.total_cost == 0.0
+        assert result.total_iterations == 0
+        assert len(result.rounds) == 1
+        assert result.rounds[0].score == 0.0
+        assert result.best_score == 0.0  # max(r.score) 不再对 None 崩溃
+        assert result.best_score_metric == "validation_pass_rate (SDK round)"
+        # W1：sdk_output_dir 已锚定到 example 目录（含 eval_optimize_loop），
+        # 而非按 CWD 解析到仓库根产生脏目录（reviewer Warning）
+        _sdk_out = _AO.last_kwargs.get("output_dir", "")
+        assert _sdk_out.endswith(os.path.join("sample_output", "sdk_artifacts"))
+        assert "eval_optimize_loop" in _sdk_out
+
     def test_run_baseline_sdk_re_raises_validation_error(self, monkeypatch, tmp_path):
         """evalset/配置校验失败（ValueError，含 pydantic ValidationError）应重新抛出，
         而非降级为 trace comparator 伪装成"可继续的基线"（reviewer Warning ②）。"""

@@ -347,3 +347,37 @@ class TestFindRepoRoot:
         d = tmp_path / "no_marker"
         d.mkdir()
         assert _paths.find_repo_root(str(d)) is None
+
+    def test_require_pkg_prefers_marker_containing_pkg(self, tmp_path):
+        # 最内层标记（inner）不含 trpc_agent_sdk、外层（outer）含 →
+        # require_pkg 返回含 SDK 的外层，避免 sys.path 指向错误仓库根
+        # （reviewer Warning：monorepo 下最内层 pyproject 可能是同级子项目）
+        from pipeline import _paths
+        outer = tmp_path / "outer"
+        (outer / "inner").mkdir(parents=True)
+        (outer / "pyproject.toml").write_text("", encoding="utf-8")
+        (outer / "inner" / "pyproject.toml").write_text("", encoding="utf-8")
+        (outer / "trpc_agent_sdk").mkdir()
+        assert _paths.find_repo_root(
+            str(outer / "inner"), require_pkg="trpc_agent_sdk") == str(outer)
+
+    def test_require_pkg_innermost_has_pkg(self, tmp_path):
+        # 最内层已含 trpc_agent_sdk → 仍取最内层
+        from pipeline import _paths
+        outer = tmp_path / "outer"
+        (outer / "inner").mkdir(parents=True)
+        (outer / "pyproject.toml").write_text("", encoding="utf-8")
+        (outer / "inner" / "pyproject.toml").write_text("", encoding="utf-8")
+        (outer / "inner" / "trpc_agent_sdk").mkdir()
+        assert _paths.find_repo_root(
+            str(outer / "inner"), require_pkg="trpc_agent_sdk") == str(outer / "inner")
+
+    def test_require_pkg_falls_back_when_no_marker_has_pkg(self, tmp_path):
+        # 所有标记都不含 trpc_agent_sdk → 回退最内层（保持 find_repo_root 原语义）
+        from pipeline import _paths
+        outer = tmp_path / "outer"
+        (outer / "inner").mkdir(parents=True)
+        (outer / "pyproject.toml").write_text("", encoding="utf-8")
+        (outer / "inner" / "pyproject.toml").write_text("", encoding="utf-8")
+        assert _paths.find_repo_root(
+            str(outer / "inner"), require_pkg="trpc_agent_sdk") == str(outer / "inner")

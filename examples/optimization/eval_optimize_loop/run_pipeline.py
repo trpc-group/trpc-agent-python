@@ -389,13 +389,22 @@ def main() -> int:
             # 注意：不能在这里 from-import run_baseline_fake（会使该名字在 main()
             # 内变为局部变量，fake 路径未赋值即用 → UnboundLocalError）
             print(f"  ⚠️  live baseline 异常，降级到 trace comparator: {_e}")
-            baseline_train = run_baseline_fake(cfg.train_evalset, cfg)
-            baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
             _msg = (f"live baseline failed ({type(_e).__name__}: {_e}); "
                     f"fell back to trace comparator")
-            # 保留 fake 回退自身的原始错误（如文件缺失/解析失败），不覆盖
-            baseline_train.errors = [_msg] + baseline_train.errors
-            baseline_val.errors = [_msg] + baseline_val.errors
+            try:
+                baseline_train = run_baseline_fake(cfg.train_evalset, cfg)
+                baseline_val = run_baseline_fake(cfg.val_evalset, cfg)
+                # 保留 fake 回退自身的原始错误（如文件缺失/解析失败），不覆盖
+                baseline_train.errors = [_msg] + baseline_train.errors
+                baseline_val.errors = [_msg] + baseline_val.errors
+            except Exception as _fe:
+                # 回退本身再次失败（如二次 IO/解析异常）：单独兜底为空结果并记错，
+                # 避免整个 live pipeline 在 Stage 2 崩溃而非优雅降级
+                # （reviewer Warning）。注意不能用 from-import，同上方 UnboundLocalError。
+                _fallback_msg = (f"trace-comparator fallback failed "
+                                 f"({type(_fe).__name__}: {_fe})")
+                baseline_train = BaselineResult(errors=[_msg, _fallback_msg])
+                baseline_val = BaselineResult(errors=[_msg, _fallback_msg])
 
     if baseline_train.errors:
         for e in baseline_train.errors:

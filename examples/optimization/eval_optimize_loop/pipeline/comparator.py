@@ -470,9 +470,15 @@ def compare_invocations(expected: dict, actual: dict, *,
             # 可能属于解释文本的泛化词），避免 "= 16, no error found" 误杀 16。
             # 语境段取"到下一个 = 候选为止"，替代原固定 80 字符窗口——否定词
             # 落在窗口外（远距离否定）仍被捕获，避免漏判通过（reviewer Warning ④）。
+            # 下一个候选边界用"独立等号"界定：前不为 <,>,!,= 且后不为 =
+            # （`(?<![<>!=])=(?!=)`）——`==`/`>=`/`<=`/`!=` 中的 = 不作切段
+            # 起点，避免把比较表达式误当候选边界、截断否定语境或吞并后续候选
+            # （reviewer Warning）。裸 find("=") 会在 "= 15, 10 >= 15 wrong"
+            # 处把否定语境段截短成 "15, 10 " 而漏判否定；仅 (?<![<>!=]) 又会在
+            # "= 15, 15 == 15 incorrect" 处把 `==` 的第一个 =（前是空格）误当边界。
             _rest = act_final[_m.end():]
-            _next_eq = _rest.find("=")
-            _segment = _rest if _next_eq == -1 else _rest[: _next_eq]
+            _next_eq = re.search(r"(?<![<>!=])=(?!=)", _rest)
+            _segment = _rest if _next_eq is None else _rest[: _next_eq.start()]
             _after = _segment.lower()
             if any(w in _after for w in ("wrong", "incorrect", "is not", "mistake",
                                          "not right", "should be", "false")):

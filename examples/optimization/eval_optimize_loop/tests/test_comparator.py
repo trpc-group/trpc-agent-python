@@ -230,6 +230,18 @@ class TestCompareInvocations:
         ok, cat = compare_invocations(case["conversation"][0], case["actual_conversation"][0])
         assert ok
 
+    def test_negation_segment_ignores_comparison_equals(self):
+        """`>=`/`==` 中的等号不作候选切段边界：否定词在其后仍须命中。
+
+        裸 find("=") 会把比较表达式里的 = 当"下一个候选起点"，否定语境段被
+        截短而漏判否定（reviewer Warning）。"""
+        for act in ("= 15, 10 >= 15 wrong", "= 15, 15 == 15 incorrect"):
+            case = _mk_case("15", act)
+            ok, cat = compare_invocations(
+                case["conversation"][0], case["actual_conversation"][0])
+            assert not ok, f"期望 15 不应匹配被否定的实际: {act}"
+            assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
+
     def test_trace_matcher_numeric_tolerance_effective(self):
         """TraceMatcher 自定义 numeric_tolerance 真正生效，非静默忽略
         （reviewer Warning：硬编码阈值被忽略的问题）。"""
