@@ -15,6 +15,7 @@ from run_pipeline import (
     ci_exit_code,
     is_output_dir_allowed,
     live_gate_downgrade,
+    live_gate_exit_code,
 )
 
 
@@ -205,6 +206,47 @@ class TestLiveGateDowngrade:
         )
         out = live_gate_downgrade(g, live=True)
         assert out.decision == GateDecision.REJECT
+
+
+class TestLiveGateExitCode:
+    """Tests for live_gate_exit_code() — live 降级后 critical/overfit 不豁免非零退出码。"""
+
+    def _gate(self, decision, details=None):
+        return GateResult(decision=decision, reason="r",
+                          details=details if details is not None else {})
+
+    def test_live_needs_review_without_hard_signal_exits_zero(self):
+        # 无 critical/overfit 信号：informational，exit 0
+        g = self._gate(GateDecision.NEEDS_REVIEW,
+                       details={"checks": [{"check": "improvement", "passed": False}]})
+        assert live_gate_exit_code(g, ci_mode=True) == 0
+
+    def test_live_needs_review_critical_regressed_kept(self):
+        # 关键 case 回归是硬性失败信号：--ci 下保留非零（2）
+        g = self._gate(GateDecision.NEEDS_REVIEW,
+                       details={"critical_regressed": ["case_001"], "checks": []})
+        assert live_gate_exit_code(g, ci_mode=True) == 2
+
+    def test_live_needs_review_overfit_kept(self):
+        # 过拟合（validation_new_failures>0）同样保留非零
+        g = self._gate(GateDecision.NEEDS_REVIEW,
+                       details={"validation_new_failures": 2, "checks": []})
+        assert live_gate_exit_code(g, ci_mode=True) == 2
+
+    def test_live_needs_review_hard_signal_non_ci_zero(self):
+        # 非 CI 模式：无论信号如何都 exit 0（不阻断交互式运行）
+        g = self._gate(GateDecision.NEEDS_REVIEW,
+                       details={"critical_regressed": ["case_001"]})
+        assert live_gate_exit_code(g, ci_mode=False) == 0
+
+    def test_live_accept_unchanged(self):
+        g = self._gate(GateDecision.ACCEPT)
+        assert live_gate_exit_code(g, ci_mode=True) == 0
+
+    def test_live_reject_unchanged(self):
+        # 未降级的 REJECT（成本超预算等真实约束）走标准 ci_exit_code
+        g = self._gate(GateDecision.REJECT, details={"budget": 5.0, "cost": 15.0})
+        assert live_gate_exit_code(g, ci_mode=True) == 1
 
 
 class TestCiExitCode:
