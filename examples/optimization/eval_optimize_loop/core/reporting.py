@@ -495,9 +495,15 @@ def _validate_optimizer_config_for_copy(path: Path) -> None:
 def _rename_directory_no_replace(source: Path, target: Path) -> None:
     """Atomically publish a directory without replacing an existing target.
 
+    The caller creates source and target as siblings beneath the resolved run
+    directory, so the operation cannot cross a filesystem or Windows volume.
     Each supported platform uses an atomic no-replace primitive. Platforms
     without that primitive fail closed rather than risking a replacement race.
     """
+    if source.parent.resolve() != target.parent.resolve():
+        raise ArtifactWriteError(
+            "atomic report publication requires sibling source and target paths"
+        )
     if sys.platform.startswith("linux"):
         try:
             libc = ctypes.CDLL(None, use_errno=True)
@@ -923,7 +929,11 @@ def publish_report_bundle(
 
 
 def write_failure_report(report: FailureReport, *, run_dir: Path) -> Path:
-    """Atomically write first-failure evidence without allowing replacement."""
+    """Atomically write first-failure evidence without allowing replacement.
+
+    The temporary and target paths are siblings beneath the resolved run
+    directory, which keeps the hard-link operation on one filesystem.
+    """
     temporary: Path | None = None
     try:
         root = _resolved_run_dir(run_dir)

@@ -183,7 +183,7 @@ Pipeline 配置中的路径相对于示例根目录解析，并且不能通过 `
 | `case_labels` | hard/critical Case 标签。 |
 | `gate` | 最小验证集提升、退化、关键 Case 和必需 Metric 规则。 |
 | `budget` | 成本、Token、耗时与不可观测值策略。 |
-| `artifacts` | 输入副本、优化器原生产物和候选审计策略。 |
+| `artifacts` | 是否保留输入副本和优化器原生产物。 |
 | `writeback` | Gate ACCEPT 后是否允许写回；示例默认关闭。 |
 
 数据文件集中在：

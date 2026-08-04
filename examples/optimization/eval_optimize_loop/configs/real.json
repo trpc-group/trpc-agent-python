@@ -35,15 +35,9 @@
     "max_duration_seconds": 180,
     "on_unavailable": "warning"
   },
-  "reporting": {
-    "write_json": true,
-    "write_markdown": true,
-    "include_case_evidence": true
-  },
   "artifacts": {
     "copy_input_files": true,
-    "retain_optimizer_native_artifacts": true,
-    "audit_all_candidates": false
+    "retain_optimizer_native_artifacts": true
   },
   "writeback": {
     "enabled": false,

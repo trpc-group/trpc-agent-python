@@ -79,15 +79,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Confirm that real API calls and their cost are intended.",
     )
     real.add_argument("--optimizer-model-name")
-    real.add_argument("--optimizer-provider-name", default="openai")
-    real.add_argument("--optimizer-temperature", type=float, default=0.8)
-    real.add_argument("--optimizer-max-tokens", type=int, default=4096)
+    real.add_argument("--optimizer-provider-name")
+    real.add_argument("--optimizer-temperature", type=float)
+    real.add_argument("--optimizer-max-tokens", type=int)
     real.add_argument(
         "--optimizer-think",
         choices=("auto", "on", "off"),
-        default="auto",
     )
-    real.add_argument("--max-candidate-proposals", type=int, default=1)
+    real.add_argument("--max-candidate-proposals", type=int)
     return parser
 
 
@@ -98,12 +97,37 @@ def _optimizer_parameters(
     if not args.optimizer_model_name:
         parser.error("real mode requires --optimizer-model-name")
     return OptimizerRuntimeParameters(
-        provider_name=args.optimizer_provider_name,
+        provider_name=args.optimizer_provider_name or "openai",
         model_name=args.optimizer_model_name,
-        temperature=args.optimizer_temperature,
-        max_tokens=args.optimizer_max_tokens,
-        think=_think_value(args.optimizer_think),
-        max_candidate_proposals=args.max_candidate_proposals,
+        temperature=(
+            0.8 if args.optimizer_temperature is None else args.optimizer_temperature
+        ),
+        max_tokens=(
+            4096
+            if args.optimizer_max_tokens is None
+            else args.optimizer_max_tokens
+        ),
+        think=_think_value(args.optimizer_think or "auto"),
+        max_candidate_proposals=(
+            1
+            if args.max_candidate_proposals is None
+            else args.max_candidate_proposals
+        ),
+    )
+
+
+def _optimizer_options_supplied(args: argparse.Namespace) -> bool:
+    """Return whether any real-only optimizer option was explicitly supplied."""
+    return any(
+        value is not None
+        for value in (
+            args.optimizer_model_name,
+            args.optimizer_provider_name,
+            args.optimizer_temperature,
+            args.optimizer_max_tokens,
+            args.optimizer_think,
+            args.max_candidate_proposals,
+        )
     )
 
 
@@ -208,6 +232,8 @@ def main() -> int:
 
     if args.run_real:
         parser.error("--run-real is only valid with execution.mode='real'")
+    if _optimizer_options_supplied(args):
+        parser.error("--optimizer-* options are only valid with execution.mode='real'")
     prepared = prepare_run(args.config, run_id=args.run_id)
     if config.execution.mode == "offline":
         result = asyncio.run(run_offline_stage(prepared, scenario=args.scenario))

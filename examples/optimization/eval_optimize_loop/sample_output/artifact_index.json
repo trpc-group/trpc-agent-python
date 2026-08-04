@@ -11,7 +11,7 @@
       "produced_by": "reporting",
       "status": "available",
       "size_bytes": 128853,
-      "sha256": "8f385ce956e5356b29a6245576b454b67ee699dcd0dc32a7ae8df85950a7b7e9",
+      "sha256": "a77aae811a0bb23beff35faaedb3735e8b1eb54f575a68bd2744531afc67f0fd",
       "unavailable_reason": null
     },
     {
@@ -98,8 +98,8 @@
       "required": true,
       "produced_by": "baseline_train",
       "status": "available",
-      "size_bytes": 1236,
-      "sha256": "f15c9e9bf66ca6851fce72f56069eceb3adf9340d2e1aaa2d1e9ae3918198230",
+      "size_bytes": 1093,
+      "sha256": "e5b07f5140453e2d105b9304741c22ad9306d5c74ebd9c6bd398e420533cc808",
       "unavailable_reason": null
     },
     {
