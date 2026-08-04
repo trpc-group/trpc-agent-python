@@ -29,6 +29,7 @@ from trpc_agent_sdk.telemetry._trace import (
     _build_llm_request_for_trace,
     _safe_json_serialize,
     get_trpc_agent_span_name,
+    mark_span_error,
     set_trpc_agent_span_name,
     trace_agent,
     trace_call_llm,
@@ -177,6 +178,29 @@ class TestSafeJsonSerialize:
 
     def test_serialize_empty_dict(self):
         assert json.loads(_safe_json_serialize({})) == {}
+
+
+# ---------------------------------------------------------------------------
+# Tests: mark_span_error
+# ---------------------------------------------------------------------------
+
+
+class TestMarkSpanError:
+
+    def test_marks_interruption_with_operation_specific_error(self):
+        span = _mock_span()
+
+        mark_span_error(
+            span,
+            error_type="RunnerGeneratorExit",
+            description="Runner invocation stopped with GeneratorExit.",
+        )
+
+        span.set_status.assert_called_once_with(
+            trace.StatusCode.ERROR,
+            "Runner invocation stopped with GeneratorExit.",
+        )
+        span.set_attribute.assert_called_once_with("error.type", "RunnerGeneratorExit")
 
 
 # ---------------------------------------------------------------------------
@@ -913,7 +937,7 @@ class TestTraceCallLlm:
         span.set_attribute.assert_any_call("trpc.python.agent.event_id", "e-1")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
-    def test_error_response_marks_span_and_records_exception(self, mock_get_span):
+    def test_error_response_sets_status_message_and_keeps_llm_response_output(self, mock_get_span):
         span = _mock_span()
         mock_get_span.return_value = span
         ctx = _make_invocation_context()
@@ -927,19 +951,19 @@ class TestTraceCallLlm:
 
         trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
 
+        # Output remains the LlmResponse JSON; status carries the error message.
+        span.set_attribute.assert_any_call("trpc.python.agent.llm_response", '{"content": "response"}')
         span.set_status.assert_called_once_with(trace.StatusCode.ERROR, "rate limit exceeded")
         span.set_attribute.assert_any_call("error.type", "RateLimitError")
         span.set_attribute.assert_any_call(
             "trpc.python.agent.llm.error_code",
             "STREAMING_ERROR",
         )
-        span.add_event.assert_called_once_with(
-            "exception",
-            {
-                "exception.type": "RateLimitError",
-                "exception.message": "rate limit exceeded",
-            },
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.llm.error_message",
+            "rate limit exceeded",
         )
+        span.add_event.assert_not_called()
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_usage_metadata(self, mock_get_span):

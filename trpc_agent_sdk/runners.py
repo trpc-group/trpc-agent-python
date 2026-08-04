@@ -19,6 +19,8 @@ from typing import Awaitable
 from typing import Callable
 from typing import Optional
 
+from opentelemetry import trace
+
 from trpc_agent_sdk import cancel
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.artifacts import BaseArtifactService
@@ -34,6 +36,7 @@ from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.memory import BaseMemoryService
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import Session
+from trpc_agent_sdk.telemetry import mark_span_error
 from trpc_agent_sdk.telemetry import tracer
 from trpc_agent_sdk.telemetry import trace_cancellation
 from trpc_agent_sdk.telemetry import trace_runner
@@ -387,7 +390,7 @@ class Runner:
         # because __aexit__ of the context manager is not guaranteed to run when
         # an async generator is cancelled, but try/finally always executes
         # even under CancelledError (PEP 492).
-        with tracer.start_as_current_span("invocation"):
+        with tracer.start_as_current_span("invocation") as invocation_span:
             # Create default agent context if not provided
             if agent_context is None:
                 agent_context = new_agent_context()
@@ -454,6 +457,7 @@ class Runner:
 
             # Track accumulated partial text for cancellation handling
             temp_text_parts: list[str] = []
+            runner_trace_recorded = False
 
             try:
                 # Support multiple levels of agent transfers
@@ -559,24 +563,13 @@ class Runner:
                 # background worker to avoid blocking request completion.
                 await self._schedule_post_turn_processing(invocation_context=invocation_context, )
 
-                # Compute state after runner execution
-                state_end = dict(session.state)
-                if (last_non_streaming_event and last_non_streaming_event.actions
-                        and last_non_streaming_event.actions.state_delta):
-                    state_end.update(last_non_streaming_event.actions.state_delta)
-
-                # Call trace function with runner execution details
-                trace_runner(
-                    app_name=self.app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                    invocation_context=invocation_context,
-                    new_message=user_message,
-                    last_event=last_non_streaming_event,
-                    state_begin=state_begin,
-                    state_end=state_end,
+            except GeneratorExit:
+                mark_span_error(
+                    invocation_span,
+                    error_type="RunnerGeneratorExit",
+                    description="Runner invocation stopped with GeneratorExit.",
                 )
-
+                raise
             except RunCancelledException as ex:
                 logger.info("Run for session %s was cancelled", session_id)
                 logger.debug("Cancellation details: %s", ex, exc_info=True)
@@ -597,18 +590,20 @@ class Runner:
                 await self.session_service.update_session(session=session)
 
                 # Trace the cancellation event
-                trace_cancellation(
-                    app_name=self.app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                    invocation_context=invocation_context,
-                    reason=str(ex),
-                    new_message=user_message,
-                    last_event=last_non_streaming_event,
-                    partial_text=temp_text,
-                    state_begin=state_begin,
-                    state_partial=state_partial,
-                )
+                with trace.use_span(invocation_span, end_on_exit=False):
+                    trace_cancellation(
+                        app_name=self.app_name,
+                        user_id=user_id,
+                        session_id=session_id,
+                        invocation_context=invocation_context,
+                        reason=str(ex),
+                        new_message=user_message,
+                        last_event=last_non_streaming_event,
+                        partial_text=temp_text,
+                        state_begin=state_begin,
+                        state_partial=state_partial,
+                    )
+                runner_trace_recorded = True
 
                 # Yield cancellation event to notify client
                 yield AgentCancelledEvent(
@@ -619,6 +614,24 @@ class Runner:
                 )
 
             finally:
+                if not runner_trace_recorded:
+                    state_end = dict(session.state)
+                    if (last_non_streaming_event and last_non_streaming_event.actions
+                            and last_non_streaming_event.actions.state_delta):
+                        state_end.update(last_non_streaming_event.actions.state_delta)
+
+                    with trace.use_span(invocation_span, end_on_exit=False):
+                        trace_runner(
+                            app_name=self.app_name,
+                            user_id=user_id,
+                            session_id=session_id,
+                            invocation_context=invocation_context,
+                            new_message=user_message,
+                            last_event=last_non_streaming_event,
+                            state_begin=state_begin,
+                            state_end=state_end,
+                        )
+
                 # Always cleanup cancellation tracking
                 await cancel.cleanup_run(
                     app_name=self.app_name,

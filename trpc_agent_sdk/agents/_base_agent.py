@@ -33,6 +33,8 @@ from typing import Union
 from typing import final
 from typing_extensions import override
 
+from opentelemetry import trace
+
 from trpc_agent_sdk.abc import AgentABC
 from trpc_agent_sdk.abc import FilterType
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
@@ -43,6 +45,10 @@ from trpc_agent_sdk.context import set_invocation_ctx
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.filter import get_filter
 from trpc_agent_sdk.filter import run_stream_filters
+from trpc_agent_sdk.telemetry import mark_span_error
+from trpc_agent_sdk.telemetry import report_invoke_agent
+from trpc_agent_sdk.telemetry import tracer
+from trpc_agent_sdk.telemetry import trace_agent
 
 from ._callback import AgentCallback
 from ._callback import AgentCallbackFilter
@@ -256,10 +262,6 @@ class BaseAgent(AgentABC):
                 - State changes
                 - Actions
         """
-        from trpc_agent_sdk.telemetry import report_invoke_agent
-        from trpc_agent_sdk.telemetry import tracer
-        from trpc_agent_sdk.telemetry import trace_agent
-
         # Manually propagate span context using attach/detach instead of
         # start_as_current_span. This ensures child spans (call_llm, execute_tool,
         # etc.) can correctly resolve their parent.
@@ -267,7 +269,7 @@ class BaseAgent(AgentABC):
         # because __aexit__ of the context manager is not guaranteed to run when
         # an async generator is cancelled, but try/finally always executes
         # even under CancelledError (PEP 492).
-        with tracer.start_as_current_span(f"agent_run [{self.name}]"):
+        with tracer.start_as_current_span(f"agent_run [{self.name}]") as agent_span:
             ctx = self._create_invocation_context(parent_context)
             if ctx.agent_context is None:
                 ctx.agent_context = create_agent_context()
@@ -294,6 +296,14 @@ class BaseAgent(AgentABC):
                         # This excludes state update events which have content=None
                         non_partial_events.append(event)
                     yield event  # type: ignore
+            except GeneratorExit:
+                metrics_error_type = "AgentGeneratorExit"
+                mark_span_error(
+                    agent_span,
+                    error_type=metrics_error_type,
+                    description="Agent execution stopped with GeneratorExit.",
+                )
+                raise
             except Exception as ex:
                 metrics_error_type = type(ex).__name__
                 raise
@@ -305,12 +315,13 @@ class BaseAgent(AgentABC):
                 agent_action = _build_action_string_from_events(non_partial_events)
 
                 # Call trace function with agent execution details
-                trace_agent(
-                    invocation_context=ctx,
-                    agent_action=agent_action,
-                    state_begin=state_begin,
-                    state_end=state_end,
-                )
+                with trace.use_span(agent_span, end_on_exit=False):
+                    trace_agent(
+                        invocation_context=ctx,
+                        agent_action=agent_action,
+                        state_begin=state_begin,
+                        state_end=state_end,
+                    )
 
                 duration_s = time.monotonic() - mono_start
                 ttft_s = (t_first_visible - mono_start) if t_first_visible is not None else duration_s

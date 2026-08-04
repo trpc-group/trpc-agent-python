@@ -274,6 +274,47 @@ class TestRunAsync:
         assert events[1].partial is False
 
     @pytest.mark.asyncio
+    async def test_closing_stream_marks_invocation_span_interrupted(self, runner, mock_session_service, mock_agent,
+                                                                    mock_session):
+        mock_session_service.get_session.return_value = mock_session
+
+        async def mock_agent_run(ctx):
+            yield Event(
+                invocation_id=ctx.invocation_id,
+                author="test_agent",
+                content=Content(parts=[Part(text="Partial")]),
+                partial=True,
+            )
+            yield Event(
+                invocation_id=ctx.invocation_id,
+                author="test_agent",
+                content=Content(parts=[Part(text="Complete")]),
+                partial=False,
+            )
+
+        mock_agent.run_async = mock_agent_run
+
+        with patch("trpc_agent_sdk.runners.mark_span_error") as mock_span_error, \
+             patch("trpc_agent_sdk.runners.trace_runner"), \
+             patch("trpc_agent_sdk.runners.tracer") as mock_tracer:
+            stream = runner.run_async(
+                user_id="test_user",
+                session_id="test_session",
+                new_message=Content(parts=[Part(text="Hello")]),
+                run_config=RunConfig(streaming=True),
+            )
+            event = await anext(stream)
+            await stream.aclose()
+
+        assert event.partial is True
+        invocation_span = mock_tracer.start_as_current_span.return_value.__enter__.return_value
+        mock_span_error.assert_called_once_with(
+            invocation_span,
+            error_type="RunnerGeneratorExit",
+            description="Runner invocation stopped with GeneratorExit.",
+        )
+
+    @pytest.mark.asyncio
     async def test_run_async_non_streaming_mode(self, runner, mock_session_service, mock_agent, mock_session):
         """Test non-streaming mode only yields complete events."""
         # Setup
