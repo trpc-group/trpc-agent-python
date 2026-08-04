@@ -81,6 +81,14 @@ def run_validation_fake(
         for c in candidate_baseline.per_case_results
     }
 
+    if baseline_map and not candidate_map:
+        # 候选侧完全没有评测结果：逐 case 对比会把 baseline 通过 case 全判
+        # new_fail → 误判过拟合 REJECT。这是空候选/未评测异常，显式报错而
+        # 非产出虚假回归（reviewer Critical）。
+        raise ValueError(
+            "candidate val has no evaluated cases; cannot compare against "
+            "baseline without fabricating regressions")
+
     deltas = []
     all_ids = set(baseline_map.keys()) | set(candidate_map.keys())
 
@@ -158,7 +166,11 @@ def _apply_scenario(case: dict, scenario: str, *, is_train: bool,
         scenario == "overfit" and not is_train
         and case_id in (val_regression_cases or [])
     )
-    if "candidate_conversation" in case and not _is_overfit_val_target:
+    # noop 契约是"候选与 baseline 完全一致"：candidate_conversation 覆盖会破坏
+    # 该语义（即使与 actual_conversation 不同也会被回放 → 虚假 new_pass/new_fail，
+    # 污染 gate 的回归/提升判定）。noop 场景跳过覆盖（reviewer Warning）。
+    if (scenario != "noop" and "candidate_conversation" in case
+            and not _is_overfit_val_target):
         new_case["actual_conversation"] = case["candidate_conversation"]
         return new_case
 
@@ -389,6 +401,15 @@ def run_validation_trace(
         str(c.get("eval_id")): c.get("pass", False)
         for c in candidate_val.per_case_results
     }
+
+    if baseline_map and not candidate_map:
+        # 候选 val 没有任何已评测 case（如候选 actual 全缺失/全 unreviewed）：
+        # 逐 case 对比会把 baseline 通过 case 全判 new_fail → 误过拟合 REJECT。
+        # 与 run_validation_fake 一致：显式报错而非产出虚假回归（reviewer Critical）。
+        raise ValueError(
+            "candidate val has no evaluated cases; cannot compare against "
+            "baseline without fabricating regressions")
+
     deltas = []
     all_ids = set(baseline_map.keys()) | set(candidate_map.keys())
     for case_id in sorted(all_ids):

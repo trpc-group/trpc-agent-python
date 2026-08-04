@@ -219,7 +219,10 @@ def generate_md_report(
         lines.append(f"- ✅ Accept the optimized prompt — improvement verified.")
     elif gate.decision.value == "reject":
         lines.append(f"- ❌ Reject the candidate — see gate reason above.")
-        if attribution.total_failures > 0:
+        if attribution.by_category:
+            # 直接按 by_category 是否为空判断，而非 total_failures：外部手动构造
+            # AttributionReport 时两者可能不一致，max() 空 dict 会抛 ValueError
+            # （reviewer Warning）。
             top_cat = max(attribution.by_category.items(), key=lambda x: x[1])
             lines.append(f"- Focus on fixing `{top_cat[0]}` issues ({top_cat[1]} failures).")
     else:

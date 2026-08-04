@@ -233,3 +233,53 @@ class TestRunValidationTraceOverfitGuard:
                 str(train), str(val), self._baseline_val(), opt,
                 load_pipeline_config(), scenario="overfit", val_regression_cases=["c1"],
             )
+
+    def test_candidate_val_empty_raises_not_fabricated_regression(self, tmp_path):
+        """baseline val 有已评测 case 而候选 val 无评测结果 → 显式报错，而非把
+        baseline 通过 case 全判 new_fail 触发误过拟合 REJECT（reviewer Critical）。"""
+        train = tmp_path / "train.evalset.json"
+        val = tmp_path / "val.evalset.json"
+        self._write(train, [{"eval_id": "c1", "conversation": [], "actual_conversation": []}])
+        self._write(val, [])  # val 集空 → 候选 val 无任何已评测 case
+        opt = type("R", (), {"candidate_strategy": "noop"})()
+        bl = BaselineResult(
+            evalset_id="val", pass_rate=1.0, total_cases=1,
+            passed_cases=1, failed_cases=0,
+            per_case_results=[{"eval_id": "c1", "pass": True}],
+        )
+
+        with pytest.raises(ValueError, match="no evaluated cases"):
+            run_validation_trace(
+                str(train), str(val), bl, opt,
+                load_pipeline_config(), scenario="noop",
+            )
+
+    def test_noop_ignores_candidate_conversation(self, tmp_path):
+        """noop 场景：case 携带 candidate_conversation 也不覆盖，候选与 baseline
+        一致、delta 全 unchanged（reviewer Warning：覆盖破坏 noop 语义）。"""
+        train = tmp_path / "train.evalset.json"
+        val = tmp_path / "val.evalset.json"
+        conv = [{"invocation_id": "i1",
+                 "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                 "final_response": {"parts": [{"text": "a"}], "role": "model"}}]
+        case = {"eval_id": "c1", "conversation": conv,
+                "actual_conversation": conv,
+                # 与 actual_conversation 不同的 candidate_conversation：noop 下不应回放
+                "candidate_conversation": [{"invocation_id": "i1",
+                                            "user_content": {"parts": [{"text": "q"}], "role": "user"},
+                                            "final_response": {"parts": [{"text": "WRONG"}], "role": "model"}}]}
+        self._write(train, [{"eval_id": "c1", "conversation": [], "actual_conversation": []}])
+        self._write(val, [case])
+        opt = type("R", (), {"candidate_strategy": "noop"})()
+        bl = BaselineResult(
+            evalset_id="val", pass_rate=1.0, total_cases=1,
+            passed_cases=1, failed_cases=0,
+            per_case_results=[{"eval_id": "c1", "pass": True}],
+        )
+
+        result = run_validation_trace(
+            str(train), str(val), bl, opt,
+            load_pipeline_config(), scenario="noop",
+        )
+        assert all(d.change == "unchanged" for d in result.deltas)
+        assert result.new_failures == 0

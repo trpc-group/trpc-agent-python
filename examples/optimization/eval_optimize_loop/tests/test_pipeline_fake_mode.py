@@ -52,13 +52,17 @@ class TestFullPipelineFakeMode:
             new_pass_rate = bl_train.pass_rate
             new_passes = bl_train.passed_cases
 
+        # candidate 需携带 per_case_results（delta 逐 case 对比用）：模拟"修复全部
+        # 失败"——baseline 失败 case 变通过，产生 new_pass 而非虚假 new_fail。
+        candidate_per_case = [{**pc, "pass": True} for pc in bl_val.per_case_results]
         candidate = BaselineResult(
             evalset_id=bl_train.evalset_id,
             pass_rate=new_pass_rate,
-            total_cases=bl_train.total_cases,
-            passed_cases=new_passes,
-            failed_cases=bl_train.total_cases - new_passes,
-            failed_case_ids=bl_train.failed_case_ids[attr.total_failures:],
+            total_cases=len(candidate_per_case),
+            passed_cases=len(candidate_per_case),
+            failed_cases=0,
+            failed_case_ids=[],
+            per_case_results=candidate_per_case,
         )
         validation = run_validation_fake(cfg.val_evalset, bl_val, candidate, cfg)
 

@@ -102,6 +102,12 @@ class AuditTracer:
 
     def end_stage(self, stage_name: str) -> StageTiming:
         """End timing a pipeline stage and record it."""
+        if self._active_stage is not None and self._active_stage != stage_name:
+            # stage 名错配（如 start_stage("baseline") 后误 end_stage("optimization")）
+            # 会把开始时间记成错误阶段、审计被静默污染 → 记录 warning（reviewer Warning）。
+            self._audit.warnings.append(
+                f"end_stage('{stage_name}') mismatched active stage "
+                f"'{self._active_stage}'")
         end = time.monotonic()
         timing = StageTiming(
             stage=stage_name,
@@ -114,6 +120,10 @@ class AuditTracer:
 
     def add_cost(self, usd: float, category: str = "optimization") -> None:
         """Add cost to the audit trail."""
+        if usd < 0:
+            # 负成本会减小 total_cost_usd，gate 的 cost 检查（cost <= max_cost）
+            # 可能把超预算伪装成在预算内 → 显式拒绝负值（reviewer Warning）。
+            raise ValueError(f"cost must be non-negative, got {usd}")
         if category == "evaluation":
             self._audit.evaluation_cost_usd += usd
         else:
@@ -136,7 +146,8 @@ class AuditTracer:
             with open(path, "rb") as f:
                 sha = hashlib.sha256(f.read()).hexdigest()[:12]
             self._audit.input_file_hashes[key] = sha
-        except (OSError, ImportError):
+        except OSError:
+            # hashlib 是 stdlib，import 不可达失败；仅 OSError（文件读失败）可达
             self._audit.input_file_hashes[key] = "unavailable"
 
     def set_results(

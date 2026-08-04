@@ -212,6 +212,11 @@ async def run_baseline_sdk(
             fail_reason = ""
             for cr in results:
                 st = getattr(cr, "final_eval_status", None)
+                if st is None:
+                    # SDK 结果缺 final_eval_status（接口结构变更/异常态）：视作
+                    # 未评测跳过，避免静默计为失败虚增失败数、拉低 pass_rate
+                    # （reviewer Warning）。
+                    continue
                 if st == EvalStatus.NOT_EVALUATED:
                     # 未评测（如缺少 trace 数据）≠ 失败：跳过，不计入 total 也不计失败，
                     # 避免虚增失败数、拉低 pass_rate、污染 gate 的 improvement 判定。
