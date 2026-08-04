@@ -23,7 +23,6 @@ from typing import Union
 from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
-
 from trpc_agent_sdk.evaluation import EvalBaseModel
 from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import OptimizeResult
@@ -525,11 +524,17 @@ class ArtifactReference(EvalBaseModel):
     @model_validator(mode="after")
     def _validate_status(self) -> "ArtifactReference":
         if self.status == "available":
-            if self.relative_path is None or self.size_bytes is None or self.sha256 is None or self.unavailable_reason is not None:
+            if (
+                self.relative_path is None
+                or self.size_bytes is None
+                or self.sha256 is None
+                or self.unavailable_reason is not None
+            ):
                 raise ValueError("available artifacts require path, size, hash, and no unavailable reason")
         elif self.unavailable_reason is None or self.size_bytes is not None or self.sha256 is not None:
             raise ValueError("unavailable artifacts require a reason and no size or hash")
         return self
+
 
 class ArtifactIndex(EvalBaseModel):
     schema_version: Literal[1] = 1

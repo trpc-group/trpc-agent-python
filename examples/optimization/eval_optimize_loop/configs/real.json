@@ -1,13 +1,13 @@
 {
   "config_version": 1,
   "execution": {
-    "mode": "offline",
+    "mode": "real",
     "candidate_scenario": "improve"
   },
   "inputs": {
-    "train_evalset": "data/train.evalset.json",
-    "validation_evalset": "data/val.evalset.json",
-    "optimizer_config": "optimizer.json"
+    "train_evalset": "data/evalsets/train.evalset.json",
+    "validation_evalset": "data/evalsets/val.evalset.json",
+    "optimizer_config": "configs/optimizer.json"
   },
   "prompts": [
     {

@@ -4,7 +4,7 @@
   "inputs": {
     "train_evalset": "data/traces/baseline.train.evalset.json",
     "validation_evalset": "data/traces/baseline.validation.evalset.json",
-    "optimizer_config": "optimizer.json"
+    "optimizer_config": "configs/optimizer.json"
   },
   "prompts": [{"name": "system_prompt", "path": "prompts/system.md"}],
   "trace_inputs": {

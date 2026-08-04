@@ -7,13 +7,13 @@
   "started_at": "2026-07-21T07:36:53.995239Z",
   "finished_at": "2026-07-21T07:36:54.029902Z",
   "input_snapshot": {
-    "pipeline_config_path": "<example_root>/pipeline.json",
-    "pipeline_config_sha256": "6bc16344d7a0691fd2aec05ae29a19fcd1507c81f7eaf5e50535c27a07775fcb",
-    "optimizer_config_path": "<example_root>/optimizer.json",
+    "pipeline_config_path": "<example_root>/configs/offline.json",
+    "pipeline_config_sha256": "f15c9e9bf66ca6851fce72f56069eceb3adf9340d2e1aaa2d1e9ae3918198230",
+    "optimizer_config_path": "<example_root>/configs/optimizer.json",
     "optimizer_config_sha256": "5f936b9abd6fbd0cfb8e72c5ee8783c3001791434f5881a2196ac3ce65145c49",
-    "train_evalset_path": "<example_root>/data/train.evalset.json",
+    "train_evalset_path": "<example_root>/data/evalsets/train.evalset.json",
     "train_evalset_sha256": "d2849889340afd9b624583d75caccc96c1657281c90a8a3373b60563e332b8a9",
-    "validation_evalset_path": "<example_root>/data/val.evalset.json",
+    "validation_evalset_path": "<example_root>/data/evalsets/val.evalset.json",
     "validation_evalset_sha256": "719cf1c6c95dd2d1e164e3383bc0c28ba9405fc438b6b4f2d34195db51028341",
     "prompt_snapshots": [
       {

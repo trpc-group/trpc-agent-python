@@ -21,7 +21,6 @@ from typing import Union
 from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
-
 from trpc_agent_sdk.evaluation import EvalBaseModel
 
 
@@ -69,7 +68,7 @@ class InputPathsConfig(EvalBaseModel):
         if not value.strip():
             raise ValueError("path must not be empty")
         if path.is_absolute():
-            raise ValueError("path must be relative to pipeline.json")
+            raise ValueError("path must be relative to the example root")
         return value
 
 
@@ -86,7 +85,7 @@ class PromptFieldConfig(EvalBaseModel):
         if not value.strip():
             raise ValueError("prompt path must not be empty")
         if path.is_absolute():
-            raise ValueError("prompt path must be relative to pipeline.json")
+            raise ValueError("prompt path must be relative to the example root")
         return value
 
 
@@ -135,7 +134,7 @@ class RunConfig(EvalBaseModel):
         if not value.strip():
             raise ValueError("runs_dir must not be empty")
         if path.is_absolute():
-            raise ValueError("runs_dir must be relative to pipeline.json")
+            raise ValueError("runs_dir must be relative to the example root")
         return value
 
 
@@ -222,7 +221,7 @@ class WritebackConfig(EvalBaseModel):
 
 
 class PipelineConfig(EvalBaseModel):
-    """The complete, example-local ``pipeline.json`` schema (version 1)."""
+    """The complete, example-local pipeline configuration schema (version 1)."""
 
     config_version: Literal[1] = 1
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
@@ -268,7 +267,7 @@ def load_pipeline_config(path: str | Path) -> PipelineConfig:
 
     Paths intentionally remain relative strings in the model so a copied example
     directory remains relocatable.  ``prepare_run`` resolves and validates them
-    relative to this file.
+    relative to the example root.
     """
     config_path = Path(path)
     return PipelineConfig.model_validate_json(config_path.read_text(encoding="utf-8"))
