@@ -8,7 +8,7 @@
 ``optimizer.json`` deliberately remains an SDK ``OptimizeConfigFile``.  The
 configuration in this module contains only orchestration concerns that do not
 belong in the SDK optimizer schema: isolated prompt sources, gate policy,
-budgets, reporting, and artifact retention.
+budgets and artifact retention.
 """
 
 from __future__ import annotations
@@ -185,26 +185,11 @@ class BudgetConfig(EvalBaseModel):
     on_unavailable: Literal["reject", "warning"] = "reject"
 
 
-class ReportingConfig(EvalBaseModel):
-    """Report formats selected for a successful future pipeline run."""
-
-    write_json: bool = True
-    write_markdown: bool = True
-    include_case_evidence: bool = True
-
-    @model_validator(mode="after")
-    def _require_report_format(self) -> "ReportingConfig":
-        if not self.write_json and not self.write_markdown:
-            raise ValueError("at least one of write_json or write_markdown must be enabled")
-        return self
-
-
 class ArtifactConfig(EvalBaseModel):
     """Which reproducibility artifacts future phases must retain."""
 
     copy_input_files: bool = True
     retain_optimizer_native_artifacts: bool = True
-    audit_all_candidates: bool = False
 
 
 class WritebackConfig(EvalBaseModel):
@@ -231,7 +216,6 @@ class PipelineConfig(EvalBaseModel):
     case_labels: CaseLabelsConfig = Field(default_factory=CaseLabelsConfig)
     gate: GateConfig = Field(default_factory=GateConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
-    reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     artifacts: ArtifactConfig = Field(default_factory=ArtifactConfig)
     writeback: WritebackConfig = Field(default_factory=WritebackConfig)
     trace_inputs: Optional[TraceInputsConfig] = None

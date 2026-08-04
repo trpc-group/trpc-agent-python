@@ -8,7 +8,7 @@
   "finished_at": "2026-07-21T07:36:54.029902Z",
   "input_snapshot": {
     "pipeline_config_path": "<example_root>/configs/offline.json",
-    "pipeline_config_sha256": "f15c9e9bf66ca6851fce72f56069eceb3adf9340d2e1aaa2d1e9ae3918198230",
+    "pipeline_config_sha256": "e5b07f5140453e2d105b9304741c22ad9306d5c74ebd9c6bd398e420533cc808",
     "optimizer_config_path": "<example_root>/configs/optimizer.json",
     "optimizer_config_sha256": "5f936b9abd6fbd0cfb8e72c5ee8783c3001791434f5881a2196ac3ce65145c49",
     "train_evalset_path": "<example_root>/data/evalsets/train.evalset.json",
