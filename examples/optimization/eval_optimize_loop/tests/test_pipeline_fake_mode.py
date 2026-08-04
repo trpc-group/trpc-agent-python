@@ -96,11 +96,14 @@ class TestFullPipelineFakeMode:
         cfg = load_pipeline_config(mode="fake")
         bl_train = run_baseline_fake(str(data_dir / "train.evalset.json"), cfg)
 
-        # Simulate big degradation
+        # 用真实 baseline 的 pass_rate 驱动显著退化候选（而非硬编码 0.8/0.2），
+        # 使该测试真正覆盖 "baseline → gate" 链路，能捕获 baseline 回归
         gate = evaluate_gate(
-            baseline_pass_rate=0.8,
-            candidate_pass_rate=0.2,
+            baseline_pass_rate=bl_train.pass_rate,
+            candidate_pass_rate=max(0.0, bl_train.pass_rate - 0.5),
             baseline_metrics={}, candidate_metrics={},
+            baseline_failed=bl_train.failed_case_ids,
+            candidate_failed=bl_train.failed_case_ids[:1],
         )
         assert gate.decision == GateDecision.REJECT
 
