@@ -1,6 +1,6 @@
 {
-  "task_id": "opt-20260803-111252-27cbe785",
-  "generated_at": "2026-08-03T11:12:52.872140+00:00",
+  "task_id": "opt-20260804-030900-4816907a",
+  "generated_at": "2026-08-04T03:09:00.356505+00:00",
   "baseline": {
     "train": {
       "evalset_id": "train-mixed-v2",
@@ -404,36 +404,41 @@
       "stages": [
         {
           "stage": "config",
-          "duration_ms": 3.2,
-          "duration_s": 0.003
+          "duration_ms": 1.5,
+          "duration_s": 0.001
         },
         {
           "stage": "baseline",
-          "duration_ms": 6.5,
-          "duration_s": 0.006
+          "duration_ms": 3.1,
+          "duration_s": 0.003
         },
         {
           "stage": "attribution",
-          "duration_ms": 0.1,
+          "duration_ms": 0.0,
           "duration_s": 0.0
         },
         {
           "stage": "optimization",
-          "duration_ms": 0.1,
+          "duration_ms": 0.0,
           "duration_s": 0.0
         },
         {
           "stage": "validate",
-          "duration_ms": 7.5,
-          "duration_s": 0.008
+          "duration_ms": 2.6,
+          "duration_s": 0.003
         },
         {
           "stage": "gate",
           "duration_ms": 0.0,
           "duration_s": 0.0
+        },
+        {
+          "stage": "report",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
         }
       ],
-      "total_duration_s": 0.0
+      "total_duration_s": 0.008
     },
     "cost": {
       "optimization_usd": 0.1,
@@ -441,8 +446,8 @@
       "total_usd": 0.1
     },
     "environment": {
-      "python_version": "3.12.7",
-      "platform": "Linux 6.8.0-90-generic"
+      "python_version": "3.13.5",
+      "platform": "Darwin 25.4.0"
     },
     "results": {
       "baseline_train_pass_rate": 0.7058823529411765,
@@ -467,7 +472,7 @@
     "warnings": [],
     "seed": 42,
     "mode": "fake",
-    "duration_seconds": 0.0,
+    "duration_seconds": 0.008,
     "optimization_cost": 0.1,
     "improvement": 0.2941,
     "improvement_note": "",

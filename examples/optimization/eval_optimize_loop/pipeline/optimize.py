@@ -213,8 +213,8 @@ async def run_optimize_live(
             from trpc_agent_sdk.evaluation import load_optimize_config as _sdk_load
             _oc = _sdk_load(optimizer_config_path)
             _rl = _oc.optimize.algorithm.reflection_lm
-            _optimize_timeout = float(
-                getattr(_oc.optimize.algorithm, "timeout_seconds", _optimize_timeout))
+            _timeout_cfg = getattr(_oc.optimize.algorithm, "timeout_seconds", None)
+            _optimize_timeout = float(_timeout_cfg) if _timeout_cfg is not None else _optimize_timeout
             if not (_rl.provider_name and _rl.model_name):
                 print("  ⚠️  reflection_lm 未配置真实 LLM（provider_name/model_name 为空），"
                       "live GEPA 优化将失败并降级为空结果")
