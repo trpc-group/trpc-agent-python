@@ -122,6 +122,25 @@ def _has_number(text: str) -> bool:
     return bool(extract_numbers(text))
 
 
+def _all_numeric_subset_matched(
+    exp_nums: list[float], act_nums: list[float], tolerance: float,
+) -> bool:
+    """期望数字在实际中一一对应命中：已配对的实际数字不可复用。
+
+    旧实现 `all(any(abs(e-a)<=tol for a in act_nums) for e in exp_nums)`
+    允许重复期望值折叠到同一实际数字（如期望 "20 and 20" 命中实际单个
+    "20" 即判通过），对多数字答案误判通过（reviewer Warning）。
+    """
+    remaining = list(act_nums)
+    for e in exp_nums:
+        idx = next((j for j, a in enumerate(remaining)
+                    if abs(e - a) <= tolerance), None)
+        if idx is None:
+            return False
+        del remaining[idx]
+    return True
+
+
 def _round_close(a: float, b: float, rel_tol: float = 0.01) -> bool:
     """相对舍入容差比较（默认 1%）。用于期望带单位的四舍五入差异。"""
     if b == 0:
@@ -522,7 +541,7 @@ def compare_invocations(expected: dict, actual: dict, *,
         else:
             exp_nums = extract_numbers(exp_final)
             act_nums = extract_numbers(act_final)
-            if exp_nums and all(any(abs(e - a) <= numeric_tolerance for a in act_nums) for e in exp_nums):
+            if exp_nums and _all_numeric_subset_matched(exp_nums, act_nums, numeric_tolerance):
                 answer_ok = True
             else:
                 answer_reason = f"expected answer '{exp_final}' not matched in actual"
@@ -533,7 +552,7 @@ def compare_invocations(expected: dict, actual: dict, *,
         else:
             exp_nums = extract_numbers(exp_final)
             act_nums = extract_numbers(act_final)
-            if exp_nums and all(any(abs(e - a) <= numeric_tolerance for a in act_nums) for e in exp_nums):
+            if exp_nums and _all_numeric_subset_matched(exp_nums, act_nums, numeric_tolerance):
                 answer_ok = True
             else:
                 answer_reason = f"expected explanation not matched; expected numbers {exp_nums} not all in actual {act_nums}"

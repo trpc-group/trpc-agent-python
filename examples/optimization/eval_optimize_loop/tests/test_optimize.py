@@ -176,6 +176,18 @@ class TestRunOptimizeFake:
         for i in range(1, len(scores)):
             assert scores[i] >= scores[i - 1], f"Score decreased at round {i}"
 
+    def test_best_so_far_is_running_max(self, all_fail_baseline):
+        """best_so_far 应为历史最大分而非本轮分（reviewer Warning：旧实现
+        best_so_far=score，审计字段失真）。"""
+        attribution = attribute_failures(all_fail_baseline.__dict__, {})
+        result = run_optimize_fake(
+            attribution, load_pipeline_config(max_iterations=4))
+        running = -1.0
+        for r in result.rounds:
+            running = max(running, r.score)
+            assert r.best_so_far == running, (
+                f"best_so_far 应为历史最大 {running}，得到 {r.best_so_far}")
+
 
 class TestAnchorToExampleDir:
     """Tests for _anchor_to_example_dir() — live 相对路径锚定到 example 目录。

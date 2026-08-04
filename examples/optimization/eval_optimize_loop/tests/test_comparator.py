@@ -256,6 +256,24 @@ class TestCompareInvocations:
             assert not ok, f"期望 42 不应匹配比较操作数: {act}"
             assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
 
+    def test_multi_numeric_expected_requires_one_to_one(self):
+        """多数字期望须一一对应：`20 and 20` 不得命中实际单个 `20`。
+
+        旧实现 `all(any(...))` 允许两个期望 20 折叠到同一实际数字 → 误判
+        通过（reviewer Warning）。
+        """
+        case = _mk_case("20 and 20", "answer is 20")
+        ok, cat = compare_invocations(
+            case["conversation"][0], case["actual_conversation"][0])
+        assert not ok, "期望 20 and 20 不应命中单个实际 20"
+        assert cat == FailureCategory.FINAL_RESPONSE_MISMATCH
+
+        # 两个实际数字 → 一一对应通过
+        case2 = _mk_case("20 and 20", "answer is 20 and 20")
+        ok2, _ = compare_invocations(
+            case2["conversation"][0], case2["actual_conversation"][0])
+        assert ok2
+
     def test_trace_matcher_numeric_tolerance_effective(self):
         """TraceMatcher 自定义 numeric_tolerance 真正生效，非静默忽略
         （reviewer Warning：硬编码阈值被忽略的问题）。"""

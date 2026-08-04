@@ -143,9 +143,13 @@ class TestIsOutputDirAllowed:
 
     def _repo_root(self) -> str:
         import os
+        from pipeline._paths import find_repo_root
         _here = os.path.dirname(os.path.abspath(__file__))  # eval_optimize_loop/tests
-        # tests → eval_optimize_loop → optimization → examples → 仓库根（4 级）
-        return os.path.realpath(os.path.join(_here, os.pardir, os.pardir, os.pardir, os.pardir))
+        # 复用 find_repo_root 标记文件锚定（替代硬编码 4 级 pardir，避免 example
+        # 目录移动后与实现 _REPO_ROOT 漂移，reviewer Warning）；找不到才回退 4 级。
+        return (find_repo_root(_here)
+                or os.path.realpath(os.path.join(
+                    _here, os.pardir, os.pardir, os.pardir, os.pardir)))
 
     def test_accepts_repo_internal(self):
         assert is_output_dir_allowed(os.path.join(self._repo_root(), "results")) is True
@@ -176,9 +180,13 @@ class TestIsOutputFileAllowed:
 
     def _repo_root(self) -> str:
         import os
+        from pipeline._paths import find_repo_root
         _here = os.path.dirname(os.path.abspath(__file__))  # eval_optimize_loop/tests
-        # tests → eval_optimize_loop → optimization → examples → 仓库根（4 级）
-        return os.path.realpath(os.path.join(_here, os.pardir, os.pardir, os.pardir, os.pardir))
+        # 复用 find_repo_root 标记文件锚定（替代硬编码 4 级 pardir，避免 example
+        # 目录移动后与实现 _REPO_ROOT 漂移，reviewer Warning）；找不到才回退 4 级。
+        return (find_repo_root(_here)
+                or os.path.realpath(os.path.join(
+                    _here, os.pardir, os.pardir, os.pardir, os.pardir)))
 
     def test_accepts_repo_internal_file(self):
         _p = os.path.join(self._repo_root(), "results", "optimization_report.json")

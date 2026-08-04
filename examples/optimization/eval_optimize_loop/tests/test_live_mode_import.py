@@ -428,6 +428,51 @@ class TestLiveModeRobustness:
         finally:
             _shutil.rmtree(_example / "sample_output", ignore_errors=True)
 
+    def test_audit_errors_include_holdout_failure(self, monkeypatch, data_dir):
+        """holdout 评分失败经 tracer.add_error 记录后不得被本地 errors 覆盖丢失。
+
+        reviewer Critical：audit_dict.update({"errors": ...}) 曾用仅含
+        optimization/scenario 错误的本地列表覆盖 tracer.to_dict() 已累积的
+        errors（含 holdout 失败），导致审计错误从报告中静默丢失。
+        """
+        import json as _json
+        import os as _os
+        import shutil as _shutil
+        import sys as _sys
+        import run_pipeline as rp
+        from pipeline._paths import find_repo_root
+
+        _repo_root = find_repo_root(str(Path(__file__).resolve().parent))
+        assert _repo_root is not None
+        _out_dir = _os.path.join(_repo_root, "sample_output_audit_err_test")
+        _real_fake = rp.run_baseline_fake
+
+        def _boom_holdout(path, cfg):
+            if "holdout" in str(path):
+                raise RuntimeError("holdout corrupt data")
+            return _real_fake(path, cfg)
+
+        monkeypatch.setattr(rp, "run_baseline_fake", _boom_holdout)
+        monkeypatch.setattr(_sys, "argv", [
+            "run_pipeline.py", "--mode", "fake",
+            "--train-evalset", str(data_dir / "train.evalset.json"),
+            "--val-evalset", str(data_dir / "val.evalset.json"),
+            "--optimizer-config", str(data_dir / "optimizer.json"),
+            "--output-dir", _out_dir,
+            "--holdout-evalset", str(data_dir / "holdout.evalset.json"),
+        ])
+        try:
+            code = rp.main()
+            assert code == 0
+            _json_path = _os.path.join(_out_dir, "optimization_report.json")
+            with open(_json_path, encoding="utf-8") as _f:
+                _rep = _json.load(_f)
+            _errs = _rep.get("audit", {}).get("errors", [])
+            assert any("holdout" in e.lower() for e in _errs), (
+                f"audit.errors 应保留 holdout 失败错误，得到: {_errs}")
+        finally:
+            _shutil.rmtree(_out_dir, ignore_errors=True)
+
     def test_scenario_error_no_overfitting_misreport(self, monkeypatch, data_dir, capsys):
         """overfit 场景配置错误路径：不得误报 "Overfitting detected"。
 

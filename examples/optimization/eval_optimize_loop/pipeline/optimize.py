@@ -124,15 +124,22 @@ def run_optimize_fake(
     optimized_fields = set()
     prompt_changes: dict[str, str] = {}
 
+    # Simulate improvement: score 基于累计已修复 case 数，单调递增。
+    # 旧实现按"轮次 (i+1) × 当前类别 cat_count"计算——大类修完后接小类时
+    # 分数会下降（如 10/12 后接 2/12），与 "deterministically improves" 矛盾；
+    # best_so_far 也须为历史最大值而非本轮分（reviewer Warning）。
+    base_score = 0.5  # Assume baseline starts at 50%
+    best_so_far = 0.0
+    fixed_total = 0
+
     for i in range(max_rounds):
         cat_name, cat_count = categories_to_fix[i % len(categories_to_fix)] if categories_to_fix else ("unknown", 0)
         start = time.monotonic()
 
-        # Simulate improvement: each fixed category adds to the score
-        base_score = 0.5  # Assume baseline starts at 50%
-        fix_contribution = (cat_count / attribution.total_failures) * 0.5
-        score = min(1.0, base_score + fix_contribution * (i + 1))
-        best_so_far = score
+        fixed_total += cat_count
+        score = min(1.0, base_score
+                    + (fixed_total / max(attribution.total_failures, 1)) * 0.5)
+        best_so_far = max(best_so_far, score)
 
         # Simulate prompt changes from reflective mutation
         changes = [_simulate_prompt_change(cat_name)]

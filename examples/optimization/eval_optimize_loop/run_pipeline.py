@@ -710,7 +710,11 @@ def main() -> int:
         "improvement_note": improvement_note,
         "baseline_train_pass_rate": baseline_train.pass_rate,
         "candidate_train_pass_rate": candidate_train.pass_rate,
-        "errors": errors,
+        # 合并而非覆盖：tracer.to_dict() 已把 tracer 累积的错误（含 holdout
+        # 评分失败等经 tracer.add_error 记录）写入 audit_dict["errors"]；用本地
+        # errors（仅 optimization/scenario）覆盖会静默丢失这些审计错误
+        # （reviewer Critical）。合并成新列表，不改写 tracer 的引用。
+        "errors": (audit_dict.get("errors") or []) + errors,
         "reproduce_command": audit_dict["reproducibility"]["reproduce_command"],
     })
     # Holdout 结果（可选）写入审计，供报告展示。
