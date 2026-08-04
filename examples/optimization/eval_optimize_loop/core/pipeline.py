@@ -28,46 +28,46 @@ from trpc_agent_sdk.evaluation import OptimizeConfigFile
 from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation import load_optimize_config
 
-from .analysis import build_evaluation_analysis
-from .business_agent import BusinessAgent
-from .artifact_writer import discover_run_artifacts
-from .artifact_writer import publish_report_bundle
-from .artifact_writer import write_failure_report
-from .candidate_provider import AgentOptimizerCandidateProvider
-from .candidate_provider import CandidateProviderError
-from .candidate_provider import CandidateRequest
-from .candidate_provider import FakeCandidateProviderAdapter
-from .config import PipelineConfig
-from .config import load_pipeline_config
-from .evaluation_adapter import EvaluationAnalysisError
-from .evaluation_adapter import standardize_snapshot
-from .fake import DeterministicFakeModel
-from .gate import evaluate_gate
-from .gate import GateEvaluationError
-from .prompt_workspace import PromptWorkspaceError
-from .prompt_workspace import resolve_inside_example_root
-from .prompt_workspace import stage_prompt_workspace
-from .prompt_workspace import validate_prompt_sources
-from .report_builder import build_failure_report
-from .report_builder import build_optimization_report
-from .schemas import InputSnapshot
-from .schemas import CandidateScenario
-from .schemas import EvaluationSnapshot
-from .schemas import OfflineStageResult
-from .schemas import ObservableValue
-from .schemas import OptimizerRuntimeParameters
-from .schemas import ResourceMeasurements
-from .schemas import RealStageResult
-from .schemas import ReportPhase
-from .schemas import ReportProgress
-from .schemas import TraceCandidateProposal
-from .schemas import TraceInputSnapshot
-from .schemas import TracePromptSnapshot
-from .schemas import TraceScenarioInputSnapshot
-from .schemas import TraceStageResult
-from .schemas import WorkspaceSnapshot
-from .schemas import WritebackResult
-from .writeback import perform_writeback
+from ..agent.agent import BusinessAgent
+from ..agent.fake import DeterministicFakeModel
+from ..data.config import PipelineConfig
+from ..data.config import load_pipeline_config
+from ..data.schemas import CandidateScenario
+from ..data.schemas import EvaluationSnapshot
+from ..data.schemas import InputSnapshot
+from ..data.schemas import ObservableValue
+from ..data.schemas import OfflineStageResult
+from ..data.schemas import OptimizerRuntimeParameters
+from ..data.schemas import RealStageResult
+from ..data.schemas import ReportPhase
+from ..data.schemas import ReportProgress
+from ..data.schemas import ResourceMeasurements
+from ..data.schemas import TraceCandidateProposal
+from ..data.schemas import TraceInputSnapshot
+from ..data.schemas import TracePromptSnapshot
+from ..data.schemas import TraceScenarioInputSnapshot
+from ..data.schemas import TraceStageResult
+from ..data.schemas import WorkspaceSnapshot
+from ..data.schemas import WritebackResult
+from .evaluation import EvaluationAnalysisError
+from .evaluation import build_evaluation_analysis
+from .evaluation import standardize_snapshot
+from .optimization import AgentOptimizerCandidateProvider
+from .optimization import CandidateProviderError
+from .optimization import CandidateRequest
+from .optimization import FakeCandidateProviderAdapter
+from .optimization import GateEvaluationError
+from .optimization import PromptWorkspaceError
+from .optimization import evaluate_gate
+from .optimization import perform_writeback
+from .optimization import resolve_inside_example_root
+from .optimization import stage_prompt_workspace
+from .optimization import validate_prompt_sources
+from .reporting import build_failure_report
+from .reporting import build_optimization_report
+from .reporting import discover_run_artifacts
+from .reporting import publish_report_bundle
+from .reporting import write_failure_report
 
 
 class PipelinePreparationError(ValueError):
@@ -392,7 +392,8 @@ def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) 
     """
     config_path = Path(pipeline_config_path).resolve()
     config = load_pipeline_config(config_path)
-    example_root = config_path.parent
+    config_dir = config_path.parent
+    example_root = config_dir.parent if config_dir.name == "configs" else config_dir
 
     train_path, validation_path, optimizer_path = _resolve_inputs(example_root, config)
     train_evalset = _load_evalset(train_path, "train_evalset")

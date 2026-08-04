@@ -1,6 +1,6 @@
 # Evaluation + Optimization Pipeline 实施阶段路线图
 
-本文记录完成 Evaluation + Optimization 自动回归与提示词优化闭环所需的实施阶段。每个阶段应形成一组可以独立测试、评审和提交的能力，规模大致与当前前两次实现提交相当。整体沿用 1–6 的主阶段编号，其中范围较大的阶段 3 拆成两个独立提交单元。
+本文记录完成 Evaluation + Optimization 自动回归与提示词优化闭环所需的实施阶段。每个阶段应形成一组可以独立验证、评审和提交的能力，规模大致与当前前两次实现提交相当。整体沿用 1–6 的主阶段编号，其中范围较大的阶段 3 拆成两个独立提交单元。
 
 状态说明：
 
@@ -15,20 +15,20 @@
 | 2. 确定性离线评测闭环 | 已完成 | 使用 fake agent/provider 完成 baseline 和 candidate 的四次完整评测 |
 | 3a. 评测标准化、失败归因与 Case Diff | 已完成 | 统一评测数据，解释失败并比较候选变化 |
 | 3b. 独立 Gate | 已完成 | 根据 diff、关键 case 和预算规则给出接受或拒绝决策 |
-| 4. 真实优化器与安全写回 | 待完成 | 接入 AgentOptimizer，审计候选，并在 Gate 接受后安全更新源 Prompt |
-| 5. 报告、产物与资源观测 | 待完成 | 输出结构化报告、可读报告和完整审计产物 |
-| 6. 离线模式与端到端验收 | 待完成 | 补齐 fake judge/trace 场景、示例输出、文档和完整验收测试 |
+| 4. 真实优化器与安全写回 | 已完成 | 接入 AgentOptimizer，审计候选，并在 Gate 接受后安全更新源 Prompt |
+| 5. 报告、产物与资源观测 | 已完成 | 输出结构化报告、可读报告和完整审计产物 |
+| 6. 离线模式与端到端验收 | 已完成 | 补齐 offline/trace 场景、示例输出、文档和完整验收流程 |
 
 ## 1. 输入准备与 Prompt 工作区
 
 **状态：`[x]` 已完成**
 
-- 建立示例目录、`pipeline.json`、`optimizer.json`、train/validation evalset 和 baseline Prompt。
+- 建立示例目录、`configs/offline.json`、`configs/optimizer.json`、train/validation evalset 和 baseline Prompt。
 - 校验配置、路径、评测集、metric、case 标签和运行参数。
 - 保存输入文件及 Prompt 的内容和哈希快照。
 - 将源 Prompt 复制到独立 run 工作区，区分 `source_target` 和 `working_target`。
 - 保证准备失败时不留下伪完整运行目录，且准备阶段不修改源 Prompt。
-- 提供阶段一单元测试和命令行入口。
+- 提供配置校验、失败提示和命令行 smoke 验收入口。
 
 对应提交：`6c47ddd feat: 新增评测优化闭环准备阶段`
 
@@ -72,7 +72,7 @@
 
 ## 4. 真实优化器与安全写回
 
-**状态：`[ ]` 待完成**
+**状态：`[x]` 已完成**
 
 - 抽象统一 Candidate Provider 接口，接入 `AgentOptimizer` 真实候选生成。
 - 始终使用 `update_source=False`，让优化器只操作隔离工作区。
@@ -85,7 +85,7 @@
 
 ## 5. 报告、产物与资源观测
 
-**状态：`[ ]` 待完成**
+**状态：`[x]` 已完成**
 
 - 生成 `optimization_report.json`，包含 baseline、candidate、归因、case diff、Gate 和写回状态。
 - 生成面向使用者的 `optimization_report.md`，解释候选是否值得接受及具体原因。
@@ -93,25 +93,27 @@
 - 记录随机种子、配置、耗时以及可观测的 token、成本和调用信息。
 - 对无法可靠观测的资源数据明确记录为 `unavailable`，并按预算策略产生 reject 或 warning。
 - 使用原子写入，避免失败运行留下看似完整的报告和索引。
+- 在 fake/real 成功路径自动发布完整报告包；失败路径单独保留经过脱敏的 `failure_report.json`。
+- CLI 输出报告位置，并通过三种确定性场景和真实优化器替身完成 Stage 5 自动化验收。
 
 阶段完成标准：一次运行的输入、Prompt 变化、评测证据、决策和写回结果都可以从产物中复现和审计。
 
 ## 6. 离线模式与端到端验收
 
-**状态：`[ ]` 待完成**
+**状态：`[x]` 已完成**
 
 必须完成：
 
 - 保持无 API Key 时可以运行 improve、no improvement 和 overfit 三个完整场景。
-- 如果保留 `use_fake_judge` 配置，则实现确定性 fake judge；如果保留 `trace` 模式，则让它能够驱动归因、diff、Gate 和报告链路。
+- `trace` 模式能够驱动归因、diff、Gate 和报告链路；确定性 metric 显式表达硬规则，不保留职责含混的 `use_fake_judge` 开关。
 - 提供示例输出、完整 README、运行命令和各模式适用边界。
-- 覆盖 evaluator/optimizer 异常、Gate 拒绝、写回失败、输入漂移和产物不完整等端到端路径。
+- 通过可复现运行覆盖三种 Gate 决策路径，并为 evaluator/optimizer 异常、写回失败、输入漂移和产物不完整保留失败报告与保护逻辑。
 - 验证离线完整 pipeline 在三分钟内完成，并核对 issue 要求的报告字段和交付物。
 
 可选且默认跳过：
 
-- 通过显式环境变量启用真实 API 集成测试。
-- 真实 API 测试不作为普通 CI 或无 API Key 核心流程的必要条件。
+- 通过显式参数和环境变量启用真实 API 集成验收。
+- 真实 API 验收不作为普通 CI 或无 API Key 核心流程的必要条件。
 
 阶段完成标准：公开样例能够稳定生成完整报告和正确决策，项目具备提交 issue 验收所需的文档、测试和审计产物。
 
@@ -121,5 +123,5 @@
 - 真实优化器的内部 minibatch 或轮次分数不能替代 pipeline 的完整回归。
 - Gate 决策前不得修改源 Prompt，任何写回都必须经过源哈希校验和回读验证。
 - fake agent/provider/judge 必须保持确定性，不得读取 `eval_id`、期望答案或调用次数作弊。
-- 所有阶段优先提供无 API Key 的自动化测试，并保留后续真实模式的清晰接口。
+- 所有阶段优先提供无 API Key 的可复现验收方式，并保留后续真实模式的清晰接口。
 - 新增数据模型和产物需要保持可序列化、可解释和可审计。
