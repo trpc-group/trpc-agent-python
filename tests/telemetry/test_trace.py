@@ -23,6 +23,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry import trace
 
 from trpc_agent_sdk.telemetry._trace import (
     _build_llm_request_for_trace,
@@ -50,12 +51,13 @@ def _mock_span():
     return span
 
 
-def _make_part(text=None, function_call=None, function_response=None, inline_data=None):
+def _make_part(text=None, function_call=None, function_response=None, inline_data=None, thought=False):
     part = MagicMock()
     part.text = text
     part.function_call = function_call
     part.function_response = function_response
     part.inline_data = inline_data
+    part.thought = thought
     return part
 
 
@@ -228,6 +230,31 @@ class TestTraceRunner:
         )
 
         span.set_attribute.assert_any_call("trpc.python.agent.runner.input", "hello\nworld")
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_with_thought_parts(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        parts = [
+            _make_part(text="thinking...", thought=True),
+            _make_part(text="final answer"),
+        ]
+        content = _make_content(parts=parts)
+
+        trace_runner(
+            app_name="app",
+            user_id="u",
+            session_id="s",
+            invocation_context=ctx,
+            new_message=content,
+        )
+
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.runner.input",
+            "<trace_think>thinking...</trace_think>\nfinal answer",
+        )
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_none_text_parts(self, mock_get_span):
@@ -545,6 +572,25 @@ class TestTraceAgent:
         span.set_attribute.assert_any_call("trpc.python.agent.agent.input", "hello\n agent")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_with_thought_user_content(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        parts = [
+            _make_part(text="reasoning", thought=True),
+            _make_part(text="answer"),
+        ]
+        user_content = _make_content(parts=parts)
+        ctx = _make_invocation_context(user_content=user_content)
+
+        trace_agent(ctx)
+
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.agent.input",
+            "<trace_think>reasoning</trace_think>\nanswer",
+        )
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_without_user_content(self, mock_get_span):
         span = _mock_span()
         mock_get_span.return_value = span
@@ -838,10 +884,12 @@ class TestTraceCallLlm:
         req.config.model_dump = MagicMock(return_value={"temperature": 0.7})
         return req
 
-    def _make_llm_response(self, content=None, usage=None, error_message=None):
+    def _make_llm_response(self, content=None, usage=None, error_code=None, error_message=None, custom_metadata=None):
         resp = MagicMock()
         resp.content = content
+        resp.error_code = error_code
         resp.error_message = error_message
+        resp.custom_metadata = custom_metadata
         resp.model_dump_json = MagicMock(return_value='{"content": "response"}')
         resp.usage_metadata = usage
         return resp
@@ -863,6 +911,35 @@ class TestTraceCallLlm:
         span.set_attribute.assert_any_call("trpc.python.agent.invocation_id", "inv-1")
         span.set_attribute.assert_any_call("trpc.python.agent.session_id", "sess-1")
         span.set_attribute.assert_any_call("trpc.python.agent.event_id", "e-1")
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_error_response_marks_span_and_records_exception(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        req = self._make_llm_request()
+        resp = self._make_llm_response(
+            error_code="STREAMING_ERROR",
+            error_message="rate limit exceeded",
+            custom_metadata={"error_type": "RateLimitError"},
+        )
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        span.set_status.assert_called_once_with(trace.StatusCode.ERROR, "rate limit exceeded")
+        span.set_attribute.assert_any_call("error.type", "RateLimitError")
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.llm.error_code",
+            "STREAMING_ERROR",
+        )
+        span.add_event.assert_called_once_with(
+            "exception",
+            {
+                "exception.type": "RateLimitError",
+                "exception.message": "rate limit exceeded",
+            },
+        )
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_usage_metadata(self, mock_get_span):

@@ -146,7 +146,9 @@ class CustomTraceReporter:
         """
         return LlmResponse(
             content=event.content if event else None,
+            error_code=event.error_code if event else None,
             error_message=event.error_message if event else None,
+            custom_metadata=event.custom_metadata if event else None,
         )
 
     def _trace_function_call(self, event: Event) -> None:
@@ -240,6 +242,13 @@ class CustomTraceReporter:
         """
         # Skip partial events
         if event.partial:
+            return
+
+        # Error events commonly have no text content. Trace them before the
+        # content-based routing below so failed custom-model invocations remain
+        # visible and are marked as errors by trace_call_llm.
+        if event.is_error():
+            self._trace_llm_response(ctx, event)
             return
 
         # Check for function_call (tool invocation request)

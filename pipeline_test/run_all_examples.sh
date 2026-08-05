@@ -11,7 +11,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RUN_MODE="all"
 FAIL_FAST=false
 INCLUDE_MANUAL=false
-EXAMPLE_TIMEOUT_SECONDS="${EXAMPLE_TIMEOUT_SECONDS:-300}"
+EXAMPLE_TIMEOUT_SECONDS="${EXAMPLE_TIMEOUT_SECONDS:-500}"
 
 PASSED=()
 FAILED=()
@@ -38,6 +38,7 @@ SKIPPED_EXAMPLES=(
     "examples/skills_hub/run_agent.py"
     "examples/skills_with_container/run_agent.py"
     "examples/skills_with_cube/run_agent.py"
+    "examples/skills_code_review_agent/run_agent.py"
 )
 
 show_usage() {

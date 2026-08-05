@@ -207,7 +207,7 @@ class SessionManager:
                 author="system",
                 actions=actions,
                 timestamp=time.time(),
-                partial=True,
+                partial=False,
             )
 
             # Apply changes through TRPC's event system

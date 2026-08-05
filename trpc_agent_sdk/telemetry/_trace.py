@@ -62,6 +62,30 @@ def get_trpc_agent_span_name() -> str:
     return _trpc_agent_span_name
 
 
+def _join_parts_with_thought_tag(parts) -> str:
+    """Join part texts, wrapping thought parts in <trace_think> tags.
+
+    Parts with ``thought=True`` (model reasoning/thinking) are wrapped in
+    ``<trace_think>...</trace_think>`` tags so downstream consumers (e.g.
+    zhiyan-llm exporter) can distinguish and optionally strip them.
+
+    Args:
+        parts: A sequence of Part objects with ``text`` and optional
+            ``thought`` attributes.
+
+    Returns:
+        The joined text string with thought parts tagged.
+    """
+    result = []
+    for part in parts:
+        text = part.text or ""
+        if getattr(part, "thought", False):
+            result.append(f"<trace_think>{text}</trace_think>")
+        else:
+            result.append(text)
+    return "\n".join(result)
+
+
 def _safe_json_serialize(obj) -> str:
     """Convert any Python object to a JSON-serializable type or string.
 
@@ -116,11 +140,11 @@ def trace_runner(
     span.set_attribute(f"{_trpc_agent_span_name}.runner.session_id", session_id)
     input_str = ""
     if new_message and new_message.parts:
-        input_str = "\n".join([part.text or "" for part in new_message.parts])
+        input_str = _join_parts_with_thought_tag(new_message.parts)
     span.set_attribute(f"{_trpc_agent_span_name}.runner.input", input_str)
     output_str = ""
     if last_event and last_event.content and last_event.content.parts:
-        output_str = "\n".join([part.text or "" for part in last_event.content.parts])
+        output_str = _join_parts_with_thought_tag(last_event.content.parts)
     span.set_attribute(f"{_trpc_agent_span_name}.runner.output", output_str)
 
     # Set state attributes for begin and end
@@ -181,7 +205,7 @@ def trace_cancellation(
     # Input (prefixed with [CANCELLED] marker)
     input_str = ""
     if new_message and new_message.parts:
-        input_str += "\n".join([part.text or "" for part in new_message.parts])
+        input_str += _join_parts_with_thought_tag(new_message.parts)
     span.set_attribute(f"{_trpc_agent_span_name}.runner.input", input_str)
 
     # Output (prefixed with [CANCELLED] marker, includes partial text or last event)
@@ -189,7 +213,7 @@ def trace_cancellation(
     if partial_text:
         output_str += partial_text
     elif last_event and last_event.content and last_event.content.parts:
-        output_str += "\n".join([part.text or "" for part in last_event.content.parts])
+        output_str += _join_parts_with_thought_tag(last_event.content.parts)
     span.set_attribute(f"{_trpc_agent_span_name}.runner.output", output_str)
 
     # Cancellation-specific attributes
@@ -245,11 +269,14 @@ def trace_agent(
         for content in override_messages:
             if content and content.parts:
                 for part in content.parts:
-                    if part.text and not part.thought:
-                        text_parts.append(part.text)
+                    if part.text:
+                        if getattr(part, "thought", False):
+                            text_parts.append(f"<trace_think>{part.text}</trace_think>")
+                        else:
+                            text_parts.append(part.text)
         input_str = "\n".join(text_parts)
     elif invocation_context.user_content and invocation_context.user_content.parts:
-        input_str = "\n".join([part.text or "" for part in invocation_context.user_content.parts])
+        input_str = _join_parts_with_thought_tag(invocation_context.user_content.parts)
     span.set_attribute(f"{_trpc_agent_span_name}.agent.input", input_str)
 
     span.set_attribute(f"{_trpc_agent_span_name}.agent.output", agent_action)
@@ -430,6 +457,26 @@ def trace_call_llm(
         llm_response_json,
     )
 
+    error_code = getattr(llm_response, "error_code", None)
+    if error_code:
+        error_message = getattr(llm_response, "error_message", None)
+        custom_metadata = getattr(llm_response, "custom_metadata", None)
+        error_type = custom_metadata.get("error_type") if isinstance(custom_metadata, dict) else None
+        error_type = str(error_type or error_code)
+        status_description = str(error_message or error_code)
+
+        span.set_status(trace.StatusCode.ERROR, status_description)
+        span.set_attribute("error.type", error_type)
+        span.set_attribute(f"{_trpc_agent_span_name}.llm.error_code", str(error_code))
+        if error_message:
+            span.set_attribute(f"{_trpc_agent_span_name}.llm.error_message", str(error_message))
+
+        exception_attributes = {
+            "exception.type": error_type,
+            "exception.message": status_description,
+        }
+        span.add_event("exception", exception_attributes)
+
     if stream_function_calls_raw:
         span.set_attribute(
             f"{_trpc_agent_span_name}.stream_function_calls.raw",
@@ -490,8 +537,10 @@ def _build_llm_request_for_trace(llm_request: LlmRequest) -> dict[str, Any]:
     """
     # Some fields in LlmRequest are function pointers and can not be serialized.
     result = {
-        "model": llm_request.model,
-        "config": llm_request.config.model_dump(exclude_none=True, exclude="response_schema"),
+        "model":
+        llm_request.model,
+        "config": (llm_request.config.model_dump(exclude_none=True, exclude="response_schema")
+                   if llm_request.config is not None else {}),
         "contents": [],
     }
     # We do not want to send bytes data to the trace.

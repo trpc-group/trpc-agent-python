@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import Optional
 from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import patch
+
+from opentelemetry import trace
 
 from trpc_agent_sdk.configs import ExponentialBackoffConfig
 from trpc_agent_sdk.configs import ModelRetryConfig
@@ -31,7 +34,6 @@ class _StatusError(Exception):
         self.status_code = status_code
         if headers is not None:
             self.response = type("Resp", (), {"headers": headers})()
-
 
 
 class _HeadersError(Exception):
@@ -73,13 +75,11 @@ async def _collect(
     *,
     get_retry_info=None,
 ) -> list[LlmResponse]:
-    return [
-        response async for response in retry_model_call(
-            call_model,
-            config,
-            get_retry_info=get_retry_info,
-        )
-    ]
+    return [response async for response in retry_model_call(
+        call_model,
+        config,
+        get_retry_info=get_retry_info,
+    )]
 
 
 class TestRetryHelpers:
@@ -192,11 +192,45 @@ class TestRetryModelCall:
             yield _content_response("ok")
 
         with patch("trpc_agent_sdk.models._retry.asyncio.sleep", new=AsyncMock()) as sleep:
-            responses = await _collect(call_model, self._retry_cfg(), get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
+            responses = await _collect(call_model,
+                                       self._retry_cfg(),
+                                       get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
         assert attempts == 2
         assert sleep.await_count == 1
         assert responses[-1].content.parts[0].text == "ok"
         assert all(response.error_code is None for response in responses)
+
+    async def test_retry_records_failed_attempt_span(self):
+        attempts = 0
+        error = _StatusError(429)
+
+        async def call_model() -> AsyncGenerator[LlmResponse, None]:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise error
+            yield _content_response("ok")
+
+        span = MagicMock()
+        with patch("trpc_agent_sdk.models._retry.asyncio.sleep", new=AsyncMock()), \
+             patch("trpc_agent_sdk.models._retry._retry_tracer") as retry_tracer:
+            retry_tracer.start_as_current_span.return_value.__enter__.return_value = span
+            responses = await _collect(
+                call_model,
+                self._retry_cfg(),
+                get_retry_info=lambda _: ModelRetryInfo(should_retry=True),
+            )
+
+        assert responses[-1].content.parts[0].text == "ok"
+        retry_tracer.start_as_current_span.assert_called_once_with("model_retry")
+        span.record_exception.assert_called_once_with(error)
+        span.set_status.assert_called_once_with(trace.StatusCode.ERROR, "status 429")
+        span.set_attribute.assert_any_call("gen_ai.operation.name", "model_retry")
+        span.set_attribute.assert_any_call("error.type", "_StatusError")
+        span.set_attribute.assert_any_call("gen_ai.retry.number", 1)
+        span.set_attribute.assert_any_call("gen_ai.retry.max_retries", 2)
+        span.set_attribute.assert_any_call("gen_ai.retry.delay_seconds", 0.0)
+        span.set_attribute.assert_any_call("http.response.status_code", 429)
 
     async def test_exhausts_budget_then_yields_error(self):
         attempts = 0
@@ -208,7 +242,9 @@ class TestRetryModelCall:
             yield
 
         with patch("trpc_agent_sdk.models._retry.asyncio.sleep", new=AsyncMock()) as sleep:
-            responses = await _collect(call_model, self._retry_cfg(num_retries=2), get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
+            responses = await _collect(call_model,
+                                       self._retry_cfg(num_retries=2),
+                                       get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
         assert attempts == 3
         assert sleep.await_count == 2
         assert responses[-1].error_code == "API_ERROR"
@@ -224,7 +260,9 @@ class TestRetryModelCall:
             yield
 
         with patch("trpc_agent_sdk.models._retry.asyncio.sleep", new=AsyncMock()) as sleep:
-            responses = await _collect(call_model, self._retry_cfg(), get_retry_info=lambda _: ModelRetryInfo(should_retry=False))
+            responses = await _collect(call_model,
+                                       self._retry_cfg(),
+                                       get_retry_info=lambda _: ModelRetryInfo(should_retry=False))
         assert attempts == 1
         assert sleep.await_count == 0
         assert responses[-1].error_code == "API_ERROR"
@@ -258,7 +296,9 @@ class TestRetryModelCall:
             raise _StatusError(429)
 
         with patch("trpc_agent_sdk.models._retry.asyncio.sleep", new=AsyncMock()) as sleep:
-            responses = await _collect(call_model, self._retry_cfg(), get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
+            responses = await _collect(call_model,
+                                       self._retry_cfg(),
+                                       get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
         assert attempts == 1
         assert sleep.await_count == 0
         assert responses[0].content.parts[0].text == "partial"
@@ -279,6 +319,8 @@ class TestRetryModelCall:
 
         attempts = iter([first_attempt, second_attempt])
         with patch("trpc_agent_sdk.models._retry.asyncio.sleep", new=AsyncMock()):
-            responses = await _collect(lambda: next(attempts)(), self._retry_cfg(), get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
+            responses = await _collect(lambda: next(attempts)(),
+                                       self._retry_cfg(),
+                                       get_retry_info=lambda _: ModelRetryInfo(should_retry=True))
         assert closed_attempts == ["first"]
         assert responses[-1].content.parts[0].text == "ok"

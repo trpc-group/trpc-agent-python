@@ -9,7 +9,9 @@ import json
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from trpc_agent_sdk.models import LlmRequest, OpenAIModel
+from trpc_agent_sdk.agents.core._request_processor import RequestProcessor
+from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.models import LlmRequest, OpenAIModel, TOOL_CALL_ARGUMENT_ERRORS
 from trpc_agent_sdk.models._llm_response import LlmResponse
 from trpc_agent_sdk.models._openai_model import (
     ApiParamsKey,
@@ -208,7 +210,10 @@ class TestProcessToolCallDelta:
         acc: list[dict] = []
         delta = {
             ToolKey.ID: "call_abc",
-            ToolKey.FUNCTION: {ToolKey.NAME: "get_weather", ToolKey.ARGUMENTS: '{"city":'},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "get_weather",
+                ToolKey.ARGUMENTS: '{"city":'
+            },
         }
         model._process_tool_call_delta(delta, acc)
         assert len(acc) == 1
@@ -222,12 +227,17 @@ class TestProcessToolCallDelta:
         acc: list[dict] = [{
             ToolKey.ID: "call_abc",
             ToolKey.TYPE: ToolKey.FUNCTION,
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: '{"a":'},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: '{"a":'
+            },
             ToolKey.THOUGHT_SIGNATURE: "",
         }]
         delta = {
             "index": 0,
-            ToolKey.FUNCTION: {ToolKey.ARGUMENTS: '"b"}'},
+            ToolKey.FUNCTION: {
+                ToolKey.ARGUMENTS: '"b"}'
+            },
         }
         model._process_tool_call_delta(delta, acc)
         assert acc[0][ToolKey.FUNCTION][ToolKey.ARGUMENTS] == '{"a":"b"}'
@@ -238,7 +248,10 @@ class TestProcessToolCallDelta:
         acc: list[dict] = [{
             ToolKey.ID: "call_orig",
             ToolKey.TYPE: ToolKey.FUNCTION,
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: ""},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: ""
+            },
             ToolKey.THOUGHT_SIGNATURE: "",
         }]
         delta = {"index": 0, ToolKey.ID: None, ToolKey.FUNCTION: {ToolKey.ARGUMENTS: "x"}}
@@ -251,8 +264,13 @@ class TestProcessToolCallDelta:
         acc: list[dict] = []
         delta = {
             "index": 0,
-            ToolKey.PROVIDER_SPECIFIC_FIELDS: {ToolKey.THOUGHT_SIGNATURE: "sig123"},
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: "{}"},
+            ToolKey.PROVIDER_SPECIFIC_FIELDS: {
+                ToolKey.THOUGHT_SIGNATURE: "sig123"
+            },
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: "{}"
+            },
         }
         model._process_tool_call_delta(delta, acc)
         assert acc[0][ToolKey.THOUGHT_SIGNATURE] == "sig123"
@@ -276,7 +294,10 @@ class TestCreateCompleteToolCalls:
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "search", ToolKey.ARGUMENTS: '{"q":"test"}'},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "search",
+                ToolKey.ARGUMENTS: '{"q":"test"}'
+            },
             ToolKey.THOUGHT_SIGNATURE: None,
         }]
         result = model._create_complete_tool_calls(acc)
@@ -285,21 +306,34 @@ class TestCreateCompleteToolCalls:
         assert result[0].name == "search"
         assert result[0].arguments == {"q": "test"}
 
-    def test_incomplete_json_skipped(self):
-        """Incomplete JSON arguments are skipped."""
+    def test_malformed_json_repaired(self):
+        """Malformed JSON arguments are repaired after stream completion."""
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: '{"incomplete":'},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: '{"queries": [{"sql": "xxx", "csv_filename": "xxx"]}}',
+            },
         }]
-        assert model._create_complete_tool_calls(acc) is None
+        result = model._create_complete_tool_calls(acc)
+        assert result is not None
+        assert result[0].arguments == {
+            "queries": [{
+                "sql": "xxx",
+                "csv_filename": "xxx",
+            }],
+        }
 
     def test_empty_arguments_yields_empty_dict(self):
         """Empty argument string produces empty dict."""
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: ""},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: ""
+            },
         }]
         result = model._create_complete_tool_calls(acc)
         assert result is not None
@@ -310,7 +344,10 @@ class TestCreateCompleteToolCalls:
         model = _model()
         acc = [{
             ToolKey.ID: "",
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: "{}"},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: "{}"
+            },
         }]
         result = model._create_complete_tool_calls(acc)
         assert result is not None
@@ -321,7 +358,10 @@ class TestCreateCompleteToolCalls:
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "", ToolKey.ARGUMENTS: "{}"},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "",
+                ToolKey.ARGUMENTS: "{}"
+            },
         }]
         assert model._create_complete_tool_calls(acc) is None
 
@@ -379,7 +419,10 @@ class TestProcessToolCallsFromMessage:
             "tool_calls": [{
                 "id": "call_1",
                 "type": "function",
-                "function": {"name": "search", "arguments": '{"q":"hello"}'},
+                "function": {
+                    "name": "search",
+                    "arguments": '{"q":"hello"}'
+                },
             }]
         }
         result = model._process_tool_calls_from_message(message)
@@ -388,17 +431,24 @@ class TestProcessToolCallsFromMessage:
         assert result[0].name == "search"
         assert result[0].arguments == {"q": "hello"}
 
-    def test_malformed_json_skipped(self):
-        """Malformed JSON arguments cause the tool call to be skipped."""
+    def test_unrecoverable_json_preserved(self):
+        """Unrecoverable arguments retain their raw value and JSON error."""
         model = _model()
         message = {
             "tool_calls": [{
                 "id": "call_1",
                 "type": "function",
-                "function": {"name": "f", "arguments": "NOT_JSON"},
+                "function": {
+                    "name": "f",
+                    "arguments": "NOT_JSON"
+                },
             }]
         }
-        assert model._process_tool_calls_from_message(message) is None
+        result = model._process_tool_calls_from_message(message)
+        assert result is not None
+        argument_errors = result[0].arguments[TOOL_CALL_ARGUMENT_ERRORS]
+        assert argument_errors["raw_arguments"] == "NOT_JSON"
+        assert "Expecting value" in argument_errors["json_error"]
 
     def test_none_entry_skipped(self):
         """None entries in tool_calls list are skipped."""
@@ -413,8 +463,13 @@ class TestProcessToolCallsFromMessage:
             "tool_calls": [{
                 "id": "call_1",
                 "type": "function",
-                "function": {"name": "f", "arguments": "{}"},
-                "provider_specific_fields": {"thought_signature": "sig_abc"},
+                "function": {
+                    "name": "f",
+                    "arguments": "{}"
+                },
+                "provider_specific_fields": {
+                    "thought_signature": "sig_abc"
+                },
             }]
         }
         result = model._process_tool_calls_from_message(message)
@@ -457,8 +512,14 @@ class TestCreateResponseHelpers:
         model = _model()
         resp = {
             "id": "resp_1",
-            "choices": [{"finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+            "choices": [{
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 2,
+                "total_tokens": 3
+            },
         }
         result = model._create_response_without_content(resp)
         assert result.content is None
@@ -477,7 +538,13 @@ class TestCreateResponseHelpers:
         model = _model()
         resp = {
             "id": "r3",
-            "choices": [{"message": {"content": "hello", "role": "assistant"}, "finish_reason": "stop"}],
+            "choices": [{
+                "message": {
+                    "content": "hello",
+                    "role": "assistant"
+                },
+                "finish_reason": "stop"
+            }],
         }
         result = model._create_response_with_content(resp)
         assert result.content is not None
@@ -489,12 +556,17 @@ class TestCreateResponseHelpers:
         resp = {
             "choices": [{
                 "message": {
-                    "content": None,
-                    "role": "assistant",
+                    "content":
+                    None,
+                    "role":
+                    "assistant",
                     "tool_calls": [{
                         "id": "call_1",
                         "type": "function",
-                        "function": {"name": "search", "arguments": '{"q":"hi"}'},
+                        "function": {
+                            "name": "search",
+                            "arguments": '{"q":"hi"}'
+                        },
                     }],
                 },
                 "finish_reason": "tool_calls",
@@ -509,7 +581,13 @@ class TestCreateResponseHelpers:
         """Response with no text and no tool calls produces empty text part."""
         model = _model()
         resp = {
-            "choices": [{"message": {"content": None, "role": "assistant"}, "finish_reason": "stop"}],
+            "choices": [{
+                "message": {
+                    "content": None,
+                    "role": "assistant"
+                },
+                "finish_reason": "stop"
+            }],
         }
         result = model._create_response_with_content(resp)
         assert result.content is not None
@@ -617,7 +695,14 @@ class TestEnsureAdditionalPropertiesFalse:
         schema = {
             "type": "object",
             "properties": {
-                "inner": {"type": "object", "properties": {"b": {"type": "number"}}},
+                "inner": {
+                    "type": "object",
+                    "properties": {
+                        "b": {
+                            "type": "number"
+                        }
+                    }
+                },
             },
         }
         result = model._ensure_additional_properties_false(schema)
@@ -819,9 +904,7 @@ class TestSetThinking:
     def test_thinking_no_max_output_tokens_raises(self):
         """Missing max_output_tokens with budget raises ValueError."""
         model = _model()
-        config = GenerateContentConfig(
-            thinking_config=ThinkingConfig(include_thoughts=True, thinking_budget=500),
-        )
+        config = GenerateContentConfig(thinking_config=ThinkingConfig(include_thoughts=True, thinking_budget=500), )
         request = _request([Content(parts=[Part.from_text(text="hi")], role="user")], config=config)
         with pytest.raises(ValueError, match="max_output_tokens must be set"):
             model._set_thinking(request, {})
@@ -902,6 +985,97 @@ class TestFormatMessages:
         user_msgs = [m for m in msgs if m.get("role") == "user"]
         assert any("hello world" in str(m.get("content", "")) for m in user_msgs)
 
+    def test_default_adapter_strips_reasoning_content(self):
+        """Thought parts are omitted unless the provider requires replay."""
+        model = _model()
+        thought_part = Part.from_text(text="internal reasoning")
+        thought_part.thought = True
+        content = Content(
+            parts=[thought_part, Part.from_text(text="visible answer")],
+            role="model",
+        )
+
+        msgs = model._format_messages(_request([content], config=GenerateContentConfig()))
+
+        assert msgs == [{"role": "assistant", "content": "visible answer"}]
+
+    def test_hy3_alias_does_not_use_hy3_adapter(self):
+        """Only the exact hy3 model name enables Hunyuan reasoning replay."""
+        model = _model(model_name="hy3-external")
+        thought_part = Part.from_text(text="internal reasoning")
+        thought_part.thought = True
+        content = Content(
+            parts=[thought_part, Part.from_text(text="visible answer")],
+            role="model",
+        )
+
+        msgs = model._format_messages(_request([content], config=GenerateContentConfig()))
+
+        assert msgs == [{"role": "assistant", "content": "visible answer"}]
+
+    def test_hy3_preserves_reasoning_content_with_tool_call(self):
+        """hy3 replays reasoning_content alongside its native tool call."""
+        model = _model(model_name="hy3")
+        thought_part = Part.from_text(text="I should call the weather tool.")
+        thought_part.thought = True
+        function_call_part = Part.from_function_call(name="get_weather", args={"city": "Beijing"})
+        function_call_part.function_call.id = "call_weather"
+        function_response_part = Part.from_function_response(
+            name="get_weather",
+            response={"temperature": "25°C"},
+        )
+        function_response_part.function_response.id = "call_weather"
+        request = _request(
+            [
+                Content(parts=[thought_part, function_call_part], role="model"),
+                Content(parts=[function_response_part], role="user"),
+            ],
+            config=GenerateContentConfig(),
+        )
+
+        msgs = model._format_messages(request)
+
+        assistant_message = next(message for message in msgs if message["role"] == "assistant")
+        assert assistant_message["content"] == ""
+        assert assistant_message["reasoning_content"] == "I should call the weather tool."
+        assert assistant_message["tool_calls"][0]["function"]["name"] == "get_weather"
+
+    def test_hy3_preserves_reasoning_content_from_request_history(self):
+        """Regression: history processing must not discard hy3 thought parts."""
+        model = _model(model_name="hy3")
+        processor = RequestProcessor()
+        request = _request([], config=GenerateContentConfig())
+        thought_part = Part.from_text(text="I should call the weather tool.")
+        thought_part.thought = True
+        function_call_part = Part.from_function_call(name="get_weather", args={"city": "Beijing"})
+        function_call_part.function_call.id = "call_weather"
+        function_response_part = Part.from_function_response(
+            name="get_weather",
+            response={"temperature": "25°C"},
+        )
+        function_response_part.function_response.id = "call_weather"
+        processor._add_content_to_request(
+            request,
+            Event(
+                invocation_id="invocation",
+                author="assistant",
+                content=Content(parts=[thought_part, function_call_part], role="model"),
+            ),
+        )
+        processor._add_content_to_request(
+            request,
+            Event(
+                invocation_id="invocation",
+                author="assistant",
+                content=Content(parts=[function_response_part], role="user"),
+            ),
+        )
+
+        msgs = model._format_messages(request)
+
+        assistant_message = next(message for message in msgs if message["role"] == "assistant")
+        assert assistant_message["reasoning_content"] == "I should call the weather tool."
+
 
 # ---------------------------------------------------------------------------
 # _validate_and_fix_openai_messages
@@ -923,9 +1097,19 @@ class TestValidateAndFixOpenAIMessages:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "f", "arguments": "{}"}}],
+                "tool_calls": [{
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "f",
+                        "arguments": "{}"
+                    }
+                }],
             },
-            {"role": "user", "content": "next question"},
+            {
+                "role": "user",
+                "content": "next question"
+            },
         ]
         fixed = model._validate_and_fix_openai_messages(messages)
         tool_msgs = [m for m in fixed if m.get("role") == "tool"]
@@ -939,10 +1123,24 @@ class TestValidateAndFixOpenAIMessages:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "f", "arguments": "{}"}}],
+                "tool_calls": [{
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "f",
+                        "arguments": "{}"
+                    }
+                }],
             },
-            {"role": "tool", "tool_call_id": "call_1", "content": "result"},
-            {"role": "user", "content": "thanks"},
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": "result"
+            },
+            {
+                "role": "user",
+                "content": "thanks"
+            },
         ]
         fixed = model._validate_and_fix_openai_messages(messages)
         dummy_msgs = [m for m in fixed if m.get("role") == "tool" and "completed by system" in m.get("content", "")]
@@ -955,7 +1153,14 @@ class TestValidateAndFixOpenAIMessages:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{"id": "call_x", "type": "function", "function": {"name": "f", "arguments": "{}"}}],
+                "tool_calls": [{
+                    "id": "call_x",
+                    "type": "function",
+                    "function": {
+                        "name": "f",
+                        "arguments": "{}"
+                    }
+                }],
             },
         ]
         fixed = model._validate_and_fix_openai_messages(messages)
@@ -1035,7 +1240,10 @@ class TestProcessChunkWithoutContent:
                     "tool_calls": [{
                         "index": 0,
                         "id": "call_1",
-                        "function": {"name": "f", "arguments": '{"a":'},
+                        "function": {
+                            "name": "f",
+                            "arguments": '{"a":'
+                        },
                     }]
                 },
                 "finish_reason": None,
@@ -1085,7 +1293,10 @@ class TestCreateStreamingToolCallResponse:
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "f", ToolKey.ARGUMENTS: "{}"},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "f",
+                ToolKey.ARGUMENTS: "{}"
+            },
         }]
         result = model._create_streaming_tool_call_response(acc, delta_arguments={1: "x"})
         assert result is None
@@ -1095,7 +1306,10 @@ class TestCreateStreamingToolCallResponse:
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "search", ToolKey.ARGUMENTS: '{"q":"hi"}'},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "search",
+                ToolKey.ARGUMENTS: '{"q":"hi"}'
+            },
         }]
         result = model._create_streaming_tool_call_response(
             acc,
@@ -1110,7 +1324,10 @@ class TestCreateStreamingToolCallResponse:
         model = _model()
         acc = [{
             ToolKey.ID: "call_1",
-            ToolKey.FUNCTION: {ToolKey.NAME: "other_tool", ToolKey.ARGUMENTS: "{}"},
+            ToolKey.FUNCTION: {
+                ToolKey.NAME: "other_tool",
+                ToolKey.ARGUMENTS: "{}"
+            },
         }]
         result = model._create_streaming_tool_call_response(
             acc,
@@ -1190,8 +1407,18 @@ class TestGenerateAsyncEdgeCases:
 
         mock_response = Mock()
         mock_response.model_dump.return_value = {
-            "choices": [{"message": {"content": "ok", "role": "assistant"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            "choices": [{
+                "message": {
+                    "content": "ok",
+                    "role": "assistant"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2
+            },
         }
 
         captured = {}
@@ -1224,14 +1451,28 @@ class TestGenerateAsyncEdgeCases:
         chunk = Mock()
         chunk.model_dump.return_value = {
             "id": "resp_1",
-            "choices": [{"delta": {"reasoning_content": "Let me think..."}, "finish_reason": None}],
+            "choices": [{
+                "delta": {
+                    "reasoning_content": "Let me think..."
+                },
+                "finish_reason": None
+            }],
             "usage": None,
         }
         final_chunk = Mock()
         final_chunk.model_dump.return_value = {
             "id": "resp_1",
-            "choices": [{"delta": {"content": "The answer is 42"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15},
+            "choices": [{
+                "delta": {
+                    "content": "The answer is 42"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 10,
+                "total_tokens": 15
+            },
         }
 
         async def mock_stream():

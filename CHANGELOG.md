@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.1.15](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.15) (2026-08-03)
+
+### Features
+
+* Tools: Added a Tool Script Safety Guard that scans Bash / Python scripts before execution and returns `allow` / `deny` / `needs_human_review`. It covers dangerous commands, sensitive path access, dependency installs, unknown network calls, and privilege escalation, and can be enabled on `BashTool`, local code executors, Skill, and MCP tool flows.
+* Tools: Added configurable safety policies, custom rule registration, JSONL audit logs, and telemetry attributes so teams can tune what to block, what to review, and how to observe safety decisions.
+* Testing: Added a Session / Memory / Summary multi-backend replay consistency framework. The same agent trajectories can be replayed on InMemory, SQLite, and optional Redis backends to compare events, state, memory, and summary results, with known SQLite summary drift reported instead of silently ignored.
+* Examples: Added a Skill-based code review agent example, including sandbox execution, review report generation, and policy filters for reviewing diffs / repositories more safely.
+* Examples: Added PostgreSQL storage support to the code review agent example, so review records can be persisted beyond the default SQLite backend.
+* Examples: Added pytest configuration and failure fallback handling for evaluation examples, making evaluation runs more resilient when individual cases fail.
+
+### Bug Fixes
+
+* Tools: Fixed `ToolSafetyFilter` only scanning the first non-empty script-like argument. It now scans all recognized fields such as `script` / `code` / `command` / `cmd` / `python_code` / `bash_code` / `code_blocks`, including mixed-language requests, so a safe earlier field can no longer hide a later dangerous command.
+* Tools: For unknown-language segments, keep running Bash rules but only merge Python findings when AST parsing succeeds. This avoids `PY_PARSE_ERROR_REVIEW` false positives that could block safe Bash scripts under strict review mode.
+* Model: Fixed Hunyuan hy3 conversations breaking the thinking chain when later turns omitted thinking content. Thinking text is now preserved when the model requires it for follow-up calls.
+* Model: Fixed tool calls being dropped when the model returned invalid JSON tool arguments. The SDK now tries `json_repair` first, and if repair fails it returns a parameter error to the agent instead of silently discarding the call.
+* Telemetry: Fixed missing traces for model retries and model call failures. Retry attempts and failure details are now recorded on the corresponding spans.
+
+### Docs
+
+* Docs: Added Tool Script Safety Guard design notes, policy examples, response schema examples, and a real-agent demo covering Tool / Skill / MCP / CodeExecutor allow-review-deny scenarios.
+* Docs: Expanded replay consistency README and implementation notes, including positive consistency checks and negative injection detection cases.
+
+## [1.1.14](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.14) (2026-07-24)
+
+### Features
+
+* Telemetry: Added support for reporting model thinking text inside a dedicated `<trace_think>` block, making it easier to distinguish reasoning content from normal response text while keeping the existing trace format compatible.
+* Sessions: Added Redis Cluster-backed session and memory services, allowing deployments that use Redis Cluster to persist conversation sessions and long-term memory through the same service interfaces as existing storage backends.
+* Storage: Formatted Redis Cluster session and memory service code to keep the new implementation consistent with the repository style.
+* Examples/Docs: Added a script for running with `uv` on macOS and updated the related installation docs and README instructions, making the macOS setup path easier to follow.
+
+## [1.1.13](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.13) (2026-07-17)
+
+### Features
+
+* Plan Mode: Added Claude Code-style Plan Mode (`setup_plan` / `PlanToolSet`), so agents can enter a design-and-approval phase before implementation. Supports model-initiated entry via `enter_plan_mode` and user/UI-driven entry through session state, with plan drafting (`update_plan_content`), clarifying questions, approval gating (`exit_plan_mode`), and write-tool restrictions while planning.
+* Tools: Added Tavily as a provider for `WebSearchTool` and `WebFetchTool`. Search can return LLM-ready answers plus optional image hits; fetch can use Tavily Extract as an alternative to direct HTTP fetching.
+* AG-UI: Expanded long-running tool discovery so nested `ToolSet` tools (including Plan Mode tools) are recognized during AG-UI runs, and tool names can be resolved from session history when the client payload only carries a tool call id.
+
+### Bug Fixes
+
+* AG-UI: Fixed session state updates from the AG-UI protocol not being persisted. State-change events are now appended as non-partial events so session services apply them correctly.
+* Runner: Avoided repeated string concatenation while accumulating streaming partial text. Partial chunks are kept as a list and joined only when cancellation cleanup needs the full text.
+* Examples: Fixed a few example agents (LangGraph and Mem0) so the full example pipeline can run more reliably.
+
+### Docs
+
+* Docs: Added English and Chinese Plan Mode guides, plus dedicated pages for TodoWrite, Task, and Goal tools.
+* Docs: Documented Tavily configuration and usage for web search and web fetch.
+* Examples: Added `plan_mode` and `plan_mode_with_goal_and_task` AG-UI examples for trying Plan Mode end to end.
+
+### Internal
+
+* CI: Added a GitHub Actions release workflow for publishing releases.
+* CI: Added code-review helper prompts and scripts under `.github/code_review/`.
+* CI: Added `pipeline_test/run_all_examples.sh` to drive the full examples pipeline more consistently.
+
 ## [1.1.12](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.12) (2026-07-10)
 
 ### Features

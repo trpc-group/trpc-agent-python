@@ -402,6 +402,114 @@ class TestExtractLongRunningToolNames:
         assert "proxy_tool" in result
         assert len(result) == 2
 
+    @pytest.mark.asyncio
+    async def test_expands_nested_toolset_long_running_tools(self, agui_agent):
+        from trpc_agent_sdk.plan_mode import PlanToolSet
+
+        agent = Mock(spec=BaseAgent)
+        agent.tools = [PlanToolSet()]
+
+        result = await agui_agent._extract_long_running_tool_names_async(agent)
+
+        assert "exit_plan_mode" in result
+        assert "ask_user_question" in result
+
+
+# ---------------------------------------------------------------------------
+# TestResolveToolNameFromSession
+# ---------------------------------------------------------------------------
+
+
+class TestResolveToolNameFromSession:
+    @pytest.mark.asyncio
+    async def test_resolves_tool_name_from_session_events(self, agui_agent):
+        from trpc_agent_sdk import types
+        from trpc_agent_sdk.events import Event
+
+        session = await agui_agent._session_manager._session_service.create_session(
+            app_name="test_app",
+            user_id="test_user",
+            session_id="thread-1",
+        )
+        call_event = Event(
+            invocation_id="inv-1",
+            author="orch",
+            content=types.Content(
+                role="model",
+                parts=[
+                    types.Part(
+                        function_call=types.FunctionCall(
+                            id="call_abc",
+                            name="ask_user_question",
+                            args={"question": "Pick one"},
+                        ))
+                ],
+            ),
+        )
+        await agui_agent._session_manager._session_service.append_event(session=session, event=call_event)
+
+        resolved = await agui_agent._resolve_tool_name_from_session(
+            thread_id="thread-1",
+            app_name="test_app",
+            user_id="test_user",
+            tool_call_id="call_abc",
+        )
+        assert resolved == "ask_user_question"
+
+    @pytest.mark.asyncio
+    async def test_extract_tool_results_falls_back_to_session(self, agui_agent):
+        from ag_ui.core import ToolMessage
+        from trpc_agent_sdk import types
+        from trpc_agent_sdk.events import Event
+
+        session = await agui_agent._session_manager._session_service.create_session(
+            app_name="test_app",
+            user_id="test_user",
+            session_id="thread-2",
+        )
+        call_event = Event(
+            invocation_id="inv-2",
+            author="orch",
+            content=types.Content(
+                role="model",
+                parts=[
+                    types.Part(
+                        function_call=types.FunctionCall(
+                            id="call_xyz",
+                            name="ask_user_question",
+                            args={"question": "Pick one"},
+                        ))
+                ],
+            ),
+        )
+        await agui_agent._session_manager._session_service.append_event(session=session, event=call_event)
+
+        tool_msg = ToolMessage(
+            id="msg-tool",
+            role="tool",
+            tool_call_id="call_xyz",
+            content='{"answer": "React", "question_id": 1}',
+        )
+        inp = RunAgentInput(
+            thread_id="thread-2",
+            run_id="run-1",
+            state={},
+            messages=[tool_msg],
+            tools=[],
+            context=[],
+            forwarded_props={},
+        )
+
+        results = await agui_agent._extract_tool_results(
+            inp,
+            thread_id="thread-2",
+            app_name="test_app",
+            user_id="test_user",
+        )
+
+        assert len(results) == 1
+        assert results[0]["tool_name"] == "ask_user_question"
+
 
 # ---------------------------------------------------------------------------
 # TestDefaultRunConfig

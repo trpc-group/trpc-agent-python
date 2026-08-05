@@ -66,7 +66,7 @@ langfuse=[
     "opentelemetry-exporter-otlp-proto-http<2.0.0,>=1.28.0",
 ]
 openclaw = [
-    "nanobot-ai>=0.1.4.post5",
+    "nanobot-ai>=0.1.4.post5; python_full_version >= '3.11'",
      "aiofiles",
      "wecom-aibot-sdk-python>=0.1.5",
 ]
@@ -151,7 +151,7 @@ all = [
     "mem0ai>=1.0.3",
     "mempalace>=3.3.3",
     "typer>=0.9.0",
-    "nanobot-ai>=0.1.4.post6",
+    "nanobot-ai>=0.1.4.post6; python_full_version >= '3.11'",
     "aiofiles",
     "wecom-aibot-sdk-python>=0.1.5",
     "a2a-sdk<1.0.0,>=0.3.22",
@@ -172,7 +172,12 @@ Homepage = "https://github.com/trpc-group/trpc-agent-python.git"
 Documentation = "https://github.com/trpc-group/trpc-agent-python.git"
 Repository = "https://github.com/trpc-group/trpc-agent-python.git"
 
-
+# uv project configuration. Defaults to the public PyPI index; the project is
+# installed as an editable package. 
+[tool.uv]
+package = true
+# Keep uv aligned with the package-level Python support. Optional dependencies
+# that require a newer interpreter use dependency-level markers above.
 
 # 可选：添加工具配置
 [tool.black]

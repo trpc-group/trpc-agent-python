@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Optional
 
+from opentelemetry import trace
+
 from trpc_agent_sdk.configs import ExponentialBackoffConfig
 from trpc_agent_sdk.configs import ModelRetryConfig
 from trpc_agent_sdk.log import logger
@@ -24,6 +26,7 @@ from trpc_agent_sdk.log import logger
 from ._llm_response import LlmResponse
 
 _MAX_RETRY_AFTER_SECONDS = 60.0
+_retry_tracer = trace.get_tracer("trpc.python.agent")
 
 
 @dataclass(frozen=True)
@@ -152,6 +155,27 @@ def _build_error_response(ex: Exception, error_code: str) -> LlmResponse:
     )
 
 
+def _trace_retry_failure(
+    ex: Exception,
+    *,
+    retry_number: int,
+    max_retries: int,
+    delay_seconds: float,
+) -> None:
+    """Record a retryable model failure as a short child span."""
+    with _retry_tracer.start_as_current_span("model_retry") as span:
+        span.record_exception(ex)
+        span.set_status(trace.StatusCode.ERROR, str(ex))
+        span.set_attribute("gen_ai.operation.name", "model_retry")
+        span.set_attribute("error.type", type(ex).__name__)
+        span.set_attribute("gen_ai.retry.number", retry_number)
+        span.set_attribute("gen_ai.retry.max_retries", max_retries)
+        span.set_attribute("gen_ai.retry.delay_seconds", delay_seconds)
+        status_code = _extract_status_code(ex)
+        if status_code is not None:
+            span.set_attribute("http.response.status_code", status_code)
+
+
 async def retry_model_call(
     call_model: Callable[[], AsyncGenerator[LlmResponse, None]],
     retry_config: Optional[ModelRetryConfig],
@@ -195,6 +219,12 @@ async def retry_model_call(
                 return
 
             delay = _compute_exponential_backoff(retry_config.backoff, attempt, retry_info.retry_after)
+            _trace_retry_failure(
+                ex,
+                retry_number=attempt + 1,
+                max_retries=retry_config.num_retries,
+                delay_seconds=delay,
+            )
             logger.warning(
                 "Model call failed (exception=%s); retrying in %.2fs (attempt %d/%d).",
                 type(ex).__name__,

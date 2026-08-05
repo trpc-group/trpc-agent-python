@@ -1,0 +1,500 @@
+{
+  "phase": "baseline",
+  "split": "train",
+  "eval_set_id": "eval_optimize_loop_train",
+  "failed_summary": {
+    "agentName": "call-agent",
+    "evalSetId": "eval_optimize_loop_train",
+    "overallStatus": "failed",
+    "runs": 1,
+    "evalCases": [
+      {
+        "evalCaseId": "train_output_format",
+        "overallStatus": "passed",
+        "metricResults": [
+          {
+            "metricName": "final_response_avg_score",
+            "score": 1.0,
+            "threshold": 1.0,
+            "evalStatus": "passed"
+          }
+        ]
+      },
+      {
+        "evalCaseId": "train_tool_arguments",
+        "overallStatus": "failed",
+        "metricResults": [
+          {
+            "metricName": "final_response_avg_score",
+            "score": 0.0,
+            "threshold": 1.0,
+            "evalStatus": "failed"
+          }
+        ]
+      },
+      {
+        "evalCaseId": "train_tool_choice",
+        "overallStatus": "failed",
+        "metricResults": [
+          {
+            "metricName": "final_response_avg_score",
+            "score": 0.0,
+            "threshold": 1.0,
+            "evalStatus": "failed"
+          }
+        ]
+      }
+    ]
+  },
+  "details_lines": [],
+  "result_lines": [
+    "Eval Set      : eval_optimize_loop_train",
+    "Overall Status: failed",
+    "Case train_output_format -> passed",
+    "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+    "",
+    "Case train_tool_arguments -> failed",
+    "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+    "",
+    "Case train_tool_choice -> failed",
+    "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+    ""
+  ],
+  "eval_results_by_eval_id": {
+    "train_tool_choice": [
+      {
+        "eval_set_id": "eval_optimize_loop_train",
+        "eval_id": "train_tool_choice",
+        "run_id": 1,
+        "final_eval_status": 2,
+        "error_message": null,
+        "overall_eval_metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            },
+            "score": 0.0,
+            "eval_status": 2,
+            "details": null
+          }
+        ],
+        "eval_metric_result_per_invocation": [
+          {
+            "actual_invocation": {
+              "invocation_id": "train-2",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "Check the status of order A100.",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": null
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 1784619414.0021462
+            },
+            "expected_invocation": {
+              "invocation_id": "train-2",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "Check the status of order A100.",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "model"
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 0.0
+            },
+            "eval_metric_results": [
+              {
+                "metric_name": "final_response_avg_score",
+                "threshold": 1.0,
+                "criterion": {
+                  "final_response": {
+                    "text": {
+                      "match": "exact",
+                      "case_insensitive": false
+                    }
+                  }
+                },
+                "score": 0.0,
+                "eval_status": 2,
+                "details": null
+              }
+            ]
+          }
+        ],
+        "session_id": "___remote_eval___session___fe46fce6-d440-432c-ac3d-3a1a03db01f1",
+        "user_id": null,
+        "session_details": null
+      }
+    ],
+    "train_tool_arguments": [
+      {
+        "eval_set_id": "eval_optimize_loop_train",
+        "eval_id": "train_tool_arguments",
+        "run_id": 1,
+        "final_eval_status": 2,
+        "error_message": null,
+        "overall_eval_metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            },
+            "score": 0.0,
+            "eval_status": 2,
+            "details": null
+          }
+        ],
+        "eval_metric_result_per_invocation": [
+          {
+            "actual_invocation": {
+              "invocation_id": "train-3",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "Look up order B-204 for customer 17.",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": null
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 1784619413.9986317
+            },
+            "expected_invocation": {
+              "invocation_id": "train-3",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "Look up order B-204 for customer 17.",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "model"
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 0.0
+            },
+            "eval_metric_results": [
+              {
+                "metric_name": "final_response_avg_score",
+                "threshold": 1.0,
+                "criterion": {
+                  "final_response": {
+                    "text": {
+                      "match": "exact",
+                      "case_insensitive": false
+                    }
+                  }
+                },
+                "score": 0.0,
+                "eval_status": 2,
+                "details": null
+              }
+            ]
+          }
+        ],
+        "session_id": "___remote_eval___session___a6cd661a-f2ca-4f9b-8c5f-e9d875e61f41",
+        "user_id": null,
+        "session_details": null
+      }
+    ],
+    "train_output_format": [
+      {
+        "eval_set_id": "eval_optimize_loop_train",
+        "eval_id": "train_output_format",
+        "run_id": 1,
+        "final_eval_status": 1,
+        "error_message": null,
+        "overall_eval_metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            },
+            "score": 1.0,
+            "eval_status": 1,
+            "details": null
+          }
+        ],
+        "eval_metric_result_per_invocation": [
+          {
+            "actual_invocation": {
+              "invocation_id": "train-1",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "How can I update my email address?",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": null
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 1784619414.0005472
+            },
+            "expected_invocation": {
+              "invocation_id": "train-1",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "How can I update my email address?",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "model"
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 0.0
+            },
+            "eval_metric_results": [
+              {
+                "metric_name": "final_response_avg_score",
+                "threshold": 1.0,
+                "criterion": {
+                  "final_response": {
+                    "text": {
+                      "match": "exact",
+                      "case_insensitive": false
+                    }
+                  }
+                },
+                "score": 1.0,
+                "eval_status": 1,
+                "details": null
+              }
+            ]
+          }
+        ],
+        "session_id": "___remote_eval___session___168d89d2-fc32-4a89-ae7d-49993d76be8f",
+        "user_id": null,
+        "session_details": null
+      }
+    ]
+  },
+  "passed_case_count": 1,
+  "total_case_count": 3,
+  "average_score": 0.3333333333333333
+}

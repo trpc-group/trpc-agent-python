@@ -18,6 +18,10 @@ from typing import Optional
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.tools import BaseTool
+from trpc_agent_sdk.tools.safety import Decision
+from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
+from trpc_agent_sdk.tools.safety import ToolScriptScanRequest
+from trpc_agent_sdk.tools.safety import write_audit_event
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Type
@@ -29,7 +33,15 @@ class BashTool(BaseTool):
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
-    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None):
+    def __init__(
+        self,
+        cwd: Optional[str] = None,
+        whitelist_commands: Optional[list[str]] = None,
+        safety_scanner: Optional[ToolScriptSafetyScanner] = None,
+        safety_audit_log_path: Optional[str] = None,
+        enable_safety_guard: bool = False,
+        block_on_review: bool = False,
+    ):
         super().__init__(
             name="Bash",
             description=("Execute bash command in shell. Returns stdout, stderr, return_code. "
@@ -38,6 +50,10 @@ class BashTool(BaseTool):
         )
         self.cwd = cwd or os.getcwd()
         self.whitelist_commands = whitelist_commands
+        self.safety_scanner = safety_scanner or (ToolScriptSafetyScanner() if enable_safety_guard else None)
+        self.safety_audit_log_path = safety_audit_log_path
+        self.enable_safety_guard = enable_safety_guard
+        self.block_on_review = block_on_review
 
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
         return FunctionDeclaration(
@@ -153,6 +169,33 @@ class BashTool(BaseTool):
         try:
             execution_dir = self._resolve_execution_directory(cwd)
 
+            safety_report = None
+            if self.enable_safety_guard:
+                safety_report = self.safety_scanner.scan(
+                    ToolScriptScanRequest(
+                        script=command,
+                        language="bash",
+                        cwd=execution_dir,
+                        env=os.environ.copy(),
+                        tool_name=self.name,
+                        tool_metadata={
+                            "timeout": timeout,
+                        },
+                    ))
+                should_block = safety_report.decision == Decision.DENY or (
+                    self.block_on_review and safety_report.decision == Decision.NEEDS_HUMAN_REVIEW)
+                safety_report.set_blocked(should_block)
+                if self.safety_audit_log_path:
+                    write_audit_event(self.safety_audit_log_path, safety_report)
+                if should_block:
+                    return {
+                        "success": False,
+                        "error": f"TOOL_SAFETY_BLOCKED: {safety_report.summary}",
+                        "command": command,
+                        "return_code": -1,
+                        "safety_report": safety_report.to_dict(),
+                    }
+
             if not self._is_command_safe(command, execution_dir):
                 if self.whitelist_commands is not None:
                     allowed_commands = ", ".join(self.whitelist_commands)
@@ -210,6 +253,7 @@ class BashTool(BaseTool):
                 "command": command,
                 "cwd": execution_dir,
                 "formatted_output": "\n".join(texts_parts),
+                "safety_report": safety_report.to_dict() if safety_report else None,
             }
         except Exception as ex:  # pylint: disable=broad-except
             return {

@@ -1,0 +1,20 @@
+## .env
+Plan.md
+.env
+
+## runtime output
+__pycache__/
+*.py[cod]
+storage/reviews.sqlite3
+storage/reviews.sqlite3-*
+reports/output/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+## AGENTS.md
+AGENTS.md
+
+## uv
+.venv/
+.python-version

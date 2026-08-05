@@ -4,6 +4,7 @@
 *.lock
 *.log
 examples/*.log
+examples/tool_safety/real_agent_safety_audit.jsonl
 
 trpc-agent-py.egg-info
 
@@ -24,3 +25,6 @@ test-ngtest-ut-trpc-agent-py.xml
 node_modules
 package-lock.json
 pyrightconfig.json
+
+# spec-workflow tool artifacts
+.spec-workflow

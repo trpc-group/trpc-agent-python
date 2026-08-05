@@ -1,0 +1,6 @@
+diff --git a/check.py b/check.py
+--- a/check.py
++++ b/check.py
+@@ -1 +1,2 @@
+ def check():
++    return "SANDBOX_FAIL"
