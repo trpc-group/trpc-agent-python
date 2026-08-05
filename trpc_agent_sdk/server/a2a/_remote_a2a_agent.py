@@ -412,6 +412,10 @@ class TrpcRemoteA2aAgent(BaseAgent):
             if state not in (TaskState.submitted, TaskState.working, TaskState.completed):
                 partial = self._resolve_partial(result.metadata)
                 ev = convert_a2a_message_to_event(msg, author=self.name, invocation_context=ctx, partial=partial)
+                if state == TaskState.failed:
+                    error_code = get_metadata(result.metadata, "error_code") or get_metadata(msg.metadata, "error_code")
+                    ev.error_code = error_code or "a2a_task_failed"
+                    ev.error_message = ev.get_text() or "Remote A2A task failed"
                 events.append(ev)
             return events
 

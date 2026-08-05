@@ -242,6 +242,8 @@ class TestCallLlmAsync:
 
         assert event.error_code == "STREAMING_ERROR"
         assert mock_trace.call_args.args[3].error_message == "rate limit exceeded"
+        assert mock_trace.call_args.kwargs["error_type"] is None
+        assert mock_trace.call_args.kwargs["error_message"] is None
 
     def test_partial_stream_close_traces_accumulated_text_and_error(self, invocation_context):
         m = MockLLMModel(model_name="test-llmproc-model")
@@ -274,6 +276,8 @@ class TestCallLlmAsync:
         assert response.content.role == "model"
         assert response.content.parts[0].text == "part1part2"
         assert response.custom_metadata is None
+        assert mock_trace.call_args.kwargs["error_type"] == "LlmCallGeneratorExit"
+        assert mock_trace.call_args.kwargs["error_message"] == "LLM call stopped with GeneratorExit."
         assert mock_report.call_args.args[2] is response
         assert mock_report.call_args.kwargs["error_type"] == "LlmCallGeneratorExit"
 
@@ -364,4 +368,6 @@ class TestCallLlmAsync:
         assert response.partial is True
         assert response.content.parts[0].text == "part1part2"
         assert response.custom_metadata == {"error_type": "RuntimeError"}
+        assert mock_trace.call_args.kwargs["error_type"] == "RuntimeError"
+        assert mock_trace.call_args.kwargs["error_message"] == "upstream failed"
         assert mock_report.call_args.kwargs["error_type"] == "RuntimeError"

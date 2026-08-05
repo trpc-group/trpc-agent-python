@@ -114,6 +114,7 @@ class TestAgentToolRunAsyncImpl:
         ctx.state = MagicMock()
         ctx.state.to_dict.return_value = {}
         ctx.event_actions = MagicMock()
+        ctx.run_config = None
         ctx.save_artifact = AsyncMock()
         return ctx
 
@@ -268,6 +269,7 @@ class TestAgentToolRunAsyncWithInputSchema:
         ctx.state = MagicMock()
         ctx.state.to_dict.return_value = {}
         ctx.event_actions = MagicMock()
+        ctx.run_config = None
         ctx.save_artifact = AsyncMock()
         return ctx
 

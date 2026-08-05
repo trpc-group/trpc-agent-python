@@ -30,6 +30,8 @@ from pydantic import field_validator
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.exceptions import RunLimitException
+from trpc_agent_sdk.exceptions import RunLimitType
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import LlmRequest
@@ -467,8 +469,10 @@ class LlmAgent(BaseAgent):
             running = agent_context.get_metadata(TRPC_AGENT_RUNNING_KEY, True)
             # Multi-turn conversation loop - continue until no more tool calls or code execution
             while running:
-                # CHECKPOINT 1: At start of each conversation turn
+                # CHECKPOINT 1: At start of each loop iteration
                 await ctx.raise_if_cancelled()
+
+                ctx.raise_if_limit(RunLimitType.MAX_ITERATIONS)
 
                 # Step 1: Build request using the request processor (includes conversation history)
                 request = LlmRequest(model=model_instance.name, )
@@ -496,6 +500,7 @@ class LlmAgent(BaseAgent):
                 collected_tool_calls = []
                 code_was_executed = False
 
+                ctx.raise_if_limit(RunLimitType.MAX_LLM_CALLS)
                 logger.debug("Starting LLM call for agent: %s", self.name)
 
                 # Use LlmProcessor to get unified events
@@ -560,6 +565,11 @@ class LlmAgent(BaseAgent):
                     try:
                         # Use extended tools processor that includes transfer tool if needed
                         extended_tools_processor = self._get_extended_tools_processor(ctx)
+
+                        ctx.raise_if_limit(
+                            RunLimitType.MAX_TOOL_CALLS,
+                            increment=len(collected_tool_calls),
+                        )
 
                         # Check if any of the tool calls are for long-running tools
                         long_running_tool_ids = set()
@@ -659,6 +669,9 @@ class LlmAgent(BaseAgent):
                         # raise to runner to handle
                         raise
 
+                    except RunLimitException:
+                        raise
+
                     except Exception as ex:  # pylint: disable=broad-except
                         logger.error("Error executing tools for agent %s: %s", self.name, ex, exc_info=True)
 
@@ -681,6 +694,8 @@ class LlmAgent(BaseAgent):
                 running = agent_context.get_metadata(TRPC_AGENT_RUNNING_KEY, False)
         except RunCancelledException:
             # raise to runner to handle
+            raise
+        except RunLimitException:
             raise
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Unexpected error in LLM agent %s: %s", self.name, ex, exc_info=True)

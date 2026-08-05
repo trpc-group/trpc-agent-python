@@ -11,6 +11,8 @@ from ._exceptions import ErrorCode
 from ._exceptions import LLMAgentModelNotFound
 from ._exceptions import ParentAgentNotFound
 from ._exceptions import RunCancelledException
+from ._exceptions import RunLimitException
+from ._exceptions import RunLimitType
 from ._exceptions import TrpcAgentException
 
 __all__ = [
@@ -20,5 +22,7 @@ __all__ = [
     "LLMAgentModelNotFound",
     "ParentAgentNotFound",
     "RunCancelledException",
+    "RunLimitException",
+    "RunLimitType",
     "TrpcAgentException",
 ]

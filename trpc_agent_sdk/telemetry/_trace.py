@@ -62,21 +62,6 @@ def get_trpc_agent_span_name() -> str:
     return _trpc_agent_span_name
 
 
-def mark_span_error(span: trace.Span, error_type: str, description: str) -> None:
-    """Mark a span as failed with an operation-specific error.
-
-    The caller supplies an error type and description that identify the failed
-    operation.
-
-    Args:
-        span: The failed operation's span.
-        error_type: The operation-specific error type.
-        description: The human-readable error description.
-    """
-    span.set_status(trace.StatusCode.ERROR, description)
-    span.set_attribute("error.type", error_type)
-
-
 def _join_parts_with_thought_tag(parts) -> str:
     """Join part texts, wrapping thought parts in <trace_think> tags.
 
@@ -127,6 +112,8 @@ def trace_runner(
     last_event: Optional[Event] = None,
     state_begin: Optional[dict[str, Any]] = None,
     state_end: Optional[dict[str, Any]] = None,
+    error_type: Optional[str] = None,
+    error_message: Optional[str] = None,
 ):
     """Traces runner execution.
 
@@ -142,6 +129,8 @@ def trace_runner(
         last_event: The last non-streaming event from the agent execution.
         state_begin: The state before the runner execution.
         state_end: The state after the runner execution.
+        error_type: The error type when the runner does not complete normally.
+        error_message: The error message when the runner does not complete normally.
     """
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
@@ -168,6 +157,10 @@ def trace_runner(
 
     if state_end is not None:
         span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
+
+    if error_type:
+        span.set_status(trace.StatusCode.ERROR, error_message or error_type)
+        span.set_attribute("error.type", error_type)
 
 
 def trace_cancellation(
@@ -249,6 +242,8 @@ def trace_agent(
     agent_action: str = "",
     state_begin: Optional[dict[str, Any]] = None,
     state_end: Optional[dict[str, Any]] = None,
+    error_type: Optional[str] = None,
+    error_message: Optional[str] = None,
 ):
     """Traces agent execution.
 
@@ -261,6 +256,8 @@ def trace_agent(
                       (text, function calls, function responses).
         state_begin: The state before the agent run.
         state_end: The state after the agent run.
+        error_type: The error type when the agent does not complete normally.
+        error_message: The error message when the agent does not complete normally.
     """
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
@@ -303,6 +300,10 @@ def trace_agent(
     if state_end is not None:
         span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
 
+    if error_type:
+        span.set_status(trace.StatusCode.ERROR, error_message or error_type)
+        span.set_attribute("error.type", error_type)
+
 
 def trace_tool_call(
     tool: BaseTool,
@@ -310,6 +311,8 @@ def trace_tool_call(
     function_response_event: Event,
     state_begin: Optional[dict[str, Any]] = None,
     state_end: Optional[dict[str, Any]] = None,
+    error_type: Optional[str] = None,
+    error_message: Optional[str] = None,
 ):
     """Traces tool call.
 
@@ -319,6 +322,8 @@ def trace_tool_call(
         function_response_event: The event with the function response details.
         state_begin: The state before the tool execution.
         state_end: The state after the tool execution.
+        error_type: The error type when the tool call does not complete normally.
+        error_message: The error message when the tool call does not complete normally.
     """
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
@@ -366,6 +371,10 @@ def trace_tool_call(
 
     if state_end is not None:
         span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
+
+    if error_type:
+        span.set_status(trace.StatusCode.ERROR, error_message or error_type)
+        span.set_attribute("error.type", error_type)
 
 
 def trace_merged_tool_calls(
@@ -427,6 +436,8 @@ def trace_call_llm(
     instruction_metadata: Optional[InstructionMetadata] = None,
     stream_function_calls_raw: Optional[list[dict[str, Any]]] = None,
     stream_function_calls_post_planner: Optional[list[dict[str, Any]]] = None,
+    error_type: Optional[str] = None,
+    error_message: Optional[str] = None,
 ):
     """Traces a call to the LLM.
 
@@ -446,6 +457,8 @@ def trace_call_llm(
             raw LLM stream chunks.
         stream_function_calls_post_planner: Optional function calls collected
             from post-planner events emitted during stream processing.
+        error_type: The error type when the LLM call does not complete normally.
+        error_message: The error message when the LLM call does not complete normally.
     """
     span = trace.get_current_span()
     # Special standard Open Telemetry GenaI attributes that indicate
@@ -472,20 +485,9 @@ def trace_call_llm(
         llm_response_json,
     )
 
-    # call_llm observation output is always the LlmResponse JSON above. On
-    # error, also set ERROR status (with description) and error attributes, but
-    # skip exception events so exporters keep using llm_response as output.
-    error_code = getattr(llm_response, "error_code", None)
-    if error_code:
-        error_message = getattr(llm_response, "error_message", None)
-        custom_metadata = getattr(llm_response, "custom_metadata", None)
-        error_type = custom_metadata.get("error_type") if isinstance(custom_metadata, dict) else None
-        error_type = str(error_type or error_code)
-        status_description = str(error_message or error_code)
-        mark_span_error(span, error_type, status_description)
-        span.set_attribute(f"{_trpc_agent_span_name}.llm.error_code", str(error_code))
-        if error_message:
-            span.set_attribute(f"{_trpc_agent_span_name}.llm.error_message", str(error_message))
+    if error_type:
+        span.set_status(trace.StatusCode.ERROR, error_message or error_type)
+        span.set_attribute("error.type", error_type)
 
     if stream_function_calls_raw:
         span.set_attribute(

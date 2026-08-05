@@ -499,7 +499,9 @@ def create_exception_status_event(
     context_id: str,
     message_text: str,
     final: bool = True,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> TaskStatusUpdateEvent:
+    """Create a terminal failed task status for an execution exception."""
     return TaskStatusUpdateEvent(
         task_id=task_id,
         status=TaskStatus(
@@ -509,10 +511,12 @@ def create_exception_status_event(
                 message_id=str(uuid.uuid4()),
                 role=Role.agent,
                 parts=[TextPart(text=message_text)],
+                metadata=metadata,
             ),
         ),
         context_id=context_id,
         final=final,
+        metadata=metadata,
     )
 
 

@@ -32,6 +32,7 @@ from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionCall
@@ -239,6 +240,8 @@ class GraphAgent(BaseAgent):
                             yield chunk_event
                             # Cancellation checkpoint after yielding events
                             await ctx.raise_if_cancelled()
+        except RunLimitException:
+            raise
         except Exception as e:
             error_message = str(e)
             logger.error(f"[{self.name}] Graph execution failed: {e}", exc_info=True)

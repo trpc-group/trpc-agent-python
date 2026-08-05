@@ -231,16 +231,12 @@ class TestBaseAgentTracing:
             await anext(stream)
             await stream.aclose()
 
-        with patch("trpc_agent_sdk.agents._base_agent.mark_span_error") as mock_span_error, \
-             patch("trpc_agent_sdk.agents._base_agent.report_invoke_agent") as mock_report, \
-             patch("trpc_agent_sdk.agents._base_agent.trace_agent"), \
+        with patch("trpc_agent_sdk.agents._base_agent.report_invoke_agent") as mock_report, \
+             patch("trpc_agent_sdk.agents._base_agent.trace_agent") as mock_trace_agent, \
              patch("trpc_agent_sdk.agents._base_agent.tracer") as mock_tracer:
             asyncio.run(run())
 
-        agent_span = mock_tracer.start_as_current_span.return_value.__enter__.return_value
-        mock_span_error.assert_called_once_with(
-            agent_span,
-            error_type="AgentGeneratorExit",
-            description="Agent execution stopped with GeneratorExit.",
-        )
+        assert mock_tracer.start_as_current_span.called
+        assert mock_trace_agent.call_args.kwargs["error_type"] == "AgentGeneratorExit"
+        assert mock_trace_agent.call_args.kwargs["error_message"] == "Agent execution stopped with GeneratorExit."
         assert mock_report.call_args.kwargs["error_type"] == "AgentGeneratorExit"

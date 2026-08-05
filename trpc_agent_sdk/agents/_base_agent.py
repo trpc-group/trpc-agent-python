@@ -43,9 +43,9 @@ from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.context import reset_invocation_ctx
 from trpc_agent_sdk.context import set_invocation_ctx
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.filter import get_filter
 from trpc_agent_sdk.filter import run_stream_filters
-from trpc_agent_sdk.telemetry import mark_span_error
 from trpc_agent_sdk.telemetry import report_invoke_agent
 from trpc_agent_sdk.telemetry import tracer
 from trpc_agent_sdk.telemetry import trace_agent
@@ -219,6 +219,7 @@ class BaseAgent(AgentABC):
     def _create_invocation_context(self, parent_context: InvocationContext) -> InvocationContext:
         """Creates a new invocation context for this agent."""
         invocation_context = parent_context.model_copy(update={"agent": self})
+        invocation_context._reset_run_limit_observed()
 
         # Handle branch assignment:
         # - If parent_context.agent is the same as self, we're being called from runner
@@ -284,7 +285,8 @@ class BaseAgent(AgentABC):
 
             mono_start = time.monotonic()
             t_first_visible: Optional[float] = None
-            metrics_error_type: Optional[str] = None
+            error_type: Optional[str] = None
+            error_message: Optional[str] = None
 
             try:
                 gen_co = run_stream_filters(ctx.agent_context, None, self.filters, handle)  # type: ignore
@@ -297,15 +299,16 @@ class BaseAgent(AgentABC):
                         non_partial_events.append(event)
                     yield event  # type: ignore
             except GeneratorExit:
-                metrics_error_type = "AgentGeneratorExit"
-                mark_span_error(
-                    agent_span,
-                    error_type=metrics_error_type,
-                    description="Agent execution stopped with GeneratorExit.",
-                )
+                error_type = "AgentGeneratorExit"
+                error_message = "Agent execution stopped with GeneratorExit."
+                raise
+            except RunLimitException as ex:
+                error_type = ex.error_code
+                error_message = str(ex)
                 raise
             except Exception as ex:
-                metrics_error_type = type(ex).__name__
+                error_type = type(ex).__name__
+                error_message = str(ex)
                 raise
             finally:
                 # Compute state after agent run
@@ -321,6 +324,8 @@ class BaseAgent(AgentABC):
                         agent_action=agent_action,
                         state_begin=state_begin,
                         state_end=state_end,
+                        error_type=error_type,
+                        error_message=error_message,
                     )
 
                 duration_s = time.monotonic() - mono_start
@@ -334,7 +339,7 @@ class BaseAgent(AgentABC):
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     is_stream=is_stream,
-                    error_type=metrics_error_type,
+                    error_type=error_type,
                 )
 
                 # avoid memory leak

@@ -384,6 +384,102 @@ for query in demo_queries:
 
 ## Advanced Configuration and Control
 
+### Limiting Work per Agent Invocation
+
+Use `RunConfig` to limit LLM calls, loop iterations, and tool calls for each Agent invocation. These limits prevent an unexpected execution path from consuming resources indefinitely.
+
+| Setting | Default | Meaning |
+| --- | ---: | --- |
+| `max_llm_calls` | `500` | Number of LLM calls that may be executed |
+| `max_iterations` | `0` | Number of Agent loop iterations that may be executed; an iteration normally contains one LLM call and any tool execution requested by that call |
+| `max_tool_calls` | `0` | Total number of tool calls that may be executed |
+
+A value of `0` disables the corresponding limit. A limit allows the configured number of operations and raises `RunLimitException` when the Agent attempts the next operation. For example, `max_iterations=1` allows the first iteration to complete and raises before the second iteration starts, so the exception contains `configured_value=1` and `observed_value=2`.
+
+`max_tool_calls` accumulates the number of tool calls returned by the LLM. If a batch would make the total exceed the limit, the framework raises before executing the batch, and none of the tools in that batch are executed.
+
+The following configuration applies to every Agent involved in this `Runner.run_async()` call:
+
+```python
+from trpc_agent_sdk.configs import RunConfig
+
+run_config = RunConfig(
+    max_llm_calls=10,
+    max_iterations=5,
+    max_tool_calls=5,
+)
+```
+
+In a multi-Agent application, use `agent_limits` to configure different limits by `agent.name`:
+
+```python
+from trpc_agent_sdk.configs import AgentRunLimits, RunConfig
+
+run_config = RunConfig(
+    max_llm_calls=10,
+    max_iterations=5,
+    max_tool_calls=5,
+    agent_limits={
+        "weather_agent": AgentRunLimits(
+            max_llm_calls=2,
+            max_iterations=2,
+            max_tool_calls=1,
+        ),
+        "summary_agent": AgentRunLimits(
+            max_llm_calls=1,
+            max_tool_calls=0,
+        ),
+    },
+)
+```
+
+Each `agent_limits` key must exactly match the target `agent.name`; otherwise, that override has no effect. Fields omitted from `AgentRunLimits` inherit the top-level `RunConfig` value. Explicitly setting a field to `0` disables the inherited limit for that Agent.
+
+Every call to an Agent's `run_async()` uses independent counters. Consequently, Agents involved in the same `Runner.run_async()` call are counted independently, and counters start over when a later invocation uses the same session.
+
+When a limit is exceeded, the framework terminates the current invocation and raises `RunLimitException` to the Python caller:
+
+```python
+from trpc_agent_sdk.exceptions import RunLimitException
+
+try:
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=user_content,
+        run_config=run_config,
+    ):
+        ...
+except RunLimitException as exc:
+    print(exc.error_code)
+    print(exc.agent_name)
+    print(exc.limit_type)
+    print(exc.configured_value, exc.observed_value)
+```
+
+The exception terminates only the current invocation; it does not close the session. The caller can pass a new `RunConfig` to a later `Runner.run_async()` call and continue using the same session. See [examples/llmagent_with_limit/run_agent.py](../../../examples/llmagent_with_limit/run_agent.py) for a complete, low-cost demonstration.
+
+`RunConfig` only limits work performed inside the Agent loop. The caller should decide when a timeout starts and how to handle it. In addition, `Runner.run_async()` returns an asynchronous event stream, and the run is not complete until that stream has been consumed. Therefore, the framework does not add a time limit to `RunConfig`; instead, the caller should apply a timeout to the complete event-consumption coroutine:
+
+```python
+import asyncio
+
+async def run_once() -> None:
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=user_content,
+        run_config=run_config,
+    ):
+        ...
+
+try:
+    await asyncio.wait_for(run_once(), timeout=120.0)
+except TimeoutError:
+    # Handle the invocation timeout.
+    ...
+```
+
 ### GenerateContentConfig
 
 Used to adjust LLM generation behavior, such as temperature, top-p, and other parameters:

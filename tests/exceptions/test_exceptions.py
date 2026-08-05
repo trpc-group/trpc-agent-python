@@ -21,7 +21,6 @@ from trpc_agent_sdk.exceptions._exceptions import (
     TrpcAgentException,
 )
 
-
 # ---------------------------------------------------------------------------
 # ErrorCode
 # ---------------------------------------------------------------------------
@@ -42,6 +41,7 @@ class TestErrorCode:
             (ErrorCode.ARTIFACT_SERVICE_NOT_FOUND, 603),
             (ErrorCode.LLM_AGENT_MODEL_NOT_FOUND, 604),
             (ErrorCode.RUN_CANCELLED, 605),
+            (ErrorCode.RUN_LIMIT_EXCEEDED, 606),
         ],
     )
     def test_member_values(self, member: ErrorCode, expected_value: int):
@@ -57,6 +57,7 @@ class TestErrorCode:
             (ErrorCode.ARTIFACT_SERVICE_NOT_FOUND, "artifact_service not found"),
             (ErrorCode.LLM_AGENT_MODEL_NOT_FOUND, "model not found"),
             (ErrorCode.RUN_CANCELLED, "run cancelled"),
+            (ErrorCode.RUN_LIMIT_EXCEEDED, "run limit exceeded"),
         ],
     )
     def test_member_phrases(self, member: ErrorCode, expected_phrase: str):
@@ -71,13 +72,14 @@ class TestErrorCode:
             (ErrorCode.ARTIFACT_SERVICE_NOT_FOUND, "the artifact_service maybe is none"),
             (ErrorCode.LLM_AGENT_MODEL_NOT_FOUND, "the artifact not found"),
             (ErrorCode.RUN_CANCELLED, "the run was cancelled by user request"),
+            (ErrorCode.RUN_LIMIT_EXCEEDED, "the agent invocation reached a configured run limit"),
         ],
     )
     def test_member_descriptions(self, member: ErrorCode, expected_description: str):
         assert member.description == expected_description
 
     def test_total_member_count(self):
-        assert len(ErrorCode) == 6
+        assert len(ErrorCode) == 7
 
     def test_can_be_used_as_int(self):
         assert ErrorCode.OK + 1 == 1
@@ -87,10 +89,12 @@ class TestErrorCode:
         assert ErrorCode(0) is ErrorCode.OK
         assert ErrorCode(601) is ErrorCode.PARENT_AGENT_NOT_FOUND
         assert ErrorCode(605) is ErrorCode.RUN_CANCELLED
+        assert ErrorCode(606) is ErrorCode.RUN_LIMIT_EXCEEDED
 
     def test_lookup_by_name(self):
         assert ErrorCode["OK"] is ErrorCode.OK
         assert ErrorCode["RUN_CANCELLED"] is ErrorCode.RUN_CANCELLED
+        assert ErrorCode["RUN_LIMIT_EXCEEDED"] is ErrorCode.RUN_LIMIT_EXCEEDED
 
     def test_invalid_value_raises(self):
         with pytest.raises(ValueError):
@@ -118,7 +122,7 @@ class TestTrpcAgentException:
 
     def test_init_sets_args_to_phrase(self):
         exc = TrpcAgentException(ErrorCode.OK)
-        assert exc.args == ("OK",)
+        assert exc.args == ("OK", )
 
     def test_str_format(self):
         exc = TrpcAgentException(ErrorCode.PARENT_AGENT_NOT_FOUND)
@@ -224,19 +228,19 @@ class TestPreBuiltExceptions:
 
     def test_all_are_trpc_agent_exception_instances(self):
         for instance in (
-            ParentAgentNotFound,
-            AgentFilterError,
-            ArtifactServiceNotFound,
-            LLMAgentModelNotFound,
+                ParentAgentNotFound,
+                AgentFilterError,
+                ArtifactServiceNotFound,
+                LLMAgentModelNotFound,
         ):
             assert isinstance(instance, TrpcAgentException)
 
     def test_all_are_exception_instances(self):
         for instance in (
-            ParentAgentNotFound,
-            AgentFilterError,
-            ArtifactServiceNotFound,
-            LLMAgentModelNotFound,
+                ParentAgentNotFound,
+                AgentFilterError,
+                ArtifactServiceNotFound,
+                LLMAgentModelNotFound,
         ):
             assert isinstance(instance, Exception)
 
@@ -262,10 +266,10 @@ class TestPreBuiltExceptions:
 
     def test_instances_are_not_run_cancelled(self):
         for instance in (
-            ParentAgentNotFound,
-            AgentFilterError,
-            ArtifactServiceNotFound,
-            LLMAgentModelNotFound,
+                ParentAgentNotFound,
+                AgentFilterError,
+                ArtifactServiceNotFound,
+                LLMAgentModelNotFound,
         ):
             assert not isinstance(instance, RunCancelledException)
 
@@ -288,6 +292,8 @@ class TestPublicAPI:
             "LLMAgentModelNotFound",
             "ParentAgentNotFound",
             "RunCancelledException",
+            "RunLimitException",
+            "RunLimitType",
             "TrpcAgentException",
         ]
         for name in expected:
@@ -303,6 +309,8 @@ class TestPublicAPI:
             "LLMAgentModelNotFound",
             "ParentAgentNotFound",
             "RunCancelledException",
+            "RunLimitException",
+            "RunLimitType",
             "TrpcAgentException",
         }
         assert set(mod.__all__) == expected_all

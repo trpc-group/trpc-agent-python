@@ -294,8 +294,7 @@ class TestRunAsync:
 
         mock_agent.run_async = mock_agent_run
 
-        with patch("trpc_agent_sdk.runners.mark_span_error") as mock_span_error, \
-             patch("trpc_agent_sdk.runners.trace_runner"), \
+        with patch("trpc_agent_sdk.runners.trace_runner") as mock_trace_runner, \
              patch("trpc_agent_sdk.runners.tracer") as mock_tracer:
             stream = runner.run_async(
                 user_id="test_user",
@@ -307,12 +306,9 @@ class TestRunAsync:
             await stream.aclose()
 
         assert event.partial is True
-        invocation_span = mock_tracer.start_as_current_span.return_value.__enter__.return_value
-        mock_span_error.assert_called_once_with(
-            invocation_span,
-            error_type="RunnerGeneratorExit",
-            description="Runner invocation stopped with GeneratorExit.",
-        )
+        assert mock_tracer.start_as_current_span.called
+        assert mock_trace_runner.call_args.kwargs["error_type"] == "RunnerGeneratorExit"
+        assert mock_trace_runner.call_args.kwargs["error_message"] == "Runner invocation stopped with GeneratorExit."
 
     @pytest.mark.asyncio
     async def test_run_async_non_streaming_mode(self, runner, mock_session_service, mock_agent, mock_session):

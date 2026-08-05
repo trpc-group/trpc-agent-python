@@ -385,6 +385,90 @@ for query in demo_queries:
 
 ## 高级配置与控制
 
+### 配置 Agent 的运行次数
+
+使用 `RunConfig` 可以限制一次 Agent 调用中的 LLM 调用次数、循环次数和工具调用次数。
+
+| 配置项 | 默认值 | 含义 |
+| --- | ---: | --- |
+| `max_llm_calls` | `500` | LLM 最多调用多少次 |
+| `max_iterations` | `0` | Agent 最多循环多少次 |
+| `max_tool_calls` | `0` | 工具最多调用多少次 |
+
+值为 `0` 表示不限制。配置的次数可以正常执行，下一次执行时才会抛出 `RunLimitException`。例如，`max_iterations=1` 时第一次循环可以正常执行，开始第二次循环时抛出异常，因此异常中的 `configured_value` 是 `1`，`observed_value` 是 `2`。
+
+如果 LLM 一次返回多个工具调用，框架会一起计算这些工具调用。总数超过 `max_tool_calls` 时，这批工具都不会执行。
+
+下面的配置会应用到本次调用中的所有 Agent：
+
+```python
+from trpc_agent_sdk.configs import AgentRunLimits, RunConfig
+
+run_config = RunConfig(
+    max_llm_calls=10,
+    max_iterations=5,
+    max_tool_calls=5,
+    agent_limits={
+        "weather_agent": AgentRunLimits(
+            max_llm_calls=2,
+            max_iterations=2,
+            max_tool_calls=1,
+        ),
+        "summary_agent": AgentRunLimits(
+            max_llm_calls=1,
+            max_tool_calls=0,
+        ),
+    },
+)
+```
+
+`agent_limits` 用于给不同 Agent 设置单独的限制。字典中的名称必须与 `agent.name` 完全一致，否则配置不会生效。`AgentRunLimits` 中没有填写的配置会沿用 `RunConfig` 中的值；设置为 `0` 表示该 Agent 不受这项限制。
+
+每个 Agent 单独计数。再次调用 Agent 时会重新计数，即使继续使用同一个会话也不会沿用上一次的次数。
+
+超过限制时，当前调用会停止，并抛出 `RunLimitException`：
+
+```python
+from trpc_agent_sdk.exceptions import RunLimitException
+
+try:
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=user_content,
+        run_config=run_config,
+    ):
+        ...
+except RunLimitException as exc:
+    print(exc.error_code)
+    print(exc.agent_name)
+    print(exc.limit_type)
+    print(exc.configured_value, exc.observed_value)
+```
+
+这个异常不会关闭会话。后续调用可以传入新的 `RunConfig`，继续使用原来的会话。完整示例请参考 [examples/llmagent_with_limit/run_agent.py](../../../examples/llmagent_with_limit/run_agent.py)。
+
+`RunConfig` 只负责限制 Agent 内部的运行次数。超时从何时开始计算、超时后如何处理，应由调用方决定；而且 `Runner.run_async()` 返回的是异步事件流，需要消费事件后才算运行结束。因此，框架没有在 `RunConfig` 中增加时间限制，而是由调用方为完整的事件消费过程设置超时：
+
+```python
+import asyncio
+
+async def run_once() -> None:
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=user_content,
+        run_config=run_config,
+    ):
+        ...
+
+try:
+    await asyncio.wait_for(run_once(), timeout=120.0)
+except TimeoutError:
+    # 处理超时。
+    ...
+```
+
 ### GenerateContentConfig
 
 用于调整LLM的生成行为，如temperature、top-p等参数：

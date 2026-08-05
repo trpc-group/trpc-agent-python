@@ -25,7 +25,6 @@ from pydantic import ValidationError
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.configs._run_config import RunConfig as RunConfigDirect
 
-
 # ---------------------------------------------------------------------------
 # Default values
 # ---------------------------------------------------------------------------
@@ -266,6 +265,9 @@ class TestPydanticModelBehavior:
         d = cfg.model_dump()
         expected_keys = {
             "max_llm_calls",
+            "max_iterations",
+            "max_tool_calls",
+            "agent_limits",
             "streaming",
             "agent_run_config",
             "custom_data",
@@ -285,6 +287,9 @@ class TestPydanticModelBehavior:
         schema = RunConfig.model_json_schema()
         props = schema.get("properties", {})
         assert "max_llm_calls" in props
+        assert "max_iterations" in props
+        assert "max_tool_calls" in props
+        assert "agent_limits" in props
         assert "streaming" in props
         assert "agent_run_config" in props
         assert "custom_data" in props
