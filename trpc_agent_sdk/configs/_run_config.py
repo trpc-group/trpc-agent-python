@@ -18,6 +18,7 @@ from pydantic import field_validator
 
 from trpc_agent_sdk.log import logger
 
+from ._agent_run_limits import AgentRunLimits
 from ._prompt_cache_config import PromptCacheConfig
 
 
@@ -29,12 +30,34 @@ class RunConfig(BaseModel):
 
     max_llm_calls: int = 500
     """
-    A limit on the total number of llm calls for a given run.
+    A limit on the total number of llm calls for each agent invocation.
 
     Valid Values:
       - More than 0 and less than sys.maxsize: The bound on the number of llm
         calls is enforced, if the value is set in this range.
       - Less than or equal to 0: This allows for unbounded number of llm calls.
+    """
+
+    max_iterations: int = Field(default=0, ge=0)
+    """Maximum loop iterations for each agent invocation.
+
+    A value of ``0`` disables this limit. The counter is local to each call to
+    an agent's ``run_async`` method.
+    """
+
+    max_tool_calls: int = Field(default=0, ge=0)
+    """Maximum tool calls for each agent invocation.
+
+    A value of ``0`` disables this limit. A batch that would exceed the limit
+    is rejected before any tool in that batch is executed.
+    """
+
+    agent_limits: dict[str, AgentRunLimits] = Field(default_factory=dict)
+    """Per-agent limit overrides keyed by the exact ``agent.name``.
+
+    Unset fields inherit their top-level values from this ``RunConfig``. A
+    per-agent value of ``0`` explicitly disables the corresponding inherited
+    limit for that agent.
     """
 
     streaming: bool = True

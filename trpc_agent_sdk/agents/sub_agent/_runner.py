@@ -26,8 +26,10 @@ from typing import Union
 
 from trpc_agent_sdk.abc import ArtifactId
 from trpc_agent_sdk.agents._llm_agent import LlmAgent
+from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.exceptions import RunCancelledException
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -388,6 +390,7 @@ async def run_subagent_streaming(
                 user_id=sub_session.user_id,
                 session_id=sub_session.id,
                 new_message=content,
+                run_config=parent_ctx.run_config or RunConfig(),
         ):
             last_event = event
             # Forward this sub-agent event to the parent consumer as a progress
@@ -409,6 +412,8 @@ async def run_subagent_streaming(
         await _forward_artifacts(sub_runner, sub_session, parent_ctx)
     except RunCancelledException:
         final_value = "[sub-agent cancelled]"
+    except RunLimitException:
+        raise
     except Exception as ex:  # noqa: BLE001
         logger.error("sub-agent run failed: %s", ex, exc_info=True)
         final_value = {"status": "error", "message": str(ex)}

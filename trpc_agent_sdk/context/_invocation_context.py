@@ -41,6 +41,7 @@ from typing import Optional
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from pydantic import PrivateAttr
 
 from trpc_agent_sdk.abc import AgentABC
 from trpc_agent_sdk.abc import ArtifactEntry
@@ -49,7 +50,10 @@ from trpc_agent_sdk.abc import ArtifactServiceABC
 from trpc_agent_sdk.abc import MemoryServiceABC
 from trpc_agent_sdk.abc import SessionABC
 from trpc_agent_sdk.abc import SessionServiceABC
+from trpc_agent_sdk.configs import AgentRunLimits
 from trpc_agent_sdk.configs import RunConfig
+from trpc_agent_sdk.exceptions import RunLimitException
+from trpc_agent_sdk.exceptions import RunLimitType
 from trpc_agent_sdk.types import ActiveStreamingTool
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import EventActions
@@ -133,6 +137,8 @@ class InvocationContext(BaseModel):
     # Configuration
     run_config: Optional[RunConfig] = None
     """Configuration for agent execution under this invocation."""
+
+    _observed_run_limits: AgentRunLimits = PrivateAttr(default_factory=AgentRunLimits)
 
     event_actions: EventActions = Field(default=EventActions(), init=True)
 
@@ -252,7 +258,7 @@ class InvocationContext(BaseModel):
          The version of the artifact.
         """
         if self.artifact_service is None:
-            raise ValueError("Artifact service is not initialized.")
+            raise ValueError('Artifact service is not initialized.')
         version = await self.artifact_service.save_artifact(
             artifact_id=ArtifactId(
                 app_name=self.app_name,
@@ -279,7 +285,7 @@ class InvocationContext(BaseModel):
             - Returns empty list if no artifacts exist
         """
         if self.artifact_service is None:
-            raise ValueError('Artifact service is not initialized.')
+            raise ValueError("Artifact service is not initialized.")
         return await self.artifact_service.list_artifact_keys(artifact_id=ArtifactId(
             app_name=self.app_name,
             user_id=self.user_id,
@@ -309,6 +315,68 @@ class InvocationContext(BaseModel):
             query=query,
             agent_context=self.agent_context,
         )
+
+    def _reset_run_limit_observed(self) -> None:
+        """Reset observed run-limit values for a new agent invocation."""
+        self._observed_run_limits = AgentRunLimits()
+
+    def _get_run_limit(self, limit_type: RunLimitType) -> int:
+        """Return the effective limit for the current agent."""
+        if self.run_config is None:
+            return 0
+
+        agent_limits = self.run_config.agent_limits.get(self.agent.name)
+        if limit_type == RunLimitType.MAX_LLM_CALLS:
+            if agent_limits is not None and agent_limits.max_llm_calls is not None:
+                return agent_limits.max_llm_calls
+            return self.run_config.max_llm_calls
+        if limit_type == RunLimitType.MAX_ITERATIONS:
+            if agent_limits is not None and agent_limits.max_iterations is not None:
+                return agent_limits.max_iterations
+            return self.run_config.max_iterations
+        if agent_limits is not None and agent_limits.max_tool_calls is not None:
+            return agent_limits.max_tool_calls
+        return self.run_config.max_tool_calls
+
+    def raise_if_limit(
+        self,
+        limit_type: RunLimitType,
+        increment: int = 1,
+    ) -> None:
+        """Record observed work and raise if its configured limit is exceeded.
+
+        Args:
+            limit_type: Limit whose observed value should be incremented.
+            increment: Number of newly observed operations.
+
+        Raises:
+            RunLimitException: If the updated observed value exceeds
+                the effective limit for the current agent.
+            ValueError: If ``increment`` is negative.
+        """
+        if increment < 0:
+            raise ValueError("Run-limit increment must not be negative.")
+
+        configured_value = self._get_run_limit(limit_type)
+        if limit_type == RunLimitType.MAX_LLM_CALLS:
+            observed_value = (self._observed_run_limits.max_llm_calls or 0) + increment
+            self._observed_run_limits.max_llm_calls = observed_value
+        elif limit_type == RunLimitType.MAX_ITERATIONS:
+            observed_value = (self._observed_run_limits.max_iterations or 0) + increment
+            self._observed_run_limits.max_iterations = observed_value
+        else:
+            observed_value = (self._observed_run_limits.max_tool_calls or 0) + increment
+            self._observed_run_limits.max_tool_calls = observed_value
+
+        if configured_value <= 0:
+            return
+        if observed_value > configured_value:
+            raise RunLimitException(
+                agent_name=self.agent.name,
+                limit_type=limit_type,
+                configured_value=configured_value,
+                observed_value=observed_value,
+            )
 
     async def raise_if_cancelled(self) -> None:
         """Raise RunCancelledException if this run is cancelled.

@@ -53,9 +53,9 @@ from trpc_agent_sdk.abc import FilterAsyncGenReturnType
 from trpc_agent_sdk.abc import FilterHandleType
 from trpc_agent_sdk.abc import FilterResult
 from trpc_agent_sdk.context import AgentContext
+from trpc_agent_sdk.exceptions import RunCancelledException
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.log import logger
-
-from ..exceptions import RunCancelledException
 
 
 class BaseFilter(FilterABC):
@@ -146,8 +146,8 @@ class BaseFilter(FilterABC):
                         logger.debug(self._create_err_str(f"{msg} error: {result.error}"))
                 if not result.is_continue:
                     return
-        except RunCancelledException:
-            # raise to runner to handle
+        except (RunCancelledException, RunLimitException):
+            # Preserve framework control-flow exceptions for the execution boundary.
             raise
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("filter type: %s, name: %s run %s error: %s",

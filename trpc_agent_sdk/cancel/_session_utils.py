@@ -21,7 +21,10 @@ from trpc_agent_sdk.types import Part
 _CANCELING_SUFFIX = "Detect user cancel the agent execution."
 
 
-async def cleanup_incomplete_function_calls(session: SessionABC) -> None:
+async def cleanup_incomplete_function_calls(
+    session: SessionABC,
+    invocation_id: Optional[str] = None,
+) -> None:
     """Remove function_calls from session.events that have no matching function_response.
 
     When cancellation occurs after tool execution, some function_calls may not
@@ -30,6 +33,8 @@ async def cleanup_incomplete_function_calls(session: SessionABC) -> None:
 
     Args:
         session: The session to clean up
+        invocation_id: When provided, only remove unmatched function calls
+            created by this invocation.
     """
     # Step 1: Collect all function_response IDs in the session
     response_ids: set[str] = set()
@@ -40,6 +45,8 @@ async def cleanup_incomplete_function_calls(session: SessionABC) -> None:
 
     # Step 2: Find and remove incomplete function_calls
     for event in session.events:
+        if invocation_id is not None and event.invocation_id != invocation_id:
+            continue
         func_calls = event.get_function_calls()
         if not func_calls:
             continue

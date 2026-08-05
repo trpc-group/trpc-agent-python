@@ -11,7 +11,6 @@ from ._metrics import report_call_llm
 from ._metrics import report_execute_tool
 from ._metrics import report_invoke_agent
 from ._trace import get_trpc_agent_span_name
-from ._trace import mark_span_error
 from ._trace import set_trpc_agent_span_name
 from ._trace import trace_agent
 from ._trace import trace_call_llm
@@ -27,7 +26,6 @@ __all__ = [
     "report_call_llm",
     "report_execute_tool",
     "report_invoke_agent",
-    "mark_span_error",
     "trace_agent",
     "trace_call_llm",
     "trace_cancellation",

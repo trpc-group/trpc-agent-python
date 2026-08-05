@@ -46,6 +46,7 @@ from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.configs import RunConfig as TRPCRunConfig
 from trpc_agent_sdk.events import EventTranslatorBase
 from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.abc import ToolSetABC
 from trpc_agent_sdk.memory import BaseMemoryService
@@ -918,7 +919,7 @@ class AgUiAgent:
             logger.debug("Finished iterating over _stream_events for execution %s", execution.thread_id)
 
             # If we found tool calls, add them to session state BEFORE cleanup
-            if has_tool_calls:
+            if has_tool_calls and not has_error:
                 app_name = self.get_app_name(input)
                 user_id = self.get_user_id(input)
                 for tool_call_id in tool_call_ids:
@@ -1273,6 +1274,16 @@ class AgUiAgent:
             await event_queue.put(None)
             logger.debug("Background task completion signal sent for thread %s", input.thread_id)
 
+        except RunLimitException as ex:
+            logger.warning("AG-UI run %s exceeded a configured run limit: %s", input.run_id, ex)
+            async for ag_ui_event in event_translator.force_close_streaming_message():
+                await event_queue.put(ag_ui_event)
+            await event_queue.put(RunErrorEvent(
+                type=EventType.RUN_ERROR,
+                message=str(ex),
+                code=ex.error_code,
+            ))
+            await event_queue.put(None)
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Background execution error: %s", ex, exc_info=True)
             # Put error in queue

@@ -130,7 +130,8 @@ class LlmProcessor:
 
                 t_start = time.monotonic()
                 t_first_token: Optional[float] = None
-                metrics_error_type: Optional[str] = None
+                error_type: Optional[str] = None
+                error_message: Optional[str] = None
                 try:
                     async for llm_response in self.model.generate_async(request, stream=stream, ctx=context):
                         latest_llm_response = llm_response
@@ -171,23 +172,25 @@ class LlmProcessor:
 
                         yield event
                 except GeneratorExit:
-                    metrics_error_type = "LlmCallGeneratorExit"
+                    error_type = "LlmCallGeneratorExit"
+                    error_message = "LLM call stopped with GeneratorExit."
                     final_llm_response = LlmResponse(
                         content=_build_interrupted_content(),
                         partial=True,
-                        error_code=metrics_error_type,
-                        error_message="LLM call stopped with GeneratorExit.",
+                        error_code=error_type,
+                        error_message=error_message,
                         interrupted=True,
                     )
                     raise
                 except Exception as ex:
-                    metrics_error_type = type(ex).__name__
+                    error_type = type(ex).__name__
+                    error_message = str(ex)
                     final_llm_response = LlmResponse(
                         content=_build_interrupted_content(),
                         partial=True,
                         error_code="LLM_CALL_ERROR",
-                        error_message=str(ex),
-                        custom_metadata={"error_type": type(ex).__name__},
+                        error_message=error_message,
+                        custom_metadata={"error_type": error_type},
                     )
                     raise
                 finally:
@@ -201,6 +204,8 @@ class LlmProcessor:
                             instruction_metadata=instruction_metadata,
                             stream_function_calls_raw=aggregated_raw_function_calls,
                             stream_function_calls_post_planner=aggregated_event_function_calls,
+                            error_type=error_type,
+                            error_message=error_message,
                         )
 
                     duration_s = time.monotonic() - t_start
@@ -212,7 +217,7 @@ class LlmProcessor:
                         duration_s=duration_s,
                         ttft_s=ttft_s,
                         is_stream=stream,
-                        error_type=metrics_error_type,
+                        error_type=error_type,
                     )
 
             if terminal_event is not None:

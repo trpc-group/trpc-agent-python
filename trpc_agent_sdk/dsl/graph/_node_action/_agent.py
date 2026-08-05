@@ -14,6 +14,7 @@ from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import EventActions
 from trpc_agent_sdk.types import Part
@@ -244,6 +245,8 @@ class AgentNodeAction(BaseNodeAction):
                 if isinstance(candidate, str) and candidate:
                     last_response = candidate
 
+        except RunLimitException:
+            raise
         except Exception as e:
             raise RuntimeError(f"Agent node '{self.name}' execution failed: {e}") from e
 

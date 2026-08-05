@@ -49,6 +49,7 @@ from pydantic import model_validator
 
 from trpc_agent_sdk.abc import AgentABC
 from trpc_agent_sdk.abc import ArtifactId
+from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.filter import BaseFilter
@@ -177,7 +178,12 @@ class AgentTool(BaseTool):
             )
 
             last_event = None
-            async for event in runner.run_async(user_id=session.user_id, session_id=session.id, new_message=content):
+            async for event in runner.run_async(
+                    user_id=session.user_id,
+                    session_id=session.id,
+                    new_message=content,
+                    run_config=tool_context.run_config or RunConfig(),
+            ):
                 # Forward state delta to parent session.
                 assert isinstance(event, Event)
                 if event.actions.state_delta:

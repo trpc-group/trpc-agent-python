@@ -26,6 +26,7 @@ from typing import Union
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.events import EventActions
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.telemetry import report_execute_tool
@@ -148,6 +149,8 @@ class ToolsProcessor:
         else:
             try:
                 result_event = await self._execute_tool(tool_call, tool, context)
+            except RunLimitException:
+                raise
             except Exception as ex:  # pylint: disable=broad-except
                 logger.error("Error executing tool %s: %s", tool_call.name, ex, exc_info=True)
                 result_event = self._create_error_event(
@@ -211,10 +214,23 @@ class ToolsProcessor:
             if parallel_tool_calls:
                 # Parallel execution: collect all events and merge them
                 function_response_events: list[Event] = []
-                async with asyncio.TaskGroup() as tg:
-                    for tool_call in non_streaming_calls:
-                        tg.create_task(self.__invoke_tools(context, resolved_tools, tool_call,
-                                                           function_response_events))
+                tasks = [
+                    asyncio.create_task(
+                        self.__invoke_tools(
+                            context,
+                            resolved_tools,
+                            tool_call,
+                            function_response_events,
+                        )) for tool_call in non_streaming_calls
+                ]
+                try:
+                    await asyncio.gather(*tasks)
+                except RunLimitException:
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    raise
 
                 # Handle merging and tracing based on number of events
                 if function_response_events:
@@ -421,6 +437,8 @@ class ToolsProcessor:
 
                 return event
 
+            except RunLimitException:
+                raise
             except Exception as ex:  # pylint: disable=broad-except
                 report_execute_tool(
                     context,
@@ -442,6 +460,8 @@ class ToolsProcessor:
                     function_response_event=error_event,
                     state_begin=state_begin,
                     state_end=state_end,
+                    error_type=type(ex).__name__,
+                    error_message=str(ex),
                 )
 
                 return error_event
@@ -579,6 +599,8 @@ class ToolsProcessor:
 
                 yield final_event
 
+            except RunLimitException:
+                raise
             except Exception as ex:  # pylint: disable=broad-except
                 report_execute_tool(
                     context,
@@ -600,6 +622,8 @@ class ToolsProcessor:
                     function_response_event=error_event,
                     state_begin=state_begin,
                     state_end=state_end,
+                    error_type=type(ex).__name__,
+                    error_message=str(ex),
                 )
                 logger.error("Error executing streaming tool %s: %s", tool_call.name, ex, exc_info=True)
                 yield error_event

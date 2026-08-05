@@ -41,9 +41,11 @@ from a2a.types import TaskState
 from pydantic import BaseModel
 from trpc_agent_sdk.cancel import SessionKey
 from trpc_agent_sdk.cancel import is_run_cancelled
+from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import new_agent_context
 from trpc_agent_sdk.events import AgentCancelledEvent
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.runners import Runner
 
@@ -63,6 +65,8 @@ UserIdExtractor = Callable[[RequestContext], Union[str, Awaitable[str]]]
 
 EventCallback = Callable[[Event, RequestContext], Union[Optional[Event], Awaitable[Optional[Event]]]]
 
+RunConfigFactory = Callable[[RequestContext], Union[RunConfig, Awaitable[RunConfig]]]
+
 
 class TrpcA2aAgentExecutorConfig(BaseModel):
     """Configuration for TrpcA2aAgentExecutor.
@@ -75,6 +79,11 @@ class TrpcA2aAgentExecutorConfig(BaseModel):
             Return the event to continue, a modified event to alter behavior, or None to
             skip this event entirely. Useful for filtering, logging, or augmenting events
             (e.g. detecting streaming tool calls via event.is_streaming_tool_call()).
+        run_config: Optional server-owned configuration applied to every agent
+            invocation. Request metadata is preserved in ``agent_run_config``.
+        run_config_factory: Optional callback that creates a server-owned
+            configuration for each request. When set, it takes precedence over
+            ``run_config``.
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -82,6 +91,8 @@ class TrpcA2aAgentExecutorConfig(BaseModel):
     cancel_wait_timeout: float = 1.0
     user_id_extractor: Optional[UserIdExtractor] = None
     event_callback: Optional[EventCallback] = None
+    run_config: Optional[RunConfig] = None
+    run_config_factory: Optional[RunConfigFactory] = None
 
 
 class TrpcA2aAgentExecutor(AgentExecutor):
@@ -115,6 +126,15 @@ class TrpcA2aAgentExecutor(AgentExecutor):
             self._runner = resolved
             return resolved
         raise TypeError(f"Runner must be a Runner instance or callable, got {type(self._runner)}")
+
+    async def _resolve_run_config(self, context: RequestContext) -> Optional[RunConfig]:
+        """Resolve the server-owned run configuration for one request."""
+        if self._config.run_config_factory is None:
+            return self._config.run_config
+        result = self._config.run_config_factory(context)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     def _get_user_session_from_task_metadata(
         self,
@@ -215,6 +235,20 @@ class TrpcA2aAgentExecutor(AgentExecutor):
                     return
 
                 await self._handle_request(context, event_queue)
+            except RunLimitException as ex:
+                logger.warning("A2A task %s exceeded a configured run limit: %s", context.task_id, ex)
+                metadata = ex.get_custom_metadata()
+                metadata["error_code"] = ex.error_code
+                try:
+                    await event_queue.enqueue_event(
+                        create_exception_status_event(
+                            task_id=context.task_id,
+                            context_id=context.context_id,
+                            message_text=str(ex),
+                            metadata=metadata,
+                        ))
+                except Exception as enqueue_error:  # pylint: disable=broad-except
+                    logger.error("Failed to publish run-limit failure event: %s", enqueue_error, exc_info=True)
             except Exception as ex:  # pylint: disable=broad-except
                 logger.error("Error handling A2A request: %s", ex, exc_info=True)
                 try:
@@ -238,6 +272,19 @@ class TrpcA2aAgentExecutor(AgentExecutor):
     async def _handle_request(self, context: RequestContext, event_queue: EventQueue):
         runner = await self._resolve_runner()
         run_args = await convert_a2a_request_to_trpc_agent_run_args(context, self._user_id_extractor)
+        configured_run_config = await self._resolve_run_config(context)
+        if configured_run_config is not None:
+            request_agent_run_config = run_args["run_config"].agent_run_config
+            configured_agent_run_config = configured_run_config.agent_run_config
+            run_args["run_config"] = configured_run_config.model_copy(
+                update={
+                    "agent_run_config": {
+                        **configured_agent_run_config,
+                        **request_agent_run_config,
+                    },
+                },
+                deep=True,
+            )
 
         session = await self._prepare_session(run_args, runner)
         agent_context = new_agent_context()
