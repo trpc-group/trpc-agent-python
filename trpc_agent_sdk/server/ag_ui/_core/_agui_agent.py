@@ -54,6 +54,7 @@ from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.sessions import strip_framework_internal_state
 from trpc_agent_sdk.tools import LongRunningFunctionTool
 from trpc_agent_sdk.types import Content
 
@@ -1103,11 +1104,19 @@ class AgUiAgent:
             # Ensure session exists
             await self._ensure_session_exists(app_name, user_id, input.thread_id, input.state)
 
-            # this will always update the backend states with the frontend states
-            # Recipe Demo Example: if there is a state "salt" in the ingredients state and in frontend user
-            # remove this salt state using UI from the ingredients list then our backend should also update
-            # these state changes as well to sync both the states
-            await self._session_manager.update_session_state(input.thread_id, app_name, user_id, input.state)
+            # Always synchronise the client-supplied state so UI-driven edits
+            # (e.g. the Recipe Demo removing an ingredient from the list) reach
+            # the backend for both normal turns and HITL tool-result rounds.
+            # Framework-internal keys (``_trpc_*``, e.g. the GraphAgent
+            # checkpoint / interrupt markers) are stripped first: they are never
+            # emitted to the client, so any occurrence here is a stale echo that
+            # must not overwrite the live checkpoint and restart the graph.
+            await self._session_manager.update_session_state(
+                input.thread_id,
+                app_name,
+                user_id,
+                strip_framework_internal_state(input.state),
+            )
 
             # Convert messages
             # only use this new_message if there is no tool response from the user

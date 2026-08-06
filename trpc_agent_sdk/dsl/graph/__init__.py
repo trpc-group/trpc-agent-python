@@ -99,10 +99,12 @@ from ._event_writer import AsyncEventWriter
 from ._event_writer import EventWriter
 from ._event_writer import EventWriterBase
 from ._graph_agent import GraphAgent
+from ._history import HistoryScope
 from ._interrupt import interrupt
 from ._memory_saver import MemorySaver
 from ._memory_saver import MemorySaverOption
 from ._memory_saver import has_graph_internal_checkpoint_state
+from ._memory_saver import has_graph_resume_state
 from ._memory_saver import strip_graph_internal_checkpoint_state
 from ._node_config import NodeConfig
 from ._state import State
@@ -146,10 +148,12 @@ __all__ = [
     "EventWriter",
     "EventWriterBase",
     "GraphAgent",
+    "HistoryScope",
     "interrupt",
     "MemorySaver",
     "MemorySaverOption",
     "has_graph_internal_checkpoint_state",
+    "has_graph_resume_state",
     "strip_graph_internal_checkpoint_state",
     "NodeConfig",
     "State",

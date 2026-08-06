@@ -412,7 +412,7 @@ graph.add_mcp_node(
 graph.add_agent_node(
     node_id="delegate",
     agent=delegate_agent,
-    isolated_messages=True,
+    history_scope="branch",
     input_from_last_response=False,
     event_scope="delegate_scope",
     input_mapper=StateMapper.rename({"query_text": STATE_KEY_USER_INPUT}),
@@ -422,11 +422,25 @@ graph.add_agent_node(
 ```
 
 常用选项：
-- isolated_messages：是否隔离父会话消息历史
+- history_scope：子 Agent 历史策略。`none` 不继承父历史，`branch` 只继承
+  当前 Agent 节点 branch 及其子 branch 的事件，`all` 继承完整父会话事件。
+- isolated_messages：旧版兼容开关。未指定 history_scope 时，`True` 映射为
+  `none`，`False` 映射为 `all`；显式 history_scope 优先。
 - input_from_last_response：是否将父状态 last_response 映射为子节点 user_input
 - event_scope：子 Agent 事件分支前缀
 - input_mapper / output_mapper：父子状态映射（推荐显式配置）
 - config / callbacks：同 add_node
+
+`branch` 过滤 child Session 的事件日志；临时图状态中的 `messages` 保持为空，
+GraphAgent 在需要时从已过滤事件重建模型输入，从而保证持久化 Session state
+仍可 JSON 序列化。该策略适用于同一 Agent 节点在后续外层 run 中再次进入、
+但又不能看到兄弟节点私有对话的场景。HITL 恢复时，旧的
+`isolated_messages=True` 节点仍会恢复当前 branch，以保留挂起的
+function-call 交互链路。
+
+当子 Agent 发出 `LongRunningEvent` 时，`add_agent_node` 会将其提升为父 GraphAgent 的 `interrupt`：父图不会执行后继节点，Runner 返回的事件保留原工具名和参数。客户端提交对应 `FunctionResponse` 后，父图恢复当前 Agent 节点，SDK 将响应映射回子 Agent 的原始 function call；只有子 Agent 最终完成后父图才继续。该机制支持同一节点多轮 HITL，并将 child state 写入 SessionService-backed checkpoint，服务重启后仍可恢复。
+
+TeamAgent 作为 Agent 节点时同样支持 Leader 发起 HITL；普通 Team Member 仍不允许配置或调用 `LongRunningFunctionTool`。
 
 GraphAgent 不需要（也不支持）通过 sub_agents 注册 Agent 节点；组合关系统一用 add_agent_node 完成。
 

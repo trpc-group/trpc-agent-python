@@ -40,13 +40,16 @@ from ._summarizer_checker import set_summarizer_time_interval_threshold
 from ._summarizer_checker import set_summarizer_token_threshold
 from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
+from ._utils import FRAMEWORK_INTERNAL_STATE_PREFIX
 from ._utils import StateStorageEntry
 from ._utils import app_state_key
 from ._utils import extract_state_delta
 from ._utils import find_events_for_summary
+from ._utils import is_framework_internal_state_key
 from ._utils import is_summary_anchor
 from ._utils import merge_state
 from ._utils import session_key
+from ._utils import strip_framework_internal_state
 from ._utils import user_state_key
 
 __all__ = [
@@ -79,11 +82,14 @@ __all__ = [
     "SummarizerSessionManager",
     "SessionServiceConfig",
     "StateStorageEntry",
+    "FRAMEWORK_INTERNAL_STATE_PREFIX",
     "app_state_key",
     "extract_state_delta",
     "find_events_for_summary",
+    "is_framework_internal_state_key",
     "merge_state",
     "is_summary_anchor",
     "session_key",
+    "strip_framework_internal_state",
     "user_state_key",
 ]

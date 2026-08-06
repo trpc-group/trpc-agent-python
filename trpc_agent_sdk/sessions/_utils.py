@@ -14,6 +14,40 @@ from typing import Optional
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.types import State
 
+# Framework-internal Session.state keys use this reserved prefix. They are
+# persisted to Session.state (e.g. the GraphAgent LangGraph checkpoint and
+# interrupt markers stored under ``_trpc_graph_*``) but MUST NOT be exposed to
+# external clients (AG-UI state snapshots / deltas) nor treated as business
+# state when comparing backends: a client that echoes such a key back as an
+# incoming state patch would overwrite the checkpoint and make
+# ``Command(resume=...)`` restart the graph from START.
+FRAMEWORK_INTERNAL_STATE_PREFIX = "_trpc_"
+
+
+def is_framework_internal_state_key(key: Any) -> bool:
+    """Whether a Session.state key is framework-internal (not client-facing).
+
+    Args:
+        key: A candidate state key.
+
+    Returns:
+        True when the key uses the reserved framework-internal prefix and
+        therefore must not be surfaced to or accepted from external clients.
+    """
+    return isinstance(key, str) and key.startswith(FRAMEWORK_INTERNAL_STATE_PREFIX)
+
+
+def strip_framework_internal_state(state: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Return a shallow copy of ``state`` without framework-internal keys.
+
+    Used at the client boundary (both outbound snapshots/deltas and inbound
+    state patches) so internal keys never leak out and can never be echoed
+    back to clobber internal storage.
+    """
+    if not state:
+        return {}
+    return {key: value for key, value in state.items() if not is_framework_internal_state_key(key)}
+
 
 @dataclass
 class StateStorageEntry:

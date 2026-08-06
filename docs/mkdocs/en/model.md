@@ -121,6 +121,52 @@ model = OpenAIModel(
 )
 ```
 
+#### Responses API
+
+`OpenAIModel` uses Chat Completions by default. Enable the Responses API explicitly for OpenAI or compatible
+providers that expose `/v1/responses`:
+
+```python
+model = OpenAIModel(
+    model_name="your-responses-model",
+    api_key="your-api-key",
+    base_url="https://api.openai.com/v1",
+    use_responses_api=True,
+    responses_api_params={
+        "store": False,
+        "reasoning": {"summary": "auto"},
+    },
+)
+```
+
+The switch is opt-in so existing OpenAI-compatible providers continue to use Chat Completions. The adapter maps
+conversation history, function calls and `function_call_output` items, structured output, semantic streaming events,
+reasoning summaries, and token usage into the existing tRPC-Agent types. When `store=False`, the SDK automatically
+requests `reasoning.encrypted_content` so reasoning items can be replayed with tool outputs in the next turn.
+
+`responses_api_params` accepts Responses-only fields such as `store`, `reasoning`, `include`, and `truncation`.
+`model`, `input`, and `stream` are managed by `OpenAIModel` and cannot be overridden there.
+
+The field is typed as the openai SDK's `ResponseCreateParams` (`openai.types.responses`), so IDEs
+auto-complete every native parameter. All values are passed through verbatim to `responses.create`
+without any SDK-side mapping. To control reasoning depth, pass `reasoning.effort` directly:
+
+```python
+model = OpenAIModel(
+    model_name="your-responses-model",
+    api_key="your-api-key",
+    use_responses_api=True,
+    responses_api_params={
+        "reasoning": {"effort": "high"},
+    },
+)
+```
+
+Supported effort values (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) vary by model —
+see the OpenAI reasoning guide for model-specific support. The SDK deliberately does not map
+`thinking_budget` to `effort`; it only requests `reasoning.summary` when thinking is enabled so the
+reasoning output stays readable.
+
 #### Advanced Usage
 
 Since version `1.1.10`, `OpenAIModel` supports passing a shared HTTP client provider to enable connection reuse. By default, `OpenAIModel` creates a temporary HTTP client for each model-service request. If you want to reuse connections, use the following configuration:
