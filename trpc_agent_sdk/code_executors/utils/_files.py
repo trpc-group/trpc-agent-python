@@ -14,14 +14,29 @@ import glob
 import mimetypes
 import os
 import shutil
+import sys
 from pathlib import Path
+
+from trpc_agent_sdk.log import logger
 from typing import Optional
 
-try:
-    import magic
-    HAS_MAGIC = True
-except ImportError:
-    HAS_MAGIC = False
+# NOTE: python-magic is NOT imported at module top level.
+# On Windows (and other platforms without libmagic installed), the `magic`
+# package searches for the native libmagic DLL at import time, which can hang
+# or crash the interpreter — making the entire trpc_agent_sdk package unusable.
+# Instead, we lazily import it inside detect_content_type() on first use.
+# See: https://github.com/trpc-group/trpc-agent-python/issues/230
+import threading as _threading
+
+_magic_module = None  # cached after first successful import on non-win32
+_magic_checked = False
+_magic_lock = _threading.Lock()
+
+# Backward-compatible public alias. Remains False until first
+# detect_content_type() call triggers lazy import on non-win32.
+# Note: on win32 this is always False (python-magic requires libmagic DLL
+# which causes access violations at import time).
+HAS_MAGIC = False
 
 
 def path_join(base: str, path: str) -> str:
@@ -228,9 +243,27 @@ def detect_content_type(filename: Path, data: bytes) -> str:
     if mime_type:
         return mime_type
 
-    # filename guess failed, use magic to guess
-    if HAS_MAGIC:
-        return magic.from_buffer(data, mime=True)
+    # filename guess failed, try python-magic (lazily imported).
+    # On Windows, python-magic requires a native libmagic DLL that, when
+    # missing, causes an access violation at import time (not catchable by
+    # try/except). We skip it entirely on win32 and fall through to the
+    # simple content-based detection below.
+    global _magic_module, _magic_checked, HAS_MAGIC
+    if sys.platform != 'win32' and not _magic_checked:
+        with _magic_lock:
+            if not _magic_checked:
+                try:
+                    import magic as _m
+                    _magic_module = _m
+                    HAS_MAGIC = True
+                except Exception:
+                    logger.debug("python-magic import failed; falling back to byte-signature detection", exc_info=True)
+                _magic_checked = True  # cache result (success or failure)
+    if _magic_module is not None:
+        try:
+            return _magic_module.from_buffer(data, mime=True)
+        except Exception:
+            logger.debug("magic.from_buffer failed; falling back to byte-signature detection", exc_info=True)
 
     # magic guess failed, use simple content-based detection
     if data.startswith(b'\x89PNG\r\n\x1a\n'):

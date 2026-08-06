@@ -27,7 +27,19 @@ from trpc_agent_sdk.code_executors.container._container_cli import (
     ContainerClient,
     ContainerConfig,
 )
+from trpc_agent_sdk.code_executors.container._container_cli import \
+    _import_docker  # noqa: F401  (used in fixture below)
 from trpc_agent_sdk.utils import CommandExecResult
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _ensure_docker_imported():
+    """Ensure docker SDK symbols exist at module level for @patch compatibility.
+
+    Without this, @patch("..._container_cli._docker_mod") fails because docker
+    is a None placeholder until _import_docker() runs.
+    """
+    _import_docker()
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +119,7 @@ def _make_mock_container(exec_exit_code=0):
 class TestContainerClientInitDockerClient:
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_from_env_when_no_base_url(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
@@ -123,7 +135,7 @@ class TestContainerClientInitDockerClient:
         assert cc.client is mock_client
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_custom_base_url(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.DockerClient.return_value = mock_client
@@ -138,9 +150,9 @@ class TestContainerClientInitDockerClient:
         assert cc.base_url == "tcp://remote:2375"
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_docker_exception_connection_error(self, mock_docker, mock_atexit):
-        exc_cls = type("DockerException", (Exception,), {})
+        exc_cls = type("DockerException", (Exception, ), {})
         mock_docker.errors.DockerException = exc_cls
         mock_docker.from_env.side_effect = exc_cls("Connection refused")
 
@@ -148,9 +160,9 @@ class TestContainerClientInitDockerClient:
             ContainerClient(config=ContainerConfig())
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_docker_exception_socket_error(self, mock_docker, mock_atexit):
-        exc_cls = type("DockerException", (Exception,), {})
+        exc_cls = type("DockerException", (Exception, ), {})
         mock_docker.errors.DockerException = exc_cls
         mock_docker.from_env.side_effect = exc_cls("No such file or directory")
 
@@ -158,9 +170,9 @@ class TestContainerClientInitDockerClient:
             ContainerClient(config=ContainerConfig())
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_docker_exception_generic(self, mock_docker, mock_atexit):
-        exc_cls = type("DockerException", (Exception,), {})
+        exc_cls = type("DockerException", (Exception, ), {})
         mock_docker.errors.DockerException = exc_cls
         mock_docker.from_env.side_effect = exc_cls("some other error")
 
@@ -168,9 +180,9 @@ class TestContainerClientInitDockerClient:
             ContainerClient(config=ContainerConfig())
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_unexpected_exception(self, mock_docker, mock_atexit):
-        mock_docker.errors.DockerException = type("DockerException", (Exception,), {})
+        mock_docker.errors.DockerException = type("DockerException", (Exception, ), {})
         mock_docker.from_env.side_effect = OSError("unexpected")
 
         with pytest.raises(RuntimeError, match="Unexpected error initializing Docker client"):
@@ -185,7 +197,7 @@ class TestContainerClientInitDockerClient:
 class TestContainerClientInitContainer:
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_container_starts_and_verifies_python(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
@@ -210,7 +222,7 @@ class TestContainerClientInitContainer:
         assert cc.container is mock_container
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_container_with_bind_mounts(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
@@ -235,7 +247,7 @@ class TestContainerClientInitContainer:
         )
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_python3_not_installed_raises(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
@@ -248,7 +260,7 @@ class TestContainerClientInitContainer:
             ContainerClient(config=ContainerConfig())
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_init_container_client_not_initialized(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
@@ -274,7 +286,7 @@ class TestContainerClientInitContainer:
 class TestContainerClientBuildDockerImage:
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_build_image_success(self, mock_docker, mock_atexit, tmp_path):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
@@ -287,19 +299,17 @@ class TestContainerClientBuildDockerImage:
         cfg = ContainerConfig(docker_path=docker_dir, image="custom:latest")
         cc = ContainerClient(config=cfg)
 
-        mock_client.images.build.assert_called_once_with(
-            path=os.path.abspath(docker_dir), tag="custom:latest", rm=True)
+        mock_client.images.build.assert_called_once_with(path=os.path.abspath(docker_dir), tag="custom:latest", rm=True)
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
-    @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")
+    @patch("trpc_agent_sdk.code_executors.container._container_cli._docker_mod")
     def test_build_image_path_not_exists(self, mock_docker, mock_atexit):
         mock_client = _make_mock_docker_client()
         mock_docker.from_env.return_value = mock_client
         mock_docker.errors.DockerException = Exception
 
         with pytest.raises(FileNotFoundError, match="Invalid Docker path"):
-            ContainerClient(config=ContainerConfig(
-                docker_path="/nonexistent/docker/path", image="custom:latest"))
+            ContainerClient(config=ContainerConfig(docker_path="/nonexistent/docker/path", image="custom:latest"))
 
     def test_build_image_no_docker_path(self):
         cc = ContainerClient.__new__(ContainerClient)
