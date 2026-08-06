@@ -5,26 +5,30 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Execution-path tests for AgentNodeAction."""
 
+import json
 from typing import Any
 
 import pytest
-from google.genai.types import Content
-from google.genai.types import Part
-from trpc_agent_sdk.dsl.graph._callbacks import NodeCallbackContext
-from trpc_agent_sdk.dsl.graph._callbacks import NodeCallbacks
-from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_LAST_RESPONSE
-from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_MESSAGES
-from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_NODE_RESPONSES
-from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_USER_INPUT
-from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_ACK
-from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_EVENT
-from trpc_agent_sdk.dsl.graph._event_writer import AsyncEventWriter
-from trpc_agent_sdk.dsl.graph._event_writer import EventWriter
+from google.genai.types import Content, Part
+
+from trpc_agent_sdk.dsl.graph._callbacks import NodeCallbackContext, NodeCallbacks
+from trpc_agent_sdk.dsl.graph._constants import (
+    STATE_KEY_LAST_RESPONSE,
+    STATE_KEY_MESSAGES,
+    STATE_KEY_NODE_RESPONSES,
+    STATE_KEY_PENDING_AGENT_NODE_HITL,
+    STATE_KEY_USER_INPUT,
+    STREAM_KEY_ACK,
+    STREAM_KEY_EVENT,
+)
+from trpc_agent_sdk.dsl.graph._event_writer import AsyncEventWriter, EventWriter
 from trpc_agent_sdk.dsl.graph._node_action._agent import AgentNodeAction
 from trpc_agent_sdk.dsl.graph._node_config import NodeConfig
+from trpc_agent_sdk.dsl.graph._state_graph import StateGraph
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions import Session
 from trpc_agent_sdk.types import EventActions
+from trpc_agent_sdk.types import State
 
 
 class _AckingWriter:
@@ -82,6 +86,13 @@ class _FakeInvocationContext:
         self.callback_state = None
         self.override_messages = None
 
+    @property
+    def state(self) -> State:
+        # Mirror InvocationContext.state: a delta-aware view over session.state.
+        if self.callback_state is None:
+            self.callback_state = State(value=self.session.state, delta=self.event_actions.state_delta)
+        return self.callback_state
+
     def model_copy(self, update: dict[str, Any], deep: bool = False):
         del deep
         clone = _FakeInvocationContext(self.agent, self.session, self.branch)
@@ -98,6 +109,7 @@ def _build_action(
     ctx: _FakeInvocationContext | None = None,
     callbacks: NodeCallbacks | None = None,
     isolated_messages: bool = False,
+    history_scope: str | None = None,
     input_from_last_response: bool = False,
     event_scope: str | None = None,
     input_mapper=None,
@@ -127,6 +139,7 @@ def _build_action(
         callback_ctx=NodeCallbackContext(node_id="node-1"),
         callbacks=callbacks,
         isolated_messages=isolated_messages,
+        history_scope=history_scope,
         input_from_last_response=input_from_last_response,
         event_scope=event_scope,
         input_mapper=input_mapper,
@@ -368,6 +381,128 @@ class TestAgentNodeActionExecute:
         isolated_texts = [event.get_text() for event in isolated_agent.calls[0].session.events if event.content]
         assert isolated_texts[:1] == ["next"]
 
+    async def test_execute_branch_history_inherits_only_the_same_child_branch(self):
+        same_branch = Event(
+            invocation_id="inv-1",
+            author="child",
+            branch="root.child",
+            content=Content(role="model", parts=[Part.from_text(text="same")]),
+        )
+        nested_branch = Event(
+            invocation_id="inv-1",
+            author="member",
+            branch="root.child.member",
+            content=Content(role="model", parts=[Part.from_text(text="nested")]),
+        )
+        other_branch = Event(
+            invocation_id="inv-1",
+            author="other",
+            branch="root.other",
+            content=Content(role="model", parts=[Part.from_text(text="other")]),
+        )
+        child_event = Event(
+            invocation_id="inv-2",
+            author="child",
+            content=Content(role="model", parts=[Part.from_text(text="done")]),
+        )
+        agent = _ScriptedAgent("child", [[child_event]])
+        ctx = _FakeInvocationContext(
+            agent,
+            _session_with_events(same_branch, nested_branch, other_branch),
+            branch="root",
+        )
+        action, _ = _build_action(
+            agent,
+            NodeConfig(name="node-1"),
+            ctx=ctx,
+            isolated_messages=True,
+            history_scope="branch",
+        )
+
+        await action.execute({STATE_KEY_USER_INPUT: "next"})
+
+        texts = [event.get_text() for event in agent.calls[0].session.events if event.content]
+        assert texts[:3] == ["same", "nested", "next"]
+        assert "other" not in texts
+        assert agent.calls[0].session.state[STATE_KEY_MESSAGES] == []
+        json.dumps(agent.calls[0].session.state)
+
+    async def test_explicit_history_scope_overrides_legacy_isolated_flag(self):
+        existing = Event(
+            invocation_id="inv-1",
+            author="user",
+            branch="root.other",
+            content=Content(role="user", parts=[Part.from_text(text="history")]),
+        )
+        child_event = Event(
+            invocation_id="inv-2",
+            author="child",
+            content=Content(role="model", parts=[Part.from_text(text="done")]),
+        )
+
+        all_agent = _ScriptedAgent("child", [[child_event]])
+        all_ctx = _FakeInvocationContext(all_agent, _session_with_events(existing), branch="root")
+        all_action, _ = _build_action(
+            all_agent,
+            NodeConfig(name="node-1"),
+            ctx=all_ctx,
+            isolated_messages=True,
+            history_scope="all",
+        )
+        await all_action.execute({STATE_KEY_USER_INPUT: "next"})
+        all_texts = [event.get_text() for event in all_agent.calls[0].session.events if event.content]
+        assert all_texts[:2] == ["history", "next"]
+
+        none_agent = _ScriptedAgent("child", [[child_event]])
+        none_ctx = _FakeInvocationContext(none_agent, _session_with_events(existing), branch="root")
+        none_action, _ = _build_action(
+            none_agent,
+            NodeConfig(name="node-1"),
+            ctx=none_ctx,
+            isolated_messages=False,
+            history_scope="none",
+        )
+        await none_action.execute({STATE_KEY_USER_INPUT: "next"})
+        none_texts = [event.get_text() for event in none_agent.calls[0].session.events if event.content]
+        assert none_texts[:1] == ["next"]
+        assert none_agent.calls[0].session.state[STATE_KEY_MESSAGES] == []
+
+    async def test_all_history_scope_keeps_full_history_during_pending_hitl(self):
+        same_branch = Event(
+            invocation_id="inv-1",
+            author="child",
+            branch="root.child",
+            content=Content(role="model", parts=[Part.from_text(text="same")]),
+        )
+        other_branch = Event(
+            invocation_id="inv-1",
+            author="other",
+            branch="root.other",
+            content=Content(role="model", parts=[Part.from_text(text="other")]),
+        )
+        session = _session_with_events(same_branch, other_branch)
+        session.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = {"node_id": "node-1"}
+        agent = _ScriptedAgent("child", [[]])
+        ctx = _FakeInvocationContext(agent, session, branch="root")
+        action, _ = _build_action(
+            agent,
+            NodeConfig(name="node-1"),
+            ctx=ctx,
+            isolated_messages=False,
+            history_scope="all",
+        )
+
+        events = action._build_child_events(ctx, "next", "root.child")
+
+        assert [event.get_text() for event in events] == ["same", "other", "next"]
+
+    async def test_invalid_history_scope_fails_when_adding_agent_node(self):
+        graph = StateGraph(dict)
+        agent = _ScriptedAgent("child", [[]])
+
+        with pytest.raises(ValueError, match="history_scope"):
+            graph.add_agent_node("child", agent, history_scope="invalid")
+
     async def test_execute_ignores_graph_events_for_state_accumulation(self):
         """Graph lifecycle events should not override state-derived response values."""
         graph_event = Event(
@@ -392,3 +527,47 @@ class TestAgentNodeActionExecute:
         result = await action.execute({})
 
         assert result[STATE_KEY_LAST_RESPONSE] == "final"
+
+
+class TestConcurrentHitlGuard:
+    """The single-slot pending-HITL bridge must reject concurrent nodes."""
+
+    def _action_with_state(self, initial_state: dict):
+        agent = _ScriptedAgent("child", [[]])
+        session = _session_with_events()
+        session.state.update(initial_state)
+        ctx = _FakeInvocationContext(agent, session)
+        action, _ = _build_action(agent, NodeConfig(name="node-1"), ctx=ctx)
+        return action, ctx
+
+    def test_rejects_pending_owned_by_another_node(self):
+        """A second node interrupting while another node is pending must fail
+        loudly instead of silently overwriting the first node's resume slot."""
+        action, ctx = self._action_with_state(
+            {STATE_KEY_PENDING_AGENT_NODE_HITL: {
+                "node_id": "other-node",
+                "current": {}
+            }})
+        with pytest.raises(RuntimeError, match="Concurrent HITL"):
+            action._reject_concurrent_pending_hitl(ctx)
+
+    def test_allows_when_absent(self):
+        """No pending slot → first HITL round proceeds."""
+        action, ctx = self._action_with_state({})
+        action._reject_concurrent_pending_hitl(ctx)  # must not raise
+
+    def test_allows_own_pending_for_multi_round_resume(self):
+        """The same node re-interrupting across rounds is legitimate."""
+        action, ctx = self._action_with_state({STATE_KEY_PENDING_AGENT_NODE_HITL: {"node_id": "node-1", "current": {}}})
+        action._reject_concurrent_pending_hitl(ctx)  # must not raise
+
+    def test_detects_delta_written_in_same_superstep(self):
+        """A sibling node's pending written to the delta (not yet committed to
+        session.state) is still visible via ctx.state and must be rejected."""
+        action, ctx = self._action_with_state({})
+        ctx.event_actions.state_delta[STATE_KEY_PENDING_AGENT_NODE_HITL] = {
+            "node_id": "sibling",
+            "current": {},
+        }
+        with pytest.raises(RuntimeError, match="Concurrent HITL"):
+            action._reject_concurrent_pending_hitl(ctx)

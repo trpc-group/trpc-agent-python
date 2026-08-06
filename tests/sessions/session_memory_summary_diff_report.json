@@ -202,7 +202,8 @@
                       "video_metadata": null,
                       "tool_call": null,
                       "tool_response": null,
-                      "part_metadata": null
+                      "part_metadata": null,
+                      "audio_transcription": null
                     }
                   ],
                   "role": "model"
@@ -267,7 +268,8 @@
                       "video_metadata": null,
                       "tool_call": null,
                       "tool_response": null,
-                      "part_metadata": null
+                      "part_metadata": null,
+                      "audio_transcription": null
                     }
                   ],
                   "role": "model"
@@ -406,7 +408,8 @@
                       "video_metadata": null,
                       "tool_call": null,
                       "tool_response": null,
-                      "part_metadata": null
+                      "part_metadata": null,
+                      "audio_transcription": null
                     }
                   ],
                   "role": "model"
@@ -471,7 +474,8 @@
                       "video_metadata": null,
                       "tool_call": null,
                       "tool_response": null,
-                      "part_metadata": null
+                      "part_metadata": null,
+                      "audio_transcription": null
                     }
                   ],
                   "role": "model"

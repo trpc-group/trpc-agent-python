@@ -34,6 +34,7 @@ from langgraph.checkpoint.base import get_checkpoint_metadata
 from ._constants import STATE_KEY_CHECKPOINTS
 from ._constants import STATE_KEY_CHECKPOINT_BLOBS
 from ._constants import STATE_KEY_CHECKPOINT_WRITES
+from ._constants import STATE_KEY_PENDING_INTERRUPT
 
 _INTERNAL_CHECKPOINT_KEYS = frozenset({
     STATE_KEY_CHECKPOINTS,
@@ -57,6 +58,23 @@ def has_graph_internal_checkpoint_state(state: dict[str, Any]) -> bool:
     if not state:
         return False
     return any(k in state for k in _INTERNAL_CHECKPOINT_KEYS)
+
+
+def has_graph_resume_state(state: dict[str, Any]) -> bool:
+    """Whether the session is paused mid-graph waiting for a human response.
+
+    This is intentionally scoped to the *pending-interrupt* marker only, NOT
+    to the presence of checkpoint storage keys. Checkpoint keys
+    (``_trpc_graph_checkpoint*``) persist after a graph runs to completion, so
+    keying off them would report every session that ever ran a GraphAgent as
+    "resumable" forever — wrongly preserving it from cleanup and suppressing
+    client state sync. ``STATE_KEY_PENDING_INTERRUPT`` is set to True only while
+    an interrupt is outstanding and reset to False on resume, so it precisely
+    identifies a session that must not be expired/deleted mid-HITL.
+    """
+    if not state:
+        return False
+    return state.get(STATE_KEY_PENDING_INTERRUPT) is True
 
 
 def strip_graph_internal_checkpoint_state(state: dict[str, Any]) -> dict[str, Any]:

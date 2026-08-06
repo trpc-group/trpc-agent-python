@@ -51,6 +51,7 @@ from trpc_agent_sdk.events import Event as TRPCEvent
 from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
+from trpc_agent_sdk.dsl.graph import is_graph_internal_state_key
 
 
 class EventTranslator:
@@ -599,9 +600,15 @@ class EventTranslator:
             A StateDeltaEvent
         """
         # Convert to JSON Patch format (RFC 6902)
-        # Use "add" operation which works for both new and existing paths
+        # Use "add" operation which works for both new and existing paths.
+        # GraphAgent-internal keys (``_trpc_graph_*``, e.g. the LangGraph
+        # checkpoint / interrupt markers) are never emitted to the client: they
+        # are backend continuation tokens, not client-facing state, and echoing
+        # them back would clobber the checkpoint.
         patches = []
         for key, value in state_delta.items():
+            if is_graph_internal_state_key(key):
+                continue
             patches.append({"op": "add", "path": f"/{key}", "value": value})
 
         timestamp_ms = int(timestamp * 1000)
@@ -621,8 +628,13 @@ class EventTranslator:
         Returns:
             A StateSnapshotEvent
         """
+        # Drop GraphAgent-internal keys (``_trpc_graph_*``) so the client
+        # snapshot only carries business state. Keeping them would leak backend
+        # continuation tokens and let the client echo them back to overwrite the
+        # checkpoint.
+        safe_snapshot = {key: value for key, value in state_snapshot.items() if not is_graph_internal_state_key(key)}
         timestamp_ms = int(timestamp * 1000)
-        return StateSnapshotEvent(type=EventType.STATE_SNAPSHOT, snapshot=state_snapshot, timestamp=timestamp_ms)
+        return StateSnapshotEvent(type=EventType.STATE_SNAPSHOT, snapshot=safe_snapshot, timestamp=timestamp_ms)
 
     async def force_close_streaming_message(self) -> AsyncGenerator[BaseEvent, None]:
         """Force close any open streaming message.

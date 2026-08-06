@@ -6,17 +6,22 @@
 """Agent node action executor."""
 
 import json
+from datetime import date
+from datetime import datetime
 from typing import Any
 from typing import Callable
 from typing import Optional
 
+from langgraph.errors import GraphInterrupt
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.exceptions import RunLimitException
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import EventActions
+from trpc_agent_sdk.types import FunctionResponse
 from trpc_agent_sdk.types import Part
 
 from .._callbacks import NodeCallbackContext
@@ -24,13 +29,43 @@ from .._callbacks import NodeCallbacks
 from .._constants import STATE_KEY_LAST_RESPONSE
 from .._constants import STATE_KEY_MESSAGES
 from .._constants import STATE_KEY_NODE_RESPONSES
+from .._constants import STATE_KEY_PENDING_AGENT_NODE_HITL
 from .._constants import STATE_KEY_USER_INPUT
 from .._event_writer import AsyncEventWriter
 from .._event_writer import EventWriter
+from .._history import HistoryScope
+from .._history import resolve_history_scope
+from .._interrupt import interrupt
 from .._node_config import NodeConfig
 from .._state import State
 from .._state_mapper import SubgraphResult
 from ._base import BaseNodeAction
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively convert a value to a JSON-serializable form.
+
+    ``child_state`` is persisted to Session.state (e.g. via SqlSessionService
+    / DynamicJSON) which serializes with plain ``json.dumps`` and no
+    ``default=str`` — non-JSON values such as pydantic models, datetime or
+    sets would raise at persist time and break the whole HITL round.  This
+    helper normalises such values so the pending HITL payload can always be
+    persisted.
+    """
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if hasattr(value, "model_dump"):
+        try:
+            return _json_safe(value.model_dump(mode="json"))
+        except (AttributeError, TypeError, ValueError):
+            pass
+    return str(value)
 
 
 class AgentNodeAction(BaseNodeAction):
@@ -55,6 +90,7 @@ class AgentNodeAction(BaseNodeAction):
         callback_ctx: Optional[NodeCallbackContext] = None,
         callbacks: Optional[NodeCallbacks] = None,
         isolated_messages: bool = False,
+        history_scope: HistoryScope | None = None,
         input_from_last_response: bool = False,
         event_scope: Optional[str] = None,
         input_mapper: Optional[Callable[[dict[str, Any]], dict[str, Any]]] = None,
@@ -83,7 +119,10 @@ class AgentNodeAction(BaseNodeAction):
         self.node_config = node_config
         self.callback_ctx = callback_ctx
         self.callbacks = callbacks
-        self.isolated_messages = isolated_messages
+        self.history_scope = resolve_history_scope(
+            history_scope,
+            isolated_messages=isolated_messages,
+        )
         self.input_from_last_response = input_from_last_response
         self.event_scope = event_scope
         self.input_mapper = input_mapper
@@ -124,16 +163,41 @@ class AgentNodeAction(BaseNodeAction):
         child_branch = f"{parent_ctx.branch}.{child_scope}" if parent_ctx.branch else child_scope
         child_user_input = child_state.get(STATE_KEY_USER_INPUT, "")
 
+        pending_hitl = self._get_pending_hitl(parent_ctx)
+        resume_content: Optional[Content] = None
+        if pending_hitl is not None:
+            completed_rounds = pending_hitl.get("completed", [])
+            for completed in completed_rounds if isinstance(completed_rounds, list) else []:
+                if isinstance(completed, dict):
+                    interrupt(self._interrupt_payload(completed))
+
+            current_round = pending_hitl.get("current")
+            if not isinstance(current_round, dict):
+                raise RuntimeError(f"Agent node '{self.node_id}' has invalid pending HITL state.")
+            human_response = interrupt(self._interrupt_payload(current_round))
+            resume_content = self._resume_content(current_round, human_response)
+            saved_child_state = current_round.get("child_state")
+            if isinstance(saved_child_state, dict):
+                child_state = dict(saved_child_state)
+
         child_session = parent_ctx.session.model_copy(deep=True)
         child_session.state = dict(child_state)
-        child_events = self._build_child_events(parent_ctx, child_user_input, child_branch)
+        child_events = self._build_child_events(
+            parent_ctx,
+            child_user_input,
+            child_branch,
+            resume_content=resume_content,
+        )
         if hasattr(child_session, "events"):
             child_session.events = child_events
-        if self.isolated_messages:
+        if self.history_scope in {"none", "branch"}:
+            # Persistent Session state must remain JSON-serializable. Content
+            # models live in the event log; GraphAgent rebuilds model input from
+            # the already-filtered child events when needed.
             child_session.state[STATE_KEY_MESSAGES] = []
 
-        child_user_content = None
-        if isinstance(child_user_input, str) and child_user_input:
+        child_user_content = resume_content
+        if child_user_content is None and isinstance(child_user_input, str) and child_user_input:
             child_user_content = Content(
                 role="user",
                 parts=[Part.from_text(text=child_user_input)],
@@ -165,11 +229,36 @@ class AgentNodeAction(BaseNodeAction):
                 transfer_requested = False
                 child_ctx.agent = current_agent
 
-                async for event in current_agent.run_async(child_ctx):
+                agent_stream = current_agent.run_async(child_ctx)
+                async for event in agent_stream:
                     await self._run_agent_event_callbacks(state, event)
 
+                    if isinstance(event, LongRunningEvent):
+                        self._reject_concurrent_pending_hitl(parent_ctx)
+                        current_round = self._pending_round(event, child_ctx, final_state)
+                        completed_rounds: list[dict[str, Any]] = []
+                        if pending_hitl is not None:
+                            previous = pending_hitl.get("completed", [])
+                            if isinstance(previous, list):
+                                completed_rounds.extend(item for item in previous if isinstance(item, dict))
+                            previous_current = pending_hitl.get("current")
+                            if isinstance(previous_current, dict):
+                                completed_rounds.append({
+                                    key: value
+                                    for key, value in previous_current.items() if key != "child_state"
+                                })
+                        parent_ctx.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = {
+                            "node_id": self.node_id,
+                            "completed": completed_rounds,
+                            "current": current_round,
+                        }
+                        await agent_stream.aclose()
+                        interrupt(self._interrupt_payload(current_round))
+
                     if (not event.partial) and hasattr(child_session, "events"):
-                        child_session.events.append(event.model_copy(deep=True))
+                        existing_ids = {item.id for item in child_session.events if getattr(item, "id", None)}
+                        if not event.id or event.id not in existing_ids:
+                            child_session.events.append(event.model_copy(deep=True))
 
                     if event.actions and event.actions.state_delta:
                         delta = dict(event.actions.state_delta)
@@ -245,9 +334,16 @@ class AgentNodeAction(BaseNodeAction):
                 if isinstance(candidate, str) and candidate:
                     last_response = candidate
 
+            if pending_hitl is not None:
+                parent_ctx.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = None
+
         except RunLimitException:
             raise
+        except GraphInterrupt:
+            raise
         except Exception as e:
+            if pending_hitl is not None:
+                parent_ctx.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = None
             raise RuntimeError(f"Agent node '{self.name}' execution failed: {e}") from e
 
         if last_response:
@@ -293,10 +389,25 @@ class AgentNodeAction(BaseNodeAction):
         parent_ctx: InvocationContext,
         child_user_input: Any,
         child_branch: str,
+        *,
+        resume_content: Optional[Content] = None,
     ) -> list[Event]:
         parent_events = getattr(parent_ctx.session, "events", [])
-        if self.isolated_messages:
-            child_events: list[Event] = []
+        pending_hitl = self._get_pending_hitl(parent_ctx)
+        if self.history_scope == "branch":
+            child_events = [
+                event.model_copy(deep=True) for event in parent_events
+                if event.branch == child_branch or str(event.branch or "").startswith(f"{child_branch}.")
+            ]
+        elif self.history_scope == "none" and pending_hitl is not None:
+            # Legacy isolated HITL resumes need the current child branch to
+            # reconstruct the pending function-call exchange.
+            child_events = [
+                event.model_copy(deep=True) for event in parent_events
+                if event.branch == child_branch or str(event.branch or "").startswith(f"{child_branch}.")
+            ]
+        elif self.history_scope == "none":
+            child_events = []
         else:
             child_events = [event.model_copy(deep=True) for event in parent_events]
 
@@ -311,7 +422,104 @@ class AgentNodeAction(BaseNodeAction):
                         parts=[Part.from_text(text=child_user_input)],
                     ),
                 ))
+        if resume_content is not None:
+            child_events.append(
+                Event(
+                    invocation_id=parent_ctx.invocation_id,
+                    author="user",
+                    branch=child_branch,
+                    content=resume_content.model_copy(deep=True),
+                ))
         return child_events
+
+    def _get_pending_hitl(self, parent_ctx: InvocationContext) -> Optional[dict[str, Any]]:
+        value = parent_ctx.session.state.get(STATE_KEY_PENDING_AGENT_NODE_HITL)
+        if isinstance(value, dict) and value.get("node_id") == self.node_id:
+            return value
+        return None
+
+    def _reject_concurrent_pending_hitl(self, parent_ctx: InvocationContext) -> None:
+        """Fail loudly if another agent node already holds an outstanding HITL.
+
+        The pending-HITL bridge persists a single slot in state
+        (``STATE_KEY_PENDING_AGENT_NODE_HITL``). If two parallel (fan-out) agent
+        nodes interrupt within the same superstep, the second write would
+        silently overwrite the first node's resume context, so its subsequent
+        resume would rerun the child agent from scratch. Reading through
+        ``parent_ctx.state`` sees both the committed session state and the
+        delta another node just wrote in this superstep. Concurrent HITL is not
+        supported; serialize such nodes instead.
+        """
+        existing = parent_ctx.state.get(STATE_KEY_PENDING_AGENT_NODE_HITL)
+        if isinstance(existing, dict):
+            other_node = existing.get("node_id")
+            if other_node is not None and other_node != self.node_id:
+                raise RuntimeError(f"Agent node '{self.node_id}' requested human-in-the-loop while node "
+                                   f"'{other_node}' already has an outstanding HITL round. Concurrent HITL "
+                                   "across parallel agent nodes is unsupported because the pending state uses "
+                                   "a single slot; serialize these nodes so at most one is pending at a time.")
+
+    def _pending_round(
+        self,
+        event: LongRunningEvent,
+        child_ctx: InvocationContext,
+        child_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "agent_name": event.author or self.agent.name,
+            "branch": event.branch or child_ctx.branch,
+            "function_call": event.function_call.model_dump(mode="json"),
+            "function_response": event.function_response.model_dump(mode="json"),
+            # child_state is persisted to Session.state; normalise it so the
+            # pending HITL payload survives JSON serialisation.
+            "child_state": _json_safe(child_state),
+        }
+
+    def _interrupt_payload(self, pending_round: dict[str, Any]) -> dict[str, Any]:
+        function_call = pending_round.get("function_call")
+        function_call = function_call if isinstance(function_call, dict) else {}
+        arguments = function_call.get("args")
+        arguments = arguments if isinstance(arguments, dict) else {}
+        function_response = pending_round.get("function_response")
+        function_response = function_response if isinstance(function_response, dict) else {}
+        response = function_response.get("response")
+        response = response if isinstance(response, dict) else {}
+        return {
+            "_trpc_agent_node_hitl": True,
+            "nodeId": self.node_id,
+            "agentName": str(pending_round.get("agent_name") or self.agent.name),
+            "toolName": str(function_call.get("name") or "graph_interrupt"),
+            # Long-running tools return the UI interaction contract from the
+            # tool execution. The model-supplied call arguments take priority
+            # so the frontend always sees what the model actually requested;
+            # the tool result may add derived fields such as stable IDs that
+            # do not collide with existing argument keys.
+            "arguments": {
+                **response,
+                **arguments,
+            },
+        }
+
+    @staticmethod
+    def _resume_content(pending_round: dict[str, Any], human_response: Any) -> Content:
+        function_call = pending_round.get("function_call")
+        function_call = function_call if isinstance(function_call, dict) else {}
+        response = human_response if isinstance(human_response, dict) else {"value": human_response}
+        fc_id = str(function_call.get("id") or "")
+        if not fc_id:
+            raise ValueError("Cannot resume HITL round: pending function_call is missing "
+                             "an 'id' field, which is required to match the interrupt "
+                             "during graph replay.")
+        return Content(
+            role="user",
+            parts=[
+                Part(function_response=FunctionResponse(
+                    id=fc_id,
+                    name=str(function_call.get("name") or ""),
+                    response=response,
+                ))
+            ],
+        )
 
     async def _run_agent_event_callbacks(self, state: State, event: Event) -> None:
         if not self.callbacks or not self.callbacks.agent_event:
