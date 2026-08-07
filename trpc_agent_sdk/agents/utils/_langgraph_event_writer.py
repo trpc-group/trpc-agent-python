@@ -15,8 +15,6 @@ from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
 
-from ._langgraph import get_agent_context
-
 # Marker to identify trpc Events in LangGraph custom stream
 TRPC_EVENT_MARKER = "__trpc_event__"
 
@@ -105,6 +103,8 @@ class LangGraphEventWriter:
         Raises:
             ValueError: If InvocationContext is not found in config
         """
+        from ._langgraph import get_agent_context
+
         ctx = get_agent_context(config)
         return cls(writer, ctx)
 

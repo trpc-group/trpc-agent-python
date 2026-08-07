@@ -1,4 +1,4 @@
-# LangGraph Agent Human-in-the-Loop 示例
+# LangGraph Agent Human-in-the-Loop(HITL) 示例
 
 本示例演示如何基于 `LangGraphAgent` 构建一个需要人工审批的数据库操作助手，并验证 `LangGraph StateGraph + interrupt() + Command 路由` 的 Human-in-the-Loop 核心链路是否正常工作。
 
@@ -29,11 +29,11 @@ human_in_loop_langgraph_agent (LangGraphAgent)
 
 关键文件：
 
-- [examples/langgraphagent_with_human_in_the_loop/agent/agent.py](./agent/agent.py)：`StateGraph` 图定义、节点构建、`LangGraphAgent` 创建
-- [examples/langgraphagent_with_human_in_the_loop/agent/tools.py](./agent/tools.py)：数据库操作工具（`@tool` + `@langgraph_tool_node`）
-- [examples/langgraphagent_with_human_in_the_loop/agent/prompts.py](./agent/prompts.py)：Agent 指令提示词
-- [examples/langgraphagent_with_human_in_the_loop/agent/config.py](./agent/config.py)：环境变量读取
-- [examples/langgraphagent_with_human_in_the_loop/run_agent.py](./run_agent.py)：测试入口，驱动执行与审批恢复
+- [examples/langgraph_agent_with_HITL/agent/agent.py](./agent/agent.py)：`StateGraph` 图定义、节点构建、`LangGraphAgent` 创建
+- [examples/langgraph_agent_with_HITL/agent/tools.py](./agent/tools.py)：数据库操作工具（`@tool` + `@langgraph_tool_node`）
+- [examples/langgraph_agent_with_HITL/agent/prompts.py](./agent/prompts.py)：Agent 指令提示词
+- [examples/langgraph_agent_with_HITL/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/langgraph_agent_with_HITL/run_agent.py](./run_agent.py)：测试入口，驱动执行与审批恢复
 
 ## 关键代码解释
 
@@ -58,25 +58,24 @@ human_in_loop_langgraph_agent (LangGraphAgent)
 - 捕获到 `LongRunningEvent` 后模拟人工审批，构造 `FunctionResponse` 携带审批决策
 - 通过 `resume_content` 再次调用 `run_invocation` 恢复图执行
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[graph]"
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
 
-在 [examples/langgraphagent_with_human_in_the_loop/.env](./.env) 中配置（或通过 `export`）：
+### 配置环境变量
+
+在 [examples/langgraph_agent_with_HITL/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`
@@ -85,7 +84,7 @@ pip3 install -e .
 ### 运行命令
 
 ```bash
-cd examples/langgraphagent_with_human_in_the_loop
+cd examples/langgraph_agent_with_HITL
 python3 run_agent.py
 ```
 

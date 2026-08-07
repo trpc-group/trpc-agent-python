@@ -8,12 +8,14 @@
 This module provides StateGraph and CompiledStateGraph classes built on top
 of LangGraph with TRPC-Agent-specific features.
 """
+from __future__ import annotations
 
 import inspect
 from typing import Any
 from typing import Callable
 from typing import Hashable
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import Type
 from typing import Union
 
@@ -27,9 +29,11 @@ from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.models import LLMModel
-from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
 from trpc_agent_sdk.tools import MCPToolset
 from trpc_agent_sdk.types import GenerateContentConfig
+
+if TYPE_CHECKING:
+    from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
 
 from ._callbacks import NodeCallbackContext
 from ._callbacks import NodeCallbacks

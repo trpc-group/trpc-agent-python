@@ -10,10 +10,35 @@
 
 无论哪种方式，子 Agent 的 instruction、工具集、模型都被锁定——LLM 只能选择 `subagent_type` 和写 `prompt`，无法在调用时改写子 Agent 的角色。
 
-## 运行
+## 环境要求
+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/spawn_subagent/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 # 零配置（仅 default 子 Agent）
+cd examples/spawn_subagent
+
 python run_agent.py
 
 # 代码定义子 Agent（security-auditor + Explore + Plan）

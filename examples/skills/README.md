@@ -19,11 +19,31 @@
 - `agent/tools.py`：`create_local_workspace_runtime` + `create_default_skill_repository` 构造 `SkillToolSet`
 - `agent/agent.py`：将 `skill_tool_set` 与 `skill_repository` 绑定到 `LlmAgent`
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；仓库根目录执行 `pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`（可用 `.env`）
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/skills/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 - 可选：`SKILLS_ROOT` 指向技能根目录
+
+### 运行命令
 
 ```bash
 cd examples/skills

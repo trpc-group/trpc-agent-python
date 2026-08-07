@@ -20,12 +20,33 @@
 - `agent/agent.py`：异步创建 agent，并把 workspace runtime 返回给 runner 做最终销毁
 - `run_agent.py`：组装含 `inputs` 数组的 JSON 提示词，驱动单次 `skill_run` 演示，并在 finally 中销毁沙箱
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；仓库根目录安装 Cube extra：`pip install -e '.[cube]'`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
-- 配置 Cube 环境变量：`CUBE_TEMPLATE_ID`、`E2B_API_URL`、`E2B_API_KEY`
-- 可选：`SKILLS_ROOT`、`CUBE_EXECUTE_TIMEOUT`（默认 `30`）、`CUBE_IDLE_TIMEOUT`（默认 `600`）
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh "[cube]"
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/skills_with_cube/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+- `CUBE_TEMPLATE_ID=your-cube-template-id`
+- `E2B_API_URL=your-e2b-api-url`
+- `E2B_API_KEY=your-e2b-api-key`
+
+### 运行命令
 
 ```bash
 cd examples/skills_with_cube

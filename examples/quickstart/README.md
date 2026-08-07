@@ -26,23 +26,22 @@ root_agent (LlmAgent)
 - 每轮使用新 `session_id` 或按脚本逻辑创建会话
 - 展示环境变量加载后与云端模型的一次完整 tool loop
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/quickstart/.env](./.env) 中配置（或通过 `export` 设置）：
 

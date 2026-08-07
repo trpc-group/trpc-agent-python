@@ -4,7 +4,45 @@ export DISABLE_TRPC_AGENT_REPORT=true
 
 set -e
 
-pip3 install -r pipeline_test/requirements.txt
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
+
+is_virtualenv_python() {
+    local python_bin="$1"
+    [[ -x "${python_bin}" ]] && "${python_bin}" -c \
+        'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' >/dev/null 2>&1
+}
+
+resolve_project_venv() {
+    local candidate
+    for candidate in .venv venv; do
+        if is_virtualenv_python "${candidate}/bin/python"; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+PROJECT_VENV_DIR=""
+if ! PROJECT_VENV_DIR="$(resolve_project_venv)"; then
+    echo "Error: no project virtual environment found (.venv or venv)." >&2
+    echo "Create one first, for example: ./build.sh" >&2
+    exit 1
+fi
+
+echo "Using project virtual environment: ${PROJECT_VENV_DIR}"
+# shellcheck source=/dev/null
+source "${PROJECT_VENV_DIR}/bin/activate"
+# export PYTHON_BIN="${REPO_ROOT}/${PROJECT_VENV_DIR}/bin/python"
+
+# shellcheck source=pipeline_test/_install_deps.sh
+source "${SCRIPT_DIR}/_install_deps.sh"
+
+# graph/* and team_member_agent_langgraph need [graph]
+pipeline_uv_install_extras "graph, deepseek-langchain"
+pipeline_uv_install_requirements "pipeline_test/requirements.txt"
 
 # Define example categories
 LLM_AGENT_EXAMPLES=(

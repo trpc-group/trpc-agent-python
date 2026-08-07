@@ -19,11 +19,31 @@
 - `agent/tools/_dynamic.py`：`DynamicSkillToolSet` 配置 `available_tools`（含 `FunctionTool(ask_name_information)` 等）
 - `run_agent.py`：单条长提示触发 `skill_list` → `skill_load` → `skill_select_tools` → 多次工具调用
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；仓库根目录 `pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/skills_with_container/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 - 技能目录默认在示例内 `skills/`，可通过环境变量 `SKILLS_ROOT` 覆盖
+
+### 运行命令
 
 ```bash
 cd examples/skills_with_dynamic_tools

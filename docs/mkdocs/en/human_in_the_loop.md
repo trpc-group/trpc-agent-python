@@ -1,4 +1,4 @@
-# Human-In-The-Loop
+# Human-In-The-Loop(HITL)
 
 During Agent processing, some scenarios require human involvement for judgment or adjustment to improve task completion accuracy. Examples include:
 - Risky operation approval: Commonly used when an Agent generates SQL or Shell scripts, whether to execute them often requires human approval. Taking Agent-generated command lines as an example, if approved, the terminal is launched to execute the command and the execution result is passed back to the Agent; if rejected, it may indicate the generated command is problematic and the Agent needs to regenerate an alternative command.
@@ -432,4 +432,4 @@ async def run_human_in_loop_agent():
 
 For complete example code, please refer to:
 - LlmAgent: [examples/llmagent_with_human_in_the_loop/README.md](../../../examples/llmagent_with_human_in_the_loop/README.md)
-- LangGraphAgent: [examples/langgraphagent_with_human_in_the_loop/README.md](../../../examples/langgraphagent_with_human_in_the_loop/README.md)
+- LangGraphAgent: [examples/langgraph_agent_with_HITL/README.md](../../../examples/langgraph_agent_with_HITL/README.md)

@@ -51,23 +51,26 @@ personal_assistant (LlmAgent)
 | `MempalaceKGTimelineTool` | `mempalace_kg_timeline` | 按时间线读取知识图谱事实，可限定某个实体。 | `entity` | 用户要求“展示 Alice 的知识图谱时间线”。 |
 | `MempalaceKGInvalidateTool` | `mempalace_kg_invalidate` | 将一条当前事实标记为失效，用于表达事实变化，而不是直接删除历史。 | `subject`、`predicate`、`object`、`ended` | 用户要求“把 Alice likes Italian food 标记为今天结束”。 |
 
-## 安装
+## 环境要求
+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[mempalace]"
 source .venv/bin/activate
-
-pip3 install -e .
-pip3 install mempalace
 ```
 
 如果你的 MemPalace 安装需要额外向量依赖，请按 MemPalace 官方说明补装对应 embedding 或 Chroma 依赖。
 
-## 环境变量
+## 运行步骤
 
-在 `examples/mempalace_tools/.env` 中配置，或通过 `export` 设置：
+### 配置环境变量
+
+在 [examples/mempalace_tools/.env](./.env) 中配置，或通过 `export` 设置：
 
 ```bash
 TRPC_AGENT_API_KEY=your-api-key
@@ -86,12 +89,14 @@ MEMPALACE_ROOM=user_profile
 - `wing`：建议映射到应用或用户级作用域，例如 `app/user`、`personal_assistant_alice`。
 - `room`：建议映射到记忆主题，例如 `user_profile`、`preferences`、`work_notes`。
 
-## 运行
+### 运行命令
 
 ```bash
 cd examples/mempalace_tools
 python3 run_agent.py
 ```
+
+## 运行结果
 
 示例分三个阶段执行。每条消息都会使用新的 `session_id`，用于验证不同 session 之间仍能通过 MemPalace 读到之前写入的数据。
 

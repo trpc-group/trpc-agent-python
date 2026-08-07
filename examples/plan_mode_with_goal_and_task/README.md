@@ -48,20 +48,29 @@ orchestrator (LlmAgent)
 
 > Plan gate 激活期间，`task_create` / `task_update` / `create_goal` / `update_goal` 会被 `PLAN_MODE_GATE` 拦截（见 `DEFAULT_WRITE_TOOL_NAMES`）。
 
-## 前置条件
+## 环境要求
+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
 
 ```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv && source .venv/bin/activate
-pip3 install -e '.[ag-ui]'
-
-# 配置 examples/plan_mode_with_goal_and_task/.env
-TRPC_AGENT_API_KEY=<你的 key>
-TRPC_AGENT_BASE_URL=<可选>
-TRPC_AGENT_MODEL_NAME=<可选，默认 gpt-4.1-mini>
+./build.sh "[ag-ui]"
+source .venv/bin/activate
 ```
+## 运行步骤
 
-## 运行
+### 配置环境变量
+
+在 [examples/plan_mode_with_goal_and_task/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 cd examples/plan_mode_with_goal_and_task

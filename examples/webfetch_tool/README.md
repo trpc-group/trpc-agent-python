@@ -113,23 +113,22 @@ ssrf_fetch_agent (LlmAgent)                     # SSRF 防护（loopback / 元�
   - `http://10.0.0.1/` — RFC 1918 内网网段，覆盖"Agent 跑在 VPC / k8s 集群里被用来扫内网"
 - 仅当调用方已用外部白名单限定目标、并确信输入可信（如内网集群）时才考虑关闭该开关；关闭后示例 5 的三条 payload 会真的发起连接，生产环境请谨慎评估
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/webfetch_tool/.env](./.env) 中配置（或通过 `export`）：
 

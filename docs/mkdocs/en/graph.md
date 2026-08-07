@@ -15,7 +15,7 @@ As shown below, users build graphs through the Graph API provided by the framewo
 It is recommended to configure your environment with the following constraints:
 
 - **Custom nodes must be defined using `async def` to prevent issues caused by mixing synchronous and asynchronous code (e.g., blocking the EventLoop)**
-- **Python 3.12**: *This constraint is imposed by the graph execution engine LangGraph. The Graph engine wrapper requires nodes to stream various information during execution, a capability Python supports on 3.11 and above.*
+- **Python3.12**: *This constraint is imposed by the graph execution engine LangGraph. The Graph engine wrapper requires nodes to stream various information during execution, a capability Python supports on 3.11 and above.*
 - **LangGraph version 1.0.x stable release is recommended**
 
 

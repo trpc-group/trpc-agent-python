@@ -72,7 +72,7 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
 
 ### Prerequisites
 
-- Python 3.10+ (Python 3.12 recommended)
+- Python3.10+ (Python3.12 recommended)
 - Available model API key (OpenAI-like / Anthropic, or route via LiteLLM)
 
 ### Installation
@@ -86,7 +86,7 @@ pip install trpc-agent-py
 Install optional capabilities as needed:
 
 ```bash
-pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langfuse]"
+pip install "trpc-agent-py[graph,a2a,ag-ui,knowledge,knowledge-hf,agent-claude,mem0,mempalace,langfuse]"
 ```
 
 #### Install with uv
@@ -94,26 +94,48 @@ pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langf
 [uv](https://docs.astral.sh/uv/) provides fast, reproducible installs:
 
 ```bash
-uv venv --python-preference only-system   # use the local Python
-uv sync                                   # production install (core only)
-uv sync --extra dev                       # core + dev tooling
-uv sync --extra a2a --extra knowledge     # add optional extras
+# Install uv if it is not already available
+python -m pip install uv
 
+# Install the published package in a virtual environment
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install trpc-agent-py
 
-# Run commands inside the environment without activating it for evaluation
+# Install optional capabilities as needed
+# uv pip install "trpc-agent-py[graph,a2a,ag-ui,knowledge,knowledge-hf]"
+```
+
+For a project managed by uv:
+
+```bash
+# Core package only
+uv add trpc-agent-py
+# Or: core + optional extras (one command is enough)
+# uv add "trpc-agent-py[graph,a2a,ag-ui,knowledge,knowledge-hf]"
+```
+
+When developing this repository:
+
+```bash
+uv sync --extra dev
+./build.sh              # uv (default; installed automatically if missing)
+# ./build.sh "[graph]"      # uv by default, extras only
+# ./build.sh pip          # use pip instead
+# ./build.sh uv "[dev,graph]"  # explicit uv with selected extras
+
+# Install dependencies required by feature-specific test suites
+./build.sh uv "[dev,graph,ag-ui,agent-claude,a2a]"
 uv run python -c "from trpc_agent_sdk.version import __version__; print(__version__)"
 ```
 
-This project also provides a script for one-shot setup on macOS：
+On macOS, use the same cross-platform build script inside a virtual environment:
 ```bash
-# One-shot setup
-bash build_mac_uv.sh
-```
-
-Install optional capabilities as needed:
-
-```bash
-EXTRAS="a2a knowledge" bash build_mac_uv.sh
+./build.sh                              # creates .venv automatically; default uv
+#./build.sh "[dev,graph,knowledge]"       # uv by default with selected extras
+#./build.sh pip "[dev]"                    # use pip
+#./build.sh uv "[dev,graph,knowledge]"     # explicit uv
+source .venv/bin/activate               # activate it in the current shell
 ```
 
 ### Develop Weather Agent
@@ -371,7 +393,7 @@ Recommended first:
 
 - [examples/langgraph_agent](./examples/langgraph_agent/README.md) - Integrate pre-built and compiled LangGraph workflows
 - [examples/langgraph_agent_with_cancel](./examples/langgraph_agent_with_cancel/README.md) - `LangGraphAgent` cancellation
-- [examples/langgraphagent_with_human_in_the_loop](./examples/langgraphagent_with_human_in_the_loop/README.md) - `LangGraphAgent` human-in-the-loop
+- [examples/langgraph_agent_with_HITL](./examples/langgraph_agent_with_HITL/README.md) - `LangGraphAgent` human-in-the-loop
 - [examples/claude_agent](./examples/claude_agent/README.md) - `ClaudeAgent` basics
 - [examples/claude_agent_with_streaming_tool](./examples/claude_agent_with_streaming_tool/README.md) - `ClaudeAgent` streaming tools
 - [examples/claude_agent_with_skills](./examples/claude_agent_with_skills/README.md) - `ClaudeAgent` + Skills
@@ -615,8 +637,8 @@ We love contributions! Join our growing developer community and help build the f
 git clone https://github.com/YOUR_USERNAME/trpc-agent-python.git
 cd trpc-agent-python
 
-# Install development dependencies and run tests
-pip install -e ".[dev]"
+# Install development and feature-test dependencies, then run tests
+pip install -e ".[dev,graph,ag-ui,agent-claude,a2a]"
 pytest
 
 # Make your changes and open a PR!

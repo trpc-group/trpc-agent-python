@@ -37,11 +37,35 @@ Skill Hub（`trpc_agent_sdk.skills.hub`）把"从各种来源发现并获取 ski
 - `agent/agent.py`：`create_agent(skills_dir)` 把返回的 `skill_repository` / `skill_tool_set` 绑定到 `LlmAgent`
 - `run_agent.py`：清空 `data/` 目录（保证每次都重新走一遍 Skill Hub 拉取流程），创建 agent，跑一轮 `skill_load` + 总结的对话，并打印实际下载到的文件列表
 
-## 环境与运行
+## 环境要求
 
-- Python 3.10+；仓库根目录执行 `pip install -e .`
+- Python3.10+，推荐 Python3.12
+
+- Python3.10+
 - 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`（可用 `.env`）
 - 可选：`GITHUB_TOKEN`，用于提高 GitHub API 限额（本示例只读取公开仓库，不设置也能跑）
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/skills_hub/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+- `GITHUB_TOKEN` 用于提高 GitHub API 限额（本示例只读取公开仓库，不设置也能跑）
+
+### 运行命令
 
 ```bash
 cd examples/skills_hub

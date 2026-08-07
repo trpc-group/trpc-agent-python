@@ -19,10 +19,30 @@
 - `agent/tools.py`：`calculate` 供 LangGraph 工具节点调用
 - `run_agent.py`：两轮算术问句，展示委派与 `calculate` 工具响应
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；安装本仓库与 LangGraph / LangChain 相关依赖；`pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`（示例使用 `deepseek:` 前缀初始化 chat model）
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh "[graph, deepseek-langchain]"
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/team_member_agent_langgraph/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 cd examples/team_member_agent_langgraph

@@ -32,15 +32,27 @@ memory_assistant (LlmAgent)
 - TTL 配置：后台周期清理过期记忆，控制成本和数据规模
 - 搜索路径：`load_memory` 基于用户维度聚合检索，支持跨 session 召回
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
-
-- Python 3.12
+- Python3.10+，推荐 Python3.12
 - 需要可用的 LLM 配置（`TRPC_AGENT_*`）
 - 自托管模式需要 Qdrant 与本地 embedding 相关依赖
 
-### 运行命令
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh "[mem0]"
+source .venv/bin/activate
+
+# Self-hosted mode only
+pip3 install sentence-transformers qdrant-client
+```
+
+## 运行步骤
+
+### 配置环境变量
 
 ```bash
 cd examples/memory_service_with_mem0

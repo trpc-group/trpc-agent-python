@@ -19,11 +19,30 @@
 - `agent/tools.py`：封装 `create_skill_tool_set` 及成员侧工具
 - `run_agent.py`：用户强制流程——先跑技能命令再委派成员
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；仓库根目录 `pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
-- 技能位于示例目录 `skills/`（可通过环境变量指定根路径）
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/team_with_skill/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 cd examples/team_with_skill

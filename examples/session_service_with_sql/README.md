@@ -26,26 +26,30 @@ root_agent (LlmAgent)
 - 初始化 SQL Session 后端并注入 `Runner`
 - 与内存版脚本结构对称，便于对比持久化语义
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
-
-- Python 3.12
+- Python3.12
 - 按 `.env` 提供可用的 SQL 配置
 
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
+
 
 在 [examples/session_service_with_sql/.env](./.env) 中配置模型与数据库相关变量（以该文件为准）。
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 
 ### 运行命令
 

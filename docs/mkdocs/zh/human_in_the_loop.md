@@ -1,4 +1,4 @@
-# Human-In-The-Loop
+# Human-In-The-Loop(HITL)
 
 在 Agent 处理请求的过程中，某些场景需要引入人工判断或调整，以提高任务完成的准确率。例如：
 - 风险操作审批：当 Agent 生成 SQL 或 Shell 脚本时，是否执行通常需要人工审批。以命令执行为例：如果人工同意，则拉起 terminal 执行并将结果回传给 Agent；如果不同意，则说明命令可能有问题，需要 Agent 重新生成替代命令。
@@ -434,4 +434,4 @@ async def run_human_in_loop_agent():
 
 完整的示例代码请参考：
 - LlmAgent：[examples/llmagent_with_human_in_the_loop/README.md](../../../examples/llmagent_with_human_in_the_loop/README.md)
-- LangGraphAgent：[examples/langgraphagent_with_human_in_the_loop/README.md](../../../examples/langgraphagent_with_human_in_the_loop/README.md)
+- LangGraphAgent：[examples/langgraph_agent_with_HITL/README.md](../../../examples/langgraph_agent_with_HITL/README.md)

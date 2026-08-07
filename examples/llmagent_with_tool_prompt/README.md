@@ -26,23 +26,22 @@ root_agent (LlmAgent, tool_prompt=XML style)
 - Agent 配置中指定工具提示模板，引导模型用标签包裹工具名与参数
 - Runner 将解析后的调用映射到已注册工具并回灌结果
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/llmagent_with_tool_prompt/.env](./.env) 中配置（或通过 `export` 设置）：
 

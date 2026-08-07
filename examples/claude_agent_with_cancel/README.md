@@ -58,23 +58,22 @@ claude_weather_agent_with_cancel (ClaudeAgent)
 - 每个场景的第 2 轮对话发送 `"what happens?"`，验证 Agent 能读取之前的 Session 上下文
 - 使用 `AgentCancelledEvent` 检测取消事件并优雅退出事件循环
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[agent-claude]"
 source .venv/bin/activate
-pip3 install -e '.[agent-claude]'
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/claude_agent_with_cancel/.env](./.env) 中配置（或通过 `export`）：
 
