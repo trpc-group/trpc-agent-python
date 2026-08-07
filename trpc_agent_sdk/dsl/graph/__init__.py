@@ -94,15 +94,19 @@ from ._constants import STATE_KEY_SESSION
 from ._constants import STATE_KEY_STEP_NUMBER
 from ._constants import STATE_KEY_TOOL_CALLBACKS
 from ._constants import STATE_KEY_USER_INPUT
+from ._constants import is_graph_internal_state_key
 from ._constants import is_unsafe_state_key
 from ._event_writer import AsyncEventWriter
 from ._event_writer import EventWriter
 from ._event_writer import EventWriterBase
+from ._exceptions import GraphResumeError
 from ._graph_agent import GraphAgent
+from ._history import HistoryScope
 from ._interrupt import interrupt
 from ._memory_saver import MemorySaver
 from ._memory_saver import MemorySaverOption
 from ._memory_saver import has_graph_internal_checkpoint_state
+from ._memory_saver import has_graph_resume_state
 from ._memory_saver import strip_graph_internal_checkpoint_state
 from ._node_config import NodeConfig
 from ._state import State
@@ -141,15 +145,19 @@ __all__ = [
     "STATE_KEY_SESSION",
     "STATE_KEY_STEP_NUMBER",
     "STATE_KEY_TOOL_CALLBACKS",
+    "is_graph_internal_state_key",
     "is_unsafe_state_key",
     "AsyncEventWriter",
     "EventWriter",
     "EventWriterBase",
+    "GraphResumeError",
     "GraphAgent",
+    "HistoryScope",
     "interrupt",
     "MemorySaver",
     "MemorySaverOption",
     "has_graph_internal_checkpoint_state",
+    "has_graph_resume_state",
     "strip_graph_internal_checkpoint_state",
     "NodeConfig",
     "State",

@@ -13,6 +13,8 @@ Usage:
     >>> messages = state.get(STATE_KEY_MESSAGES, [])
 """
 
+from typing import Any
+
 # =============================================================================
 # Core State Keys
 # =============================================================================
@@ -148,6 +150,11 @@ STATE_KEY_PENDING_INTERRUPT_ID = "_trpc_graph_pending_interrupt_id"
 STATE_KEY_PENDING_INTERRUPT_AUTHOR = "_trpc_graph_pending_interrupt_author"
 STATE_KEY_PENDING_INTERRUPT_BRANCH = "_trpc_graph_pending_interrupt_branch"
 
+# Pending child-agent HITL context owned by AgentNodeAction. This bridges a
+# child LongRunningEvent into a parent GraphAgent interrupt and supports
+# replaying multiple clarification rounds in the same graph node.
+STATE_KEY_PENDING_AGENT_NODE_HITL = "_trpc_graph_pending_agent_node_hitl"
+
 # Prefix for synthetic function call IDs used by graph interrupt bridge
 STATE_KEY_LONG_RUNNING_PREFIX = "__trpc_graph_long_running__"
 
@@ -179,6 +186,7 @@ UNSAFE_STATE_KEYS = frozenset({
     STATE_KEY_PENDING_INTERRUPT_ID,
     STATE_KEY_PENDING_INTERRUPT_AUTHOR,
     STATE_KEY_PENDING_INTERRUPT_BRANCH,
+    STATE_KEY_PENDING_AGENT_NODE_HITL,
 })
 
 
@@ -192,3 +200,30 @@ def is_unsafe_state_key(key: str) -> bool:
         True if the key is unsafe
     """
     return key in UNSAFE_STATE_KEYS
+
+
+# Reserved prefix for keys owned by the GraphAgent runtime and persisted to
+# Session.state (LangGraph checkpoints, pending interrupt / HITL markers).
+# These are backend continuation tokens: they must never be emitted to external
+# clients (AG-UI state snapshots/deltas) nor accepted back as inbound state
+# patches, otherwise a client echo would clobber the checkpoint and restart the
+# graph from START. Only GraphAgent-internal keys use this prefix; other
+# framework-internal state keys are owned by their modules and managed there.
+GRAPH_INTERNAL_STATE_PREFIX = "_trpc_graph_"
+
+
+def is_graph_internal_state_key(key: Any) -> bool:
+    """Whether a Session.state key is owned by the GraphAgent runtime.
+
+    GraphAgent-internal keys (``_trpc_graph_*``: LangGraph checkpoints and
+    pending interrupt / HITL markers) are backend continuation tokens that
+    external clients neither need to see nor are allowed to overwrite.
+
+    Args:
+        key: A candidate state key.
+
+    Returns:
+        True when the key is GraphAgent-internal and must be filtered at the
+        client boundary (outbound snapshots/deltas and inbound state patches).
+    """
+    return isinstance(key, str) and key.startswith(GRAPH_INTERNAL_STATE_PREFIX)

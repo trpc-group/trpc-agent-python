@@ -413,7 +413,7 @@ Scenario: Integrate any BaseAgent (e.g., LlmAgent/GraphAgent) as a node in the g
 graph.add_agent_node(
     node_id="delegate",
     agent=delegate_agent,
-    isolated_messages=True,
+    history_scope="branch",
     input_from_last_response=False,
     event_scope="delegate_scope",
     input_mapper=StateMapper.rename({"query_text": STATE_KEY_USER_INPUT}),
@@ -423,11 +423,28 @@ graph.add_agent_node(
 ```
 
 Common options:
-- isolated_messages: Whether to isolate the parent session's message history
+- history_scope: Child history policy. `none` starts without parent history,
+  `branch` inherits only events from the same Agent-node branch (including its
+  nested branches), and `all` inherits the complete parent event history.
+- isolated_messages: Legacy compatibility switch. When history_scope is omitted,
+  `True` maps to `none` and `False` maps to `all`. An explicit history_scope
+  takes precedence.
 - input_from_last_response: Whether to map the parent state's last_response as the child node's user_input
 - event_scope: Event branch prefix for the child Agent
 - input_mapper / output_mapper: Parent-child state mapping (explicit configuration recommended)
 - config / callbacks: Same as add_node
+
+`branch` filters the child Session event log. The transient graph `messages`
+state stays empty and GraphAgent rebuilds model input from those filtered events;
+this keeps persistent Session state JSON-serializable. The policy is useful when
+the same Agent node is entered again in a later outer run without exposing
+private conversations from sibling nodes. During HITL resume, legacy
+`isolated_messages=True` nodes still recover their current branch so the pending
+function-call exchange remains intact.
+
+When a child Agent emits a `LongRunningEvent`, `add_agent_node` promotes it to a parent GraphAgent `interrupt`: the parent graph does not execute downstream nodes, and the Runner event preserves the original tool name and arguments. After the client submits the matching `FunctionResponse`, the parent graph resumes the current Agent node and the SDK maps the response back to the child's original function call. The graph continues only after the child Agent reaches a final result. This supports multiple HITL rounds in one node and persists child state in the SessionService-backed checkpoint for process-restart recovery.
+
+When the Agent node is a TeamAgent, the Leader can use the same HITL flow. Regular Team Members still must not be configured with or invoke `LongRunningFunctionTool`.
 
 GraphAgent does not require (nor support) registering Agent nodes via sub_agents; composition relationships are handled uniformly through add_agent_node.
 

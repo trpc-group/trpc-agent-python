@@ -8,13 +8,14 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 from langgraph.checkpoint.base import empty_checkpoint
 from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_CHECKPOINTS
 from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_CHECKPOINT_BLOBS
 from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_CHECKPOINT_WRITES
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_PENDING_INTERRUPT
 from trpc_agent_sdk.dsl.graph._memory_saver import MemorySaver
 from trpc_agent_sdk.dsl.graph._memory_saver import has_graph_internal_checkpoint_state
+from trpc_agent_sdk.dsl.graph._memory_saver import has_graph_resume_state
 from trpc_agent_sdk.dsl.graph._memory_saver import strip_graph_internal_checkpoint_state
 
 
@@ -38,6 +39,36 @@ class TestMemorySaverHelpers:
         assert has_graph_internal_checkpoint_state(state) is True
         assert stripped == {"visible": "keep"}
         assert STATE_KEY_CHECKPOINTS in state
+
+    def test_has_graph_resume_state_only_tracks_outstanding_interrupt(self):
+        """Resume detection must key off the outstanding-interrupt marker, not
+        checkpoint storage.  A graph that ran to completion still carries
+        checkpoint keys; treating those as "resumable" would preserve the
+        session from cleanup forever and suppress client state sync (the
+        original bug).  Only an outstanding interrupt should count.
+        """
+        # Empty / no marker.
+        assert has_graph_resume_state({}) is False
+
+        # Completed graph: checkpoint keys linger but no pending interrupt.
+        completed = {
+            STATE_KEY_CHECKPOINTS: {
+                "t": {}
+            },
+            STATE_KEY_CHECKPOINT_BLOBS: {
+                "t": {}
+            },
+            STATE_KEY_CHECKPOINT_WRITES: {
+                "t": {}
+            },
+        }
+        assert has_graph_resume_state(completed) is False
+
+        # Marker reset to False on resume must not count.
+        assert has_graph_resume_state({STATE_KEY_PENDING_INTERRUPT: False}) is False
+
+        # Only an outstanding interrupt counts as resumable.
+        assert has_graph_resume_state({STATE_KEY_PENDING_INTERRUPT: True}) is True
 
 
 class TestMemorySaverStorage:

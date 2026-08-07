@@ -60,7 +60,9 @@ from ._constants import STREAM_KEY_ACK
 from ._constants import STREAM_KEY_EVENT
 from ._constants import is_unsafe_state_key
 from ._events import EventBuilder
+from ._exceptions import GraphResumeError
 from ._memory_saver import has_graph_internal_checkpoint_state
+from ._memory_saver import has_graph_resume_state
 from ._memory_saver import strip_graph_internal_checkpoint_state
 from ._state_graph import CompiledStateGraph
 
@@ -167,13 +169,31 @@ class GraphAgent(BaseAgent):
 
         interrupted = False
         resume_command = self._extract_resume_command(ctx)
+        pending_resume = has_graph_resume_state(dict(ctx.session.state or {}))
+        if pending_resume and resume_command is None:
+            response = self._current_function_response(ctx)
+            pending_id = ctx.session.state.get(STATE_KEY_PENDING_INTERRUPT_ID)
+            resume_error = GraphResumeError(
+                "missing_function_response" if response is None else "interrupt_id_mismatch",
+                pending_interrupt_id=pending_id if isinstance(pending_id, str) else None,
+                response_id=(response.id if response is not None and isinstance(response.id, str) else None),
+            )
+            yield Event(
+                invocation_id=ctx.invocation_id,
+                author=self.name,
+                branch=ctx.branch,
+                error_code=resume_error.error_code,
+                error_message=str(resume_error),
+                custom_metadata=resume_error.get_custom_metadata(),
+            )
+            return
         if resume_command is not None:
             logger.debug(f"[{self.name}] Resuming graph from pending interrupt")
-            self._clear_pending_interrupt_state(ctx)
             graph_input: GraphInput = resume_command
         else:
             graph_input = initial_state
 
+        resume_accepted = False
         try:
             # Execute with stream_mode=["updates", "custom"]
             # "updates" is required for state to propagate between nodes
@@ -183,6 +203,13 @@ class GraphAgent(BaseAgent):
                     runnable_config,
                     stream_mode=["updates", "custom"],
             ):
+                # Do not consume the durable pending marker until LangGraph has
+                # accepted the resume command and produced its first chunk. If
+                # checkpoint loading fails, the caller can safely retry the
+                # same interrupt instead of losing the recovery boundary.
+                if resume_command is not None and not resume_accepted:
+                    self._clear_pending_interrupt_state(ctx)
+                    resume_accepted = True
                 # Cancellation checkpoint at each iteration
                 await ctx.raise_if_cancelled()
 
@@ -240,6 +267,11 @@ class GraphAgent(BaseAgent):
                             yield chunk_event
                             # Cancellation checkpoint after yielding events
                             await ctx.raise_if_cancelled()
+            if resume_command is not None and not resume_accepted:
+                # A valid graph may complete without emitting an update. The
+                # astream call still accepted the resume command successfully.
+                self._clear_pending_interrupt_state(ctx)
+                resume_accepted = True
         except RunLimitException:
             raise
         except Exception as e:
@@ -269,21 +301,35 @@ class GraphAgent(BaseAgent):
             logger.debug(f"[{self.name}] Graph execution completed in {step_count} steps")
             yield completion_event
 
-    def _extract_resume_command(self, ctx: InvocationContext) -> Optional[Command]:
-        """Build resume command when the latest user event is a function response."""
+    @staticmethod
+    def _current_function_response(ctx: InvocationContext) -> Optional[FunctionResponse]:
+        """Return the response owned by this invocation.
+
+        ``ctx.user_content`` is the authoritative Runner input. The session-tail
+        fallback preserves compatibility with direct GraphAgent callers that
+        construct an InvocationContext without populating ``user_content``.
+        """
+        user_content = getattr(ctx, "user_content", None)
+        if user_content is not None:
+            for part in getattr(user_content, "parts", []) or []:
+                if part.function_response is not None:
+                    return part.function_response
+            return None
+
         events = getattr(ctx.session, "events", [])
-        if not events:
-            return None
+        if events:
+            last_event = events[-1]
+            if last_event.author == ROLE_USER:
+                function_responses = last_event.get_function_responses()
+                if function_responses:
+                    return function_responses[0]
+        return None
 
-        last_event = events[-1]
-        if last_event.author != ROLE_USER:
+    def _extract_resume_command(self, ctx: InvocationContext) -> Optional[Command]:
+        """Build a resume command from the current invocation response."""
+        function_response = self._current_function_response(ctx)
+        if function_response is None:
             return None
-
-        function_responses = last_event.get_function_responses()
-        if not function_responses:
-            return None
-
-        function_response = function_responses[0]
         function_response_id = function_response.id
         if not isinstance(function_response_id, str) or not function_response_id:
             return None
@@ -296,7 +342,7 @@ class GraphAgent(BaseAgent):
 
         if not function_response_id.startswith(STATE_KEY_LONG_RUNNING_PREFIX):
             return None
-        interrupt_id = function_response_id[len(STATE_KEY_LONG_RUNNING_PREFIX):]
+        interrupt_id = function_response_id.removeprefix(STATE_KEY_LONG_RUNNING_PREFIX)
         if not interrupt_id:
             return None
 
@@ -359,7 +405,7 @@ class GraphAgent(BaseAgent):
         if isinstance(interrupt.value, dict):
             interrupt_response = interrupt.value
         else:
-            interrupt_response = {"desicion": interrupt.value}
+            interrupt_response = {"decision": interrupt.value}
 
         function_response = FunctionResponse(
             id=function_call.id,
@@ -393,7 +439,11 @@ class GraphAgent(BaseAgent):
         function_call_id = f"{STATE_KEY_LONG_RUNNING_PREFIX}{interrupt_id}"
 
         raw_args = interrupt.value
-        if isinstance(raw_args, dict):
+        if isinstance(raw_args, dict) and raw_args.get("_trpc_agent_node_hitl") is True:
+            function_name = str(raw_args.get("toolName") or function_name)
+            visible_args = raw_args.get("arguments")
+            function_args = visible_args if isinstance(visible_args, dict) else {}
+        elif isinstance(raw_args, dict):
             function_args = {str(key): value for key, value in raw_args.items()}
         else:
             function_args = {"value": raw_args}

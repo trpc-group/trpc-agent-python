@@ -27,6 +27,7 @@ from typing import Optional
 from typing import Set
 from typing import Union
 
+from trpc_agent_sdk.dsl.graph import has_graph_resume_state
 from trpc_agent_sdk.log import logger
 
 
@@ -92,9 +93,13 @@ class SessionManager:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._initialized = True
 
-        logger.info("Initialized SessionManager - timeout: %ss, cleanup: %ss, max/user: %s, memory: %s",
-                    session_timeout_seconds, cleanup_interval_seconds, max_sessions_per_user or 'unlimited',
-                    'enabled' if memory_service else 'disabled')
+        logger.info(
+            "Initialized SessionManager - timeout: %ss, cleanup: %ss, max/user: %s, memory: %s",
+            session_timeout_seconds,
+            cleanup_interval_seconds,
+            max_sessions_per_user or "unlimited",
+            "enabled" if memory_service else "disabled",
+        )
 
     @classmethod
     def get_instance(cls, **kwargs):
@@ -179,7 +184,9 @@ class SessionManager:
             if not session:
                 logger.debug(
                     "Session not found for update: %s:%s - this may be normal if session is still being created",
-                    app_name, session_id)
+                    app_name,
+                    session_id,
+                )
                 return False
 
             if not state_updates:
@@ -575,11 +582,24 @@ class SessionManager:
                 if session and hasattr(session, "last_update_time"):
                     age = current_time - session.last_update_time
                     if age > self._timeout:
-                        # Check for pending tool calls before deletion (HITL scenarios)
-                        pending_calls = session.state.get("pending_tool_calls", []) if session.state else []
+                        # Do not expire a session that is mid human-in-the-loop.
+                        # Two independent HITL mechanisms can pause a session:
+                        #  - pending_tool_calls: classic long-running tool wait.
+                        #  - a GraphAgent interrupt that is still outstanding.
+                        # Deleting either would lose the resume point. The graph
+                        # check is scoped to the *outstanding interrupt* marker
+                        # only (see has_graph_resume_state); a completed graph
+                        # is eligible for normal cleanup.
+                        state = session.state if session.state else {}
+                        pending_calls = state.get("pending_tool_calls", [])
                         if pending_calls:
-                            logger.info("Preserving expired session %s - has %s pending tool calls (HITL)", session_key,
-                                        len(pending_calls))
+                            logger.info(
+                                "Preserving expired session %s - has %s pending tool calls (HITL)",
+                                session_key,
+                                len(pending_calls),
+                            )
+                        elif has_graph_resume_state(state):
+                            logger.info("Preserving expired session %s - graph interrupt awaiting resume", session_key)
                         else:
                             await self._delete_session(session)
                             expired_count += 1

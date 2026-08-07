@@ -29,6 +29,7 @@ from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_PENDING_INTERRUPT_ID
 from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_USER_INPUT
 from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_ACK
 from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_EVENT
+from trpc_agent_sdk.dsl.graph._exceptions import GraphResumeError
 from trpc_agent_sdk.dsl.graph._graph_agent import GraphAgent
 from trpc_agent_sdk.dsl.graph._state_graph import CompiledStateGraph
 from trpc_agent_sdk.events import Event
@@ -95,6 +96,7 @@ def _new_invocation_context(
     invocation_id: str = "inv-1",
     branch: str | None = "graph-agent",
     actions: EventActions | None = None,
+    user_content: Content | None = None,
 ) -> InvocationContext:
     """Create a real InvocationContext for GraphAgent.run_async tests."""
     return InvocationContext(
@@ -104,6 +106,7 @@ def _new_invocation_context(
         agent=agent,
         agent_context=new_agent_context(),
         session=session,
+        user_content=user_content,
         event_actions=actions or EventActions(),
     )
 
@@ -285,6 +288,138 @@ class TestGraphAgent:
         assert session.state[STATE_KEY_PENDING_INTERRUPT_ID] is None
         assert session.state[STATE_KEY_PENDING_INTERRUPT_AUTHOR] is None
         assert session.state[STATE_KEY_PENDING_INTERRUPT_BRANCH] is None
+
+    async def test_run_async_resume_prefers_current_invocation_content(self):
+        """Resume must not depend on unrelated events appended to the session tail."""
+        function_response = FunctionResponse(
+            id=f"{STATE_KEY_LONG_RUNNING_PREFIX}approval:current",
+            name="approval",
+            response={"approved": True},
+        )
+        graph = _FakeCompiledGraph(items=[])
+        agent = _new_graph_agent(graph)
+        unrelated_event = Event(
+            invocation_id="other",
+            author="system",
+            content=Content(role="model", parts=[Part.from_text(text="projection")]),
+        )
+        session = _new_session(
+            unrelated_event,
+            state={
+                STATE_KEY_PENDING_INTERRUPT: True,
+                STATE_KEY_PENDING_INTERRUPT_ID: function_response.id,
+            },
+        )
+        current_content = Content(
+            role=ROLE_USER,
+            parts=[Part(function_response=function_response)],
+        )
+        ctx = _new_invocation_context(agent, session, user_content=current_content)
+
+        events = [event async for event in agent.run_async(ctx)]
+
+        assert events[-1].object == "graph.execution"
+        assert isinstance(graph.calls[0].graph_input, Command)
+        assert graph.calls[0].graph_input.resume == {"approval:current": {"approved": True}}
+
+    async def test_run_async_pending_interrupt_rejects_non_response_input(self):
+        """A paused graph must fail closed instead of restarting from START."""
+        pending_id = f"{STATE_KEY_LONG_RUNNING_PREFIX}approval:pending"
+        stale_response_event = Event(
+            invocation_id="old",
+            author=ROLE_USER,
+            content=Content(
+                role=ROLE_USER,
+                parts=[
+                    Part(function_response=FunctionResponse(
+                        id=pending_id,
+                        name="approval",
+                        response={"approved": False},
+                    ))
+                ],
+            ),
+        )
+        graph = _FakeCompiledGraph(items=[])
+        agent = _new_graph_agent(graph)
+        session = _new_session(
+            stale_response_event,
+            state={
+                STATE_KEY_PENDING_INTERRUPT: True,
+                STATE_KEY_PENDING_INTERRUPT_ID: pending_id,
+            },
+        )
+        ctx = _new_invocation_context(
+            agent,
+            session,
+            user_content=Content(role=ROLE_USER, parts=[Part.from_text(text="continue")]),
+        )
+
+        events = [event async for event in agent.run_async(ctx)]
+
+        assert len(events) == 1
+        assert events[0].is_error()
+        assert events[0].error_code == GraphResumeError.error_code
+        assert events[0].custom_metadata["reason"] == "missing_function_response"
+        assert graph.calls == []
+        assert session.state[STATE_KEY_PENDING_INTERRUPT] is True
+
+    async def test_run_async_pending_interrupt_rejects_mismatched_response(self):
+        """A response for another interrupt must not start a new graph run."""
+        pending_id = f"{STATE_KEY_LONG_RUNNING_PREFIX}approval:pending"
+        response = FunctionResponse(
+            id=f"{STATE_KEY_LONG_RUNNING_PREFIX}approval:stale",
+            name="approval",
+            response={"approved": True},
+        )
+        graph = _FakeCompiledGraph(items=[])
+        agent = _new_graph_agent(graph)
+        session = _new_session(state={
+            STATE_KEY_PENDING_INTERRUPT: True,
+            STATE_KEY_PENDING_INTERRUPT_ID: pending_id,
+        }, )
+        ctx = _new_invocation_context(
+            agent,
+            session,
+            user_content=Content(role=ROLE_USER, parts=[Part(function_response=response)]),
+        )
+
+        events = [event async for event in agent.run_async(ctx)]
+
+        assert len(events) == 1
+        assert events[0].is_error()
+        assert events[0].error_code == GraphResumeError.error_code
+        assert events[0].custom_metadata == {
+            "reason": "interrupt_id_mismatch",
+            "pending_interrupt_id": pending_id,
+            "response_id": response.id,
+        }
+        assert graph.calls == []
+        assert session.state[STATE_KEY_PENDING_INTERRUPT] is True
+
+    async def test_run_async_failed_resume_keeps_pending_marker(self):
+        """Checkpoint failures after a valid response must remain retryable."""
+        response = FunctionResponse(
+            id=f"{STATE_KEY_LONG_RUNNING_PREFIX}approval:retry",
+            name="approval",
+            response={"approved": True},
+        )
+        graph = _FakeCompiledGraph(error=RuntimeError("checkpoint unavailable"))
+        agent = _new_graph_agent(graph)
+        session = _new_session(state={
+            STATE_KEY_PENDING_INTERRUPT: True,
+            STATE_KEY_PENDING_INTERRUPT_ID: response.id,
+        }, )
+        ctx = _new_invocation_context(
+            agent,
+            session,
+            user_content=Content(role=ROLE_USER, parts=[Part(function_response=response)]),
+        )
+
+        events = [event async for event in agent.run_async(ctx)]
+
+        assert events[-1].actions.state_delta["phase"] == "error"
+        assert session.state[STATE_KEY_PENDING_INTERRUPT] is True
+        assert session.state[STATE_KEY_PENDING_INTERRUPT_ID] == response.id
 
     async def test_run_async_reports_stream_errors_in_completion_event(self):
         """Stream errors should surface in graph execution completion metadata."""

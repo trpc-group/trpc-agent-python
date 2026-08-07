@@ -121,6 +121,49 @@ model = OpenAIModel(
 )
 ```
 
+#### Responses API
+
+`OpenAIModel` 默认仍使用 Chat Completions。对于 OpenAI 或提供 `/v1/responses` 的兼容服务，需要显式开启：
+
+```python
+model = OpenAIModel(
+    model_name="your-responses-model",
+    api_key="your-api-key",
+    base_url="https://api.openai.com/v1",
+    use_responses_api=True,
+    responses_api_params={
+        "store": False,
+        "reasoning": {"summary": "auto"},
+    },
+)
+```
+
+该开关默认关闭，现有 OpenAI-compatible 服务不会改变调用路径。适配层会把多轮消息、函数调用及
+`function_call_output`、结构化输出、语义化流式事件、reasoning summary 和 token usage 映射为现有
+tRPC-Agent 类型。设置 `store=False` 时，SDK 会自动请求 `reasoning.encrypted_content`，以便下一轮
+连同工具结果一起回放 reasoning item。
+
+`responses_api_params` 可传入 `store`、`reasoning`、`include`、`truncation` 等 Responses 专用字段；
+`model`、`input`、`stream` 由 `OpenAIModel` 管理，不能在此覆盖。
+
+该字段类型为 openai SDK 的 `ResponseCreateParams`（`openai.types.responses`），IDE 可直接提示全部原生参数；
+所有字段原样透传给 `responses.create`，SDK 不做任何映射。控制推理深度时直接传 `reasoning.effort`：
+
+```python
+model = OpenAIModel(
+    model_name="your-responses-model",
+    api_key="your-api-key",
+    use_responses_api=True,
+    responses_api_params={
+        "reasoning": {"effort": "high"},
+    },
+)
+```
+
+支持的档位（`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`）随模型而异，
+具体以 OpenAI reasoning 指南及模型文档为准。SDK 刻意不做 `thinking_budget` → `effort` 的映射；
+仅在开启 thinking 时请求 `reasoning.summary`，保证推理输出可读。
+
 #### 高级用法
 
 从版本 `1.1.10`之后 OpenAIModel 支持传入共享的 http client 来解决连接复用的场景，当前的 OpenAIModel 默认每次都会创建临时的 http client 去访问模型服务；如果期望连接复用可以使用如下的方式

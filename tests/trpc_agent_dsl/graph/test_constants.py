@@ -7,6 +7,7 @@
 
 from trpc_agent_sdk.dsl.graph._constants import (
     END,
+    GRAPH_INTERNAL_STATE_PREFIX,
     METADATA_KEY_AGENT_NAME,
     METADATA_KEY_BRANCH,
     METADATA_KEY_INVOCATION_ID,
@@ -39,6 +40,7 @@ from trpc_agent_sdk.dsl.graph._constants import (
     STATE_KEY_NODE_RESPONSES,
     STATE_KEY_ONE_SHOT_MESSAGES,
     STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE,
+    STATE_KEY_PENDING_AGENT_NODE_HITL,
     STATE_KEY_PENDING_INTERRUPT,
     STATE_KEY_PENDING_INTERRUPT_AUTHOR,
     STATE_KEY_PENDING_INTERRUPT_BRANCH,
@@ -50,6 +52,7 @@ from trpc_agent_sdk.dsl.graph._constants import (
     STREAM_KEY_ACK,
     STREAM_KEY_EVENT,
     UNSAFE_STATE_KEYS,
+    is_graph_internal_state_key,
     is_unsafe_state_key,
 )
 
@@ -114,6 +117,7 @@ class TestStateKeyValues:
         assert STATE_KEY_PENDING_INTERRUPT_ID == "_trpc_graph_pending_interrupt_id"
         assert STATE_KEY_PENDING_INTERRUPT_AUTHOR == "_trpc_graph_pending_interrupt_author"
         assert STATE_KEY_PENDING_INTERRUPT_BRANCH == "_trpc_graph_pending_interrupt_branch"
+        assert STATE_KEY_PENDING_AGENT_NODE_HITL == "_trpc_graph_pending_agent_node_hitl"
         assert STATE_KEY_LONG_RUNNING_PREFIX == "__trpc_graph_long_running__"
 
     def test_role_values(self):
@@ -145,6 +149,7 @@ class TestUnsafeStateKeys:
             STATE_KEY_PENDING_INTERRUPT_ID,
             STATE_KEY_PENDING_INTERRUPT_AUTHOR,
             STATE_KEY_PENDING_INTERRUPT_BRANCH,
+            STATE_KEY_PENDING_AGENT_NODE_HITL,
         }
         assert UNSAFE_STATE_KEYS == expected
 
@@ -169,10 +174,60 @@ class TestUnsafeStateKeys:
     def test_serializable_keys_are_not_unsafe(self):
         """Keys that represent user-visible data should never appear in UNSAFE_STATE_KEYS."""
         serializable = {
-            STATE_KEY_USER_INPUT, STATE_KEY_MESSAGES, STATE_KEY_LAST_RESPONSE,
-            STATE_KEY_LAST_RESPONSE_ID, STATE_KEY_LAST_TOOL_RESPONSE,
-            STATE_KEY_NODE_RESPONSES, STATE_KEY_ONE_SHOT_MESSAGES,
-            STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE, STATE_KEY_METADATA,
+            STATE_KEY_USER_INPUT,
+            STATE_KEY_MESSAGES,
+            STATE_KEY_LAST_RESPONSE,
+            STATE_KEY_LAST_RESPONSE_ID,
+            STATE_KEY_LAST_TOOL_RESPONSE,
+            STATE_KEY_NODE_RESPONSES,
+            STATE_KEY_ONE_SHOT_MESSAGES,
+            STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE,
+            STATE_KEY_METADATA,
             STATE_KEY_STEP_NUMBER,
         }
         assert serializable.isdisjoint(UNSAFE_STATE_KEYS)
+
+
+class TestGraphInternalStateKeys:
+    """Contract tests for ``is_graph_internal_state_key``.
+
+    The AG-UI client boundary filters GraphAgent-internal state keys
+    (``_trpc_graph_*``) out of outbound snapshots/deltas and inbound state
+    patches. Any new GraphAgent-internal key MUST be covered by this predicate,
+    otherwise it leaks to (or can be echoed back by) the client.
+    """
+
+    def test_prefix_constant(self):
+        assert GRAPH_INTERNAL_STATE_PREFIX == "_trpc_graph_"
+
+    def test_all_graph_internal_keys_are_covered(self):
+        graph_internal_keys = {
+            STREAM_KEY_EVENT,
+            STREAM_KEY_ACK,
+            STATE_KEY_CHECKPOINTS,
+            STATE_KEY_CHECKPOINT_WRITES,
+            STATE_KEY_CHECKPOINT_BLOBS,
+            STATE_KEY_PENDING_INTERRUPT,
+            STATE_KEY_PENDING_INTERRUPT_ID,
+            STATE_KEY_PENDING_INTERRUPT_AUTHOR,
+            STATE_KEY_PENDING_INTERRUPT_BRANCH,
+            STATE_KEY_PENDING_AGENT_NODE_HITL,
+        }
+        for key in graph_internal_keys:
+            assert is_graph_internal_state_key(key) is True, f"Expected {key!r} to be graph-internal"
+
+    def test_non_graph_keys_are_not_covered(self):
+        non_graph_keys = [
+            STATE_KEY_USER_INPUT,
+            STATE_KEY_MESSAGES,
+            STATE_KEY_LAST_RESPONSE,
+            "arbitrary_custom_key",
+            "_trpc_some_other_module_key",
+            "",
+        ]
+        for key in non_graph_keys:
+            assert is_graph_internal_state_key(key) is False, f"Expected {key!r} not to be graph-internal"
+
+    def test_non_string_key_is_false(self):
+        assert is_graph_internal_state_key(None) is False
+        assert is_graph_internal_state_key(123) is False
