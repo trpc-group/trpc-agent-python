@@ -17,7 +17,7 @@ The trpc-agent-python SDK includes built-in Agent-to-Agent (A2A) protocol suppor
 pip install -e ".[a2a]"
 ```
 
-Python 3.12 is required.
+Python3.12 is required.
 
 ---
 

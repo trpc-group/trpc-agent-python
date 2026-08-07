@@ -19,11 +19,31 @@
 - `run_agent.py`：组装含 `inputs` 数组的 JSON 提示词，驱动单次 `skill_run` 演示
 - `run_agent.py` 末尾清理 `/tmp/skillrun-inputs` 等临时文件
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；已安装 Docker；仓库根目录 `pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/skills_with_container/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 - 可选：`SKILLS_ROOT`、`SKILLS_INPUTS_HOST`（默认 `/tmp/skillrun-inputs`）
+
+### 运行命令
 
 ```bash
 cd examples/skills_with_container

@@ -4,7 +4,16 @@ export DISABLE_TRPC_AGENT_REPORT=true
 
 set -e
 
-pip3 install -r pipeline_test/requirements-ecosystem.txt
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
+
+# shellcheck source=pipeline_test/_install_deps.sh
+source "${SCRIPT_DIR}/_install_deps.sh"
+
+# A2A + Claude team member examples
+pipeline_uv_install_extras "a2a,agent-claude"
+pipeline_uv_install_requirements "pipeline_test/requirements-ecosystem.txt"
 
 # 启动A2A服务端（后台运行）
 echo "启动A2A服务端..."

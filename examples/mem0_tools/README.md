@@ -58,7 +58,7 @@ personal_assistant (LlmAgent)
 
 ### 环境要求
 
-- Python 3.12
+- Python3.10+，推荐 Python3.12
 - `mem0ai`
 - 自托管模式额外需要：`sentence-transformers`、`qdrant-client`
 
@@ -67,17 +67,16 @@ personal_assistant (LlmAgent)
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[mem0]"
 source .venv/bin/activate
-
-pip3 install -e .[mem0]
-pip3 install mem0ai
 
 # Self-hosted mode only
 pip3 install sentence-transformers qdrant-client
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/mem0_tools/.env](./.env) 中配置（或通过 `export`）：
 

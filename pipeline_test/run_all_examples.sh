@@ -62,6 +62,10 @@ Environment:
   EXTRA_SKIP_EXAMPLES  Space-separated run_agent.py paths to skip.
   EXAMPLE_TIMEOUT_SECONDS
                        Max seconds for each example before marking it failed.
+
+Notes:
+  Installs matching optional extras with uv before running (cache on by default).
+  Disable cache with USE_CACHE=0. With --include-manual, also installs mem0 and cube.
 EOF
 }
 
@@ -365,6 +369,33 @@ while (($# > 0)); do
 done
 
 cd "$REPO_ROOT"
+
+# shellcheck source=pipeline_test/_install_deps.sh
+source "${SCRIPT_DIR}/_install_deps.sh"
+
+# Install optional extras required by the selected mode.
+case "$RUN_MODE" in
+    all)
+        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,eval"
+        ;;
+    run-agent)
+        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace"
+        ;;
+    evaluation)
+        EXTRAS="eval"
+        ;;
+    a2a)
+        EXTRAS="a2a"
+        ;;
+esac
+
+# Manual/skipped examples may also need mem0 / cube when --include-manual is set.
+if [[ "$INCLUDE_MANUAL" == true ]]; then
+    EXTRAS="${EXTRAS},mem0,cube"
+fi
+
+pipeline_uv_install_extras "${EXTRAS}"
+
 prepare_tasks
 
 case "$RUN_MODE" in

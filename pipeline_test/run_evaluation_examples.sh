@@ -4,6 +4,16 @@ export DISABLE_TRPC_AGENT_REPORT=true
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
+
+# shellcheck source=pipeline_test/_install_deps.sh
+source "${SCRIPT_DIR}/_install_deps.sh"
+
+# AgentEvaluator needs rouge-score / pandas / pytest from [eval]
+pipeline_uv_install_extras "eval"
+
 # Evaluation
 cd examples/evaluation/quickstart && pytest test_quickstart.py -v -s && cd -
 cd examples/evaluation/webui && pytest test_book_finder.py -v -s && cd -

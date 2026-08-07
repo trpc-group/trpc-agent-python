@@ -34,19 +34,26 @@ LlmAgent --stdio--> mempalace mcp (子进程, MCP server)
 
 ---
 
-## 准备工作
+## 环境要求
 
-### 1. 安装依赖
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
 
 在仓库根目录：
 
 ```bash
-pip install -e ".[mempalace]"
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh "[mempalace]"
+source .venv/bin/activate
 ```
 
 `mempalace` 包会带上 `mempalace` CLI 命令到当前 Python 环境的 PATH。
 
-### 2. 初始化 palace（首次使用）
+## 运行步骤
+
+### 初始化 palace（首次使用）
 
 ```bash
 mempalace init
@@ -59,9 +66,9 @@ export MEMPALACE_PALACE_PATH=/absolute/path/to/palace
 mempalace --palace "$MEMPALACE_PALACE_PATH" init
 ```
 
-### 3. 配置模型 key
+### 配置环境变量
 
-复制并填写 `.env`：
+在 [examples/mempalace_mcp/.env](./.env) 中设置（也可通过 export）：
 
 ```env
 TRPC_AGENT_API_KEY=your-api-key
@@ -72,14 +79,14 @@ TRPC_AGENT_MODEL_NAME=your-model-name
 
 ---
 
-## 启动 MemPalace MCP Server
+### 启动 MemPalace MCP Server
 
 > ⚠️ **重要**：`mempalace mcp`（带空格）**不是** MCP server，它只是打印设置帮助。  
 > 真正的 server 入口是 `mempalace-mcp`（带连字符）或 `python -m mempalace.mcp_server`。
 
 MemPalace MCP server 有 **3 种启动方式**，本示例使用第 1 种，**完全无需手动操作**：
 
-### 方式 1：自动 stdio 子进程（本示例采用，推荐）
+#### 方式 1：自动 stdio 子进程（本示例采用，推荐）
 
 `MempalaceMCPToolset` 在 `LlmAgent` 启动时**自动**把 server 作为子进程拉起，通过
 stdin/stdout 与之通信；`Runner` 关闭时子进程也跟着退出。**你什么都不用做，跑 `python3 run_agent.py` 即可。**
@@ -102,7 +109,7 @@ McpStdioServerParameters(
 McpStdioServerParameters(command="mempalace-mcp", args=[...], env=env)
 ```
 
-### 方式 2：手动启动 stdio server（用于调试）
+#### 方式 2：手动启动 stdio server（用于调试）
 
 要确认 MemPalace MCP server 本身可用，先在终端单独跑一下：
 
@@ -130,7 +137,7 @@ stdio 协议要求 stdout 纯净，否则 MCP 客户端会无法解析。
 | `mempalace-mcp`（带连字符） | ✅ 真正启动 stdio server |
 | `python -m mempalace.mcp_server` | ✅ 真正启动 stdio server（最稳） |
 
-### 方式 3：作为常驻 HTTP server（多 agent 共享同一 palace）
+#### 方式 3：作为常驻 HTTP server（多 agent 共享同一 palace）
 
 如果你希望多个 agent 共享同一个 MemPalace，可以让 MCP server 跑成 HTTP 服务（具体
 CLI 选项请参考 MemPalace 官方文档当前版本：[mempalace mcp](https://mempalaceofficial.com/reference/cli)）。然后把
@@ -152,7 +159,7 @@ self._connection_params = StreamableHTTPConnectionParams(
 
 ---
 
-## 运行示例
+### 运行命令
 
 ```bash
 cd examples/mempalace_mcp

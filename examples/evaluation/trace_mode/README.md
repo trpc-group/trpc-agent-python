@@ -10,7 +10,7 @@
 
 ## 环境要求
 
-Python 3.10+。Trace 模式不跑模型推理，但框架仍会加载 agent 模块；若未配置 `TRPC_AGENT_API_KEY`，加载可能报错，可按需配置或仅用於查看結構。
+Python3.10+。Trace 模式不跑模型推理，但框架仍会加载 agent 模块；若未配置 `TRPC_AGENT_API_KEY`，加载可能报错，可按需配置或仅用於查看結構。
 
 ## 运行
 

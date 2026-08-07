@@ -32,12 +32,30 @@ weather_agent (LlmAgent)
 - `search_memory()`：扫描用户维度的记忆键并聚合过滤匹配事件
 - `load_memory` 工具：在对话中触发检索，验证跨会话记忆是否可用
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
-
-- Python 3.12
+- Python3.10+，推荐 Python3.12
 - Redis 服务可用（本地 / Docker / 远程）
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/memory_service_with_redis/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 
 ### 运行命令
 
@@ -81,9 +99,8 @@ python3 run_agent.py
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
 ---

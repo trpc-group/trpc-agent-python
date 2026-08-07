@@ -10,7 +10,7 @@
 
 ## 环境要求
 
-Python 3.10+。需配置 `TRPC_AGENT_API_KEY` 等环境变量（同 quickstart）。
+Python3.10+。需配置 `TRPC_AGENT_API_KEY` 等环境变量（同 quickstart）。
 
 ## 运行
 

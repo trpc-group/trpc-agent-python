@@ -56,26 +56,24 @@ code_assistant (LlmAgent)
   - `code_execution_result`（代码执行结果）
   - `function_call`（工具调用）
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-- 若使用 `ContainerCodeExecutor`，需安装 Docker 并确保 Docker daemon 正在运行
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
 
-在 `examples/code_executors/.env` 中配置（或通过 `export`）：
+### 配置环境变量
+
+在 [examples/code_executors/.env](./.env) 中设置（也可通过 export）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

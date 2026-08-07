@@ -2,19 +2,34 @@
 
 演示 **Goal 工具族**（`create_goal` / `get_goal` / `update_goal`）：为会话设置一个持久目标，目标未完成前 Agent 应继续执行，而不是过早给出最终回复。示例同时挂载 `Bash` / `Write` / `Read` 完成真实的多步文件任务。
 
-## 快速开始
+## 环境要求
+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
 
 ```bash
-# 在项目根目录安装
+git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv && source .venv/bin/activate
-pip3 install -e .
+./build.sh
+source .venv/bin/activate
+```
 
-# 配置模型（examples/goal_tools/.env）
-TRPC_AGENT_API_KEY=your-api-key
-TRPC_AGENT_BASE_URL=your-base-url
-TRPC_AGENT_MODEL_NAME=your-model-name
+## 运行步骤
 
+### 配置环境变量
+
+在 [examples/goal_tools/.env](./.env) 中设置（也可通过 export）：
+
+```bash
+TRPC_AGENT_API_KEY=...
+TRPC_AGENT_BASE_URL=...
+TRPC_AGENT_MODEL_NAME=...
+```
+
+### 运行命令
+
+```bash
 # 运行
 cd examples/goal_tools
 python3 run_agent.py

@@ -61,26 +61,25 @@ LangchainKnowledge (x3 实例)
 - 实现 `from_documents` 类方法，支持与 VectorStore 配合使用时的工厂创建模式
 - 在 `agent.py` 的 `create_retriever_knowledge()` 中，直接传入预构造的 `Document` 列表，不依赖 Embedding 模型
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[knowledge,knowledge-hf]"
 source .venv/bin/activate
-pip3 install -e ".[knowledge]"
 ```
 
 > **注意**：本示例依赖 `langchain-text-splitters`、`langchain-community`、`langchain-huggingface` 等包，
-> 必须使用 `pip3 install -e ".[knowledge]"` 安装 knowledge 可选依赖，否则会报 `ModuleNotFoundError`。
+> 必须使用 `./build.sh "[knowledge,knowledge-hf]"` 安装 knowledge 与 Hugging Face 可选依赖，否则会报 `ModuleNotFoundError`。
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/knowledge_with_custom_components/.env](./.env) 中配置（或通过 `export`）：
 

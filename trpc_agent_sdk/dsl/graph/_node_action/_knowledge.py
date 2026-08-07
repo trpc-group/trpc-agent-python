@@ -4,15 +4,19 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Knowledge search node action executor."""
+from __future__ import annotations
 
 from typing import Any
 from typing import Callable
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import Union
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
-from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
+
+if TYPE_CHECKING:
+    from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
 
 from .._constants import STATE_KEY_LAST_RESPONSE
 from .._constants import STATE_KEY_NODE_RESPONSES

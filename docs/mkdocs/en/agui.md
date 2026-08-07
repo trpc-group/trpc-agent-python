@@ -18,7 +18,7 @@ From the repository root after cloning (enable the `ag-ui` optional extra):
 pip install -e ".[ag-ui]"
 ```
 
-Python 3.12 is required. Core dependencies include `ag-ui-protocol` and `FastAPI/Uvicorn`.
+Python3.12 is required. Core dependencies include `ag-ui-protocol` and `FastAPI/Uvicorn`.
 
 ## Quick Start
 

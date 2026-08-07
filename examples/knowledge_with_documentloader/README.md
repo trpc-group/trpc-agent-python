@@ -57,26 +57,17 @@ documentloader_agent (LlmAgent)
 - Agent 接收到用户问题后，自动调用 `simple_search` 检索知识库，结合检索结果生成回答
 - 流式事件中区分并打印 `function_call`（工具调用）与 `function_response`（工具返回）
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[knowledge,knowledge-hf]"
 source .venv/bin/activate
-pip3 install -e ".[knowledge]"
-```
-
-安装 DocumentLoader 相关依赖：
-
-```bash
-pip3 install langchain-community langchain-huggingface sentence-transformers
 ```
 
 如需使用 `PyPDFLoader`，还需安装：
@@ -93,15 +84,15 @@ pip3 install unstructured
 
 | 依赖包 | 说明 |
 |---|---|
-| `langchain-community` | 提供 `TextLoader`、`PyPDFLoader`、`UnstructuredMarkdownLoader` 等文档加载器 |
-| `langchain-huggingface` | 提供 `HuggingFaceEmbeddings` 向量嵌入模型接口 |
 | `sentence-transformers` | HuggingFace 嵌入模型的底层依赖，用于加载和运行嵌入模型 |
 | `pypdf` | `PyPDFLoader` 的底层依赖，用于解析 PDF 文件 |
 | `unstructured` | `UnstructuredMarkdownLoader` 的底层依赖，用于解析 Markdown 文件 |
 
 > 首次运行时会自动从 HuggingFace Hub 下载 `BAAI/bge-small-en-v1.5` 嵌入模型，请确保网络可访问 huggingface.co。
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/knowledge_with_documentloader/.env](./.env) 中配置（或通过 `export`）：
 

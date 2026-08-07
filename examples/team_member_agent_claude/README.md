@@ -41,25 +41,25 @@ assistant_team (Leader, LlmAgent)
 - 运行日志包含 proxy 进程启动、event loop thread 生命周期和最终清理
 - 结束时出现 `Cleaned up Claude environment`，说明清理流程完整
 
-## 环境与运行
 
-### 环境要求
+## 环境要求
 
-- Python 3.12
+- Python3.10+，推荐 Python3.12
 
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[agent-claude]"
 source .venv/bin/activate
-pip3 install -e .[agent-claude]
 ```
 
-### 环境变量要求
+## 运行步骤
 
-在 [examples/team_member_agent_claude/.env](./.env) 中配置（或通过 `export`）：
+### 配置环境变量
+
+在 [examples/team_human_in_the_loop/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

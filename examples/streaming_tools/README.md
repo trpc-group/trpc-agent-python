@@ -19,10 +19,30 @@
 - `agent/agent.py`：注册 `StreamingFunctionTool` 与 `FunctionTool`
 - `agent/tools.py`：实现 `write_file`、`get_file_info` 的具体逻辑
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；仓库根目录 `pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`（可用 `.env`）
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/streaming_tools/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 cd examples/streaming_tools

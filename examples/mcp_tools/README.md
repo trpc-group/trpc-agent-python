@@ -47,23 +47,22 @@ mcp_assistant (LlmAgent)
 - `run_agent.py` 中逐轮打印 `function_call` 和 `function_response`
 - 便于确认 MCP 请求确实被触发且结果被正确消费
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/mcp_tools/.env](./.env) 中配置（或通过 `export`）：
 

@@ -95,36 +95,30 @@ a2a_svc = TrpcA2aAgentService(
 
 建议两者配置相同的超时时间。
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-- 已安装项目依赖
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[a2a]"
 source .venv/bin/activate
-pip3 install -e '.[a2a]'
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/a2a_with_cancel/.env](./.env) 中设置（也可通过 export）：
 
-```bash
-TRPC_AGENT_API_KEY=...
-TRPC_AGENT_BASE_URL=...
-TRPC_AGENT_MODEL_NAME=...
-```
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 
-### 运行步骤
-
-#### 1. 启动服务端
+### 启动服务端
 
 ```bash
 cd examples/a2a_with_cancel
@@ -136,7 +130,7 @@ python3 run_server.py
 - API：`http://127.0.0.1:18082`
 - Agent Card：`http://127.0.0.1:18082/.well-known/agent.json`
 
-#### 2. 启动客户端（新开终端）
+#### 启动客户端（新开终端）
 
 ```bash
 cd examples/a2a_with_cancel
