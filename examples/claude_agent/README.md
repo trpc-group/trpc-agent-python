@@ -53,23 +53,22 @@ claude_weather_agent (ClaudeAgent)
   - `function_call`（工具调用）
   - `function_response`（工具返回）
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
-
-- Python 3.12
+- Python3.10+，推荐 Python3.12
 
 ### 安装步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[agent-claude]"
 source .venv/bin/activate
-pip3 install -e '.[agent-claude]'
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/claude_agent/.env](./.env) 中配置（或通过 `export`）：
 

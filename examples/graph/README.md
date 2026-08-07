@@ -112,23 +112,22 @@ graph TD
 - `after_node` 回调记录执行时间，写入 `node_execution_history` 列表
 - `format_output` 节点读取 `node_execution_history`，生成完整的执行流程报告
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[graph]"
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/graph/.env](./.env) 中配置（或通过 `export`）：
 
@@ -136,7 +135,7 @@ pip3 install -e .
 - `TRPC_AGENT_BASE_URL`
 - `TRPC_AGENT_MODEL_NAME`
 
-#### 启用知识搜索分支（可选）
+### 启用知识搜索分支（可选）
 
 1. 在 `run_agent.py` 中设置 `ENABLE_KNOWLEDGE = True`
 2. 在 `.env` 中额外配置 TRAG 环境变量：

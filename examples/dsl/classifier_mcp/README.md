@@ -65,25 +65,23 @@ classifier_mcp_example (GraphAgent)
 - 通过 `ModelExecutionMetadata.from_event(event)` 打印模型执行状态
 - `event.partial=True` 时打印流式文本分片
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
+./buid.sh uv "dev,graph"
 ```
 
-### 环境变量要求
+## 运行步骤
 
-在 `examples/dsl/classifier_mcp/.env` 中配置（或通过 `export`）：
+### 配置环境变量
+
+在 [examples/dsl/classifier_mcp/.env](./.env) 中配置（或通过 `export`）：
 
 - `MODEL1_NAME` / `MODEL1_API_KEY` / `MODEL1_BASE_URL`（Classifier Agent 模型）
 - `MODEL2_NAME` / `MODEL2_API_KEY` / `MODEL2_BASE_URL`（Simple Math Agent 模型）

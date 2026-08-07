@@ -1,4 +1,4 @@
-[English](README.md) | 中文
+[English](README.md) | [中文](README.zh_CN.md)
 
 # tRPC-Agent-Python
 
@@ -72,10 +72,12 @@ tRPC-Agent-Python 提供从 Agent 构建、编排、工具接入、会话记忆�
 
 ### 前置条件
 
-- Python 3.10+（推荐 Python 3.12）
+- Python3.10+（推荐 Python3.12）
 - 可用的模型服务 API Key（OpenAI-like / Anthropic，或通过 LiteLLM 路由）
 
 ### 安装
+
+#### 使用 pip 安装
 
 ```bash
 pip install trpc-agent-py
@@ -84,10 +86,60 @@ pip install trpc-agent-py
 按需安装扩展能力：
 
 ```bash
-pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langfuse]"
+pip install "trpc-agent-py[graph,a2a,ag-ui,knowledge,knowledge-hf,agent-claude,mem0,mempalace,langfuse]"
 ```
 
-### 开发天气查询Agent
+#### 使用 uv 安装
+
+[uv](https://docs.astral.sh/uv/) 可提供更快、可复现的安装体验：
+
+```bash
+# 如果尚未安装 uv，先安装
+python -m pip install uv
+
+# 在虚拟环境中安装已发布的包
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install trpc-agent-py
+
+# 按需安装扩展能力
+uv pip install "trpc-agent-py[graph,a2a,ag-ui,knowledge,knowledge-hf]"
+```
+
+对于由 uv 管理的项目：
+
+```bash
+# 只要核心能力
+uv add trpc-agent-py
+# 需要扩展能力（一条就够）
+#uv add "trpc-agent-py[graph,a2a,ag-ui,knowledge,knowledge-hf]"
+```
+
+开发本仓库时：
+
+```bash
+uv sync --extra dev
+./build.sh              # 默认使用 uv（缺失时会自动安装）
+# ./build.sh "[graph]"      # 默认 uv，仅指定 extras
+# ./build.sh pip          # 改用 pip
+# ./build.sh uv "[dev,graph]"  # 显式 uv，并选择 extras
+
+# 安装功能相关测试所需依赖
+./build.sh uv "[dev,graph,ag-ui,agent-claude,a2a]"
+uv run python -c "from trpc_agent_sdk.version import __version__; print(__version__)"
+```
+
+在 macOS 上，同样使用跨平台的构建脚本，并在虚拟环境中运行：
+
+```bash
+./build.sh                              # 自动创建 .venv，默认 uv
+# ./build.sh "[dev,graph,knowledge]"       # 默认 uv，选择 extras
+# ./build.sh pip "[dev]"                    # 使用 pip
+# ./build.sh uv "[dev,graph,knowledge]"     # 显式 uv
+source .venv/bin/activate               # 在当前 shell 中激活环境
+```
+
+### 开发天气查询 Agent
 
 ```python
 import asyncio
@@ -586,8 +638,8 @@ skill_tool_set = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs
 git clone https://github.com/YOUR_USERNAME/trpc-agent-python.git
 cd trpc-agent-python
 
-# 安装开发依赖并运行测试
-pip install -e ".[dev]"
+# 安装开发与功能测试依赖，然后运行测试
+pip install -e ".[dev,graph,ag-ui,agent-claude,a2a]"
 pytest
 
 # 进行您的更改并提交 PR！

@@ -20,16 +20,9 @@ from langchain_core.messages import BaseMessage
 from langchain_core.prompt_values import PromptValue
 from langchain_core.prompts.base import BasePromptTemplate
 from langchain_core.retrievers import BaseRetriever
+from langchain_core.runnables import Runnable as Chain
 from langchain_core.runnables import RunnableConfig
 from langchain_core.vectorstores import VectorStore
-
-# Version compatibility: Support both LangChain 0.3.x and 1.x.x
-# In LangChain 1.x, Chain is deprecated in favor of Runnable
-try:
-    from langchain_core.runnables import Runnable as Chain
-except ImportError:
-    # Fallback to Chain for LangChain 0.3.x
-    from langchain.chains.base import Chain
 
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.knowledge import KnowledgeBase

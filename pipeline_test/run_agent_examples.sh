@@ -4,7 +4,16 @@ export DISABLE_TRPC_AGENT_REPORT=true
 
 set -e
 
-pip3 install -r pipeline_test/requirements.txt
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
+
+# shellcheck source=pipeline_test/_install_deps.sh
+source "${SCRIPT_DIR}/_install_deps.sh"
+
+# graph/* and team_member_agent_langgraph need [graph]
+pipeline_uv_install_extras "graph"
+pipeline_uv_install_requirements "pipeline_test/requirements.txt"
 
 # Define example categories
 LLM_AGENT_EXAMPLES=(

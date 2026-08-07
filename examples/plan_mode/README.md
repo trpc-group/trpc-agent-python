@@ -39,24 +39,32 @@ orchestrator (LlmAgent + setup_plan)
 - 计划文档持久化在**主 agent 的 session** 中（`state["plan"]`）。
 - 被 spawn 出来的子 agent 只返回文本，不直接改动主 agent 的状态。
 
-## 前置条件
+## 环境要求
+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
 
 ```bash
 # 1. 安装 SDK（含 AG-UI 依赖）
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[ag-ui]"
 source .venv/bin/activate
-pip3 install -e .
-
-# 2. 配置模型访问
-# 复制并填写 examples/plan_mode/.env：
-TRPC_AGENT_API_KEY=<你的 key>
-TRPC_AGENT_BASE_URL=<可选，自定义 endpoint>
-TRPC_AGENT_MODEL_NAME=<可选，默认 gpt-4.1-mini>
+pip3 install fastapi
 ```
 
-## 运行
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/plan_mode/.env](./.env) 中设置（也可通过 export）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 cd examples/plan_mode

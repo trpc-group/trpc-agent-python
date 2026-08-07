@@ -44,23 +44,22 @@ root_agent (TransferAgent wrapper)
 - 运行日志按节点分段打印，便于确认每一步是否执行
 - 可直接判断“外部查询 -> 转交 -> 二次输出”的完整性
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/transfer_agent/.env](./.env) 中配置（或通过 `export`）：
 

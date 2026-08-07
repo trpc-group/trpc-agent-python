@@ -53,23 +53,22 @@ assistant (LlmAgent)
 - 重点观察第 4 轮是否还能提到第 1 轮信息（姓名）
 - 用于验证历史裁剪是否按预期生效
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/llmagent_with_max_history_messages/.env](./.env) 中配置（或通过 `export`）：
 

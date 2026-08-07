@@ -101,7 +101,7 @@ tRPC-Agent 评测模块是一套**自动化 Agent 质量检验工具**。它让�
 
 #### 第一步：环境准备
 
-**系统要求**：Python 3.12，可访问的 LLM 模型服务。
+**系统要求**：Python3.12，可访问的 LLM 模型服务。
 
 **安装依赖**（包含 pytest、pytest-asyncio、rouge-score 等）：
 

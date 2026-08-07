@@ -13,25 +13,34 @@ MemPalace 是一个本地优先的记忆系统，底层使用 ChromaDB 存储 dr
 - 支持 TTL 后台定时清理过期 drawer。
 - 示例输出中会截断过长工具结果，避免 memory JSON 刷屏。
 
-## 安装依赖
+## 环境要求
 
-使用前需要安装本项目依赖和 MemPalace 可选依赖。
+- Python3.10+，推荐 Python3.12
 
-在项目根目录执行：
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[mempalace]"
 source .venv/bin/activate
-pip install -e ".[mempalace]"
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/memory_service_with_mempalace/.env](./.env) 中设置（也可通过 export）：
+
+```bash
+TRPC_AGENT_API_KEY=...
+TRPC_AGENT_BASE_URL=...
+TRPC_AGENT_MODEL_NAME=...
 ```
 
 如果你使用虚拟环境，请确保运行示例和执行 `mempalace search` 时使用的是同一个环境。
 
-## 运行示例
-
-在项目根目录执行：
+### 运行命令
 
 ```bash
 cd examples/memory_service_with_mempalace

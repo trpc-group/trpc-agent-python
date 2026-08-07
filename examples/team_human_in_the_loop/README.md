@@ -19,10 +19,30 @@
 - `agent/tools.py`：`request_approval`、`search_info` 的实现与 HITL 演示配合
 - `run_agent.py`：捕获 pending、打印 `HITL TRIGGERED!` 后注入批准结果并继续 `run_async`
 
-## 环境与运行
+## 环境要求
 
-- Python 3.12；仓库根目录 `pip install -e .`
-- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/team_human_in_the_loop/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
 cd examples/team_human_in_the_loop

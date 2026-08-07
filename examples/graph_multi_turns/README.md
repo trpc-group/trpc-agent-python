@@ -57,23 +57,22 @@ graph_multi_turns (GraphAgent)
 - 通过 `runner.run_async(...)` 消费事件流，打印节点生命周期（`Node start` / `Node done`）、模型调用（`Model start` / `Model done`）等日志
 - 从 Session 状态中读取 `STATE_KEY_LAST_RESPONSE` 获取格式化后的最终输出
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[graph]"
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/graph_multi_turns/.env](./.env) 中配置（或通过 `export`）：
 
