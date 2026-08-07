@@ -28,23 +28,22 @@ compose_root（Compose 编排入口）
 - Compose 将多个子 Agent 的结果在编排层合并或续写
 - `run_agent.py` 打印各阶段标题与正文片段
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/multi_agent_compose/.env](./.env) 中配置（或通过 `export` 设置）：
 

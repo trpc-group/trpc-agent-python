@@ -76,23 +76,22 @@ task_planner (LlmAgent)
 - **Prompt 引导（鼓励不强制）**：`DEFAULT_TASK_PROMPT` 在挂载工具时经 `process_request` 自动追加到 system instruction。
 - 原则：要强制就加 validator，不要把约束塞进 prompt，两层保持可区分。
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/task_tools/.env](./.env) 中配置（或通过 `export`）：
 

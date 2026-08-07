@@ -30,23 +30,22 @@ state_demo_agent (LlmAgent + set_state_at_different_levels)
 - `run_agent.py` 按块运行四个示例，每块打印用户输入、工具调用与当前各级 state 快照
 - 展示 `output_key` 与协作子 Agent 输出合并进 state 的模式
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/session_state/.env](./.env) 中配置（或通过 `export` 设置）：
 

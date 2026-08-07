@@ -26,24 +26,22 @@ root_agent (LlmAgent)
 - 初始化 SQL 记忆服务并注入 `Runner`，与内存版示例结构平行
 - Agent 通过 `load_memory` 查询后根据返回 JSON 组织回复
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-- 按 `.env` 配置可用的 SQL 连接（与示例一致）
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/memory_service_with_sql/.env](./.env) 中配置模型与数据库相关变量（以该文件为准）。
 

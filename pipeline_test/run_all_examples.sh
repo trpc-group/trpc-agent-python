@@ -22,6 +22,39 @@ EVALUATION_TESTS=()
 TOTAL_TASKS=0
 CURRENT_TASK=0
 
+cd "$REPO_ROOT"
+
+is_virtualenv_python() {
+    local python_bin="$1"
+    [[ -x "${python_bin}" ]] && "${python_bin}" -c \
+        'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' >/dev/null 2>&1
+}
+
+resolve_project_venv() {
+    local candidate
+    for candidate in .venv venv; do
+        if is_virtualenv_python "${candidate}/bin/python"; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+PROJECT_VENV_DIR=""
+if ! PROJECT_VENV_DIR="$(resolve_project_venv)"; then
+    echo "Error: no project virtual environment found (.venv or venv)." >&2
+    echo "Create one first, for example: ./build.sh" >&2
+    exit 1
+fi
+
+echo "Using project virtual environment: ${PROJECT_VENV_DIR}"
+# shellcheck source=/dev/null
+source "${PROJECT_VENV_DIR}/bin/activate"
+# export PYTHON_BIN="${REPO_ROOT}/${PROJECT_VENV_DIR}/bin/python"
+cd -
+
+
 SKIPPED_EXAMPLES=(
     "examples/claude_agent_with_travel_planner/run_agent.py"
     "examples/dsl/classifier_mcp/run_agent.py"
@@ -62,6 +95,10 @@ Environment:
   EXTRA_SKIP_EXAMPLES  Space-separated run_agent.py paths to skip.
   EXAMPLE_TIMEOUT_SECONDS
                        Max seconds for each example before marking it failed.
+
+Notes:
+  Installs matching optional extras with uv before running (cache on by default).
+  Disable cache with USE_CACHE=0. With --include-manual, also installs mem0 and cube.
 EOF
 }
 
@@ -365,6 +402,33 @@ while (($# > 0)); do
 done
 
 cd "$REPO_ROOT"
+
+# shellcheck source=pipeline_test/_install_deps.sh
+source "${SCRIPT_DIR}/_install_deps.sh"
+
+# Install optional extras required by the selected mode.
+case "$RUN_MODE" in
+    all)
+        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,eval"
+        ;;
+    run-agent)
+        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace"
+        ;;
+    evaluation)
+        EXTRAS="eval"
+        ;;
+    a2a)
+        EXTRAS="a2a"
+        ;;
+esac
+
+# Manual/skipped examples may also need mem0 / cube when --include-manual is set.
+if [[ "$INCLUDE_MANUAL" == true ]]; then
+    EXTRAS="${EXTRAS},mem0,cube"
+fi
+
+pipeline_uv_install_extras "${EXTRAS}"
+
 prepare_tasks
 
 case "$RUN_MODE" in

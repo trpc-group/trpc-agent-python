@@ -124,23 +124,22 @@ google_raw_agent (LlmAgent)            # dedup_urls=False + 6 个月时效性
   - `google_raw_agent` 使用 `google_extra_params={"dateRestrict": "m6"}` —— 只保留过去 6 个月内被 Google 索引的结果，适合"最新/what's new"类查询
 - 其他常见透传包括 Google CSE 的 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate
-pip3 install -e .
 ```
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/websearch_tool/.env](./.env) 中配置（或通过 `export`）：
 

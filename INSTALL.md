@@ -65,7 +65,7 @@ Install optional extensions:
 
 ```bash
 # Choose as needed, multiple extensions can be combined with commas
-pip install "trpc-agent-py[a2a,knowledge,agent-claude]"
+pip install "trpc-agent-py[graph,a2a,knowledge,knowledge-hf,agent-claude]"
 ```
 
 ---
@@ -77,29 +77,53 @@ pip install "trpc-agent-py[a2a,knowledge,agent-claude]"
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
 # Create and activate a virtual environment
-python3 -m venv .venv
+./build.sh
 source .venv/bin/activate        # Linux / macOS
 # .venv\Scripts\activate         # Windows
-# Install
-pip install -e .
 ```
 
 ### uv Installation
 
-[uv](https://docs.astral.sh/uv/) manages the Python toolchain, virtual environment and dependencies based on the repository's `pyproject.toml` for fast, reproducible installs. This project provides a script for one-shot setup on macOS:
+[uv](https://docs.astral.sh/uv/) provides fast dependency installation.
+
+#### Install in a user project (recommended)
+
+```bash
+# Install uv if it is not already available
+python -m pip install uv
+
+# Install the published package in a virtual environment
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install trpc-agent-py
+
+# Install optional capabilities as needed
+# uv pip install "trpc-agent-py[graph,a2a,knowledge,knowledge-hf,agent-claude]"
+```
+
+For a project managed by uv:
+
+```bash
+# Core package only
+uv add trpc-agent-py
+# Or: core + optional extras (one command is enough)
+# uv add "trpc-agent-py[graph,a2a,knowledge,knowledge-hf,agent-claude]"
+```
+
+#### Develop this repository from source
+
+After cloning the repository, use the same cross-platform build script:
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
 
-# Install uv on macOS (see https://docs.astral.sh/uv/getting-started/installation/)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+./build.sh uv
 
-# One-shot setup
-bash build_mac_uv.sh
-
-# add optional extras
-EXTRAS="a2a knowledge" bash build_mac_uv.sh
+# Or: core + optional extras (one command is enough; installer defaults to uv)
+# ./build.sh "[dev,graph,a2a,knowledge,knowledge-hf]"
+# ./build.sh uv "[dev,graph,a2a,knowledge,knowledge-hf]"
+source .venv/bin/activate
 ```
 
 Or run the steps manually:
@@ -107,10 +131,10 @@ Or run the steps manually:
 ```bash
 uv venv --python-preference only-system   # use the local Python
 uv sync --extra dev                       # core + dev tooling
-uv sync --extra a2a --extra knowledge     # add optional extras
+uv sync --extra graph --extra a2a --extra knowledge --extra knowledge-hf
 uv sync                                   # production install (core only)
 
-# Run commands inside the environment without activating it for evaluation
+# Run commands inside the environment without activating it
 uv run python -c "from trpc_agent_sdk.version import __version__; print(__version__)"
 ```
 
@@ -118,6 +142,8 @@ To speed up downloads via a mirror, pass `--default-index`, e.g.:
 
 ```bash
 uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
+# Or in a user project:
+# uv pip install trpc-agent-py --index-url https://mirrors.cloud.tencent.com/pypi/simple
 ```
 
 ### Optional Dependencies Reference
@@ -127,7 +153,9 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 | `a2a`            | Google A2A protocol           | `pip install "trpc-agent-py[a2a]"`            |
 | `ag-ui`          | AG-UI protocol                | `pip install "trpc-agent-py[ag-ui]"`          |
 | `agent-claude`   | Claude Agent                  | `pip install "trpc-agent-py[agent-claude]"`   |
+| `graph`          | LangGraphAgent and graph DSL (includes langchain) | `pip install "trpc-agent-py[graph]"`          |
 | `knowledge`      | Knowledge base / RAG          | `pip install "trpc-agent-py[knowledge]"`      |
+| `knowledge-hf`   | Hugging Face embeddings       | `pip install "trpc-agent-py[knowledge-hf]"`   |
 | `mem0`           | Long-term memory (Mem0)       | `pip install "trpc-agent-py[mem0]"`           |
 | `langchain_tool` | LangChain Tool integration    | `pip install "trpc-agent-py[langchain_tool]"` |
 | `langfuse`       | Langfuse observability        | `pip install "trpc-agent-py[langfuse]"`       |
@@ -163,6 +191,7 @@ TRPC_AGENT_MODEL_NAME="your-model-name"
 **Option 2**: Export directly to the shell environment
 
 ```bash
+# Export environment variables
 export TRPC_AGENT_API_KEY="your-api-key"
 export TRPC_AGENT_BASE_URL="your-base-url"
 export TRPC_AGENT_MODEL_NAME="your-model-name"
@@ -202,6 +231,7 @@ Expected output:
 ```
 All core modules imported successfully.
 ```
+
 ### Run Unit Tests
 
 ```bash
@@ -220,10 +250,10 @@ pytest tests/ -v
 **Solution**: Use a mirror to speed up downloads.
 
 ```bash
-# Temporary usage Tencent Cloud mirror
+# Temporary usage
 pip install trpc-agent-py -i https://mirrors.cloud.tencent.com/pypi/simple
 
-# Set global Tencent Cloud mirror
+# Set global mirror
 pip config set global.index-url https://mirrors.cloud.tencent.com/pypi/simple
 ```
 
@@ -243,10 +273,10 @@ Other available mirrors:
 ERROR: Package 'trpc-agent-py' requires a different Python: 3.9.x not in '>=3.10'
 ```
 
-**Solution**: Upgrade to Python 3.12.
+**Solution**: Upgrade to Python3.12.
 
 ```bash
-# Solution 1: Using pyenv to install Python 3.12
+# Solution 1: Using pyenv to install Python3.12
 pyenv install 3.12
 pyenv local 3.12
 

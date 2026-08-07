@@ -56,20 +56,18 @@ rag_agent (LlmAgent)
 - `run_agent.py` 执行流程：加载 `.env` → 调用 `rag.create_vectorstore_from_document()` 构建向量库 → 创建 `Runner` 发起对话
 - 使用 `runner.run_async(...)` 消费事件流，区分并打印 `function_call`（工具调用）与 `function_response`（工具返回）
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[knowledge,knowledge-hf]"
+
 source .venv/bin/activate
-pip3 install -e .
 ```
 
 根据选择的向量数据库后端安装 RAG 相关依赖：
@@ -77,24 +75,26 @@ pip3 install -e .
 **PGVector：**
 
 ```bash
-pip3 install langchain-community langchain-huggingface sentence-transformers langchain-postgres
+pip3 install langchain-postgres
 ```
 
 **Elasticsearch：**
 
 ```bash
-pip3 install langchain-community langchain-huggingface sentence-transformers langchain-elasticsearch
+pip3 install langchain-elasticsearch
 ```
 
 **腾讯云向量数据库：**
 
 ```bash
-pip3 install langchain-community tcvectordb
+pip3 install tcvectordb
 ```
 
 > 使用 PGVector / Elasticsearch 时，首次运行会自动从 HuggingFace Hub 下载 `BAAI/bge-small-en-v1.5` 嵌入模型，请确保网络可访问 HuggingFace。
 
-### 环境变量要求
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/knowledge_with_vectorstore/.env](./.env) 中配置（或通过 `export`）：
 

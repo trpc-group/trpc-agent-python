@@ -20,12 +20,13 @@ sudo rm  -rf  examples/.__py_trpc_frame.lock
 sudo rm  -rf  examples/.__trpc.lock
 
 
-find -type d | grep __pycache__ | xargs sudo rm  -r
+find . -type d -name __pycache__ -prune -exec sudo rm -rf {} +
 
 find ./ -type f -name "*.log" -exec sudo rm {} \;
 
 
-pip3 freeze > tmp_requirements.txt
-pip3 uninstall -r tmp_requirements.txt -y
-
-sudo rm tmp_requirements.txt
+python -m pip freeze > tmp_requirements.txt
+if [ -s tmp_requirements.txt ]; then
+    python -m pip uninstall -r tmp_requirements.txt -y
+fi
+sudo rm -f tmp_requirements.txt

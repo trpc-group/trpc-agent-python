@@ -55,35 +55,25 @@ rag_agent_{template_type} (LlmAgent)
   - `function_call`（工具调用）
   - `function_response`（工具返回）
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[knowledge,knowledge-hf]"
 source .venv/bin/activate
-pip3 install -e ".[knowledge]"
+
+# HuggingFace 嵌入模型的底层依赖，用于加载和运行嵌入模型
+pip3 install sentence-transformers
 ```
 
-本示例还依赖 Langchain 社区组件和 HuggingFace 向量嵌入模型，需要额外安装：
+## 运行步骤
 
-```bash
-pip3 install langchain-community langchain-huggingface sentence-transformers
-```
-
-| 依赖包 | 说明 |
-|---|---|
-| `langchain-community` | 提供 `TextLoader` 等文档加载器 |
-| `langchain-huggingface` | 提供 `HuggingFaceEmbeddings` 向量嵌入模型接口 |
-| `sentence-transformers` | HuggingFace 嵌入模型的底层依赖，用于加载和运行嵌入模型 |
-
-### 环境变量要求
+### 配置环境变量
 
 在 [examples/knowledge_with_prompt_template/.env](./.env) 中配置（或通过 `export`）：
 

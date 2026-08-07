@@ -65,21 +65,20 @@ travel_planner (ClaudeAgent)
   - `function_call`（工具调用 / Skill 调用）
   - `function_response`（工具返回）
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
+- Python3.10+，推荐 Python3.12
 
-- Python 3.12
-
-### 安装步骤
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[agent-claude]"
 source .venv/bin/activate
-pip3 install -e '.[agent-claude]'
 ```
+
+## 运行步骤
 
 ### Skill 前置配置
 
@@ -89,7 +88,7 @@ pip3 install -e '.[agent-claude]'
 2. 在 `skills` 目录下创建 Skill 子目录（如 `traver_helper`），并在其中编写 `SKILL.md`
 3. Skill 格式参考：[Claude Agent SDK Skills 文档](https://platform.claude.com/docs/zh-CN/agents-and-tools/agent-skills/overview#skill)
 
-### 环境变量要求
+### 配置环境变量
 
 在 [examples/claude_agent_with_skills/.env](./.env) 中配置（或通过 `export`）：
 

@@ -50,6 +50,8 @@
 
 ### Pip 安装
 
+#### 在用户项目中安装（推荐）
+
 ```bash
 # 创建虚拟环境
 python3 -m venv .venv
@@ -65,41 +67,65 @@ pip install trpc-agent-py
 
 ```bash
 # 按需选择，多个扩展可用逗号组合
-pip install "trpc-agent-py[a2a,knowledge,agent-claude]"
+pip install "trpc-agent-py[graph,a2a,knowledge,knowledge-hf,agent-claude]"
 ```
 
----
-
-### 源码安装
+#### 从源码开发本仓库
 
 ```bash
 # 克隆仓库
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
 # 创建并激活虚拟环境
-python3 -m venv .venv
+./build.sh pip
 source .venv/bin/activate        # Linux / macOS
 # .venv\Scripts\activate         # Windows
-# 安装
-pip install -e .
 ```
+
+---
 
 ### uv 安装
 
-[uv](https://docs.astral.sh/uv/) 会基于仓库中 `pyproject.toml` 管理 Python 工具链、虚拟环境与依赖，实现快速、可复现的安装，本项目提供脚本在 macOS 上一键安装运行：
+[uv](https://docs.astral.sh/uv/) 可以快速安装依赖。
+
+#### 在用户项目中安装（推荐）
+
+```bash
+# 如果尚未安装 uv，先安装
+python -m pip install uv
+
+# 在虚拟环境中安装已发布的包
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install trpc-agent-py
+
+# 按需安装扩展能力
+# uv pip install "trpc-agent-py[graph,a2a,knowledge,knowledge-hf,agent-claude]"
+```
+
+对于由 uv 管理的项目：
+
+```bash
+# 只要核心能力
+uv add trpc-agent-py
+# 需要扩展能力（一条就够）
+# uv add "trpc-agent-py[graph,a2a,knowledge,knowledge-hf,agent-claude]"
+```
+
+#### 从源码开发本仓库
+
+克隆仓库后，可使用与其他平台相同的构建脚本：
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
 
-# 在 macOS 上安装 uv（参考 https://docs.astral.sh/uv/getting-started/installation/）
-curl -LsSf https://astral.sh/uv/install.sh | sh
+./build.sh uv
 
-# 一键初始化核心依赖
-bash build_mac_uv.sh
-
-# 按需追加可选扩展
-EXTRAS="a2a knowledge" bash build_mac_uv.sh
+# 需要扩展能力（一条就够；省略 uv 时默认仍用 uv）
+# ./build.sh "[dev,graph,a2a,knowledge,knowledge-hf]"
+# ./build.sh uv "[dev,graph,a2a,knowledge,knowledge-hf]"
+source .venv/bin/activate
 ```
 
 或者使用手动执行的方式：
@@ -107,7 +133,7 @@ EXTRAS="a2a knowledge" bash build_mac_uv.sh
 ```bash
 uv venv --python-preference only-system   # 使用本地已安装的 Python
 uv sync --extra dev                       # 核心依赖 + 开发工具
-uv sync --extra a2a --extra knowledge     # 按需追加可选扩展
+uv sync --extra graph --extra a2a --extra knowledge --extra knowledge-hf
 uv sync                                   # 生产安装（仅核心依赖）
 
 # 无需激活环境即可运行命令验证
@@ -118,6 +144,8 @@ uv run python -c "from trpc_agent_sdk.version import __version__; print(__versio
 
 ```bash
 uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
+# 或在用户项目中：
+# uv pip install trpc-agent-py --index-url https://mirrors.cloud.tencent.com/pypi/simple
 ```
 
 ### 可选依赖对照表
@@ -127,7 +155,9 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 | `a2a`            | Google A2A 协议               | `pip install "trpc-agent-py[a2a]"`            |
 | `ag-ui`          | AG-UI 协议                    | `pip install "trpc-agent-py[ag-ui]"`          |
 | `agent-claude`   | Claude Agent                  | `pip install "trpc-agent-py[agent-claude]"`   |
+| `graph`          | LangGraphAgent 与图 DSL（含 langchain） | `pip install "trpc-agent-py[graph]"`          |
 | `knowledge`      | 知识库 / RAG                  | `pip install "trpc-agent-py[knowledge]"`      |
+| `knowledge-hf`   | Hugging Face 嵌入模型         | `pip install "trpc-agent-py[knowledge-hf]"`   |
 | `mem0`           | 长期记忆（Mem0）              | `pip install "trpc-agent-py[mem0]"`           |
 | `langchain_tool` | LangChain Tool 集成           | `pip install "trpc-agent-py[langchain_tool]"` |
 | `langfuse`       | Langfuse 可观测性             | `pip install "trpc-agent-py[langfuse]"`       |
@@ -245,7 +275,7 @@ pip config set global.index-url https://mirrors.cloud.tencent.com/pypi/simple
 ERROR: Package 'trpc-agent-py' requires a different Python: 3.9.x not in '>=3.10'
 ```
 
-**解决方案**：升级到 Python 3.12。
+**解决方案**：升级到 Python3.12。
 
 ```bash
 # 解决方案 1: 使用 pyenv 安装

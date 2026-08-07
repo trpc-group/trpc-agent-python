@@ -9,9 +9,37 @@
 
 无论哪种模式，子 Agent 的工具面始终在代码定义的能力边界内，LLM 只能缩小、不可越界。
 
-## 运行
+## 环境要求
+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
 
 ```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/dynamic_subagent/.env](./.env) 中设置（也可通过 export）：
+
+```bash
+TRPC_AGENT_API_KEY=...
+TRPC_AGENT_BASE_URL=...
+TRPC_AGENT_MODEL_NAME=...
+```
+
+### 运行命令
+
+```bash
+
+cd examples/dynamic_subagent
+
 # minimal（默认）—— 父 Agent 与子 Agent 共享工具
 python run_agent.py
 

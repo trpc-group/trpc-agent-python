@@ -11,33 +11,28 @@
 
 ## 环境要求
 
-- Python 3.12
-- 已安装项目依赖
+- Python3.10+，推荐 Python3.12
 
-## 运行步骤
-
-### 1. 安装依赖
+## 构建步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
-python3 -m venv .venv
+./build.sh "[a2a]"
 source .venv/bin/activate
-pip3 install -e '.[a2a]'
-pip3 install a2a-sdk python-dotenv
 ```
 
-### 2. 配置环境变量
+## 运行步骤
+
+### 配置环境变量
 
 在 [examples/a2a/.env](./.env) 中设置（也可通过 export）：
 
-```bash
-TRPC_AGENT_API_KEY=...
-TRPC_AGENT_BASE_URL=...
-TRPC_AGENT_MODEL_NAME=...
-```
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 
-### 3. 启动服务端
+### 启动服务端
 
 ```bash
 cd examples/a2a
@@ -49,7 +44,7 @@ python3 run_server.py
 - API：`http://127.0.0.1:18081`
 - Agent Card：`http://127.0.0.1:18081/.well-known/agent.json`
 
-### 4. 启动客户端
+### 启动客户端
 
 新开终端执行：
 

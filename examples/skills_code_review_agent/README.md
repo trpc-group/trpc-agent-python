@@ -50,9 +50,23 @@ skills_code_review_agent/
 └── examples/review_report.*      # 示例报告
 ```
 
-## 运行要求
+## 环境要求
 
-- Python 3.10+
+- Python3.10+，推荐 Python3.12
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 前置说明
+
 - 已按仓库根目录说明安装 `trpc-agent-python` 及其现有依赖
 - fake/dry-run 不需要 Docker 或模型 API Key
 - 真实模式需要 Docker daemon，以及模型环境变量
@@ -61,6 +75,10 @@ skills_code_review_agent/
 允许使用 HTTP，便于连接本地开发模型服务。
 生产环境建议设置 `TRPC_AGENT_ALLOWED_MODEL_HOSTS`，限制可接收 API Key
 和审查证据的模型服务域名。
+
+### 配置环境变量
+
+在 [examples/skills_code_review_agent/.env](./.env) 中配置
 
 本示例不额外依赖 `.env` 解析库。入口只读取示例目录下权限为 `0600`、
 键名前缀为 `TRPC_AGENT_` 或 `CODE_REVIEW_` 的普通文件；同名进程变量优先：

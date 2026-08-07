@@ -32,12 +32,29 @@ weather_agent (LlmAgent)
 - `RedisSessionService.save_session()`：持久化事件和状态并设置过期时间
 - `run_agent.py`：通过三次运行（间隔控制）验证 TTL 与状态恢复行为
 
-## 环境与运行
+## 环境要求
 
-### 环境要求
-
-- Python 3.12
+- Python3.10+，推荐 Python3.12
 - 可用 Redis 服务
+
+## 构建步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
+
+## 运行步骤
+
+### 配置环境变量
+
+在 [examples/session_service_with_redis/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
 
 ### 运行命令
 
