@@ -26,9 +26,12 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Awaitable
+from typing import Callable
 from typing_extensions import override
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LlmRequest
 
 from ._base_tool import BaseTool
@@ -41,10 +44,22 @@ class PreloadMemoryTool(BaseTool):
     NOTE: Currently this tool only uses text part from the memory.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        memory_preloader: Callable[[str, InvocationContext], Awaitable[str | None]] | None = None,
+        use_legacy_memory: bool = True,
+    ):
         # Name and description are not used because this tool only
         # changes llm_request.
         super().__init__(name='preload_memory', description='preload_memory')
+        self._memory_preloader = memory_preloader
+        self._use_legacy_memory = use_legacy_memory
+
+    @property
+    def uses_legacy_memory(self) -> bool:
+        """Return whether this tool also runs the original memory search."""
+        return self._use_legacy_memory
 
     @override
     async def _run_async_impl(self, *, tool_context: InvocationContext, args: dict[str, Any]) -> Any:
@@ -62,7 +77,26 @@ class PreloadMemoryTool(BaseTool):
             return
 
         user_query: str = user_content.parts[0].text
-        response = await tool_context.search_memory(user_query)
+        if self._memory_preloader is not None:
+            try:
+                memory_instructions = await self._memory_preloader(user_query, tool_context)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Preloaded memory was skipped: %s", exc)
+            else:
+                if memory_instructions:
+                    try:
+                        llm_request.append_instructions([memory_instructions])
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Preloaded memory could not be added to the request: %s", exc)
+        if not self._use_legacy_memory:
+            return
+        try:
+            response = await tool_context.search_memory(user_query)
+        except Exception as exc:  # noqa: BLE001
+            if self._memory_preloader is None:
+                raise
+            logger.warning("Legacy preloaded memory was skipped: %s", exc)
+            return
         if not response.memories:
             return
 
@@ -82,7 +116,12 @@ They may be useful for answering the user's current query.
 {full_memory_text}
 </PAST_CONVERSATIONS>
 """
-        llm_request.append_instructions([si])
+        try:
+            llm_request.append_instructions([si])
+        except Exception as exc:  # noqa: BLE001
+            if self._memory_preloader is None:
+                raise
+            logger.warning("Legacy preloaded memory could not be added to the request: %s", exc)
 
 
 preload_memory_tool = PreloadMemoryTool()
