@@ -53,6 +53,7 @@ __all__ = [
     "ListSessionsResponse",
     "State",
     "BaseSessionService",
+    "AdvancedMemorySessionService",
     "HistoryRecord",
     "InMemorySessionService",
     "SessionWithTTL",
@@ -87,3 +88,12 @@ __all__ = [
     "session_key",
     "user_state_key",
 ]
+
+
+def __getattr__(name: str):
+    """Lazily expose Advanced Memory without creating an import cycle."""
+    if name == "AdvancedMemorySessionService":
+        from ._advanced_memory_session_service import AdvancedMemorySessionService
+
+        return AdvancedMemorySessionService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
