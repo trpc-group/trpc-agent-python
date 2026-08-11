@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.1.16](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.16) (2026-08-11)
+
+### Features
+
+* Model: Added OpenAI Responses API support in `OpenAIModel`, including streaming, tool calls, and related adapter integration, so agents can use the Responses API alongside existing chat-completions flows.
+* Graph: Strengthened `GraphAgent` human-in-the-loop support and resume behavior, including clearer HITL event handling, checkpoint recovery, and AG-UI integration updates for interrupted graph runs.
+* Agent: Added configurable run limits for `LlmAgent` through `AgentRunLimits`, allowing callers to cap total turns, LLM calls, and tool calls and fail fast when a budget is exceeded.
+* Eval/Optimization: Added an evaluation-and-optimization closed loop, covering pipeline config validation, standardized evaluation, failure attribution, case diff analysis, gate/budget decisions, real optimizer write-back, atomic report publishing, audit indexing, and offline model / trace replay validation.
+* Examples: Added `examples/optimization/eval_optimize_loop` for the evaluation-optimization workflow and `examples/llmagent_with_limit` for demonstrating agent run limits.
+
+### Bug Fixes
+
+* Tools: Fixed `BashTool` whitelist validation so every executable segment in standalone commands, pipelines, and compound shell syntax (`;`, `&&`, `||`, newlines, background `&`) is checked. Heredoc bodies are treated as data, and unverifiable substitution syntax now fails closed.
+* Code Execution: Deferred `docker` and `python-magic` imports to first use, preventing import-time hangs or crashes on Windows and other environments without Docker Desktop or libmagic installed.
+* Telemetry: Fixed missing trace reporting when LLM calls are cancelled with `GeneratorExit` after a client disconnects during deployed service runs.
+* Eval/Optimization: Hardened report publishing, credential redaction, telemetry completeness, and config snapshot handling so optimization artifacts do not leak secrets or publish partial state.
+
+### Docs
+
+* Docs: Added English and Chinese documentation for OpenAI Responses API usage, GraphAgent HITL/resume behavior, and `LlmAgent` run-limit configuration.
+
+### Internal
+
+* CI: Optimized code-review prompt output to reduce blocking review noise.
+* CI: Improved full pipeline example execution coverage in `pipeline_test/run_all_examples.sh`.
+* Code Execution: Follow-up lazy-import fixes for Docker CLI helpers and content-type detection, including thread-safe magic probing and test compatibility updates.
+
 ## [1.1.15](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.15) (2026-08-03)
 
 ### Features

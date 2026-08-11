@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<1.30"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
@@ -164,8 +164,12 @@ all = [
 trpc_agent_cmd = "trpc_agent_sdk._cli:main"
 
 # 使用 include 保证三个包都包含进来
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
+
 [tool.hatch.build.targets.wheel]
 packages = ["trpc_agent_sdk"]
+core-metadata-version = "2.4"
 
 [project.urls]
 Homepage = "https://github.com/trpc-group/trpc-agent-python.git"
