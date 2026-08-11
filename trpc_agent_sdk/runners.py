@@ -223,6 +223,16 @@ class Runner:
                 the memory service. Set to False when the service is managed
                 outside the runner.
         """
+        # Advanced Memory needs the agent and session service in addition to
+        # the traditional memory-service hook. Bind it here so callers can
+        # use the same construction pattern as Redis/Mem0 memory services.
+        from trpc_agent_sdk.memory import AdvancedMemoryService
+        from trpc_agent_sdk.sessions import AdvancedMemorySessionService
+
+        if isinstance(memory_service, AdvancedMemoryService):
+            session_service = memory_service.bind(agent, session_service)
+        elif isinstance(session_service, AdvancedMemorySessionService):
+            session_service = session_service.bind(agent)
         self.app_name = app_name
         self.agent = agent
         self.artifact_service = artifact_service
