@@ -1241,10 +1241,18 @@ class AgUiAgent:
                 return
 
             # Run TRPC agent
+            # Track whether the last observed trpc_event was a fatal (non-recoverable) error, so
+            # that once the stream ends we know whether the run actually terminated due to an
+            # error or completed normally. We can't emit RunErrorEvent as soon as we see an error
+            # event mid-stream because most agent types (GraphAgent, ChainAgent, etc.) continue
+            # running after a sub-agent yields an error event, and RunErrorEvent is terminal per
+            # the AG-UI protocol - compliant clients close the connection upon receiving it.
+            last_event_is_error = False
             async for trpc_event in runner.run_async(user_id=user_id,
                                                      session_id=input.thread_id,
                                                      new_message=new_message,
                                                      run_config=run_config):
+                last_event_is_error = trpc_event.is_error() and not trpc_event.get_function_responses()
                 if not isinstance(trpc_event, LongRunningEvent):
                     # Check if custom translator should handle this event
                     if self._custom_event_translator and self._custom_event_translator.need_translate(trpc_event):
@@ -1281,6 +1289,21 @@ class AgUiAgent:
                 current_timestamp = datetime.now().timestamp()
                 ag_ui_event = event_translator._create_state_snapshot_event(final_state, current_timestamp)
                 await event_queue.put(ag_ui_event)
+
+            # The run ended - decide whether it finished normally or terminated due to an error
+            # based on whether the last trpc_event observed was an error. `trpc_event` still
+            # refers to the last event yielded by the loop above.
+            if last_event_is_error:
+                error_msg = (trpc_event.error_message or (trpc_event.custom_metadata or {}).get("error")
+                             or "Unknown error")
+                logger.error("Run for thread %s ended with a fatal error as its last event: %s", input.thread_id,
+                             error_msg)
+                await event_queue.put(
+                    RunErrorEvent(
+                        type=EventType.RUN_ERROR,
+                        message=error_msg,
+                        code=trpc_event.error_code or "MODEL_ERROR",
+                    ))
             # Signal completion - TRPC execution is done
             logger.debug("Background task sending completion signal for thread %s", input.thread_id)
             await event_queue.put(None)

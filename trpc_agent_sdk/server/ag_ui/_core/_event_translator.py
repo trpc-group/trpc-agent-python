@@ -30,7 +30,6 @@ from typing import Optional
 from ag_ui.core import BaseEvent
 from ag_ui.core import CustomEvent
 from ag_ui.core import EventType
-from ag_ui.core import RunErrorEvent
 from ag_ui.core import StateDeltaEvent
 from ag_ui.core import StateSnapshotEvent
 from ag_ui.core import TextMessageContentEvent
@@ -202,9 +201,17 @@ class EventTranslator:
             # Tool execution errors (with function_response) are recoverable: the error is already
             # passed back to the LLM as a tool result, so the LLM can retry or adjust its approach.
             # Only fatal errors (LLM failures, system errors) without function_response should
-            # emit RunErrorEvent to terminate the run.
+            # be surfaced as an error to the client.
+            #
+            # NOTE (deferred decision): We deliberately do NOT emit RunErrorEvent here. Per the
+            # AG-UI protocol, RunErrorEvent is terminal and compliant clients close the connection
+            # upon receiving it. However, most agent types (GraphAgent, ChainAgent, etc.) continue
+            # running after a sub-agent yields an error event, so terminating the connection here
+            # would desynchronize the client from the still-running backend. Instead, we surface the
+            # error as a CustomEvent, and the caller (who observes the full event stream) decides
+            # whether to emit RunErrorEvent or RunFinishedEvent once the run actually ends.
             if trpc_event.is_error() and not function_responses:
-                # Fatal system/LLM error - emit RunErrorEvent to terminate the run
+                # Fatal system/LLM error - surface it via CustomEvent instead of terminating the run
                 logger.error("Fatal error (non-recoverable), error_code=%s, error_message=%s", trpc_event.error_code,
                              trpc_event.error_message)
                 # Force close any streaming message before emitting error
@@ -212,12 +219,14 @@ class EventTranslator:
                     yield close_event
                 error_msg = (trpc_event.error_message or (trpc_event.custom_metadata or {}).get("error")
                              or "Unknown error")
-                yield RunErrorEvent(
-                    type=EventType.RUN_ERROR,
-                    message=error_msg,
-                    code=trpc_event.error_code or "MODEL_ERROR",
+                yield CustomEvent(
+                    type=EventType.CUSTOM,
+                    name="trpc_error",
+                    value={
+                        "code": trpc_event.error_code or "MODEL_ERROR",
+                        "message": error_msg,
+                    },
                 )
-                return
 
             # Handle custom events or metadata
             if trpc_event.custom_metadata:
