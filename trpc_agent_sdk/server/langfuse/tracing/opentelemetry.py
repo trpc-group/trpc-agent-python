@@ -162,60 +162,82 @@ class _LangfuseMixin:
 
     def _map_trace_level_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
         """Map trace-level attributes for runner execution spans."""
-        trace_attrs = {}
-
         # Use TRPC agent span name from trace module
         trpc_span_name = get_trpc_agent_span_name()
 
+        # Start from a copy of the original attributes so that any user-defined
+        # attribute (including ones already in Langfuse-native "langfuse.*"
+        # format) is preserved by default instead of being dropped.
+        trace_attrs = dict(attributes)
+
         # Map trace name from runner name
-        trace_attrs["langfuse.trace.name"] = attributes.get(f"{trpc_span_name}.runner.name", "unknown")
+        trace_attrs["langfuse.trace.name"] = trace_attrs.pop(f"{trpc_span_name}.runner.name", "unknown")
 
         # Map user ID from runner attributes
-        if f"{trpc_span_name}.runner.user_id" in attributes:
-            trace_attrs["langfuse.user.id"] = attributes[f"{trpc_span_name}.runner.user_id"]
+        if f"{trpc_span_name}.runner.user_id" in trace_attrs:
+            trace_attrs["langfuse.user.id"] = trace_attrs.pop(f"{trpc_span_name}.runner.user_id")
 
         # Map session ID from runner attributes
-        if f"{trpc_span_name}.runner.session_id" in attributes:
-            trace_attrs["langfuse.session.id"] = attributes[f"{trpc_span_name}.runner.session_id"]
+        if f"{trpc_span_name}.runner.session_id" in trace_attrs:
+            trace_attrs["langfuse.session.id"] = trace_attrs.pop(f"{trpc_span_name}.runner.session_id")
 
         trace_attrs["langfuse.observation.type"] = "span"
         # Map input/output from runner attributes
-        if f"{trpc_span_name}.runner.input" in attributes:
-            trace_attrs["langfuse.trace.input"] = attributes[f"{trpc_span_name}.runner.input"]
+        if f"{trpc_span_name}.runner.input" in trace_attrs:
+            trace_attrs["langfuse.trace.input"] = trace_attrs.pop(f"{trpc_span_name}.runner.input")
             trace_attrs["langfuse.observation.input"] = trace_attrs["langfuse.trace.input"]
 
-        if f"{trpc_span_name}.runner.output" in attributes:
-            trace_attrs["langfuse.trace.output"] = attributes[f"{trpc_span_name}.runner.output"]
+        if f"{trpc_span_name}.runner.output" in trace_attrs:
+            trace_attrs["langfuse.trace.output"] = trace_attrs.pop(f"{trpc_span_name}.runner.output")
             trace_attrs["langfuse.observation.output"] = trace_attrs["langfuse.trace.output"]
 
         # Map trace metadata from runner attributes
         trace_metadata = {}
 
         # Map state.begin, state.end, and state.partial to metadata
-        if f"{trpc_span_name}.state.begin" in attributes:
-            trace_metadata["state_begin"] = attributes[f"{trpc_span_name}.state.begin"]
+        if f"{trpc_span_name}.state.begin" in trace_attrs:
+            trace_metadata["state_begin"] = trace_attrs.pop(f"{trpc_span_name}.state.begin")
 
-        if f"{trpc_span_name}.state.end" in attributes:
-            trace_metadata["state_end"] = attributes[f"{trpc_span_name}.state.end"]
+        if f"{trpc_span_name}.state.end" in trace_attrs:
+            trace_metadata["state_end"] = trace_attrs.pop(f"{trpc_span_name}.state.end")
 
-        if f"{trpc_span_name}.state.partial" in attributes:
-            trace_metadata["state_partial"] = attributes[f"{trpc_span_name}.state.partial"]
+        if f"{trpc_span_name}.state.partial" in trace_attrs:
+            trace_metadata["state_partial"] = trace_attrs.pop(f"{trpc_span_name}.state.partial")
 
         # Map cancellation-specific attributes to metadata
-        if f"{trpc_span_name}.cancellation.reason" in attributes:
-            trace_metadata["cancellation_reason"] = attributes[f"{trpc_span_name}.cancellation.reason"]
+        if f"{trpc_span_name}.cancellation.reason" in trace_attrs:
+            trace_metadata["cancellation_reason"] = trace_attrs.pop(f"{trpc_span_name}.cancellation.reason")
 
-        if f"{trpc_span_name}.cancellation.agent_name" in attributes:
-            trace_metadata["cancellation_agent_name"] = attributes[f"{trpc_span_name}.cancellation.agent_name"]
+        if f"{trpc_span_name}.cancellation.agent_name" in trace_attrs:
+            trace_metadata["cancellation_agent_name"] = trace_attrs.pop(f"{trpc_span_name}.cancellation.agent_name")
 
-        if f"{trpc_span_name}.cancellation.branch" in attributes:
-            trace_metadata["cancellation_branch"] = attributes[f"{trpc_span_name}.cancellation.branch"]
+        if f"{trpc_span_name}.cancellation.branch" in trace_attrs:
+            trace_metadata["cancellation_branch"] = trace_attrs.pop(f"{trpc_span_name}.cancellation.branch")
 
         for key, value in attributes.items():
             if key.startswith(f"{trpc_span_name}.runner."):
                 # Convert TRPC agent runner attributes to metadata
                 clean_key = key.replace(f"{trpc_span_name}.runner.", "")
                 trace_metadata[clean_key] = str(value)
+
+        # The runner.* namespace has been fully captured into trace_metadata
+        # above (including any user-defined custom runner.* fields); drop the
+        # raw keys so they are not duplicated at the top level.
+        for key in [k for k in trace_attrs if k.startswith(f"{trpc_span_name}.runner.")]:
+            trace_attrs.pop(key)
+
+        # Drop the routing key consumed by _map_attributes_to_langfuse(); it is
+        # not user-defined data and should not leak into metadata.
+        trace_attrs.pop("gen_ai.operation.name", None)
+
+        # Collect any remaining user-defined attributes (pure custom keys,
+        # unmapped trpc.* fields, or unknown gen_ai.* fields) into metadata so
+        # they are not silently dropped. Attributes already in Langfuse-native
+        # format ("langfuse.*" prefix) are left untouched at the top level so
+        # the Langfuse platform can natively recognize them.
+        for key in [k for k in trace_attrs if not k.startswith("langfuse.")]:
+            clean_key = key[len(f"{trpc_span_name}."):] if key.startswith(f"{trpc_span_name}.") else key
+            trace_metadata.setdefault(clean_key, str(trace_attrs.pop(key)))
 
         if trace_metadata:
             trace_attrs["langfuse.trace.metadata"] = json.dumps(trace_metadata)
@@ -224,62 +246,106 @@ class _LangfuseMixin:
 
     def _map_agent_observation_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
         """Map span observation attributes for agent executions."""
-        agent_attrs = {}
-
         # Use TRPC agent span name from trace module
         trpc_span_name = get_trpc_agent_span_name()
+
+        # Start from a copy of the original attributes so that any user-defined
+        # attribute (including ones already in Langfuse-native "langfuse.*"
+        # format) is preserved by default instead of being dropped.
+        agent_attrs = dict(attributes)
+
+        # Drop the routing key consumed by _map_attributes_to_langfuse(); it is
+        # not user-defined data and should not leak into metadata.
+        agent_attrs.pop("gen_ai.operation.name", None)
 
         # Set observation type to span
         agent_attrs["langfuse.observation.type"] = "span"
 
         # Map input/output for agent execution
-        agent_attrs["langfuse.observation.input"] = attributes.get(f"{trpc_span_name}.agent.input", "")
-        agent_attrs["langfuse.observation.output"] = attributes.get(f"{trpc_span_name}.agent.output", "")
+        agent_attrs["langfuse.observation.input"] = agent_attrs.pop(f"{trpc_span_name}.agent.input", "")
+        agent_attrs["langfuse.observation.output"] = agent_attrs.pop(f"{trpc_span_name}.agent.output", "")
+
+        # Collect any remaining user-defined attributes (pure custom keys,
+        # unmapped trpc.* fields, or unknown gen_ai.* fields) into metadata so
+        # they are not silently dropped. Attributes already in Langfuse-native
+        # format ("langfuse.*" prefix) are left untouched at the top level so
+        # the Langfuse platform can natively recognize them.
+        agent_metadata = {}
+        for key in [k for k in agent_attrs if not k.startswith("langfuse.")]:
+            clean_key = key[len(f"{trpc_span_name}."):] if key.startswith(f"{trpc_span_name}.") else key
+            agent_metadata.setdefault(clean_key, str(agent_attrs.pop(key)))
+
+        if agent_metadata:
+            agent_attrs["langfuse.observation.metadata"] = json.dumps(agent_metadata)
 
         return agent_attrs
 
     def _map_generation_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
         """Map generation observation attributes for LLM calls."""
-        gen_attrs = {}
-
         # Use TRPC agent span name from trace module
         trpc_span_name = get_trpc_agent_span_name()
+
+        # Start from a copy of the original attributes so that any user-defined
+        # attribute (including ones already in Langfuse-native "langfuse.*"
+        # format) is preserved by default instead of being dropped.
+        gen_attrs = dict(attributes)
+
+        # Drop the routing key consumed by _map_attributes_to_langfuse(); it is
+        # not user-defined data and should not leak into metadata.
+        gen_attrs.pop("gen_ai.operation.name", None)
 
         # Set observation type to generation
         gen_attrs["langfuse.observation.type"] = "generation"
 
         # Map input/output for LLM calls
-        gen_attrs["langfuse.observation.input"] = attributes.get(f"{trpc_span_name}.llm_request", "unknown")
-        gen_attrs["langfuse.observation.output"] = attributes.get(f"{trpc_span_name}.llm_response", "unknown")
+        llm_request_raw = gen_attrs.pop(f"{trpc_span_name}.llm_request", "unknown")
+        llm_response_raw = gen_attrs.pop(f"{trpc_span_name}.llm_response", "unknown")
+        gen_attrs["langfuse.observation.input"] = llm_request_raw
+        gen_attrs["langfuse.observation.output"] = llm_response_raw
 
         # Map model parameters from LLM request
-        llm_request_json = json.loads(attributes.get(f"{trpc_span_name}.llm_request", "{}"))
+        llm_request_json = json.loads(llm_request_raw if llm_request_raw != "unknown" else "{}")
         config = llm_request_json.get("config", {})
         gen_attrs["langfuse.observation.model.parameters"] = json.dumps(config)
 
-        # Map usage details
-        gen_attrs["gen_ai.usage.input_tokens"] = attributes.get("gen_ai.usage.input_tokens", "0")
-        gen_attrs["gen_ai.usage.output_tokens"] = attributes.get("gen_ai.usage.output_tokens", "0")
-        if "gen_ai.request.model" in attributes:
-            gen_attrs["gen_ai.request.model"] = attributes["gen_ai.request.model"]
-
-        # Map generation metadata
-        gen_metadata = {}
-        excluded_keys = {"llm_request", "llm_response", "prompt.name", "prompt.version", "prompt.labels"}
-        for key, value in attributes.items():
-            if key.startswith(f"{trpc_span_name}."):
-                clean_key = key.replace(f"{trpc_span_name}.", "")
-                if clean_key not in excluded_keys:
-                    gen_metadata[clean_key] = str(value)
+        # Map usage details (already present as-is from the copied attributes;
+        # only fill in defaults when missing)
+        gen_attrs.setdefault("gen_ai.usage.input_tokens", "0")
+        gen_attrs.setdefault("gen_ai.usage.output_tokens", "0")
+        # gen_ai.request.model, if present, is already carried over as-is.
 
         # Instruction-Generation association: attributes written by trace_call_llm()
         # via RemoteInstruction.metadata, mapped to Langfuse native prompt fields.
-        instruction_name = attributes.get(f"{trpc_span_name}.instruction.name")
-        instruction_version = attributes.get(f"{trpc_span_name}.instruction.version")
+        instruction_name = gen_attrs.pop(f"{trpc_span_name}.instruction.name", None)
+        instruction_version = gen_attrs.pop(f"{trpc_span_name}.instruction.version", None)
         if instruction_name:
             gen_attrs["langfuse.observation.prompt.name"] = instruction_name
         if instruction_version is not None:
             gen_attrs["langfuse.observation.prompt.version"] = instruction_version
+
+        # These trpc.* fields are reserved for prompt-related mapping and are
+        # intentionally excluded from metadata collection.
+        for reserved_key in ("prompt.name", "prompt.version", "prompt.labels"):
+            gen_attrs.pop(f"{trpc_span_name}.{reserved_key}", None)
+
+        # Known gen_ai.* keys that are already mapped to the top level above
+        # and must not be duplicated into metadata.
+        known_gen_ai_keys = {
+            "gen_ai.usage.input_tokens",
+            "gen_ai.usage.output_tokens",
+            "gen_ai.request.model",
+        }
+
+        # Map generation metadata: collect any remaining user-defined
+        # attributes (pure custom keys, unmapped trpc.* fields, or unknown
+        # gen_ai.* fields) so they are not silently dropped. Attributes
+        # already in Langfuse-native format ("langfuse.*" prefix) are left
+        # untouched at the top level so the Langfuse platform can natively
+        # recognize them.
+        gen_metadata = {}
+        for key in [k for k in gen_attrs if not k.startswith("langfuse.") and k not in known_gen_ai_keys]:
+            clean_key = key[len(f"{trpc_span_name}."):] if key.startswith(f"{trpc_span_name}.") else key
+            gen_metadata.setdefault(clean_key, str(gen_attrs.pop(key)))
 
         if gen_metadata:
             gen_attrs["langfuse.observation.metadata"] = json.dumps(gen_metadata)
@@ -288,46 +354,54 @@ class _LangfuseMixin:
 
     def _map_tool_observation_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
         """Map span observation attributes for tool executions."""
-        tool_attrs = {}
-
         # Use TRPC agent span name from trace module
         trpc_span_name = get_trpc_agent_span_name()
+
+        # Start from a copy of the original attributes so that any user-defined
+        # attribute (including ones already in Langfuse-native "langfuse.*"
+        # format) is preserved by default instead of being dropped.
+        tool_attrs = dict(attributes)
+
+        # Drop the routing key consumed by _map_attributes_to_langfuse(); it is
+        # not user-defined data and should not leak into metadata.
+        tool_attrs.pop("gen_ai.operation.name", None)
 
         # Set observation type to span
         tool_attrs["langfuse.observation.type"] = "span"
 
         # Map input/output for tool calls
-        tool_attrs["langfuse.observation.input"] = attributes.get(f"{trpc_span_name}.tool_call_args", "unknown")
-        tool_attrs["langfuse.observation.output"] = attributes.get(f"{trpc_span_name}.tool_response", "unknown")
+        tool_attrs["langfuse.observation.input"] = tool_attrs.pop(f"{trpc_span_name}.tool_call_args", "unknown")
+        tool_attrs["langfuse.observation.output"] = tool_attrs.pop(f"{trpc_span_name}.tool_response", "unknown")
 
         # Map tool-specific metadata
         tool_metadata = {}
 
         # Map tool name and description
-        if "gen_ai.tool.name" in attributes:
-            tool_metadata["tool_name"] = attributes["gen_ai.tool.name"]
+        if "gen_ai.tool.name" in tool_attrs:
+            tool_metadata["tool_name"] = tool_attrs.pop("gen_ai.tool.name")
 
-        if "gen_ai.tool.description" in attributes:
-            tool_metadata["tool_description"] = attributes["gen_ai.tool.description"]
+        if "gen_ai.tool.description" in tool_attrs:
+            tool_metadata["tool_description"] = tool_attrs.pop("gen_ai.tool.description")
 
-        if "gen_ai.tool.call.id" in attributes:
-            tool_metadata["tool_call_id"] = attributes["gen_ai.tool.call.id"]
+        if "gen_ai.tool.call.id" in tool_attrs:
+            tool_metadata["tool_call_id"] = tool_attrs.pop("gen_ai.tool.call.id")
 
         # Map state.begin and state.end to metadata
-        if f"{trpc_span_name}.state.begin" in attributes:
-            tool_metadata["state_begin"] = attributes[f"{trpc_span_name}.state.begin"]
+        if f"{trpc_span_name}.state.begin" in tool_attrs:
+            tool_metadata["state_begin"] = tool_attrs.pop(f"{trpc_span_name}.state.begin")
 
-        if f"{trpc_span_name}.state.end" in attributes:
-            tool_metadata["state_end"] = attributes[f"{trpc_span_name}.state.end"]
+        if f"{trpc_span_name}.state.end" in tool_attrs:
+            tool_metadata["state_end"] = tool_attrs.pop(f"{trpc_span_name}.state.end")
 
-        # Map other TRPC agent attributes
-        for key, value in attributes.items():
-            if key.startswith(f"{trpc_span_name}."):
-                clean_key = key.replace(f"{trpc_span_name}.", "")
-                # Exclude tool_call_args, tool_response, state.begin,
-                # state.end from metadata as they're mapped separately
-                if clean_key not in ["tool_call_args", "tool_response", "state.begin", "state.end"]:
-                    tool_metadata[clean_key] = str(value)
+        # Map other TRPC agent attributes, and collect any remaining
+        # user-defined attributes (pure custom keys, unmapped trpc.* fields,
+        # or unknown gen_ai.* fields) into metadata so they are not silently
+        # dropped. Attributes already in Langfuse-native format ("langfuse.*"
+        # prefix) are left untouched at the top level so the Langfuse
+        # platform can natively recognize them.
+        for key in [k for k in tool_attrs if not k.startswith("langfuse.")]:
+            clean_key = key[len(f"{trpc_span_name}."):] if key.startswith(f"{trpc_span_name}.") else key
+            tool_metadata.setdefault(clean_key, str(tool_attrs.pop(key)))
 
         if tool_metadata:
             tool_attrs["langfuse.observation.metadata"] = json.dumps(tool_metadata)
