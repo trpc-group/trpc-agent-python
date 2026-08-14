@@ -55,20 +55,16 @@ root_agent = LlmAgent(
 
 ### 2. Create the A2A Service and Start It
 
-Use `TrpcA2aAgentService` to wrap the Agent as an A2A service, then run it over standard HTTP with the A2A SDK’s `A2AStarletteApplication`:
+Use `TrpcA2aAgentService` to wrap the Agent as an A2A service, then assemble a Starlette app with `create_a2a_application` (which wraps the a2a-sdk 1.x route factories):
 
 ```python
 # run_server.py
 import uvicorn
 
-# HTTP application components from the A2A SDK
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-
-# A2A service wrapper from the SDK
+# A2A service wrapper and convenience app assembly from the SDK
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a import create_a2a_application
 
 HOST = "127.0.0.1"
 PORT = 18081
@@ -80,10 +76,13 @@ def create_a2a_service() -> TrpcA2aAgentService:
     # Executor configuration (optional); configure user_id_extractor, event_callback, etc.
     executor_config = TrpcA2aAgentExecutorConfig()
 
-    # Wrap the Agent as an A2A service implementing the A2A SDK AgentExecutor interface
+    # Wrap the Agent as an A2A service implementing the A2A SDK AgentExecutor interface.
+    # rpc_url is the public address advertised in the agent card; discovery-based
+    # clients call this url.
     a2a_svc = TrpcA2aAgentService(
         service_name="weather_agent_service",  # Service identifier
         agent=root_agent,                      # Agent to deploy
+        rpc_url=f"http://{HOST}:{PORT}",       # Public address for the agent card
         executor_config=executor_config,
     )
     a2a_svc.initialize()  # Required: builds Agent Card and completes initialization
@@ -93,39 +92,105 @@ def create_a2a_service() -> TrpcA2aAgentService:
 def serve():
     a2a_svc = create_a2a_service()
 
-    # DefaultRequestHandler handles A2A protocol requests
-    request_handler = DefaultRequestHandler(
-        agent_executor=a2a_svc,        # Our A2A service as the executor
-        task_store=InMemoryTaskStore(), # Task store; replace with a persistent implementation in production
-    )
-
-    # Starlette HTTP app: registers Agent Card and A2A protocol endpoints
-    server = A2AStarletteApplication(
-        agent_card=a2a_svc.agent_card,  # Agent Card is served at /.well-known/agent.json
-        http_handler=request_handler,
-    )
+    # Assemble a Starlette app with the agent-card and JSON-RPC routes.
+    app = create_a2a_application(a2a_svc)
 
     print(f"Starting A2A server on http://{HOST}:{PORT}")
-    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent.json")
+    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent-card.json")
 
-    uvicorn.run(server.build(), host=HOST, port=PORT)
+    uvicorn.run(app, host=HOST, port=PORT)
 
 
 if __name__ == "__main__":
     serve()
 ```
 
-After startup, the service publishes the Agent Card at `/.well-known/agent.json`; clients discover and invoke the Agent from that URL.
+After startup, the service publishes the Agent Card at `/.well-known/agent-card.json`; clients discover and invoke the Agent from that URL.
 
 ### 3. Server Essentials
 
 | Topic | Description |
 |------|------|
-| `TrpcA2aAgentService` | Implements the A2A SDK `AgentExecutor` interface and can be passed directly as the executor to `DefaultRequestHandler` |
+| `TrpcA2aAgentService` | Implements the A2A SDK `AgentExecutor` interface and can be passed directly as the executor to `create_a2a_application` |
+| `rpc_url` | The public address advertised in `supported_interfaces[].url`; set it when the server knows its own address (see [Agent Card URL](#agent-card-url)) |
 | `agent_card` | Built automatically from the Agent’s name, description, tools, etc.; can also be supplied manually |
 | `initialize()` | Must be called before use; builds the Agent Card and completes internal setup |
+| `create_a2a_application()` | Convenience wrapper that mounts the agent-card and JSON-RPC routes into a Starlette app. Optional: for full control, compose a2a-sdk’s `create_agent_card_routes` / `create_jsonrpc_routes` yourself |
+| `enable_v0_3_compat` | `create_a2a_application(..., enable_v0_3_compat=True)` also accepts legacy v0.3 clients on the same endpoint |
 | `session_service` | Optional; defaults to `InMemorySessionService`; can be replaced with a persistent implementation |
 | `executor_config` | Optional; configures `user_id_extractor`, `event_callback`, `cancel_wait_timeout`, and related behavior |
+
+#### Agent Card URL
+
+The server does not know its own public address, so `supported_interfaces[].url` is left empty unless you provide one. The single configuration point is `TrpcA2aAgentService(rpc_url=...)` (or a fully custom `agent_card`):
+
+```python
+# The url is written into the agent card as-is.
+svc = TrpcA2aAgentService(
+    service_name="weather",
+    agent=root_agent,
+    rpc_url="https://agent.example.com/a2a",
+)
+```
+
+`create_a2a_application()` derives the JSON-RPC mount path from that url (`https://agent.example.com/a2a` → `/a2a`, a bare origin → `/`), so the advertised path and the mounted path can never diverge. If no url is configured anywhere, the app still starts — direct JSON-RPC callers never read the card — but a warning is logged because discovery-based clients cannot call the agent.
+
+---
+
+## Upgrading from v0.3
+
+The SDK moved from the a2a 0.3 protocol to 1.0. Two things matter for application code: **code changes** (below) and **runtime compatibility** (the compat switches). **The card path is unchanged**: both 0.3 and 1.0 publish the Agent Card at `/.well-known/agent-card.json`, so discovery needs no migration.
+
+### Code migration (0.3 → 1.0)
+
+a2a-sdk 0.3 → 1.0 was an architectural rewrite; several key call sites in business code must change:
+
+| 0.3 usage | 1.0 usage | Notes |
+|---|---|---|
+| `from a2a.server.apps import A2AStarletteApplication` + `server = A2AStarletteApplication(agent_card=..., http_handler=...)` | `from trpc_agent_sdk.server.a2a import create_a2a_application` + `app = create_a2a_application(a2a_svc)` | **`A2AStarletteApplication` was removed in 1.0**; use the SDK convenience layer |
+| `DefaultRequestHandler(agent_executor=..., task_store=...)` | Not needed (assembled inside `create_a2a_application`); only for custom handlers: `DefaultRequestHandler(agent_executor=..., task_store=..., agent_card=...)` | **`DefaultRequestHandler` gained a required `agent_card`** |
+| `TrpcA2aAgentService(service_name=..., agent=..., executor_config=...)` | add `rpc_url=...` | **`rpc_url` is required**, see below |
+| top-level card `url` | `supported_interfaces[].url` | card layout changed; 0.3 clients discover via top-level `url`, 1.0 via `supported_interfaces` |
+
+> The table above is what **business code** must change. a2a-sdk also removed other low-level APIs (`A2AClient` → `await create_client()`, `ClientFactory` sync → async), but they are hidden inside the SDK, so business code does not need to handle them. Business code usually only needs: add `rpc_url` + switch to `create_a2a_application` on the server, and use `TrpcRemoteA2aAgent` on the client.
+
+### Server: enable `enable_v0_3_compat` for legacy clients
+
+A 1.0 server accepts only 1.0 clients by default. If you still have un-upgraded 0.3 clients in production, enable the switch so the server accepts both 1.0 and 0.3 traffic on the **same endpoint**:
+
+```python
+app = create_a2a_application(a2a_svc, enable_v0_3_compat=True)
+```
+
+The framework automatically appends a `protocol_version="0.3"` interface (reusing the same url) so 0.3 clients can discover and call the agent. Legacy 0.3 clients need **no changes**.
+
+### Client: `enable_v0_3_compat=True` for old servers
+
+When the remote may be a pure v0.3 server (its card has no `supportedInterfaces` or empty interface urls, so 1.0 discovery fails with `no compatible transports found`), enable compat mode so the client **negotiates automatically**: it uses the 1.0 wire when it reads a 1.0 interface, and the v0.3 wire for a v0.3 interface:
+
+```python
+remote_agent = TrpcRemoteA2aAgent(
+    name="weather_agent",
+    agent_base_url="http://127.0.0.1:18081",
+    enable_v0_3_compat=True,  # compat with old servers: auto-negotiate 1.0/0.3
+)
+```
+
+### The most important change: configure `rpc_url`
+
+v0.3 did not require a card url, so old servers worked without one; **a 1.0 Agent Card must carry a reachable `supported_interfaces[].url`**, otherwise discovery-based clients fail with `no compatible transports found`. On upgrade, **make sure** to configure `rpc_url` when constructing `TrpcA2aAgentService` (or provide a custom `agent_card`) — see [Agent Card URL](#agent-card-url) above.
+
+### Protocol combination matrix
+
+| Scenario | Server | Client |
+|---|---|---|
+| **1.0 → 1.0** (recommended) | `create_a2a_application(a2a_svc)` | default |
+| **0.3 client → 1.0 server** | `create_a2a_application(a2a_svc, enable_v0_3_compat=True)` | legacy 0.3 client, no changes |
+| **1.0 client → 0.3 server** | legacy 0.3 server | `TrpcRemoteA2aAgent(..., enable_v0_3_compat=True)` |
+
+> **`enable_v0_3_compat=True` auto-adapts**: the client negotiates the protocol from the card — a 1.0 interface uses the 1.0 wire, a v0.3 interface uses the v0.3 wire. When the **card cannot be fetched, has no `supportedInterfaces`, or has empty interface urls** (a pure v0.3 server, whose 0.3 layout leaves the address to the client), it uses the v0.3 wire directly. So one client can call both a 1.0 server and a pure v0.3 server without switching.
+
+> Runnable example: [examples/a2a](../../../examples/a2a/README.md) — the same example covers all three combinations via the `A2A_V03_COMPAT` environment variable.
 
 ---
 
@@ -151,7 +216,7 @@ AGENT_BASE_URL = "http://127.0.0.1:18081"
 
 
 async def main():
-    # Remote Agent with service URL; discovers Agent Card from /.well-known/agent.json
+    # Remote Agent with service URL; discovers Agent Card from /.well-known/agent-card.json
     remote_agent = TrpcRemoteA2aAgent(
         name="weather_agent",
         agent_base_url=AGENT_BASE_URL,
@@ -243,7 +308,7 @@ The server can read this metadata in the `user_id_extractor` callback (see the c
 | Topic | Description |
 |------|------|
 | `TrpcRemoteA2aAgent` | Extends `BaseAgent`; use with `Runner` like a local Agent |
-| `agent_base_url` | HTTP base URL of the remote A2A service; client discovers the Agent Card from `/.well-known/agent.json` |
+| `agent_base_url` | HTTP base URL of the remote A2A service; client discovers the Agent Card from `/.well-known/agent-card.json` |
 | `initialize()` | Async initialization: Agent Card discovery and client construction |
 | `agent_card` / `a2a_client` | Optional; pass an existing AgentCard or A2AClient to skip auto-discovery |
 | `RunConfig` | Business parameters (e.g. `user_id`) via `metadata`; server reads them in callbacks |
@@ -486,10 +551,10 @@ def custom_event_callback(event: Event, context: RequestContext) -> Event | None
 ┌─────────────────▼──────────────────────────────┐
 │                  Server                        │
 │  ┌──────────────────────────────────────────┐  │
-│  │  A2AStarletteApplication (a2a-sdk)      │  │
-│  │    └─ DefaultRequestHandler             │  │
-│  │         └─ TrpcA2aAgentService          │  │
-│  │              └─ LlmAgent (your Agent)   │  │
+│  │  create_a2a_application (trpc-agent) │  │
+│  │    └─ DefaultRequestHandler          │  │
+│  │         └─ TrpcA2aAgentService       │  │
+│  │              └─ LlmAgent (your Agent)│  │
 │  └──────────────────────────────────────────┘  │
 └────────────────────────────────────────────────┘
 ```

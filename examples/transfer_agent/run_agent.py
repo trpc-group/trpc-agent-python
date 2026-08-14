@@ -20,11 +20,8 @@ import uuid
 from dotenv import load_dotenv
 import uvicorn
 
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-
 from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.a2a import create_a2a_application
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -65,18 +62,13 @@ class _EmbeddedA2AServer:
         a2a_svc = TrpcA2aAgentService(
             service_name="embedded_weather_agent_service",
             agent=a2a_root_agent,
+            # Public address advertised in the agent card; clients call this url.
+            rpc_url=f"http://{self.host}:{self.port}",
             executor_config=TrpcA2aAgentExecutorConfig(),
         )
         a2a_svc.initialize()
 
-        request_handler = DefaultRequestHandler(
-            agent_executor=a2a_svc,
-            task_store=InMemoryTaskStore(),
-        )
-        app = A2AStarletteApplication(
-            agent_card=a2a_svc.agent_card,
-            http_handler=request_handler,
-        ).build()
+        app = create_a2a_application(a2a_svc)
         config = uvicorn.Config(app=app, host=self.host, port=self.port, log_level="warning")
         return uvicorn.Server(config)
 

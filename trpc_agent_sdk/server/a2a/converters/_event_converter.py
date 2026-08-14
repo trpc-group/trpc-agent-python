@@ -34,14 +34,13 @@ _TYPE_CODE_EXECUTION_RESULT = "code_execution_result"
 _TYPE_STREAMING_TOOL_CALL = "streaming_tool_call"
 _TYPE_TEXT = "text"
 
-from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 import uuid
 
+from a2a.helpers.proto_helpers import new_text_message
 from a2a.server.events import Event as A2AEvent
 from a2a.types import (
     Artifact,
-    DataPart,
     Message,
     Part as A2APart,
     Role,
@@ -50,9 +49,9 @@ from a2a.types import (
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
-    TextPart,
 )
 from google.genai import types as genai_types
+from google.protobuf.json_format import MessageToDict
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
@@ -74,6 +73,15 @@ from .._utils import metadata_is_true
 from .._utils import set_metadata
 from ._part_converter import convert_a2a_part_to_genai_part
 from ._part_converter import convert_genai_part_to_a2a_part
+
+
+def _metadata_to_dict(metadata: Any) -> Dict[str, Any]:
+    """Normalize a Struct/dict metadata value to a plain dict for helpers."""
+    if metadata is None:
+        return {}
+    if isinstance(metadata, dict):
+        return metadata
+    return MessageToDict(metadata)
 
 
 def build_request_message_metadata(invocation_context: InvocationContext) -> Dict[str, Any]:
@@ -222,10 +230,10 @@ def _build_event_metadata(event: Event, message: Message, ctx: InvocationContext
     set_metadata(metadata, MESSAGE_METADATA_TAG_KEY, msg_meta.get(MESSAGE_METADATA_TAG_KEY) or "")
     set_metadata(metadata, MESSAGE_METADATA_RESPONSE_ID_KEY, msg_meta.get(MESSAGE_METADATA_RESPONSE_ID_KEY) or "")
     streaming_delta = A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA
-    if any(
-            get_metadata(p.root.metadata, A2A_DATA_PART_METADATA_TYPE_KEY) == streaming_delta for p in message.parts
-            if p.root.metadata):
-        set_metadata(metadata, "streaming_tool_call", "true")
+    for p in message.parts:
+        if get_metadata(p.metadata, A2A_DATA_PART_METADATA_TYPE_KEY) == streaming_delta:
+            set_metadata(metadata, "streaming_tool_call", "true")
+            break
     return metadata
 
 
@@ -234,14 +242,15 @@ def _mark_long_running_tools(a2a_parts: List[A2APart], event: Event) -> None:
     if not event.long_running_tool_ids:
         return
     for a2a_part in a2a_parts:
-        root = a2a_part.root
-        if not isinstance(root, DataPart) or not root.metadata:
+        if not a2a_part.HasField("data"):
             continue
-        if get_metadata(root.metadata, A2A_DATA_PART_METADATA_TYPE_KEY) != A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL:
+        if get_metadata(a2a_part.metadata,
+                        A2A_DATA_PART_METADATA_TYPE_KEY) != A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL:
             continue
-        if root.data.get("id") not in event.long_running_tool_ids:
+        data = _metadata_to_dict(a2a_part.data)
+        if data.get("id") not in event.long_running_tool_ids:
             continue
-        set_metadata(root.metadata, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY, True)
+        set_metadata(a2a_part.metadata, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY, True)
 
 
 def _effective_response_id(event: Event) -> str:
@@ -260,15 +269,12 @@ def _build_message(event: Event, a2a_parts: List[A2APart], role: Role, effective
     message = Message(message_id=effective_id, role=role, parts=a2a_parts)
     msg_meta = _build_message_metadata(event, effective_id)
     if msg_meta:
-        message.metadata = msg_meta
+        message.metadata.update(msg_meta)
     return message
 
 
 def _is_streaming_delta(a2a_part: A2APart) -> bool:
-    meta = a2a_part.root.metadata
-    if meta is None:
-        return False
-    t = get_metadata(meta, A2A_DATA_PART_METADATA_TYPE_KEY)
+    t = get_metadata(a2a_part.metadata, A2A_DATA_PART_METADATA_TYPE_KEY)
     return t == A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA
 
 
@@ -315,7 +321,7 @@ _EVENT_TYPE_PART_RULES: dict[str, dict] = {
 def convert_event_to_a2a_message(
     event: Event,
     invocation_context: InvocationContext,
-    role: Role = Role.agent,
+    role: Role = Role.ROLE_AGENT,
 ) -> Optional[Message]:
     """Convert a TrpcAgent Event to an A2A Message.
 
@@ -341,7 +347,7 @@ def convert_event_to_a2a_message(
 
 def convert_content_to_a2a_message(
     contents: List[genai_types.Content],
-    role: Role = Role.agent,
+    role: Role = Role.ROLE_AGENT,
 ) -> Optional[Message]:
     """Convert a list of Content objects to a single A2A Message.
 
@@ -382,11 +388,11 @@ def convert_a2a_task_to_event(
     if a2a_task.artifacts:
         message = Message(
             message_id="",
-            role=Role.agent,
+            role=Role.ROLE_AGENT,
             parts=a2a_task.artifacts[-1].parts,
-            metadata=getattr(a2a_task.artifacts[-1], "metadata", None),
+            metadata=a2a_task.artifacts[-1].metadata,
         )
-    elif a2a_task.status and a2a_task.status.message:
+    elif a2a_task.status and a2a_task.status.HasField("message"):
         message = a2a_task.status.message
     elif a2a_task.history:
         message = a2a_task.history[-1]
@@ -417,7 +423,7 @@ def convert_a2a_message_to_event(
 
     inv_id = invocation_context.invocation_id if invocation_context else str(uuid.uuid4())
     branch = invocation_context.branch if invocation_context else None
-    msg_meta = getattr(a2a_message, "metadata", None)
+    msg_meta = _metadata_to_dict(a2a_message.metadata)
 
     if not a2a_message.parts:
         logger.warning("A2A message has no parts, creating event with empty content")
@@ -441,7 +447,7 @@ def convert_a2a_message_to_event(
             if gpart is None:
                 logger.warning("Failed to convert A2A part, skipping: %s", a2a_part)
                 continue
-            is_lr = metadata_is_true(a2a_part.root.metadata, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY)
+            is_lr = metadata_is_true(a2a_part.metadata, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY)
             if is_lr and gpart.function_call:
                 long_running_tool_ids.add(gpart.function_call.id)
             parts.append(gpart)
@@ -468,8 +474,21 @@ def convert_a2a_message_to_event(
     )
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def _now_timestamp() -> Any:
+    """Return a protobuf ``Timestamp`` set to the current UTC time."""
+    from google.protobuf.timestamp_pb2 import Timestamp
+
+    ts = Timestamp()
+    ts.GetCurrentTime()
+    return ts
+
+
+def _status_message(text: str, metadata: Optional[Dict[str, Any]] = None) -> Message:
+    """Build a small agent Message with a single text part."""
+    msg = new_text_message(text=text, role=Role.ROLE_AGENT)
+    if metadata:
+        msg.metadata.update(metadata)
+    return msg
 
 
 def create_cancellation_event(
@@ -478,19 +497,16 @@ def create_cancellation_event(
     message_text: str,
     final: bool = True,
 ) -> TaskStatusUpdateEvent:
+    # In a2a-sdk 1.x TaskStatusUpdateEvent has no ``final`` field; the parameter
+    # is kept for backward compatibility but is not serialized.
     return TaskStatusUpdateEvent(
         task_id=task_id,
         status=TaskStatus(
-            state=TaskState.canceled,
-            timestamp=_now_iso(),
-            message=Message(
-                message_id=str(uuid.uuid4()),
-                role=Role.agent,
-                parts=[TextPart(text=message_text)],
-            ),
+            state=TaskState.TASK_STATE_CANCELED,
+            timestamp=_now_timestamp(),
+            message=_status_message(message_text),
         ),
         context_id=context_id,
-        final=final,
     )
 
 
@@ -505,17 +521,11 @@ def create_exception_status_event(
     return TaskStatusUpdateEvent(
         task_id=task_id,
         status=TaskStatus(
-            state=TaskState.failed,
-            timestamp=_now_iso(),
-            message=Message(
-                message_id=str(uuid.uuid4()),
-                role=Role.agent,
-                parts=[TextPart(text=message_text)],
-                metadata=metadata,
-            ),
+            state=TaskState.TASK_STATE_FAILED,
+            timestamp=_now_timestamp(),
+            message=_status_message(message_text, metadata),
         ),
         context_id=context_id,
-        final=final,
         metadata=metadata,
     )
 
@@ -528,9 +538,8 @@ def create_submitted_status_event(
 ) -> TaskStatusUpdateEvent:
     return TaskStatusUpdateEvent(
         task_id=task_id,
-        status=TaskStatus(state=TaskState.submitted, message=message, timestamp=_now_iso()),
+        status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED, message=message, timestamp=_now_timestamp()),
         context_id=context_id,
-        final=final,
     )
 
 
@@ -542,9 +551,8 @@ def create_working_status_event(
 ) -> TaskStatusUpdateEvent:
     return TaskStatusUpdateEvent(
         task_id=task_id,
-        status=TaskStatus(state=TaskState.working, timestamp=_now_iso()),
+        status=TaskStatus(state=TaskState.TASK_STATE_WORKING, timestamp=_now_timestamp()),
         context_id=context_id,
-        final=final,
         metadata=metadata,
     )
 
@@ -556,9 +564,8 @@ def create_completed_status_event(
 ) -> TaskStatusUpdateEvent:
     return TaskStatusUpdateEvent(
         task_id=task_id,
-        status=TaskStatus(state=TaskState.completed, timestamp=_now_iso()),
+        status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED, timestamp=_now_timestamp()),
         context_id=context_id,
-        final=final,
     )
 
 
@@ -571,9 +578,8 @@ def create_final_status_event(
 ) -> TaskStatusUpdateEvent:
     return TaskStatusUpdateEvent(
         task_id=task_id,
-        status=TaskStatus(state=state, timestamp=_now_iso(), message=message),
+        status=TaskStatus(state=state, timestamp=_now_timestamp(), message=message),
         context_id=context_id,
-        final=final,
     )
 
 
@@ -597,33 +603,26 @@ def _create_error_status_event(
         context_id=context_id,
         metadata=event_metadata,
         status=TaskStatus(
-            state=TaskState.failed,
-            message=Message(
-                message_id=str(uuid.uuid4()),
-                role=Role.agent,
-                parts=[TextPart(text=error_message)],
-                metadata=error_msg_metadata,
-            ),
-            timestamp=_now_iso(),
+            state=TaskState.TASK_STATE_FAILED,
+            message=_status_message(error_message, error_msg_metadata),
+            timestamp=_now_timestamp(),
         ),
-        final=False,
     )
 
 
 def _a2a_part_requests_euc_auth(part: A2APart) -> bool:
-    root = part.root
-    md = root.metadata
+    md = part.metadata
     if not md:
         return False
     t = get_metadata(md, A2A_DATA_PART_METADATA_TYPE_KEY)
+    data = _metadata_to_dict(part.data)
     return (t == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL
             and metadata_is_true(md, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY)
-            and root.data.get("name") == REQUEST_EUC_FUNCTION_CALL_NAME)
+            and data.get("name") == REQUEST_EUC_FUNCTION_CALL_NAME)
 
 
 def _a2a_part_is_long_running_function_call(part: A2APart) -> bool:
-    root = part.root
-    md = root.metadata
+    md = part.metadata
     if not md:
         return False
     t = get_metadata(md, A2A_DATA_PART_METADATA_TYPE_KEY)
@@ -639,19 +638,18 @@ def _create_status_update_event(
     context_id: Optional[str],
     effective_id: str = "",
 ) -> TaskStatusUpdateEvent:
-    status = TaskStatus(state=TaskState.working, message=message, timestamp=_now_iso())
+    status = TaskStatus(state=TaskState.TASK_STATE_WORKING, message=message, timestamp=_now_timestamp())
 
     if any(_a2a_part_requests_euc_auth(p) for p in message.parts):
-        status.state = TaskState.auth_required
+        status.state = TaskState.TASK_STATE_AUTH_REQUIRED
     elif any(_a2a_part_is_long_running_function_call(p) for p in message.parts):
-        status.state = TaskState.input_required
+        status.state = TaskState.TASK_STATE_INPUT_REQUIRED
 
     return TaskStatusUpdateEvent(
         task_id=task_id,
         context_id=context_id,
         status=status,
         metadata=_build_event_metadata(event, message, ctx, effective_id),
-        final=False,
     )
 
 
@@ -706,8 +704,10 @@ def convert_event_to_a2a_events(
     if event.error_code:
         error_event = _create_error_status_event(event, invocation_context, task_id, context_id)
         _notify(error_event)
-        if error_event.status and error_event.status.message:
-            a2a_events.append(error_event.status.message)
+        # a2a-sdk 1.x task-mode streaming forbids a bare `Message` after the
+        # initial `Task`; carry the failure through the status event instead.
+        if error_event.status and error_event.status.HasField("message"):
+            a2a_events.append(error_event)
 
     message = convert_event_to_a2a_message(event, invocation_context)
     if message:

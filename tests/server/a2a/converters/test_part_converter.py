@@ -13,16 +13,9 @@ from enum import Enum
 from unittest.mock import MagicMock
 
 import pytest
-try:
-    from a2a import types as a2a_types
-    _ = a2a_types.DataPart
-    _ = a2a_types.TextPart
-except (ImportError, AttributeError):
-    pytest.skip(
-        "Installed a2a.types does not export DataPart/TextPart; skip legacy A2A tests.",
-        allow_module_level=True,
-    )
+from a2a.types import Part as A2APart
 from google.genai import types as genai_types
+from google.protobuf.json_format import MessageToDict
 
 from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 from trpc_agent_sdk.server.a2a._constants import (
@@ -62,6 +55,31 @@ from trpc_agent_sdk.server.a2a.converters._part_converter import (
     convert_a2a_part_to_genai_part,
     convert_genai_part_to_a2a_part,
 )
+
+
+def _data_dict(part: A2APart) -> dict:
+    """Extract the data field of a Part as a plain dict."""
+    return MessageToDict(part.data)
+
+
+def _meta_dict(part: A2APart) -> dict:
+    """Extract the metadata field of a Part as a plain dict."""
+    return MessageToDict(part.metadata)
+
+
+def _data_part(data: dict, metadata: dict | None = None) -> A2APart:
+    """Build a Part whose ``data`` field holds structured data.
+
+    The protobuf ``data`` field is a ``google.protobuf.Value`` and must be
+    constructed via ``ParseDict`` (a raw dict is not accepted).
+    """
+    from google.protobuf import struct_pb2
+    from google.protobuf.json_format import ParseDict
+
+    return A2APart(
+        data=ParseDict(data, struct_pb2.Value()),
+        metadata=metadata,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -192,27 +210,27 @@ class TestGenaiTextToA2a:
     def test_basic_text(self):
         part = genai_types.Part(text="hello")
         result = _genai_text_to_a2a(part)
-        assert isinstance(result.root, a2a_types.TextPart)
-        assert result.root.text == "hello"
+        assert result.HasField("text")
+        assert result.text == "hello"
 
     def test_text_with_thought(self):
         part = genai_types.Part(text="thinking...", thought=True)
         result = _genai_text_to_a2a(part)
-        assert result.root.metadata == {"thought": True}
+        assert _meta_dict(result) == {"thought": True}
 
     def test_text_without_thought(self):
         part = genai_types.Part(text="no thought")
         result = _genai_text_to_a2a(part)
-        assert result.root.metadata is None
+        assert not result.HasField("metadata")
 
 
 class TestGenaiFileUriToA2a:
     def test_basic(self):
         part = genai_types.Part(file_data=genai_types.FileData(file_uri="gs://b/f", mime_type="image/png"))
         result = _genai_file_uri_to_a2a(part)
-        assert isinstance(result.root, a2a_types.FilePart)
-        assert isinstance(result.root.file, a2a_types.FileWithUri)
-        assert result.root.file.uri == "gs://b/f"
+        assert result.HasField("url")
+        assert result.url == "gs://b/f"
+        assert result.media_type == "image/png"
 
 
 class TestGenaiInlineFileToA2a:
@@ -220,9 +238,8 @@ class TestGenaiInlineFileToA2a:
         data = b"binary_data"
         part = genai_types.Part(inline_data=genai_types.Blob(data=data, mime_type="application/octet-stream"))
         result = _genai_inline_file_to_a2a(part)
-        assert isinstance(result.root, a2a_types.FilePart)
-        assert isinstance(result.root.file, a2a_types.FileWithBytes)
-        assert base64.b64decode(result.root.file.bytes) == data
+        assert result.HasField("raw")
+        assert result.raw == data
 
 
 class TestGenaiStreamingFunctionCallToA2a:
@@ -230,42 +247,43 @@ class TestGenaiStreamingFunctionCallToA2a:
         part = genai_types.Part(function_call=genai_types.FunctionCall(
             id="tool1", name="fn", args={TOOL_STREAMING_ARGS: "partial"}))
         result = _genai_streaming_function_call_to_a2a(part)
-        assert isinstance(result.root, a2a_types.DataPart)
-        assert result.root.data["name"] == "fn"
-        assert result.root.data["delta_args"] == "partial"
-        assert result.root.metadata[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA
+        assert result.HasField("data")
+        data = _data_dict(result)
+        assert data["name"] == "fn"
+        assert data["delta_args"] == "partial"
+        assert _meta_dict(result)[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA
 
 
 class TestGenaiFunctionCallToA2a:
     def test_basic(self):
         part = genai_types.Part(function_call=genai_types.FunctionCall(name="fn", args={"x": 1}))
         result = _genai_function_call_to_a2a(part)
-        assert isinstance(result.root, a2a_types.DataPart)
-        assert result.root.metadata[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL
+        assert result.HasField("data")
+        assert _meta_dict(result)[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL
 
 
 class TestGenaiFunctionResponseToA2a:
     def test_basic(self):
         part = genai_types.Part(function_response=genai_types.FunctionResponse(name="fn", response={"r": "ok"}))
         result = _genai_function_response_to_a2a(part)
-        assert isinstance(result.root, a2a_types.DataPart)
-        assert result.root.metadata[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE
+        assert result.HasField("data")
+        assert _meta_dict(result)[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE
 
 
 class TestGenaiCodeExecutionResultToA2a:
     def test_basic(self):
         part = genai_types.Part(code_execution_result=genai_types.CodeExecutionResult(output="result", outcome="OUTCOME_OK"))
         result = _genai_code_execution_result_to_a2a(part)
-        assert isinstance(result.root, a2a_types.DataPart)
-        assert result.root.data[A2A_DATA_FIELD_CODE_EXECUTION_OUTPUT] == "result"
+        assert result.HasField("data")
+        assert _data_dict(result)[A2A_DATA_FIELD_CODE_EXECUTION_OUTPUT] == "result"
 
 
 class TestGenaiExecutableCodeToA2a:
     def test_basic(self):
         part = genai_types.Part(executable_code=genai_types.ExecutableCode(code="print(1)", language="PYTHON"))
         result = _genai_executable_code_to_a2a(part)
-        assert isinstance(result.root, a2a_types.DataPart)
-        assert result.root.data[A2A_DATA_FIELD_CODE_EXECUTION_CODE] == "print(1)"
+        assert result.HasField("data")
+        assert _data_dict(result)[A2A_DATA_FIELD_CODE_EXECUTION_CODE] == "print(1)"
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +293,7 @@ class TestConvertGenaiPartToA2aPart:
     def test_text_dispatch(self):
         part = genai_types.Part(text="hi")
         result = convert_genai_part_to_a2a_part(part)
-        assert isinstance(result.root, a2a_types.TextPart)
+        assert result.HasField("text")
 
     def test_unknown_returns_none(self):
         part = genai_types.Part()
@@ -357,24 +375,24 @@ class TestConvertStreamingFunctionCallDelta:
 # ---------------------------------------------------------------------------
 class TestConvertA2aDataPart:
     def test_function_call(self):
-        dp = a2a_types.DataPart(
-            data={"name": "fn", "args": '{"x": 1}'},
-            metadata={A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        part = _data_part(
+            {"name": "fn", "args": '{"x": 1}'},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
         )
-        result = _convert_a2a_data_part(dp)
+        result = _convert_a2a_data_part(part)
         assert result.function_call is not None
         assert result.function_call.name == "fn"
 
     def test_unknown_type_falls_back_to_json_text(self):
-        dp = a2a_types.DataPart(data={"custom": "value"}, metadata={"type": "unknown"})
-        result = _convert_a2a_data_part(dp)
+        part = _data_part({"custom": "value"}, {"type": "unknown"})
+        result = _convert_a2a_data_part(part)
         assert result.text is not None
         parsed = json.loads(result.text)
         assert parsed["custom"] == "value"
 
     def test_no_metadata_type(self):
-        dp = a2a_types.DataPart(data={"k": "v"})
-        result = _convert_a2a_data_part(dp)
+        part = _data_part({"k": "v"})
+        result = _convert_a2a_data_part(part)
         assert result.text is not None
 
 
@@ -383,47 +401,37 @@ class TestConvertA2aDataPart:
 # ---------------------------------------------------------------------------
 class TestConvertA2aPartToGenaiPart:
     def test_text_part(self):
-        a2a_part = a2a_types.Part(root=a2a_types.TextPart(text="hello"))
+        a2a_part = A2APart(text="hello")
         result = convert_a2a_part_to_genai_part(a2a_part)
         assert result.text == "hello"
 
     def test_text_part_with_thought(self):
-        tp = a2a_types.TextPart(text="thinking")
-        tp.metadata = {"thought": "true"}
-        a2a_part = a2a_types.Part(root=tp)
+        a2a_part = A2APart(text="thinking", metadata={"thought": "true"})
         result = convert_a2a_part_to_genai_part(a2a_part)
         assert result.text == "thinking"
         assert result.thought is True
 
     def test_file_with_uri(self):
-        fp = a2a_types.FilePart(file=a2a_types.FileWithUri(uri="gs://b/f", mime_type="text/plain"))
-        a2a_part = a2a_types.Part(root=fp)
+        a2a_part = A2APart(url="gs://b/f", media_type="text/plain")
         result = convert_a2a_part_to_genai_part(a2a_part)
         assert result.file_data.file_uri == "gs://b/f"
 
     def test_file_with_bytes(self):
         data = b"hello"
-        fp = a2a_types.FilePart(file=a2a_types.FileWithBytes(
-            bytes=base64.b64encode(data).decode("utf-8"),
-            mime_type="text/plain",
-        ))
-        a2a_part = a2a_types.Part(root=fp)
+        a2a_part = A2APart(raw=data, media_type="text/plain")
         result = convert_a2a_part_to_genai_part(a2a_part)
         assert result.inline_data.data == data
 
     def test_data_part(self):
-        dp = a2a_types.DataPart(
-            data={"name": "fn", "args": "{}"},
-            metadata={A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        a2a_part = _data_part(
+            {"name": "fn", "args": "{}"},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
         )
-        a2a_part = a2a_types.Part(root=dp)
         result = convert_a2a_part_to_genai_part(a2a_part)
         assert result.function_call is not None
 
-    def test_unsupported_file_type_returns_none(self):
-        mock_file_part = MagicMock(spec=a2a_types.FilePart)
-        mock_file_part.file = MagicMock()
-        a2a_part = MagicMock(spec=a2a_types.Part)
-        a2a_part.root = mock_file_part
-        result = convert_a2a_part_to_genai_part(a2a_part)
+    def test_unsupported_part_returns_none(self):
+        mock_part = MagicMock(spec=A2APart)
+        mock_part.HasField.side_effect = lambda f: False
+        result = convert_a2a_part_to_genai_part(mock_part)
         assert result is None

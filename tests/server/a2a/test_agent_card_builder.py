@@ -120,7 +120,9 @@ class TestAgentCardBuilderBuild:
         assert isinstance(card, AgentCard)
         assert card.name == "my-agent"
         assert card.description == "A test agent"
-        assert card.url == "http://localhost:8080"
+        # In 1.x the card exposes interfaces (url + protocol binding) instead of
+        # a single top-level url.
+        assert card.supported_interfaces[0].url == "http://localhost:8080"
 
     async def test_build_with_no_description(self):
         agent = _make_llm_agent(name="agent", description=None)

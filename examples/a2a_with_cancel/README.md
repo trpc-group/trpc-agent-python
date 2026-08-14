@@ -70,6 +70,7 @@ executor_config = TrpcA2aAgentExecutorConfig(
 a2a_svc = TrpcA2aAgentService(
     service_name="weather_agent_cancel_service",
     agent=root_agent,
+    rpc_url="http://127.0.0.1:18082",  # 写入 Agent Card 的对外地址
     executor_config=executor_config,
 )
 ```
@@ -134,7 +135,7 @@ python3 run_server.py
 服务地址：
 
 - API：`http://127.0.0.1:18082`
-- Agent Card：`http://127.0.0.1:18082/.well-known/agent.json`
+- Agent Card：`http://127.0.0.1:18082/.well-known/agent-card.json`
 
 #### 2. 启动客户端（新开终端）
 
@@ -151,7 +152,7 @@ python3 test_a2a_cancel.py
 [2026-04-02 15:19:26][INFO][trpc_agent_sdk][trpc_agent_sdk/server/a2a/_agent_service.py:108][66551] Initialized A2A Agent Service weather_agent_cancel_service for weather_agent
 Starting A2A server with cancel support...
 Listening on: http://127.0.0.1:18082
-Agent card: http://127.0.0.1:18082/.well-known/agent.json
+Agent card: http://127.0.0.1:18082/.well-known/agent-card.json
 Cancel wait timeout: 3.0s
 INFO:     Started server process [66551]
 INFO:     Waiting for application startup.

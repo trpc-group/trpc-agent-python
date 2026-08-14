@@ -19,17 +19,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Conversion between A2A Part and Google GenAI Part."""
+"""Conversion between A2A Part and Google GenAI Part.
+
+In a2a-sdk 1.x ``Part`` is a protobuf message with a oneof content field
+(``text`` / ``raw`` / ``url`` / ``data``) instead of a pydantic wrapper around
+``TextPart``/``FilePart``/``DataPart``.  This module converts between the
+GenAI ``Part`` model and the protobuf ``Part``.
+"""
 
 from __future__ import annotations
 
-import base64
 import json
 from typing import Any
 from typing import Optional
 
-from a2a import types as a2a_types
 from google.genai import types as genai_types
+from google.protobuf import struct_pb2
+from google.protobuf.json_format import MessageToDict, ParseDict
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 
@@ -47,6 +53,18 @@ from .._constants import A2A_DATA_PART_METADATA_TYPE_KEY
 from .._constants import A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA
 from .._utils import get_metadata
 from .._utils import set_metadata
+
+_A2A_PART_MODULE = None
+
+
+def _a2a_part_type() -> Any:
+    """Lazily import the A2A Part type to avoid a hard dependency."""
+    global _A2A_PART_MODULE  # pylint: disable=global-statement
+    if _A2A_PART_MODULE is None:
+        from a2a.types import Part as A2APart
+
+        _A2A_PART_MODULE = A2APart
+    return _A2A_PART_MODULE
 
 
 def _to_bool_metadata(value: Any) -> Optional[bool]:
@@ -109,33 +127,47 @@ def _get_genai_part_kind(part: genai_types.Part) -> Optional[str]:
     return None
 
 
-def _genai_text_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
-    a2a_part = a2a_types.TextPart(text=part.text)
+def _new_a2a_part(**kwargs: Any) -> Any:
+    """Build a protobuf A2A Part with the given oneof fields.
+
+    The ``data`` field is a ``google.protobuf.Value``; a plain dict must be
+    wrapped via ``ParseDict`` before being passed to the constructor.
+    """
+    data = kwargs.pop("data", None)
+    part = _a2a_part_type()(**kwargs)
+    if data is not None:
+        part.data.CopyFrom(ParseDict(data, struct_pb2.Value()))
+    return part
+
+
+def _genai_text_to_a2a(part: genai_types.Part) -> Optional[Any]:
+    metadata = None
     if part.thought is not None:
-        a2a_part.metadata = {"thought": part.thought}
-    return a2a_types.Part(root=a2a_part)
+        metadata = {"thought": part.thought}
+    return _new_a2a_part(text=part.text, metadata=metadata)
 
 
-def _genai_file_uri_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
-    return a2a_types.Part(root=a2a_types.FilePart(file=a2a_types.FileWithUri(
-        uri=part.file_data.file_uri,
-        mime_type=part.file_data.mime_type,
-    )))
+def _genai_file_uri_to_a2a(part: genai_types.Part) -> Optional[Any]:
+    return _new_a2a_part(
+        url=part.file_data.file_uri,
+        media_type=part.file_data.mime_type,
+    )
 
 
-def _genai_inline_file_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
-    a2a_part = a2a_types.FilePart(file=a2a_types.FileWithBytes(
-        bytes=base64.b64encode(part.inline_data.data).decode("utf-8"),
-        mime_type=part.inline_data.mime_type,
-    ))
+def _genai_inline_file_to_a2a(part: genai_types.Part) -> Optional[Any]:
+    metadata = None
     if part.video_metadata:
-        a2a_part.metadata = {
+        metadata = {
             "video_metadata": part.video_metadata.model_dump(by_alias=True, exclude_none=True),
         }
-    return a2a_types.Part(root=a2a_part)
+    return _new_a2a_part(
+        raw=part.inline_data.data,
+        media_type=part.inline_data.mime_type,
+        metadata=metadata,
+    )
 
 
-def _genai_streaming_function_call_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
+def _genai_streaming_function_call_to_a2a(part: genai_types.Part) -> Optional[Any]:
     fc = part.function_call
     tool_id = fc.id or f"tool_{fc.name}_{id(fc)}"
     data: dict[str, Any] = {
@@ -145,7 +177,7 @@ def _genai_streaming_function_call_to_a2a(part: genai_types.Part) -> Optional[a2
     }
     metadata = _typed_metadata(A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA)
     set_metadata(metadata, "streaming", True)
-    return a2a_types.Part(root=a2a_types.DataPart(data=data, metadata=metadata))
+    return _new_a2a_part(data=data, metadata=metadata)
 
 
 def _function_call_data_for_a2a(raw: Any) -> dict[str, Any]:
@@ -160,12 +192,12 @@ def _function_call_data_for_a2a(raw: Any) -> dict[str, Any]:
     return out
 
 
-def _genai_function_call_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
+def _genai_function_call_to_a2a(part: genai_types.Part) -> Optional[Any]:
     data = _function_call_data_for_a2a(part.function_call)
-    return a2a_types.Part(root=a2a_types.DataPart(
+    return _new_a2a_part(
         data=data,
         metadata=_typed_metadata(A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL),
-    ))
+    )
 
 
 def _function_response_data_for_a2a(raw: Any) -> dict[str, Any]:
@@ -178,32 +210,32 @@ def _function_response_data_for_a2a(raw: Any) -> dict[str, Any]:
     return out
 
 
-def _genai_function_response_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
+def _genai_function_response_to_a2a(part: genai_types.Part) -> Optional[Any]:
     data = _function_response_data_for_a2a(part.function_response)
-    return a2a_types.Part(root=a2a_types.DataPart(
+    return _new_a2a_part(
         data=data,
         metadata=_typed_metadata(A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE),
-    ))
+    )
 
 
-def _genai_code_execution_result_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
-    return a2a_types.Part(root=a2a_types.DataPart(
+def _genai_code_execution_result_to_a2a(part: genai_types.Part) -> Optional[Any]:
+    return _new_a2a_part(
         data={
             A2A_DATA_FIELD_CODE_EXECUTION_OUTPUT: _stringify(part.code_execution_result.output),
             A2A_DATA_FIELD_CODE_EXECUTION_OUTCOME: _stringify(part.code_execution_result.outcome),
         },
         metadata=_typed_metadata(A2A_DATA_PART_METADATA_TYPE_CODE_EXECUTION_RESULT),
-    ))
+    )
 
 
-def _genai_executable_code_to_a2a(part: genai_types.Part) -> Optional[a2a_types.Part]:
-    return a2a_types.Part(root=a2a_types.DataPart(
+def _genai_executable_code_to_a2a(part: genai_types.Part) -> Optional[Any]:
+    return _new_a2a_part(
         data={
             A2A_DATA_FIELD_CODE_EXECUTION_CODE: _stringify(part.executable_code.code),
             A2A_DATA_FIELD_CODE_EXECUTION_LANGUAGE: _stringify(part.executable_code.language) or "unknown",
         },
         metadata=_typed_metadata(A2A_DATA_PART_METADATA_TYPE_EXECUTABLE_CODE),
-    ))
+    )
 
 
 _GENAI_KIND_CONVERTERS: dict[str, callable] = {
@@ -218,7 +250,7 @@ _GENAI_KIND_CONVERTERS: dict[str, callable] = {
 }
 
 
-def convert_genai_part_to_a2a_part(part: genai_types.Part) -> Optional[a2a_types.Part]:
+def convert_genai_part_to_a2a_part(part: genai_types.Part) -> Optional[Any]:
     """Convert a Google GenAI Part to an A2A Part."""
     kind = _get_genai_part_kind(part)
     converter = _GENAI_KIND_CONVERTERS.get(kind) if kind else None
@@ -265,6 +297,15 @@ def _convert_streaming_function_call_delta(data: Any) -> genai_types.Part:
     ), )
 
 
+def _a2a_data_to_dict(data: Any) -> dict[str, Any]:
+    """Convert a protobuf ``Value`` data field back to a plain dict."""
+    if isinstance(data, struct_pb2.Value):
+        return MessageToDict(data)
+    if isinstance(data, dict):
+        return data
+    return {}
+
+
 _A2A_DATA_TYPE_CONVERTERS: dict[str, callable] = {
     A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL:
     lambda d: genai_types.Part(function_call=genai_types.FunctionCall.model_validate(_normalize_function_call_data(d),
@@ -282,40 +323,41 @@ _A2A_DATA_TYPE_CONVERTERS: dict[str, callable] = {
 }
 
 
-def _convert_a2a_data_part(part: a2a_types.DataPart) -> Optional[genai_types.Part]:
-    """Convert an A2A DataPart to a GenAI Part based on metadata type."""
-    metadata_type = get_metadata(part.metadata, A2A_DATA_PART_METADATA_TYPE_KEY)
+def _convert_a2a_data_part(part: Any) -> Optional[genai_types.Part]:
+    """Convert an A2A data Part to a GenAI Part based on metadata type.
+
+    In 1.x the data is a ``google.protobuf.Value``; it is read back via
+    ``MessageToDict`` so the converter lambdas receive plain dicts.
+    """
+    metadata = getattr(part, "metadata", None)
+    metadata_type = get_metadata(metadata, A2A_DATA_PART_METADATA_TYPE_KEY)
+    data = _a2a_data_to_dict(getattr(part, "data", None))
     converter = _A2A_DATA_TYPE_CONVERTERS.get(metadata_type)
     if converter:
-        return converter(part.data)
-    return genai_types.Part(text=json.dumps(part.data))
+        return converter(data)
+    return genai_types.Part(text=json.dumps(data))
 
 
-def convert_a2a_part_to_genai_part(a2a_part: a2a_types.Part) -> Optional[genai_types.Part]:
+def convert_a2a_part_to_genai_part(a2a_part: Any) -> Optional[genai_types.Part]:
     """Convert an A2A Part to a Google GenAI Part."""
-    part = a2a_part.root
-
-    if isinstance(part, a2a_types.TextPart):
-        thought = _to_bool_metadata(get_metadata(getattr(part, "metadata", None), "thought"))
-        kwargs: dict[str, Any] = {"text": part.text}
+    if a2a_part.HasField("text"):
+        thought = _to_bool_metadata(get_metadata(getattr(a2a_part, "metadata", None), "thought"))
+        kwargs: dict[str, Any] = {"text": a2a_part.text}
         if thought is not None:
             kwargs["thought"] = thought
         return genai_types.Part(**kwargs)
 
-    if isinstance(part, a2a_types.FilePart):
-        if isinstance(part.file, a2a_types.FileWithUri):
-            return genai_types.Part(file_data=genai_types.FileData(file_uri=part.file.uri,
-                                                                   mime_type=part.file.mime_type), )
-        if isinstance(part.file, a2a_types.FileWithBytes):
-            return genai_types.Part(inline_data=genai_types.Blob(
-                data=base64.b64decode(part.file.bytes),
-                mime_type=part.file.mime_type,
-            ))
-        logger.warning("Cannot convert unsupported file type: %s for A2A part: %s", type(part.file), a2a_part)
-        return None
+    if a2a_part.HasField("url"):
+        return genai_types.Part(file_data=genai_types.FileData(file_uri=a2a_part.url, mime_type=a2a_part.media_type), )
 
-    if isinstance(part, a2a_types.DataPart):
-        return _convert_a2a_data_part(part)
+    if a2a_part.HasField("raw"):
+        return genai_types.Part(inline_data=genai_types.Blob(
+            data=a2a_part.raw,
+            mime_type=a2a_part.media_type,
+        ))
 
-    logger.warning("Cannot convert unsupported part type: %s for A2A part: %s", type(part), a2a_part)
+    if a2a_part.HasField("data"):
+        return _convert_a2a_data_part(a2a_part)
+
+    logger.warning("Cannot convert unsupported part type for A2A part: %s", a2a_part)
     return None

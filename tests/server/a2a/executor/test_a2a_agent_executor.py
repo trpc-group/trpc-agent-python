@@ -16,9 +16,9 @@ from a2a.types import (
     Message,
     Part as A2APart,
     Role,
+    Task,
     TaskState,
     TaskStatus,
-    TextPart,
 )
 
 from trpc_agent_sdk.runners import Runner
@@ -234,7 +234,7 @@ class TestExecute:
             await executor.execute(ctx, queue)
 
     async def test_submitted_event_when_no_current_task(self):
-        msg = Message(message_id="m1", role=Role.user, parts=[A2APart(root=TextPart(text="hi"))])
+        msg = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
         runner = _make_runner()
 
         async def empty_run(**kwargs):
@@ -268,9 +268,13 @@ class TestExecute:
             await executor.execute(ctx, queue)
             calls = queue.enqueue_event.call_args_list
             assert len(calls) >= 2
+            # In 1.x the first event must be a Task (submission signal).
+            first_event = calls[0].args[0]
+            assert isinstance(first_event, Task)
+            assert first_event.id == "task-1"
 
     async def test_cancelled_session_enqueues_cancellation(self):
-        msg = Message(message_id="m1", role=Role.user, parts=[A2APart(root=TextPart(text="hi"))])
+        msg = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
         runner = _make_runner()
         executor = TrpcA2aAgentExecutor(runner=runner)
         ctx = _make_context(message=msg, current_task=MagicMock())
@@ -289,8 +293,51 @@ class TestExecute:
             await executor.execute(ctx, queue)
             enqueued_args = [call.args[0] for call in queue.enqueue_event.call_args_list]
             # Should have a cancellation event
-            assert any(hasattr(e, "status") and e.status.state == TaskState.canceled
+            assert any(hasattr(e, "status") and e.status.state == TaskState.TASK_STATE_CANCELED
                        for e in enqueued_args if hasattr(e, "status"))
+
+    async def test_execution_error_enqueues_status_event(self):
+        msg = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
+        runner = _make_runner()
+
+        async def failing_run(**kwargs):
+            raise RuntimeError("boom")
+            yield  # pragma: no cover
+
+        runner.run_async = failing_run
+        executor = TrpcA2aAgentExecutor(runner=runner)
+        ctx = _make_context(message=msg, current_task=None)
+        ctx.call_context = None
+        queue = _make_event_queue()
+
+        with patch(
+            "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.convert_a2a_request_to_trpc_agent_run_args",
+            new_callable=AsyncMock,
+            return_value={
+                "user_id": "u1",
+                "session_id": "s1",
+                "new_message": MagicMock(),
+                "run_config": MagicMock(),
+            },
+        ), patch(
+            "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.is_run_cancelled",
+            new_callable=AsyncMock,
+            return_value=False,
+        ), patch(
+            "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.new_agent_context",
+            return_value=MagicMock(),
+        ):
+            runner._new_invocation_context = MagicMock()
+            await executor.execute(ctx, queue)
+            enqueued_args = [call.args[0] for call in queue.enqueue_event.call_args_list]
+            # a2a-sdk 1.x task-mode forbids a bare Message after the initial Task;
+            # the failure must be delivered as a TaskStatusUpdateEvent.
+            assert any(
+                hasattr(e, "status")
+                and e.status.state == TaskState.TASK_STATE_FAILED
+                and e.status.HasField("message")
+                for e in enqueued_args
+            )
 
 
 # ---------------------------------------------------------------------------

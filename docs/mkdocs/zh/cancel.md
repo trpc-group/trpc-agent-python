@@ -514,10 +514,7 @@ run_server.py:
 import uvicorn
 from dotenv import load_dotenv
 
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-
+from trpc_agent_sdk.server.a2a import create_a2a_application
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
 
@@ -542,6 +539,7 @@ def create_a2a_service() -> TrpcA2aAgentService:
     a2a_svc = TrpcA2aAgentService(
         service_name="weather_agent_cancel_service",
         agent=root_agent,
+        rpc_url=f"http://{HOST}:{PORT}",   # 写入 Agent Card 的对外地址
         executor_config=executor_config,
     )
     a2a_svc.initialize()
@@ -553,18 +551,10 @@ def serve():
     """启动 A2A 服务"""
     a2a_svc = create_a2a_service()
 
-    # 使用 a2a-sdk 标准组件组装服务
-    request_handler = DefaultRequestHandler(
-        agent_executor=a2a_svc,
-        task_store=InMemoryTaskStore(),
-    )
+    # 组装 Starlette 应用（Agent Card + JSON-RPC 路由）
+    app = create_a2a_application(a2a_svc)
 
-    server = A2AStarletteApplication(
-        agent_card=a2a_svc.agent_card,
-        http_handler=request_handler,
-    )
-
-    uvicorn.run(server.build(), host=HOST, port=PORT)
+    uvicorn.run(app, host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

@@ -11,9 +11,16 @@ This example demonstrates how to use TrpcRemoteA2aAgent to connect to a
 remote A2A service (standard protocol) over standard HTTP and interact with it
 using the Runner interface. The standard protocol uses artifact-first streaming
 and unprefixed metadata keys.
+
+Protocol combinations (paired with ``run_server.py``):
+
+- 1.0 client -> 1.0 server (default): ``python3 test_a2a.py``
+- 1.0 client -> v0.3 server: ``A2A_V03_COMPAT=1 python3 test_a2a.py``
+  (compat mode auto-negotiates the v0.3 wire for a not-yet-upgraded server)
 """
 
 import asyncio
+import os
 import uuid
 
 from dotenv import load_dotenv
@@ -36,6 +43,9 @@ async def run_remote_agent(
     query: str,
 ) -> None:
     """Run remote agent with a single query and handle events.
+
+    Both the 1.0 and v0.3 wires deliver the assistant text as streaming
+    ``partial=True`` artifact chunks, so the printing logic is protocol-agnostic.
 
     Args:
         runner: The runner instance
@@ -64,6 +74,8 @@ async def run_remote_agent(
 
             if event.partial:
                 for part in event.content.parts:
+                    if part.thought:
+                        continue
                     if part.text:
                         print(part.text, end="", flush=True)
                 continue
@@ -142,10 +154,15 @@ async def main():
     print("Note: Ensure the A2A server is running (python run_server.py)")
     print()
 
+    # Default to the 1.0 wire (auto negotiation).  Set A2A_V03_COMPAT=1 to
+    # enable compat mode, which auto-negotiates 1.0/0.3 and falls back to the
+    # v0.3 wire for a not-yet-upgraded v0.3 server.
+    enable_v0_3_compat = os.getenv("A2A_V03_COMPAT", "").strip().lower() in ("1", "true", "yes")
     remote_agent = TrpcRemoteA2aAgent(
         name="weather_agent",
         agent_base_url=AGENT_BASE_URL,
         description="Professional weather query assistant",
+        enable_v0_3_compat=enable_v0_3_compat,
     )
     await remote_agent.initialize()
 

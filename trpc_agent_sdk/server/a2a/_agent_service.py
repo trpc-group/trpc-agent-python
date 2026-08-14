@@ -23,7 +23,7 @@
 
 This service provides a bridge between trpc-agent and the A2A protocol, allowing
 users to easily deploy trpc-agent as an A2A service. It extends ``AgentExecutor``
-from the A2A SDK so it can be used directly with ``A2AStarletteApplication`` or
+from the A2A SDK so it can be used directly with ``create_a2a_application`` or
 any other A2A-compatible server.
 """
 
@@ -55,7 +55,7 @@ class TrpcA2aAgentService(AgentExecutor):
 
     This service provides a bridge between trpc-agent and the A2A protocol using
     unprefixed metadata keys and artifact-first streaming. It extends ``AgentExecutor``
-    from the A2A SDK so it can be used directly with ``A2AStarletteApplication``.
+    from the A2A SDK so it can be used directly with ``create_a2a_application``.
 
     Attributes:
         agent: The trpc-agent BaseAgent to use (required).
@@ -70,6 +70,7 @@ class TrpcA2aAgentService(AgentExecutor):
         agent: BaseAgent,
         app_name: Optional[str] = None,
         agent_card: Optional[AgentCard] = None,
+        rpc_url: Optional[str] = None,
         session_service: Optional[BaseSessionService] = None,
         memory_service: Optional[BaseMemoryService] = None,
         executor_config: Optional[TrpcA2aAgentExecutorConfig] = None,
@@ -79,6 +80,7 @@ class TrpcA2aAgentService(AgentExecutor):
         self._agent_card = agent_card
         self._service_name = service_name
         self._app_name = app_name
+        self._rpc_url = rpc_url
         self._session_service = session_service
         self._memory_service = memory_service
         self._executor_config = executor_config
@@ -105,7 +107,7 @@ class TrpcA2aAgentService(AgentExecutor):
             self._session_service = InMemorySessionService()
 
         if self._agent_card is None:
-            builder = AgentCardBuilder(agent=self._agent)
+            builder = AgentCardBuilder(agent=self._agent, rpc_url=self._rpc_url)
             self._agent_card = await builder.build()
 
         self._agent_card.capabilities.streaming = True

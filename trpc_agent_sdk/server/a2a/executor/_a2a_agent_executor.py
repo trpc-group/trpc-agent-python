@@ -36,8 +36,10 @@ from a2a.server.agent_execution import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events.event_queue import EventQueue
 from a2a.types import Artifact
+from a2a.types import Task
 from a2a.types import TaskArtifactUpdateEvent
 from a2a.types import TaskState
+from a2a.types import TaskStatus
 from pydantic import BaseModel
 from trpc_agent_sdk.cancel import SessionKey
 from trpc_agent_sdk.cancel import is_run_cancelled
@@ -56,7 +58,6 @@ from ..converters import create_cancellation_event
 from ..converters import create_completed_status_event
 from ..converters import create_exception_status_event
 from ..converters import create_final_status_event
-from ..converters import create_submitted_status_event
 from ..converters import create_working_status_event
 from ..converters import get_user_session_id
 from ._task_result_aggregator import TaskResultAggregator
@@ -66,6 +67,17 @@ UserIdExtractor = Callable[[RequestContext], Union[str, Awaitable[str]]]
 EventCallback = Callable[[Event, RequestContext], Union[Optional[Event], Awaitable[Optional[Event]]]]
 
 RunConfigFactory = Callable[[RequestContext], Union[RunConfig, Awaitable[RunConfig]]]
+
+
+def _metadata_to_dict(metadata: Any) -> dict[str, Any]:
+    """Normalize a Struct/dict metadata value to a plain dict."""
+    if metadata is None:
+        return {}
+    if isinstance(metadata, dict):
+        return metadata
+    from google.protobuf.json_format import MessageToDict
+
+    return MessageToDict(metadata)
 
 
 class TrpcA2aAgentExecutorConfig(BaseModel):
@@ -143,7 +155,7 @@ class TrpcA2aAgentExecutor(AgentExecutor):
         """Extract (app_name, user_id, session_id) from task metadata written by execute()."""
         if not context.current_task or not context.current_task.metadata:
             return None, None, None
-        metadata = context.current_task.metadata
+        metadata = _metadata_to_dict(context.current_task.metadata)
         return (
             get_metadata(metadata, "app_name"),
             get_metadata(metadata, "user_id"),
@@ -210,11 +222,16 @@ class TrpcA2aAgentExecutor(AgentExecutor):
                 raise ValueError("A2A request must have a message")
 
             if not context.current_task:
+                # a2a-sdk 1.x enforces that the first event is a `Task`, followed by
+                # `TaskStatusUpdateEvent`/`TaskArtifactUpdateEvent` events.  Enqueue
+                # the Task (seeded with the user message) as the submission signal
+                # instead of a bare submitted status event.
                 await event_queue.enqueue_event(
-                    create_submitted_status_event(
-                        task_id=context.task_id,
+                    Task(
+                        id=context.task_id,
                         context_id=context.context_id,
-                        message=context.message,
+                        status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+                        history=[context.message] if context.message else [],
                     ))
 
             try:
@@ -252,13 +269,16 @@ class TrpcA2aAgentExecutor(AgentExecutor):
             except Exception as ex:  # pylint: disable=broad-except
                 logger.error("Error handling A2A request: %s", ex, exc_info=True)
                 try:
-                    except_event = create_exception_status_event(
-                        task_id=context.task_id,
-                        context_id=context.context_id,
-                        message_text=str(ex),
-                    )
-                    if except_event.status and except_event.status.message:
-                        await event_queue.enqueue_event(except_event.status.message)
+                    # a2a-sdk 1.x enforces task-mode streaming: after the initial
+                    # `Task`, only `TaskStatusUpdateEvent`/`TaskArtifactUpdateEvent`
+                    # may follow.  Enqueue the whole failed-status event (not the
+                    # bare ``status.message``) so the response stays valid.
+                    await event_queue.enqueue_event(
+                        create_exception_status_event(
+                            task_id=context.task_id,
+                            context_id=context.context_id,
+                            message_text=str(ex),
+                        ))
                 except Exception as enqueue_error:  # pylint: disable=broad-except
                     logger.error("Failed to publish failure event: %s", enqueue_error, exc_info=True)
         finally:
@@ -301,6 +321,12 @@ class TrpcA2aAgentExecutor(AgentExecutor):
             "user_id": run_args["user_id"],
             "session_id": run_args["session_id"],
         }
+
+        # a2a-sdk 1.x enforces that the first event is a `Task`, followed by
+        # `TaskStatusUpdateEvent`/`TaskArtifactUpdateEvent` events.  The initial
+        # Task is enqueued by ``execute()`` (when no current task exists); here we
+        # only emit the working status update that transitions the task into the
+        # executing state.
         await event_queue.enqueue_event(
             create_working_status_event(
                 task_id=context.task_id,
@@ -337,7 +363,7 @@ class TrpcA2aAgentExecutor(AgentExecutor):
             ):
                 await event_queue.enqueue_event(a2a_event)
 
-        if (aggregator.task_state == TaskState.working and aggregator.task_status_message is not None
+        if (aggregator.task_state == TaskState.TASK_STATE_WORKING and aggregator.task_status_message is not None
                 and aggregator.task_status_message.parts):
             final_meta: dict[str, Any] = {"partial": False}
             await event_queue.enqueue_event(
