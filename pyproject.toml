@@ -77,7 +77,9 @@ knowledge = [
 ]
 
 a2a = [
-    "a2a-sdk<1.0.0,>=0.3.22",
+    "a2a-sdk<2.0.0,>=1.0.0",
+    "google-api-core",
+    "googleapis-common-protos",
     "protobuf>=5.29.5",
 ]
 
@@ -154,7 +156,9 @@ all = [
     "nanobot-ai>=0.1.4.post6; python_full_version >= '3.11'",
     "aiofiles",
     "wecom-aibot-sdk-python>=0.1.5",
-    "a2a-sdk<1.0.0,>=0.3.22",
+    "a2a-sdk<2.0.0,>=1.0.0",
+    "google-api-core",
+    "googleapis-common-protos",
     "e2b-code-interpreter>=2.0.0",
     "gepa>=0.0.7",
     "rich>=13.0.0",

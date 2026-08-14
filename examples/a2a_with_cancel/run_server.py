@@ -14,10 +14,7 @@ cancellation cleanup before responding.
 import uvicorn
 from dotenv import load_dotenv
 
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-
+from trpc_agent_sdk.server.a2a import create_a2a_application
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
 
@@ -44,6 +41,8 @@ def create_a2a_service() -> TrpcA2aAgentService:
     a2a_svc = TrpcA2aAgentService(
         service_name="weather_agent_cancel_service",
         agent=root_agent,
+        # Public address advertised in the agent card; clients call this url.
+        rpc_url=f"http://{HOST}:{PORT}",
         executor_config=executor_config,
     )
     a2a_svc.initialize()
@@ -55,22 +54,14 @@ def serve():
     """Start the A2A server with cancel support."""
     a2a_svc = create_a2a_service()
 
-    request_handler = DefaultRequestHandler(
-        agent_executor=a2a_svc,
-        task_store=InMemoryTaskStore(),
-    )
-
-    server = A2AStarletteApplication(
-        agent_card=a2a_svc.agent_card,
-        http_handler=request_handler,
-    )
+    app = create_a2a_application(a2a_svc)
 
     print("Starting A2A server with cancel support...")
     print(f"Listening on: http://{HOST}:{PORT}")
-    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent.json")
+    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent-card.json")
     print(f"Cancel wait timeout: {CANCEL_WAIT_TIMEOUT}s")
 
-    uvicorn.run(server.build(), host=HOST, port=PORT)
+    uvicorn.run(app, host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

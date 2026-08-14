@@ -11,26 +11,20 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
-try:
-    from a2a.types import (
-        Artifact,
-        DataPart,
-        Message,
-        Part as A2APart,
-        Role,
-        Task,
-        TaskArtifactUpdateEvent,
-        TaskState,
-        TaskStatus,
-        TaskStatusUpdateEvent,
-        TextPart,
-    )
-except ImportError:
-    pytest.skip(
-        "Installed a2a.types does not export DataPart/TextPart; skip legacy A2A tests.",
-        allow_module_level=True,
-    )
+from a2a.types import (
+    Artifact,
+    Message,
+    Part as A2APart,
+    Role,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskState,
+    TaskStatus,
+    TaskStatusUpdateEvent,
+)
 from google.genai import types as genai_types
+from google.protobuf import struct_pb2
+from google.protobuf.json_format import MessageToDict, ParseDict
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
@@ -48,6 +42,7 @@ from trpc_agent_sdk.server.a2a._constants import (
     REQUEST_EUC_FUNCTION_CALL_NAME,
 )
 from trpc_agent_sdk.server.a2a.converters._event_converter import (
+    _a2a_part_requests_euc_auth,
     _build_context_metadata,
     _build_event_metadata,
     _build_message,
@@ -63,6 +58,7 @@ from trpc_agent_sdk.server.a2a.converters._event_converter import (
     _infer_message_tag,
     _is_streaming_delta,
     _mark_long_running_tools,
+    _metadata_to_dict,
     build_request_message_metadata,
     convert_a2a_message_to_event,
     convert_a2a_task_to_event,
@@ -120,6 +116,35 @@ def _make_event(*, text=None, function_call=None, function_response=None,
         long_running_tool_ids=long_running_tool_ids,
         response_id=response_id,
     )
+
+
+def _data_part(data: dict, metadata: dict | None = None) -> A2APart:
+    """Build a Part with a structured ``data`` field."""
+    return A2APart(
+        data=ParseDict(data, struct_pb2.Value()),
+        metadata=metadata,
+    )
+
+
+def _meta_dict(message) -> dict:
+    return MessageToDict(message.metadata)
+
+
+# ---------------------------------------------------------------------------
+# _metadata_to_dict
+# ---------------------------------------------------------------------------
+class TestMetadataToDict:
+    def test_none_returns_empty(self):
+        assert _metadata_to_dict(None) == {}
+
+    def test_dict_returned_as_is(self):
+        payload = {"k": "v"}
+        assert _metadata_to_dict(payload) is payload
+
+    def test_struct_converted(self):
+        struct = struct_pb2.Struct()
+        struct.update({"k": "v"})
+        assert _metadata_to_dict(struct) == {"k": "v"}
 
 
 # ---------------------------------------------------------------------------
@@ -318,24 +343,22 @@ class TestBuildMessageMetadata:
 # ---------------------------------------------------------------------------
 class TestMarkLongRunningTools:
     def test_marks_matching_tool_ids(self):
-        dp = DataPart(
-            data={"id": "tool1", "name": "fn"},
-            metadata={A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        a2a_part = _data_part(
+            {"id": "tool1", "name": "fn"},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
         )
-        a2a_part = A2APart(root=dp)
         event = _make_event(function_call=FunctionCall(name="fn", args={}), long_running_tool_ids={"tool1"})
         _mark_long_running_tools([a2a_part], event)
-        assert dp.metadata[A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY] is True
+        assert MessageToDict(a2a_part.metadata)[A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY] is True
 
     def test_does_nothing_without_long_running_ids(self):
-        dp = DataPart(
-            data={"id": "tool1"},
-            metadata={A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        a2a_part = _data_part(
+            {"id": "tool1"},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
         )
-        a2a_part = A2APart(root=dp)
         event = _make_event(function_call=FunctionCall(name="fn", args={}))
         _mark_long_running_tools([a2a_part], event)
-        assert A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY not in dp.metadata
+        assert A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY not in MessageToDict(a2a_part.metadata)
 
 
 # ---------------------------------------------------------------------------
@@ -344,14 +367,14 @@ class TestMarkLongRunningTools:
 class TestBuildMessage:
     def test_returns_none_for_empty_parts(self):
         event = _make_event(text="hi")
-        assert _build_message(event, [], Role.agent, "e1") is None
+        assert _build_message(event, [], Role.ROLE_AGENT, "e1") is None
 
     def test_returns_message_with_parts(self):
         event = _make_event(text="hi", response_id="resp-1")
-        parts = [A2APart(root=TextPart(text="hi"))]
-        msg = _build_message(event, parts, Role.agent, "resp-1")
+        parts = [A2APart(text="hi")]
+        msg = _build_message(event, parts, Role.ROLE_AGENT, "resp-1")
         assert msg is not None
-        assert msg.role == Role.agent
+        assert msg.role == Role.ROLE_AGENT
         assert msg.message_id == "resp-1"
         assert len(msg.parts) == 1
 
@@ -361,18 +384,18 @@ class TestBuildMessage:
 # ---------------------------------------------------------------------------
 class TestIsStreamingDelta:
     def test_true(self):
-        dp = DataPart(
-            data={},
-            metadata={A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA},
+        part = _data_part(
+            {},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA},
         )
-        assert _is_streaming_delta(A2APart(root=dp)) is True
+        assert _is_streaming_delta(part) is True
 
     def test_false(self):
-        dp = DataPart(
-            data={},
-            metadata={A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        part = _data_part(
+            {},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
         )
-        assert _is_streaming_delta(A2APart(root=dp)) is False
+        assert _is_streaming_delta(part) is False
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +439,7 @@ class TestConvertContentToA2aMessage:
         content = genai_types.Content(role="user", parts=[genai_types.Part(text="hi")])
         msg = convert_content_to_a2a_message([content])
         assert msg is not None
-        assert msg.role == Role.agent
+        assert msg.role == Role.ROLE_AGENT
 
     def test_empty_raises(self):
         with pytest.raises(ValueError, match="Contents cannot be None or empty"):
@@ -433,8 +456,8 @@ class TestConvertContentToA2aMessage:
 
     def test_custom_role(self):
         content = genai_types.Content(role="user", parts=[genai_types.Part(text="hi")])
-        msg = convert_content_to_a2a_message([content], role=Role.user)
-        assert msg.role == Role.user
+        msg = convert_content_to_a2a_message([content], role=Role.ROLE_USER)
+        assert msg.role == Role.ROLE_USER
 
 
 # ---------------------------------------------------------------------------
@@ -449,11 +472,11 @@ class TestConvertA2aTaskToEvent:
         task = Task(
             id="t1",
             context_id="ctx1",
-            status=TaskStatus(state=TaskState.completed),
+            status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED),
             artifacts=[
                 Artifact(
                     artifact_id="a1",
-                    parts=[A2APart(root=TextPart(text="result"))],
+                    parts=[A2APart(text="result")],
                 )
             ],
         )
@@ -464,13 +487,13 @@ class TestConvertA2aTaskToEvent:
     def test_task_with_status_message(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="status"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="status")],
         )
         task = Task(
             id="t1",
             context_id="ctx1",
-            status=TaskStatus(state=TaskState.working, message=msg),
+            status=TaskStatus(state=TaskState.TASK_STATE_WORKING, message=msg),
         )
         event = convert_a2a_task_to_event(task)
         assert event.content is not None
@@ -478,13 +501,13 @@ class TestConvertA2aTaskToEvent:
     def test_task_with_history(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="history"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="history")],
         )
         task = Task(
             id="t1",
             context_id="ctx1",
-            status=TaskStatus(state=TaskState.completed),
+            status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED),
             history=[msg],
         )
         event = convert_a2a_task_to_event(task)
@@ -494,7 +517,7 @@ class TestConvertA2aTaskToEvent:
         task = Task(
             id="t1",
             context_id="ctx1",
-            status=TaskStatus(state=TaskState.working),
+            status=TaskStatus(state=TaskState.TASK_STATE_WORKING),
         )
         ctx = _make_invocation_context()
         event = convert_a2a_task_to_event(task, invocation_context=ctx)
@@ -512,23 +535,23 @@ class TestConvertA2aMessageToEvent:
     def test_basic_text(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hello"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="hello")],
         )
         event = convert_a2a_message_to_event(msg, author="bot")
         assert event.author == "bot"
         assert event.content.parts[0].text == "hello"
 
     def test_empty_parts(self):
-        msg = Message(message_id="m1", role=Role.agent, parts=[])
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[])
         event = convert_a2a_message_to_event(msg, author="bot")
         assert event.content is not None
 
     def test_partial_flag(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hi"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="hi")],
         )
         event = convert_a2a_message_to_event(msg, partial=True)
         assert event.partial is True
@@ -536,8 +559,8 @@ class TestConvertA2aMessageToEvent:
     def test_with_invocation_context(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hi"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="hi")],
         )
         ctx = _make_invocation_context(invocation_id="inv-99", branch="b1")
         event = convert_a2a_message_to_event(msg, invocation_context=ctx)
@@ -545,17 +568,17 @@ class TestConvertA2aMessageToEvent:
         assert event.branch == "b1"
 
     def test_long_running_tool_detected(self):
-        dp = DataPart(
-            data={"name": "fn", "id": "tool1", "args": "{}"},
-            metadata={
+        dp = _data_part(
+            {"name": "fn", "id": "tool1", "args": "{}"},
+            {
                 A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
                 A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY: True,
             },
         )
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=dp)],
+            role=Role.ROLE_AGENT,
+            parts=[dp],
         )
         event = convert_a2a_message_to_event(msg)
         assert event.long_running_tool_ids is not None
@@ -563,8 +586,8 @@ class TestConvertA2aMessageToEvent:
     def test_metadata_object_type_used(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hi"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="hi")],
             metadata={MESSAGE_METADATA_OBJECT_TYPE_KEY: "custom.type"},
         )
         event = convert_a2a_message_to_event(msg)
@@ -577,39 +600,34 @@ class TestConvertA2aMessageToEvent:
 class TestCreateStatusEvents:
     def test_cancellation_event(self):
         evt = create_cancellation_event("t1", "ctx1", "cancelled")
-        assert evt.status.state == TaskState.canceled
+        assert evt.status.state == TaskState.TASK_STATE_CANCELED
         assert evt.task_id == "t1"
-        assert evt.final is True
 
     def test_exception_status_event(self):
         evt = create_exception_status_event("t1", "ctx1", "error occurred")
-        assert evt.status.state == TaskState.failed
-        assert evt.final is True
+        assert evt.status.state == TaskState.TASK_STATE_FAILED
 
     def test_submitted_status_event(self):
-        msg = Message(message_id="m1", role=Role.user, parts=[])
+        msg = Message(message_id="m1", role=Role.ROLE_USER, parts=[])
         evt = create_submitted_status_event("t1", "ctx1", msg)
-        assert evt.status.state == TaskState.submitted
-        assert evt.final is False
+        assert evt.status.state == TaskState.TASK_STATE_SUBMITTED
 
     def test_working_status_event(self):
         evt = create_working_status_event("t1", "ctx1")
-        assert evt.status.state == TaskState.working
-        assert evt.final is False
+        assert evt.status.state == TaskState.TASK_STATE_WORKING
 
     def test_working_status_event_with_metadata(self):
         evt = create_working_status_event("t1", "ctx1", metadata={"k": "v"})
-        assert evt.metadata == {"k": "v"}
+        assert _meta_dict(evt) == {"k": "v"}
 
     def test_completed_status_event(self):
         evt = create_completed_status_event("t1", "ctx1")
-        assert evt.status.state == TaskState.completed
-        assert evt.final is True
+        assert evt.status.state == TaskState.TASK_STATE_COMPLETED
 
     def test_final_status_event(self):
-        msg = Message(message_id="m1", role=Role.agent, parts=[])
-        evt = create_final_status_event("t1", "ctx1", TaskState.input_required, message=msg)
-        assert evt.status.state == TaskState.input_required
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[])
+        evt = create_final_status_event("t1", "ctx1", TaskState.TASK_STATE_INPUT_REQUIRED, message=msg)
+        assert evt.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
         assert evt.status.message == msg
 
 
@@ -621,14 +639,71 @@ class TestCreateErrorStatusEvent:
         event = _make_event(text="hi", error_code="500", error_message="Server error")
         ctx = _make_invocation_context()
         result = _create_error_status_event(event, ctx, "t1", "ctx1")
-        assert result.status.state == TaskState.failed
-        assert "Server error" in result.status.message.parts[0].root.text
+        assert result.status.state == TaskState.TASK_STATE_FAILED
+        assert "Server error" in result.status.message.parts[0].text
 
     def test_default_error_message(self):
         event = _make_event(error_code="500")
         ctx = _make_invocation_context()
         result = _create_error_status_event(event, ctx, "t1", "ctx1")
-        assert DEFAULT_ERROR_MESSAGE in result.status.message.parts[0].root.text
+        assert DEFAULT_ERROR_MESSAGE in result.status.message.parts[0].text
+
+
+# ---------------------------------------------------------------------------
+# _a2a_part_requests_euc_auth
+# ---------------------------------------------------------------------------
+def _non_data_part(kind: str, metadata: dict | None = None) -> A2APart:
+    if kind == "text":
+        return A2APart(text="hello", metadata=metadata)
+    if kind == "url":
+        return A2APart(url="https://example.com/file", metadata=metadata)
+    raise ValueError(f"unsupported non-data part kind: {kind}")
+
+
+@pytest.mark.parametrize("kind", ["text", "url"])
+class TestA2aPartRequestsEucAuth:
+    def test_false_for_non_data_part(self, kind):
+        part = _non_data_part(kind, {"k": "v"})
+        assert not part.HasField("data")
+        assert _a2a_part_requests_euc_auth(part) is False
+
+    def test_false_when_function_call_metadata_without_data(self, kind):
+        part = _non_data_part(
+            kind,
+            {
+                A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
+                A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY: True,
+            },
+        )
+        assert _a2a_part_requests_euc_auth(part) is False
+
+    def test_skips_metadata_to_dict_for_non_data_part(self, kind):
+        part = _non_data_part(kind, {"k": "v"})
+        with patch(
+            "trpc_agent_sdk.server.a2a.converters._event_converter._metadata_to_dict"
+        ) as mock_to_dict:
+            assert _a2a_part_requests_euc_auth(part) is False
+            mock_to_dict.assert_not_called()
+
+
+class TestA2aPartRequestsEucAuthDuckTyped:
+    def test_false_for_non_data_part_without_hasfield(self):
+        from types import SimpleNamespace
+
+        part = SimpleNamespace(metadata={"k": "v"})
+        assert _a2a_part_requests_euc_auth(part) is False
+
+
+class TestA2aPartRequestsEucAuthDataPart:
+    def test_true_for_euc_function_call_data_part(self):
+        part = _data_part(
+            {"id": "t1", "name": REQUEST_EUC_FUNCTION_CALL_NAME},
+            {
+                A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
+                A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY: True,
+            },
+        )
+        assert _a2a_part_requests_euc_auth(part) is True
 
 
 # ---------------------------------------------------------------------------
@@ -638,41 +713,59 @@ class TestCreateStatusUpdateEvent:
     def test_basic_working(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hi"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="hi")],
         )
         event = _make_event(text="hi")
         ctx = _make_invocation_context()
         result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
-        assert result.status.state == TaskState.working
+        assert result.status.state == TaskState.TASK_STATE_WORKING
+
+    def test_text_and_url_parts_stay_working(self):
+        msg = Message(
+            message_id="m1",
+            role=Role.ROLE_AGENT,
+            parts=[
+                A2APart(text="hi"),
+                A2APart(url="https://example.com/file"),
+            ],
+        )
+        event = _make_event(text="hi")
+        ctx = _make_invocation_context()
+        with patch(
+            "trpc_agent_sdk.server.a2a.converters._event_converter._metadata_to_dict"
+        ) as mock_to_dict:
+            result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
+        assert result.status.state == TaskState.TASK_STATE_WORKING
+        mock_to_dict.assert_not_called()
 
     def test_auth_required_for_euc(self):
-        dp = DataPart(
-            data={"id": "t1", "name": REQUEST_EUC_FUNCTION_CALL_NAME},
-            metadata={
+        dp = _data_part(
+            {"id": "t1", "name": REQUEST_EUC_FUNCTION_CALL_NAME},
+            {
                 A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
                 A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY: True,
             },
         )
-        msg = Message(message_id="m1", role=Role.agent, parts=[A2APart(root=dp)])
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[dp])
         event = _make_event(function_call=FunctionCall(name=REQUEST_EUC_FUNCTION_CALL_NAME, args={}))
         ctx = _make_invocation_context()
         result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
-        assert result.status.state == TaskState.auth_required
+        assert result.status.state == TaskState.TASK_STATE_AUTH_REQUIRED
 
     def test_input_required_for_long_running(self):
-        dp = DataPart(
-            data={"id": "t1", "name": "other_tool"},
-            metadata={
+        dp = _data_part(
+            {"id": "t1", "name": "other_tool"},
+            {
                 A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
                 A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY: True,
             },
         )
-        msg = Message(message_id="m1", role=Role.agent, parts=[A2APart(root=dp)])
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[dp])
         event = _make_event(function_call=FunctionCall(name="other_tool", args={}))
         ctx = _make_invocation_context()
         result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
-        assert result.status.state == TaskState.input_required
+        assert result.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
 
 
 # ---------------------------------------------------------------------------
@@ -682,8 +775,8 @@ class TestCreateArtifactUpdateEvent:
     def test_basic(self):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hi"))],
+            role=Role.ROLE_AGENT,
+            parts=[A2APart(text="hi")],
         )
         event = _make_event(text="hi", response_id="resp-1")
         ctx = _make_invocation_context()
@@ -694,7 +787,7 @@ class TestCreateArtifactUpdateEvent:
         assert result.last_chunk is False
 
     def test_last_chunk(self):
-        msg = Message(message_id="m1", role=Role.agent, parts=[A2APart(root=TextPart(text="hi"))])
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="hi")])
         event = _make_event(text="hi")
         ctx = _make_invocation_context()
         result = _create_artifact_update_event(
@@ -702,7 +795,7 @@ class TestCreateArtifactUpdateEvent:
         )
         assert result.last_chunk is True
         assert result.artifact.artifact_id == ""
-        assert result.artifact.parts == []
+        assert len(result.artifact.parts) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -727,12 +820,58 @@ class TestConvertEventToA2aEvents:
         has_artifact = any(isinstance(e, TaskArtifactUpdateEvent) for e in events)
         assert has_artifact
 
-    def test_error_event_produces_message(self):
+    def test_error_event_produces_status_update(self):
         event = _make_event(text="hi", error_code="500", error_message="fail")
         ctx = _make_invocation_context()
         events = convert_event_to_a2a_events(event, ctx, task_id="t1", context_id="ctx1")
-        has_message = any(isinstance(e, Message) for e in events)
-        assert has_message
+        # a2a-sdk 1.x forbids a bare Message in task mode; the failure is carried
+        # through the failed TaskStatusUpdateEvent.
+        has_status = any(
+            isinstance(e, TaskStatusUpdateEvent)
+            and e.status.state == TaskState.TASK_STATE_FAILED
+            and e.status.HasField("message")
+            for e in events
+        )
+        assert has_status
+        assert not any(isinstance(e, Message) for e in events)
+
+    def test_error_event_does_not_emit_followup_working_or_artifact(self):
+        """An error Event must not also produce working/status/artifact follow-ups.
+
+        After TASK_STATE_FAILED, converting the same Event would regress the
+        stream to working (or emit an artifact) and diverge from the aggregator,
+        which keeps the first failed state.
+        """
+        event = _make_event(text="hi", error_code="500", error_message="fail")
+        ctx = _make_invocation_context()
+        notified = []
+        events = convert_event_to_a2a_events(
+            event, ctx, task_id="t1", context_id="ctx1", on_event=notified.append
+        )
+        assert len(events) == 1
+        assert isinstance(events[0], TaskStatusUpdateEvent)
+        assert events[0].status.state == TaskState.TASK_STATE_FAILED
+        assert not any(isinstance(e, TaskArtifactUpdateEvent) for e in events)
+
+        assert len(notified) == 1
+        assert notified[0].status.state == TaskState.TASK_STATE_FAILED
+        assert not any(
+            isinstance(e, TaskStatusUpdateEvent) and e.status.state != TaskState.TASK_STATE_FAILED
+            for e in notified
+        )
+
+    def test_partial_error_event_does_not_emit_artifact(self):
+        event = _make_event(text="hi", error_code="500", error_message="fail", partial=True)
+        ctx = _make_invocation_context()
+        notified = []
+        events = convert_event_to_a2a_events(
+            event, ctx, task_id="t1", context_id="ctx1", on_event=notified.append
+        )
+        assert len(events) == 1
+        assert events[0].status.state == TaskState.TASK_STATE_FAILED
+        assert not any(isinstance(e, TaskArtifactUpdateEvent) for e in events)
+        assert len(notified) == 1
+        assert notified[0].status.state == TaskState.TASK_STATE_FAILED
 
     def test_on_event_callback_called(self):
         event = _make_event(text="hello", partial=True)

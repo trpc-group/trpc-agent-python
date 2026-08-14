@@ -14,16 +14,17 @@ import pytest
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
+    AgentInterface,
     Artifact,
     Message,
     Part as A2APart,
     Role,
+    StreamResponse,
     Task,
     TaskArtifactUpdateEvent,
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
-    TextPart,
 )
 
 from trpc_agent_sdk.context import InvocationContext
@@ -37,11 +38,13 @@ def _make_agent_card():
     return AgentCard(
         name="remote",
         description="A remote agent",
-        url="http://remote:8080",
         version="1.0",
         capabilities=AgentCapabilities(streaming=True),
-        defaultInputModes=["text/plain"],
-        defaultOutputModes=["text/plain"],
+        default_input_modes=["text/plain"],
+        default_output_modes=["text/plain"],
+        supported_interfaces=[
+            AgentInterface(protocol_binding="JSONRPC", protocol_version="1.0", url="http://remote:8080"),
+        ],
         skills=[],
     )
 
@@ -60,6 +63,36 @@ def _make_invocation_context(**overrides):
     ctx.raise_if_cancelled = AsyncMock()
     ctx.get_cancel_event = AsyncMock(return_value=asyncio.Event())
     return ctx
+
+
+def _artifact_event(**overrides):
+    return TaskArtifactUpdateEvent(
+        task_id=overrides.get("task_id", "t1"),
+        context_id=overrides.get("context_id", "ctx1"),
+        artifact=overrides.get(
+            "artifact",
+            Artifact(artifact_id="a1", parts=[A2APart(text="result")]),
+        ),
+        last_chunk=overrides.get("last_chunk", False),
+        metadata=overrides.get("metadata"),
+    )
+
+
+def _status_event(state: TaskState, **overrides):
+    return TaskStatusUpdateEvent(
+        task_id=overrides.get("task_id", "t1"),
+        context_id=overrides.get("context_id", "ctx1"),
+        status=overrides.get(
+            "status",
+            TaskStatus(
+                state=state,
+                message=overrides.get(
+                    "message",
+                    Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="msg")]),
+                ),
+            ),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +141,34 @@ class TestInitialize:
         result = await agent.initialize()
         assert result is True
 
+    async def test_injected_client_skips_card_and_httpx(self):
+        client = MagicMock()
+        agent = TrpcRemoteA2aAgent(name="remote", a2a_client=client)
+        with patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.A2ACardResolver") as MockResolver, \
+             patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.create_client") as MockCreateClient, \
+             patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.httpx.AsyncClient") as MockHttpx:
+            result = await agent.initialize()
+        assert result is True
+        assert agent._initialized is True
+        assert agent._a2a_client is client
+        assert agent._agent_card is None
+        assert agent._httpx_client is None
+        MockResolver.assert_not_called()
+        MockCreateClient.assert_not_called()
+        MockHttpx.assert_not_called()
+
+    async def test_legacy_injected_client_does_not_require_url(self):
+        client = MagicMock()
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            a2a_client=client,
+            force_v0_3=True,
+        )
+        result = await agent.initialize()
+        assert result is True
+        assert agent._a2a_client is client
+        assert agent._httpx_client is None
+
     async def test_with_agent_card_creates_client(self):
         card = _make_agent_card()
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=card, agent_base_url="http://x")
@@ -126,6 +187,8 @@ class TestInitialize:
             result = await agent.initialize()
             assert result is True
             assert agent._agent_card is mock_card
+            assert type(agent._a2a_client._transport).__name__ == "JsonRpcTransport"
+            assert agent._a2a_client._transport.url == "http://remote:8080"
             if agent._httpx_client:
                 await agent._httpx_client.aclose()
 
@@ -154,6 +217,246 @@ class TestInitialize:
         agent.agent_base_url = None
         result = await agent.initialize()
         assert result is False
+
+    async def test_force_v0_3_uses_compat_wire_even_for_1_0_card(self):
+        # force_v0_3=True means the peer is 0.3.  A 1.0-shaped card must not
+        # switch the client onto JsonRpcTransport / create_client negotiation.
+        mock_card = _make_agent_card()
+        with patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.A2ACardResolver") as MockResolver:
+            MockResolver.return_value.get_agent_card = AsyncMock(return_value=mock_card)
+            agent = TrpcRemoteA2aAgent(
+                name="remote",
+                agent_base_url="http://127.0.0.1:18081",
+                force_v0_3=True,
+            )
+            result = await agent.initialize()
+        assert result is True
+        MockResolver.assert_called_once()
+        assert type(agent._a2a_client._transport).__name__ == "CompatJsonRpcTransport"
+        assert agent._a2a_client._transport.url == "http://remote:8080"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_force_v0_3_without_base_url_raises(self):
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_base_url="http://x",
+            force_v0_3=True,
+        )
+        agent.agent_base_url = None
+        result = await agent.initialize()
+        assert result is False
+        assert agent._a2a_client is None
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_build_v0_3_client_requires_url(self):
+        # Card with no JSONRPC url and no agent_base_url: the raise at
+        # _build_v0_3_a2a_client must fire (initialize() would swallow it).
+        card = _make_agent_card()
+        card.ClearField("supported_interfaces")
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=card, force_v0_3=True)
+        with pytest.raises(ValueError, match="agent_base_url is required for force_v0_3"):
+            await agent._build_v0_3_a2a_client()
+        empty_card = _make_agent_card()
+        empty_card.ClearField("supported_interfaces")
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_base_url="http://127.0.0.1:18081",
+            force_v0_3=True,
+        )
+        with patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.A2ACardResolver") as MockResolver:
+            MockResolver.return_value.get_agent_card = AsyncMock(return_value=empty_card)
+            result = await agent.initialize()
+        assert result is True
+        assert list(empty_card.supported_interfaces) == []
+        assert type(agent._a2a_client._transport).__name__ == "CompatJsonRpcTransport"
+        assert agent._a2a_client._transport.url == "http://127.0.0.1:18081"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_force_v0_3_empty_interface_url_uses_agent_base_url(self):
+        card = _make_agent_card()
+        card.supported_interfaces[0].url = ""
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_base_url="http://127.0.0.1:18081",
+            force_v0_3=True,
+        )
+        with patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.A2ACardResolver") as MockResolver:
+            MockResolver.return_value.get_agent_card = AsyncMock(return_value=card)
+            result = await agent.initialize()
+        assert result is True
+        assert type(agent._a2a_client._transport).__name__ == "CompatJsonRpcTransport"
+        assert agent._a2a_client._transport.url == "http://127.0.0.1:18081"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_force_v0_3_discovery_failure_returns_false(self):
+        # Both flags require a card.  A failed fetch must not fall back to
+        # posting 0.3 JSON-RPC at agent_base_url with no AgentCard.
+        with patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.A2ACardResolver") as MockResolver:
+            MockResolver.return_value.get_agent_card = AsyncMock(side_effect=Exception("connection failed"))
+            agent = TrpcRemoteA2aAgent(
+                name="remote",
+                agent_base_url="http://127.0.0.1:18081",
+                force_v0_3=True,
+            )
+            result = await agent.initialize()
+        assert result is False
+        assert agent._a2a_client is None
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_default_uses_1_0_jsonrpc_transport(self):
+        mock_card = _make_agent_card()
+        with patch("trpc_agent_sdk.server.a2a._remote_a2a_agent.A2ACardResolver") as MockResolver:
+            MockResolver.return_value.get_agent_card = AsyncMock(return_value=mock_card)
+            agent = TrpcRemoteA2aAgent(name="remote", agent_base_url="http://remote:8080")
+            result = await agent.initialize()
+        assert result is True
+        assert type(agent._a2a_client._transport).__name__ == "JsonRpcTransport"
+        assert agent._a2a_client._transport.url == "http://remote:8080"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_default_create_client_follows_card_protocol_version(self):
+        # Default path leaves transport selection to create_client: a JSONRPC
+        # interface with protocol_version=0.3 uses CompatJsonRpcTransport.
+        card = _make_agent_card()
+        card.supported_interfaces[0].protocol_version = "0.3"
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_card=card,
+            agent_base_url="http://127.0.0.1:18081",
+        )
+        result = await agent.initialize()
+        assert result is True
+        assert type(agent._a2a_client._transport).__name__ == "CompatJsonRpcTransport"
+        assert agent._a2a_client._transport.url == "http://remote:8080"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_empty_jsonrpc_url_filled_from_agent_base_url(self):
+        card = _make_agent_card()
+        card.supported_interfaces[0].url = ""
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_card=card,
+            agent_base_url="http://127.0.0.1:18081",
+        )
+        result = await agent.initialize()
+        assert result is True
+        assert card.supported_interfaces[0].url == ""
+        assert agent._agent_card.supported_interfaces[0].protocol_binding == "JSONRPC"
+        assert agent._agent_card.supported_interfaces[0].url == "http://127.0.0.1:18081"
+        assert type(agent._a2a_client._transport).__name__ == "JsonRpcTransport"
+        assert agent._a2a_client._transport.url == "http://127.0.0.1:18081"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_non_empty_jsonrpc_url_not_overwritten(self):
+        card = _make_agent_card()
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_card=card,
+            agent_base_url="http://127.0.0.1:18081",
+        )
+        result = await agent.initialize()
+        assert result is True
+        assert card.supported_interfaces[0].url == "http://remote:8080"
+        assert agent._a2a_client._transport.url == "http://remote:8080"
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_empty_grpc_url_not_filled(self):
+        card = _make_agent_card()
+        card.supported_interfaces[0].url = ""
+        card.supported_interfaces.append(
+            AgentInterface(protocol_binding="GRPC", protocol_version="1.0", url=""),
+        )
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_card=card,
+            agent_base_url="http://127.0.0.1:18081",
+        )
+        result = await agent.initialize()
+        assert result is True
+        assert {i.protocol_binding: i.url for i in card.supported_interfaces} == {
+            "JSONRPC": "",
+            "GRPC": "",
+        }
+        urls_by_binding = {i.protocol_binding: i.url for i in agent._agent_card.supported_interfaces}
+        assert urls_by_binding["JSONRPC"] == "http://127.0.0.1:18081"
+        assert urls_by_binding["GRPC"] == ""
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_empty_interfaces_default_does_not_synthesize_jsonrpc(self):
+        # A 0.3 card with empty top-level url parses to no interfaces.  Default
+        # does not invent a 0.3 JSONRPC binding; create_client has nothing to
+        # connect with.  Use force_v0_3=True to post at agent_base_url.
+        empty_card = _make_agent_card()
+        empty_card.ClearField("supported_interfaces")
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_card=empty_card,
+            agent_base_url="http://127.0.0.1:18081",
+        )
+        result = await agent.initialize()
+        assert result is False
+        assert list(empty_card.supported_interfaces) == []
+        assert agent._a2a_client is None
+        if agent._httpx_client:
+            await agent._httpx_client.aclose()
+
+    async def test_grpc_only_card_does_not_synthesize_jsonrpc(self):
+        card = _make_agent_card()
+        card.ClearField("supported_interfaces")
+        card.supported_interfaces.append(
+            AgentInterface(protocol_binding="GRPC", protocol_version="1.0", url=""),
+        )
+        agent = TrpcRemoteA2aAgent(
+            name="remote",
+            agent_card=card,
+            agent_base_url="http://127.0.0.1:18081",
+        )
+        agent._fill_empty_jsonrpc_urls()
+        assert [i.protocol_binding for i in card.supported_interfaces] == ["GRPC"]
+        assert card.supported_interfaces[0].url == ""
+
+    def test_fill_empty_jsonrpc_urls_skips_without_base_url(self):
+        card = _make_agent_card()
+        card.supported_interfaces[0].url = ""
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=card)
+        agent._fill_empty_jsonrpc_urls()
+        assert card.supported_interfaces[0].url == ""
+
+    def test_fill_empty_jsonrpc_urls_does_not_mutate_input_card(self):
+        card = _make_agent_card()
+        card.supported_interfaces[0].url = ""
+        agent_a = TrpcRemoteA2aAgent(
+            name="a",
+            agent_card=card,
+            agent_base_url="http://agent-a:8080",
+        )
+        agent_b = TrpcRemoteA2aAgent(
+            name="b",
+            agent_card=card,
+            agent_base_url="http://agent-b:8080",
+        )
+        agent_a._fill_empty_jsonrpc_urls()
+        agent_b._fill_empty_jsonrpc_urls()
+        assert card.supported_interfaces[0].url == ""
+        assert agent_a._agent_card is not card
+        assert agent_b._agent_card is not card
+        assert agent_a._agent_card.supported_interfaces[0].url == "http://agent-a:8080"
+        assert agent_b._agent_card.supported_interfaces[0].url == "http://agent-b:8080"
+
+    def test_first_jsonrpc_url_none_when_card_missing(self):
+        agent = TrpcRemoteA2aAgent(name="remote", agent_base_url="http://x")
+        assert agent._agent_card is None
+        assert agent._first_jsonrpc_url() is None
 
 
 # ---------------------------------------------------------------------------
@@ -198,29 +501,20 @@ class TestBuildOutgoingMessage:
 # ---------------------------------------------------------------------------
 class TestBuildMessageFromArtifactEvent:
     def test_with_artifact(self):
-        event = TaskArtifactUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            artifact=Artifact(
-                artifact_id="a1",
-                parts=[A2APart(root=TextPart(text="result"))],
-            ),
-            last_chunk=False,
-        )
+        event = _artifact_event()
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         msg = agent._build_message_from_artifact_event(event)
-        assert msg.role == Role.agent
+        assert msg.role == Role.ROLE_AGENT
         assert len(msg.parts) == 1
 
     def test_without_artifact(self):
-        from pydantic import ValidationError
-
         event = MagicMock()
         event.artifact = None
         delattr(event, "artifact")
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
-        with pytest.raises(ValidationError):
-            agent._build_message_from_artifact_event(event)
+        msg = agent._build_message_from_artifact_event(event)
+        assert msg.role == Role.ROLE_AGENT
+        assert len(msg.parts) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +585,44 @@ class TestResolvePartial:
 
 
 # ---------------------------------------------------------------------------
+# _response_payload
+# ---------------------------------------------------------------------------
+class TestResponsePayload:
+    def test_task_payload(self):
+        task = Task(id="t1", context_id="ctx1", status=TaskStatus(state=TaskState.TASK_STATE_WORKING))
+        from a2a.types import StreamResponse
+        resp = StreamResponse(task=task)
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        assert agent._response_payload(resp) == task
+
+    def test_message_payload(self):
+        from a2a.types import StreamResponse
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="hi")])
+        resp = StreamResponse(message=msg)
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        assert agent._response_payload(resp) == msg
+
+    def test_status_update_payload(self):
+        from a2a.types import StreamResponse
+        status = _status_event(TaskState.TASK_STATE_WORKING)
+        resp = StreamResponse(status_update=status)
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        assert agent._response_payload(resp) == status
+
+    def test_artifact_update_payload(self):
+        from a2a.types import StreamResponse
+        artifact = _artifact_event()
+        resp = StreamResponse(artifact_update=artifact)
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        assert agent._response_payload(resp) == artifact
+
+    def test_empty_payload_returns_none(self):
+        resp = StreamResponse()
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        assert agent._response_payload(resp) is None
+
+
+# ---------------------------------------------------------------------------
 # _events_from_response
 # ---------------------------------------------------------------------------
 class TestEventsFromResponse:
@@ -300,24 +632,13 @@ class TestEventsFromResponse:
     def test_artifact_event_with_parts(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        artifact_event = TaskArtifactUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            artifact=Artifact(
-                artifact_id="a1",
-                parts=[A2APart(root=TextPart(text="result"))],
-            ),
-            last_chunk=False,
-        )
-        events = agent._events_from_response(artifact_event, 1, ctx)
+        events = agent._events_from_response(_artifact_event(), 1, ctx)
         assert len(events) == 1
 
     def test_artifact_event_empty_last_chunk_skipped(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        artifact_event = TaskArtifactUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
+        artifact_event = _artifact_event(
             artifact=Artifact(artifact_id="a1", parts=[]),
             last_chunk=True,
         )
@@ -327,18 +648,9 @@ class TestEventsFromResponse:
     def test_status_event_with_agent_message(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        status_event = TaskStatusUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            final=False,
-            status=TaskStatus(
-                state=TaskState.input_required,
-                message=Message(
-                    message_id="m1",
-                    role=Role.agent,
-                    parts=[A2APart(root=TextPart(text="need input"))],
-                ),
-            ),
+        status_event = _status_event(
+            TaskState.TASK_STATE_INPUT_REQUIRED,
+            message=Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="need input")]),
         )
         events = agent._events_from_response(status_event, 1, ctx)
         assert len(events) == 1
@@ -346,18 +658,9 @@ class TestEventsFromResponse:
     def test_status_event_user_message_skipped(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        status_event = TaskStatusUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            final=False,
-            status=TaskStatus(
-                state=TaskState.working,
-                message=Message(
-                    message_id="m1",
-                    role=Role.user,
-                    parts=[A2APart(root=TextPart(text="user msg"))],
-                ),
-            ),
+        status_event = _status_event(
+            TaskState.TASK_STATE_WORKING,
+            message=Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="user msg")]),
         )
         events = agent._events_from_response(status_event, 1, ctx)
         assert len(events) == 0
@@ -365,11 +668,9 @@ class TestEventsFromResponse:
     def test_status_event_no_message_skipped(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        status_event = TaskStatusUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            final=False,
-            status=TaskStatus(state=TaskState.working),
+        status_event = _status_event(
+            TaskState.TASK_STATE_WORKING,
+            message=None,
         )
         events = agent._events_from_response(status_event, 1, ctx)
         assert len(events) == 0
@@ -377,18 +678,9 @@ class TestEventsFromResponse:
     def test_status_working_state_skipped(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        status_event = TaskStatusUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            final=False,
-            status=TaskStatus(
-                state=TaskState.working,
-                message=Message(
-                    message_id="m1",
-                    role=Role.agent,
-                    parts=[A2APart(root=TextPart(text="working"))],
-                ),
-            ),
+        status_event = _status_event(
+            TaskState.TASK_STATE_WORKING,
+            message=Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="working")]),
         )
         events = agent._events_from_response(status_event, 1, ctx)
         assert len(events) == 0
@@ -400,12 +692,8 @@ class TestEventsFromResponse:
             id="t1",
             context_id="ctx1",
             status=TaskStatus(
-                state=TaskState.completed,
-                message=Message(
-                    message_id="m1",
-                    role=Role.agent,
-                    parts=[A2APart(root=TextPart(text="done"))],
-                ),
+                state=TaskState.TASK_STATE_COMPLETED,
+                message=Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="done")]),
             ),
         )
         events = agent._events_from_response(task, 1, ctx)
@@ -414,11 +702,7 @@ class TestEventsFromResponse:
     def test_message_result(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        msg = Message(
-            message_id="m1",
-            role=Role.agent,
-            parts=[A2APart(root=TextPart(text="hello"))],
-        )
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[A2APart(text="hello")])
         events = agent._events_from_response(msg, 1, ctx)
         assert len(events) == 1
 
@@ -429,22 +713,44 @@ class TestEventsFromResponse:
         assert len(events) == 1
         assert "unknown" in events[0].content.parts[0].text.lower()
 
+    def test_none_result_skipped(self):
+        agent = self._make_agent()
+        ctx = _make_invocation_context()
+        assert agent._events_from_response(None, 1, ctx) == []
+
     def test_artifact_with_streaming_tool_call_metadata(self):
         agent = self._make_agent()
         ctx = _make_invocation_context()
-        artifact_event = TaskArtifactUpdateEvent(
-            task_id="t1",
-            context_id="ctx1",
-            artifact=Artifact(
-                artifact_id="a1",
-                parts=[A2APart(root=TextPart(text="result"))],
-            ),
-            last_chunk=False,
-            metadata={"streaming_tool_call": "true"},
-        )
+        artifact_event = _artifact_event(metadata={"streaming_tool_call": "true"})
         events = agent._events_from_response(artifact_event, 1, ctx)
         assert len(events) == 1
         assert events[0].partial is True
+
+
+# ---------------------------------------------------------------------------
+# _task_id_from_payload
+# ---------------------------------------------------------------------------
+class TestTaskIdFromPayload:
+    def _make_agent(self):
+        return TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+
+    def test_task_uses_id(self):
+        # 1.x Task has `id`, not `task_id`. The initial stream event is a Task.
+        agent = self._make_agent()
+        task = Task(id="task-from-id", context_id="ctx1", status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED))
+        assert agent._task_id_from_payload(task) == "task-from-id"
+
+    def test_status_update_uses_task_id(self):
+        agent = self._make_agent()
+        assert agent._task_id_from_payload(_status_event(TaskState.TASK_STATE_WORKING)) == "t1"
+
+    def test_artifact_update_uses_task_id(self):
+        agent = self._make_agent()
+        assert agent._task_id_from_payload(_artifact_event()) == "t1"
+
+    def test_unknown_payload_returns_none(self):
+        agent = self._make_agent()
+        assert agent._task_id_from_payload("not-a-payload") is None
 
 
 # ---------------------------------------------------------------------------
@@ -470,3 +776,114 @@ class TestRunAsyncImpl:
             events.append(event)
         assert len(events) == 1
         assert events[0].content is not None
+
+    async def test_merges_existing_message_metadata(self):
+        from google.protobuf.json_format import MessageToDict
+
+        outgoing = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
+        outgoing.metadata.update({
+            "custom_key": "custom_val",
+            "nested": {"a": [1, 2, 3]},
+            "nullable": None,
+        })
+
+        async def empty_stream():
+            if False:
+                yield StreamResponse()
+
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        agent._initialized = True
+        agent._a2a_client = MagicMock()
+        agent._a2a_client.send_message = MagicMock(return_value=empty_stream())
+        ctx = _make_invocation_context()
+
+        with patch.object(agent, "_build_outgoing_message", return_value=outgoing):
+            async for _ in agent._run_async_impl(ctx):
+                pass
+
+        request = agent._a2a_client.send_message.call_args.args[0]
+        merged = MessageToDict(request.message.metadata)
+        # Framework keys are filled only when absent (same as 0.3).
+        assert merged["custom_key"] == "custom_val"
+        assert merged["nested"] == {"a": [1.0, 2.0, 3.0]}
+        assert merged["user_id"] == "user-1"
+        assert "nullable" in request.message.metadata
+        assert request.message.metadata["nullable"] is None
+
+    async def test_existing_user_id_is_not_overwritten_by_context(self):
+        from google.protobuf.json_format import MessageToDict
+
+        outgoing = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
+        outgoing.metadata.update({"user_id": "biz-user", "custom_key": "keep-me"})
+
+        async def empty_stream():
+            if False:
+                yield StreamResponse()
+
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        agent._initialized = True
+        agent._a2a_client = MagicMock()
+        agent._a2a_client.send_message = MagicMock(return_value=empty_stream())
+        ctx = _make_invocation_context(user_id="user-1")
+
+        with patch.object(agent, "_build_outgoing_message", return_value=outgoing):
+            async for _ in agent._run_async_impl(ctx):
+                pass
+
+        request = agent._a2a_client.send_message.call_args.args[0]
+        merged = MessageToDict(request.message.metadata)
+        assert merged["user_id"] == "biz-user"
+        assert merged["custom_key"] == "keep-me"
+        assert merged["invocation_id"] == "inv-1"
+
+    async def test_empty_stream_response_is_skipped(self):
+        outgoing = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
+
+        async def stream():
+            yield StreamResponse()
+
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        agent._initialized = True
+        agent._a2a_client = MagicMock()
+        agent._a2a_client.send_message = MagicMock(return_value=stream())
+        ctx = _make_invocation_context()
+
+        events = []
+        with patch.object(agent, "_build_outgoing_message", return_value=outgoing):
+            async for event in agent._run_async_impl(ctx):
+                events.append(event)
+
+        assert events == []
+
+    async def test_cancel_uses_id_from_initial_task(self):
+        # 1.x streams Task first (field `id`). If cancel arrives before any
+        # TaskStatusUpdateEvent/TaskArtifactUpdateEvent, cancel must still use
+        # that id — not depend on `task_id`.
+        from google.genai import types as genai_types
+
+        task = Task(
+            id="task-from-id",
+            context_id="ctx1",
+            status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+        )
+
+        async def stream():
+            yield StreamResponse(task=task)
+            raise RunCancelledException("cancelled")
+
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        agent._initialized = True
+        agent._a2a_client = MagicMock()
+        agent._a2a_client.send_message = MagicMock(return_value=stream())
+        agent._a2a_client.cancel_task = AsyncMock()
+        ctx = _make_invocation_context(
+            override_messages=[genai_types.Content(role="user", parts=[genai_types.Part(text="hi")])]
+        )
+
+        with pytest.raises(RunCancelledException):
+            async for _ in agent._run_async_impl(ctx):
+                pass
+
+        agent._a2a_client.cancel_task.assert_awaited()
+        cancel_request = agent._a2a_client.cancel_task.call_args.args[0]
+        assert cancel_request.id == "task-from-id"

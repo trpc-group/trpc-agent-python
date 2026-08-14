@@ -30,6 +30,7 @@ from typing import Optional
 from a2a.types import AgentCapabilities
 from a2a.types import AgentCard
 from a2a.types import AgentExtension
+from a2a.types import AgentInterface
 from a2a.types import AgentProvider
 from a2a.types import AgentSkill
 from a2a.types import SecurityScheme
@@ -70,7 +71,10 @@ class AgentCardBuilder:
             raise ValueError('Agent cannot be None or empty.')
 
         self._agent = agent
-        # keep it empty, trpc-a2a server will replace it with yaml config
+        # Kept empty by default; the deployer supplies the public endpoint via
+        # ``rpc_url`` (TrpcA2aAgentService).  ``create_a2a_application`` warns if
+        # a 1.0-only card is assembled without any url, and raises if
+        # ``enable_v0_3_compat`` is on (0.3 discovery cannot invent a url).
         self._rpc_url = rpc_url or ''
         self._capabilities = capabilities or AgentCapabilities()
         self._doc_url = doc_url
@@ -91,14 +95,19 @@ class AgentCardBuilder:
             return AgentCard(
                 name=self._agent.name,
                 description=self._agent.description or 'An A2A Agent',
-                doc_url=self._doc_url,
-                url=f"{self._rpc_url.rstrip('/')}",
                 version=self._agent_version,
+                documentation_url=self._doc_url,
                 capabilities=capabilities,
                 skills=all_skills,
                 default_input_modes=['text/plain'],
                 default_output_modes=['text/plain'],
-                supports_authenticated_extended_card=False,
+                supported_interfaces=[
+                    AgentInterface(
+                        protocol_binding='JSONRPC',
+                        protocol_version='1.0',
+                        url=self._rpc_url.rstrip('/'),
+                    ),
+                ],
                 provider=self._provider,
                 security_schemes=self._security_schemes,
             )
@@ -107,15 +116,21 @@ class AgentCardBuilder:
 
 
 def _capabilities_with_trpc_extension(capabilities: Optional[AgentCapabilities]) -> AgentCapabilities:
-    """Ensure capabilities includes the trpc-a2a-version extension."""
-    base = capabilities or AgentCapabilities()
-    exts = list(base.extensions) if base.extensions else []
-    if not any(getattr(e, "uri", None) == EXTENSION_TRPC_A2A_VERSION for e in exts):
-        exts.append(AgentExtension(
-            uri=EXTENSION_TRPC_A2A_VERSION,
-            params={"version": INTERACTION_SPEC_VERSION},
-        ))
-    return base.model_copy(update={"extensions": exts})
+    """Return a copy of capabilities that includes the trpc-a2a-version extension.
+
+    The input is not mutated. AgentCapabilities is a protobuf message (no
+    ``model_copy``); copy via ``CopyFrom`` then append on the clone.
+    """
+    base = AgentCapabilities()
+    if capabilities is not None:
+        base.CopyFrom(capabilities)
+    if not any(getattr(e, "uri", None) == EXTENSION_TRPC_A2A_VERSION for e in base.extensions):
+        base.extensions.append(
+            AgentExtension(
+                uri=EXTENSION_TRPC_A2A_VERSION,
+                params={"version": INTERACTION_SPEC_VERSION},
+            ))
+    return base
 
 
 # Module-level helper functions
@@ -177,10 +192,10 @@ async def _build_sub_agent_skills(agent: BaseAgent) -> List[AgentSkill]:
                     id=f'{sub_agent.name}_{skill.id}',
                     name=f'{sub_agent.name}: {skill.name}',
                     description=skill.description,
-                    examples=skill.examples,
-                    input_modes=skill.input_modes,
-                    output_modes=skill.output_modes,
-                    tags=[f'sub_agent:{sub_agent.name}'] + (skill.tags or []),
+                    examples=list(skill.examples),
+                    input_modes=list(skill.input_modes),
+                    output_modes=list(skill.output_modes),
+                    tags=[f'sub_agent:{sub_agent.name}'] + list(skill.tags or []),
                 )
                 sub_agent_skills.append(aggregated_skill)
         except Exception as ex:  # pylint: disable=broad-except

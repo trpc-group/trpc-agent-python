@@ -43,18 +43,12 @@ A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE = 'function_response'
 """Constants for function response type."""
 A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA = 'streaming_function_call_delta'
 """Constants for streaming function call delta type."""
+A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL = "streaming_function_call"
+"""Constants for streaming function call type."""
 A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY = 'is_long_running'
 """Constants for data part metadata is long running key."""
 A2A_DATA_PART_METADATA_TYPE_KEY = 'type'
 """Constants for data part metadata type key."""
-A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY = 'is_long_running'
-"""Constants for A2A data part metadata is long running."""
-
-A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL = 'function_call'
-"""Constants for A2A data part metadata type."""
-
-A2A_DATA_PART_METADATA_TYPE_KEY = 'type'
-"""Constants for A2A data part metadata type."""
 
 ARTIFACT_ID_SEPARATOR = "-"
 """Constants for artifact id separator."""
@@ -62,26 +56,6 @@ ARTIFACT_ID_SEPARATOR = "-"
 DEFAULT_ERROR_MESSAGE = "An error occurred during processing"
 """Constants for default error message."""
 
-# Streaming function call type constants
-A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL = "streaming_function_call"
-"""Constants for streaming function call type."""
-
-A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA = "streaming_function_call_delta"
-"""Constants for streaming function call delta type."""
-
-A2A_DATA_PART_METADATA_TYPE_CODE_EXECUTION_RESULT = 'code_execution_result'
-"""Constants for code execution result type."""
-
-A2A_DATA_PART_METADATA_TYPE_EXECUTABLE_CODE = 'executable_code'
-"""Constants for executable code type."""
-
-A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE = 'function_response'
-"""Constants for function response type."""
-
-ARTIFACT_ID_SEPARATOR = "-"
-"""Constants for artifact id separator."""
-DEFAULT_ERROR_MESSAGE = "An error occurred during processing"
-"""Constants for default error message."""
 INTERACTION_SPEC_VERSION = "0.1"
 """Constants for interaction spec version."""
 MESSAGE_METADATA_INTERACTION_SPEC_VERSION_KEY = "interaction_spec_version"

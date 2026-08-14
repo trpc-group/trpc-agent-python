@@ -29,10 +29,16 @@ from a2a.types import TaskStatusUpdateEvent
 
 
 class TaskResultAggregator:
-    """Aggregates the task status updates and provides the final task state."""
+    """Aggregates the task status updates and provides the final task state.
+
+    In a2a-sdk 1.x the events are shared protobuf messages, so this aggregator
+    only *observes* them and tracks the highest-priority state internally; it
+    never mutates an event in place (unlike the 0.3 implementation, which
+    rewrote ``event.status.state``).
+    """
 
     def __init__(self):
-        self._task_state = TaskState.working
+        self._task_state = TaskState.TASK_STATE_WORKING
         self._task_status_message = None
 
     def process_event(self, event: A2AEvent):
@@ -44,22 +50,19 @@ class TaskResultAggregator:
         - working
         """
         if isinstance(event, TaskStatusUpdateEvent):
-            if event.status.state == TaskState.failed:
-                self._task_state = TaskState.failed
+            if event.status.state == TaskState.TASK_STATE_FAILED:
+                self._task_state = TaskState.TASK_STATE_FAILED
                 self._task_status_message = event.status.message
-            elif (event.status.state == TaskState.auth_required and self._task_state != TaskState.failed):
-                self._task_state = TaskState.auth_required
+            elif (event.status.state == TaskState.TASK_STATE_AUTH_REQUIRED
+                  and self._task_state != TaskState.TASK_STATE_FAILED):
+                self._task_state = TaskState.TASK_STATE_AUTH_REQUIRED
                 self._task_status_message = event.status.message
-            elif (event.status.state == TaskState.input_required
-                  and self._task_state not in (TaskState.failed, TaskState.auth_required)):
-                self._task_state = TaskState.input_required
+            elif (event.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+                  and self._task_state not in (TaskState.TASK_STATE_FAILED, TaskState.TASK_STATE_AUTH_REQUIRED)):
+                self._task_state = TaskState.TASK_STATE_INPUT_REQUIRED
                 self._task_status_message = event.status.message
-            # final state is already recorded and make sure the intermediate state is
-            # always working because other state may terminate the event aggregation
-            # in a2a request handler
-            elif self._task_state == TaskState.working:
+            elif self._task_state == TaskState.TASK_STATE_WORKING:
                 self._task_status_message = event.status.message
-            event.status.state = TaskState.working
 
     @property
     def task_state(self) -> TaskState:

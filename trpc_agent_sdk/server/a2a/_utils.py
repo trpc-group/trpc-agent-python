@@ -19,31 +19,58 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Metadata utilities using unprefixed keys."""
+"""Metadata utilities using unprefixed keys.
+
+In a2a-sdk 1.x metadata fields are ``google.protobuf.Struct`` instances
+instead of plain ``dict``.  These helpers duck-type both so callers keep
+working whether they hold a ``dict`` or a ``Struct``.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 from typing import Optional
 
+from google.protobuf import struct_pb2
 
-def set_metadata(metadata: dict[str, Any], key: str, value: Any) -> None:
-    """Set a metadata value for the given key."""
+
+def set_metadata(metadata: Any, key: str, value: Any) -> None:
+    """Set a metadata value for the given key.
+
+    Works on both plain ``dict`` and ``google.protobuf.Struct``.  For a
+    ``Struct`` the value is converted via ``ParseDict`` (plain dict) or
+    ``Struct``-compatible assignment (scalars/lists), so structured values
+    are persisted correctly on the wire.
+    """
+    if isinstance(metadata, struct_pb2.Struct):
+        # Struct supports mapping-style updates for dict/list/scalar values.
+        metadata.update({key: value})
+        return
     metadata[key] = value
 
 
 def get_metadata(
-    metadata: Optional[dict[str, Any]],
+    metadata: Optional[Any],
     key: str,
     default: Any = None,
 ) -> Any:
-    """Get a metadata value by key."""
+    """Get a metadata value by key.
+
+    Works on both plain ``dict`` and ``google.protobuf.Struct``.  For a
+    ``Struct``, numeric values round-trip through protobuf ``Value`` and may
+    arrive as ``float``.
+    """
     if not metadata:
         return default
-    return metadata.get(key, default)
+    try:
+        if key in metadata:
+            return metadata[key]
+    except TypeError:  # pragma: no cover - defensive
+        pass
+    return default
 
 
-def metadata_is_true(metadata: Optional[dict[str, Any]], key: str) -> bool:
+def metadata_is_true(metadata: Optional[Any], key: str) -> bool:
     """Return whether a metadata key is set to a truthy boolean value."""
     value = get_metadata(metadata, key)
     if isinstance(value, bool):
@@ -51,3 +78,20 @@ def metadata_is_true(metadata: Optional[dict[str, Any]], key: str) -> bool:
     if isinstance(value, str):
         return value.strip().lower() == "true"
     return False
+
+
+def has_field(message: Any, name: str) -> bool:
+    """Return whether ``name`` is set on ``message``.
+
+    Prefers protobuf ``HasField`` so oneof defaults (empty ``text`` / empty
+    ``Value``) are not treated as set.  Duck-typed objects without ``HasField``
+    fall back to a present, non-``None`` attribute.  Unknown protobuf field
+    names raise ``ValueError`` from ``HasField``; those are treated as unset.
+    """
+    has_field_fn = getattr(message, "HasField", None)
+    if callable(has_field_fn):
+        try:
+            return bool(has_field_fn(name))
+        except (ValueError, AttributeError, TypeError):
+            return False
+    return getattr(message, name, None) is not None

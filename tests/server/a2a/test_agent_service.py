@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events.event_queue import EventQueue
-from a2a.types import AgentCapabilities, AgentCard
+from a2a.types import AgentCapabilities, AgentCard, AgentInterface
 
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.server.a2a._agent_service import TrpcA2aAgentService
@@ -31,11 +31,13 @@ def _make_card(name="test-agent"):
     return AgentCard(
         name=name,
         description="Test agent",
-        url="http://localhost",
         version="0.0.1",
         capabilities=AgentCapabilities(streaming=True),
-        defaultInputModes=["text/plain"],
-        defaultOutputModes=["text/plain"],
+        default_input_modes=["text/plain"],
+        default_output_modes=["text/plain"],
+        supported_interfaces=[
+            AgentInterface(protocol_binding="JSONRPC", protocol_version="1.0", url="http://localhost"),
+        ],
         skills=[],
     )
 
@@ -94,6 +96,16 @@ class TestInitialize:
         await service._initialize()
         assert service._agent_card is not None
         assert service._agent_card.capabilities.streaming is True
+
+    async def test_rpc_url_passed_to_card_builder(self):
+        service = TrpcA2aAgentService(
+            service_name="svc",
+            agent=_make_agent(),
+            rpc_url="https://agent.example.com/a2a",
+        )
+        await service._initialize()
+        assert service._agent_card is not None
+        assert service._agent_card.supported_interfaces[0].url == "https://agent.example.com/a2a"
 
     async def test_preserves_existing_card(self):
         card = _make_card()

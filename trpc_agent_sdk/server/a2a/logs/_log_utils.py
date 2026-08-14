@@ -19,23 +19,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utility functions for structured A2A request and response logging."""
+"""Utility functions for structured A2A request and response logging.
+
+In a2a-sdk 1.x the A2A types are protobuf messages.  ``Part`` uses a oneof
+content field (``text`` / ``url`` / ``raw`` / ``data``) and metadata is a
+``google.protobuf.Struct``.
+"""
 
 from __future__ import annotations
 
 import json
 
-from a2a.types import DataPart as A2ADataPart
 from a2a.types import Message as A2AMessage
 from a2a.types import Part as A2APart
 from a2a.types import SendMessageRequest
 from a2a.types import SendMessageResponse
 from a2a.types import Task as A2ATask
-from a2a.types import TextPart as A2ATextPart
+from google.protobuf.json_format import MessageToDict
+
+from trpc_agent_sdk.server.a2a._utils import has_field
 
 # Constants
 _NEW_LINE = "\n"
-_EXCLUDED_PART_FIELD = {"file": {"bytes"}}
 
 
 def _is_a2a_task(obj) -> bool:
@@ -54,20 +59,23 @@ def _is_a2a_message(obj) -> bool:
         return type(obj).__name__ == "Message" and hasattr(obj, "role")
 
 
-def _is_a2a_text_part(obj) -> bool:
-    """Check if an object is an A2A TextPart, with fallback for isinstance issues."""
-    try:
-        return isinstance(obj, A2ATextPart)
-    except (TypeError, AttributeError):
-        return type(obj).__name__ == "TextPart" and hasattr(obj, "text")
+def _metadata_dict(metadata) -> dict:
+    """Convert a Struct/dict metadata value to a plain dict for logging."""
+    if metadata is None:
+        return {}
+    if isinstance(metadata, dict):
+        return metadata
+    return MessageToDict(metadata)
 
 
-def _is_a2a_data_part(obj) -> bool:
-    """Check if an object is an A2A DataPart, with fallback for isinstance issues."""
-    try:
-        return isinstance(obj, A2ADataPart)
-    except (TypeError, AttributeError):
-        return type(obj).__name__ == "DataPart" and hasattr(obj, "data")
+def _is_a2a_text_part(part: A2APart) -> bool:
+    """Check if a protobuf Part is a text part."""
+    return has_field(part, "text")
+
+
+def _is_a2a_data_part(part: A2APart) -> bool:
+    """Check if a protobuf Part is a data part."""
+    return has_field(part, "data")
 
 
 def build_message_part_log(part: A2APart) -> str:
@@ -80,25 +88,55 @@ def build_message_part_log(part: A2APart) -> str:
         A string representation of the part.
     """
     part_content = ""
-    if _is_a2a_text_part(part.root):
-        part_content = f"TextPart: {part.root.text[:100]}" + ("..." if len(part.root.text) > 100 else "")
-    elif _is_a2a_data_part(part.root):
+    if _is_a2a_text_part(part):
+        text = part.text
+        part_content = f"TextPart: {text[:100]}" + ("..." if len(text) > 100 else "")
+    elif _is_a2a_data_part(part):
         # For data parts, show the data keys but exclude large values
-        data_summary = {
+        data_summary = _metadata_dict(part.data)
+        if not isinstance(data_summary, dict):
+            data_summary = {"value": data_summary}
+        summarized = {
             k: (f"<{type(v).__name__}>" if isinstance(v, (dict, list)) and len(str(v)) > 100 else v)
-            for k, v in part.root.data.items()
+            for k, v in data_summary.items()
         }
-        part_content = f"DataPart: {json.dumps(data_summary, indent=2)}"
+        part_content = f"DataPart: {json.dumps(summarized, indent=2)}"
+    elif has_field(part, "url"):
+        part_content = f"FilePart: url={part.url}, media_type={part.media_type}"
+    elif has_field(part, "raw"):
+        part_content = f"FilePart: raw bytes ({len(part.raw)} bytes), media_type={part.media_type}"
     else:
-        part_content = (f"{type(part.root).__name__}:"
-                        f" {part.model_dump_json(exclude_none=True, exclude=_EXCLUDED_PART_FIELD)}")
+        part_content = f"Part: {type(part).__name__}"
 
     # Add part metadata if it exists
-    if hasattr(part.root, "metadata") and part.root.metadata:
-        metadata_str = json.dumps(part.root.metadata, indent=2).replace("\n", "\n    ")
+    if has_field(part, "metadata") and part.metadata:
+        metadata_str = json.dumps(_metadata_dict(part.metadata), indent=2).replace("\n", "\n    ")
         part_content += f"\n    Part Metadata: {metadata_str}"
 
     return part_content
+
+
+def _build_message_section(message: A2AMessage, indent: str = "") -> str:
+    """Build a structured log section for an A2A Message."""
+    parts_logs = []
+    for i, part in enumerate(message.parts):
+        part_log = build_message_part_log(part)
+        part_log_formatted = part_log.replace("\n", "\n" + indent + "  ")
+        parts_logs.append(f"{indent}  Part {i}: {part_log_formatted}")
+
+    metadata_section = ""
+    if message.metadata:
+        meta = _metadata_dict(message.metadata)
+        metadata_section = f"""
+{indent}  Metadata:
+{indent}  {json.dumps(meta, indent=2).replace(chr(10), chr(10) + indent + '  ')}"""
+
+    return f"""{indent}  ID: {message.message_id}
+{indent}  Role: {message.role}
+{indent}  Task ID: {message.task_id}
+{indent}  Context ID: {message.context_id}
+{indent}  Message Parts:
+{_NEW_LINE.join(parts_logs) if parts_logs else indent + '  No parts'}{metadata_section}"""
 
 
 def build_a2a_request_log(req: SendMessageRequest) -> str:
@@ -110,58 +148,37 @@ def build_a2a_request_log(req: SendMessageRequest) -> str:
     Returns:
         A formatted string representation of the request.
     """
-    # Message parts logs
-    message_parts_logs = []
-    if req.params.message.parts:
-        for i, part in enumerate(req.params.message.parts):
-            part_log = build_message_part_log(part)
-            # Replace any internal newlines with indented newlines to maintain formatting
-            part_log_formatted = part_log.replace("\n", "\n  ")
-            message_parts_logs.append(f"Part {i}: {part_log_formatted}")
+    message = req.message if req.HasField("message") else None
+    message_section = _build_message_section(message) if message else "  No message"
 
     # Configuration logs
     config_log = "None"
-    if req.params.configuration:
+    if req.HasField("configuration"):
+        config = req.configuration
         config_data = {
-            "accepted_output_modes": req.params.configuration.accepted_output_modes,
-            "blocking": req.params.configuration.blocking,
-            "history_length": req.params.configuration.history_length,
-            "push_notification_config": bool(req.params.configuration.push_notification_config),
+            "accepted_output_modes": list(config.accepted_output_modes),
+            "return_immediately": config.return_immediately,
+            "history_length": config.history_length,
+            "push_notification_config": bool(config.HasField("task_push_notification_config")),
         }
         config_log = json.dumps(config_data, indent=2)
-
-    # Build message metadata section
-    message_metadata_section = ""
-    if req.params.message.metadata:
-        message_metadata_section = f"""
-  Metadata:
-  {json.dumps(req.params.message.metadata, indent=2).replace(chr(10), chr(10) + '  ')}"""
 
     # Build optional sections
     optional_sections = []
 
-    if req.params.metadata:
+    if req.HasField("metadata") and req.metadata:
         optional_sections.append(f"""-----------------------------------------------------------
 Metadata:
-{json.dumps(req.params.metadata, indent=2)}""")
+{json.dumps(_metadata_dict(req.metadata), indent=2)}""")
 
     optional_sections_str = _NEW_LINE.join(optional_sections)
 
     return f"""
 A2A Request:
 -----------------------------------------------------------
-Request ID: {req.id}
-Method: {req.method}
-JSON-RPC: {req.jsonrpc}
------------------------------------------------------------
+Tenant: {req.tenant}
 Message:
-  ID: {req.params.message.message_id}
-  Role: {req.params.message.role}
-  Task ID: {req.params.message.task_id}
-  Context ID: {req.params.message.context_id}{message_metadata_section}
------------------------------------------------------------
-Message Parts:
-{_NEW_LINE.join(message_parts_logs) if message_parts_logs else "No parts"}
+{message_section}
 -----------------------------------------------------------
 Configuration:
 {config_log}
@@ -170,38 +187,95 @@ Configuration:
 """
 
 
+def _jsonrpc_error_attr(error, name: str, default=None):
+    """Read ``code`` / ``message`` / ``data`` from an error object or dict."""
+    if isinstance(error, dict):
+        return error.get(name, default)
+    return getattr(error, name, default)
+
+
+def _format_error_data(data) -> str:
+    """Serialize JSON-RPC error data for logging."""
+    if data is None:
+        return "None"
+    if hasattr(data, "DESCRIPTOR"):
+        try:
+            data = MessageToDict(data)
+        except (TypeError, ValueError, AttributeError):
+            return str(data)
+    try:
+        return json.dumps(data, indent=2)
+    except TypeError:
+        return str(data)
+
+
+def _extract_jsonrpc_error(resp) -> tuple[object, object | None, object | None] | None:
+    """Extract ``(error, id, jsonrpc)`` from a JSON-RPC error envelope.
+
+    1.x protobuf ``SendMessageResponse`` has no error payload; errors arrive as
+    ``JSONRPCErrorResponse``, 0.3 RootModel ``SendMessageResponse``, a dict
+    from ``build_error_response``, or a proto with an ``error`` oneof.
+    """
+    if has_field(resp, "error"):
+        return (
+            resp.error,
+            getattr(resp, "id", None),
+            getattr(resp, "jsonrpc", None),
+        )
+
+    root = getattr(resp, "root", None)
+    if root is not None:
+        error = getattr(root, "error", None)
+        if error is not None:
+            return error, getattr(root, "id", None), getattr(root, "jsonrpc", None)
+
+    error = getattr(resp, "error", None)
+    if error is not None:
+        return error, getattr(resp, "id", None), getattr(resp, "jsonrpc", None)
+
+    if isinstance(resp, dict) and resp.get("error") is not None:
+        return resp["error"], resp.get("id"), resp.get("jsonrpc")
+
+    return None
+
+
 def build_a2a_response_log(resp: SendMessageResponse) -> str:
     """Builds a structured log representation of an A2A response.
 
     Args:
-        resp: The A2A SendMessageResponse to log.
+        resp: The A2A SendMessageResponse to log, or a JSON-RPC error envelope.
 
     Returns:
         A formatted string representation of the response.
     """
-    # Handle error responses
-    if hasattr(resp.root, "error"):
+    error_info = _extract_jsonrpc_error(resp)
+    if error_info is not None:
+        error, response_id, jsonrpc = error_info
         return f"""
 A2A Response:
 -----------------------------------------------------------
 Type: ERROR
-Error Code: {resp.root.error.code}
-Error Message: {resp.root.error.message}
-Error Data: {json.dumps(resp.root.error.data, indent=2) if resp.root.error.data else "None"}
+Error Code: {_jsonrpc_error_attr(error, "code")}
+Error Message: {_jsonrpc_error_attr(error, "message")}
+Error Data: {_format_error_data(_jsonrpc_error_attr(error, "data"))}
 -----------------------------------------------------------
-Response ID: {resp.root.id}
-JSON-RPC: {resp.root.jsonrpc}
+Response ID: {response_id}
+JSON-RPC: {jsonrpc}
 -----------------------------------------------------------
 """
 
-    # Handle success responses
-    result = resp.root.result
-    result_type = type(result).__name__
+    result = None
+    if has_field(resp, "task"):
+        result = resp.task
+    elif has_field(resp, "message"):
+        result = resp.message
+    result_type = type(result).__name__ if result else "None"
 
-    # Build result details based on type
     result_details = []
+    if result is None:
+        result_details.append("No result")
 
-    if _is_a2a_task(result):
+    elif _is_a2a_task(result):
         result_details.extend([
             f"Task ID: {result.id}",
             f"Context ID: {result.context_id}",
@@ -211,10 +285,9 @@ JSON-RPC: {resp.root.jsonrpc}
             f"Artifacts Count: {len(result.artifacts) if result.artifacts else 0}",
         ])
 
-        # Add task metadata if it exists
         if result.metadata:
             result_details.append("Task Metadata:")
-            metadata_formatted = json.dumps(result.metadata, indent=2).replace("\n", "\n  ")
+            metadata_formatted = json.dumps(_metadata_dict(result.metadata), indent=2).replace("\n", "\n  ")
             result_details.append(f"  {metadata_formatted}")
 
     elif _is_a2a_message(result):
@@ -225,83 +298,29 @@ JSON-RPC: {resp.root.jsonrpc}
             f"Context ID: {result.context_id}",
         ])
 
-        # Add message parts
         if result.parts:
             result_details.append("Message Parts:")
             for i, part in enumerate(result.parts):
                 part_log = build_message_part_log(part)
-                # Replace any internal newlines with indented newlines to maintain formatting
                 part_log_formatted = part_log.replace("\n", "\n    ")
                 result_details.append(f"  Part {i}: {part_log_formatted}")
 
-        # Add metadata if it exists
         if result.metadata:
             result_details.append("Metadata:")
-            metadata_formatted = json.dumps(result.metadata, indent=2).replace("\n", "\n  ")
+            metadata_formatted = json.dumps(_metadata_dict(result.metadata), indent=2).replace("\n", "\n  ")
             result_details.append(f"  {metadata_formatted}")
-
-    else:
-        # Handle other result types by showing their JSON representation
-        if hasattr(result, "model_dump_json"):
-            try:
-                result_json = result.model_dump_json()
-                result_details.append(f"JSON Data: {result_json}")
-            except Exception:  # pylint: disable=broad-except
-                result_details.append("JSON Data: <unable to serialize>")
 
     # Build status message section
     status_message_section = "None"
-    if _is_a2a_task(result) and result.status.message:
-        status_parts_logs = []
-        if result.status.message.parts:
-            for i, part in enumerate(result.status.message.parts):
-                part_log = build_message_part_log(part)
-                # Replace any internal newlines with indented newlines to maintain formatting
-                part_log_formatted = part_log.replace("\n", "\n  ")
-                status_parts_logs.append(f"Part {i}: {part_log_formatted}")
-
-        # Build status message metadata section
-        status_metadata_section = ""
-        if result.status.message.metadata:
-            status_metadata_section = f"""
-Metadata:
-{json.dumps(result.status.message.metadata, indent=2)}"""
-
-        status_message_section = f"""ID: {result.status.message.message_id}
-Role: {result.status.message.role}
-Task ID: {result.status.message.task_id}
-Context ID: {result.status.message.context_id}
-Message Parts:
-{_NEW_LINE.join(status_parts_logs) if status_parts_logs else "No parts"}{status_metadata_section}"""
+    if _is_a2a_task(result) and result.status.HasField("message"):
+        status_message_section = _build_message_section(result.status.message, indent="")
 
     # Build history section
     history_section = "No history"
     if _is_a2a_task(result) and result.history:
         history_logs = []
         for i, message in enumerate(result.history):
-            message_parts_logs = []
-            if message.parts:
-                for j, part in enumerate(message.parts):
-                    part_log = build_message_part_log(part)
-                    # Replace any internal newlines with indented newlines to maintain formatting
-                    part_log_formatted = part_log.replace("\n", "\n    ")
-                    message_parts_logs.append(f"  Part {j}: {part_log_formatted}")
-
-            # Build message metadata section
-            message_metadata_section = ""
-            if message.metadata:
-                message_metadata_section = f"""
-  Metadata:
-  {json.dumps(message.metadata, indent=2).replace(chr(10), chr(10) + '  ')}"""
-
-            history_logs.append(f"""Message {i + 1}:
-  ID: {message.message_id}
-  Role: {message.role}
-  Task ID: {message.task_id}
-  Context ID: {message.context_id}
-  Message Parts:
-{_NEW_LINE.join(message_parts_logs) if message_parts_logs else "  No parts"}{message_metadata_section}""")
-
+            history_logs.append(f"Message {i + 1}:\n{_build_message_section(message, indent='  ')}")
         history_section = _NEW_LINE.join(history_logs)
 
     return f"""
@@ -318,8 +337,5 @@ Status Message:
 -----------------------------------------------------------
 History:
 {history_section}
------------------------------------------------------------
-Response ID: {resp.root.id}
-JSON-RPC: {resp.root.jsonrpc}
 -----------------------------------------------------------
 """

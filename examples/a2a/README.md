@@ -4,7 +4,7 @@
 
 ## 功能说明
 
-- 使用 `A2AStarletteApplication` 提供 A2A HTTP 服务
+- 使用 SDK 内置的 `create_a2a_application()` 提供 A2A HTTP 服务（1.x 路由装配封装）
 - 使用 `TrpcRemoteA2aAgent` 作为远程客户端
 - 演示三轮会话上下文保持
 - 演示工具调用（`get_weather_report`）
@@ -44,10 +44,14 @@ cd examples/a2a
 python3 run_server.py
 ```
 
+- 默认：纯 1.0 服务端
+- `A2A_V03_COMPAT=1 python3 run_server.py`：1.0 服务端**同时接受 0.3 客户端**（开启 v0.3 compat）
+
 服务地址：
 
 - API：`http://127.0.0.1:18081`
-- Agent Card：`http://127.0.0.1:18081/.well-known/agent.json`
+- Agent Card（1.x）：`http://127.0.0.1:18081/.well-known/agent-card.json`
+- Agent Card（0.3，仅 `A2A_V03_COMPAT=1` 时发布）：`http://127.0.0.1:18081/.well-known/agent.json`
 
 ### 4. 启动客户端
 
@@ -58,6 +62,64 @@ cd examples/a2a
 python3 test_a2a.py
 ```
 
+## 三种调用链路
+
+同一个 example（`run_server.py` + `test_a2a.py`）通过两个环境变量覆盖三种协议组合：服务端 `A2A_V03_COMPAT`（同时接受 0.3 客户端），客户端 `A2A_FORCE_V03`（强制打 0.3 报文）。
+
+| 场景 | 服务端命令 | 客户端命令 |
+|---|---|---|
+| **1.0 → 1.0**（默认）| `python3 run_server.py` | `python3 test_a2a.py` |
+| **0.3 客户端 → 1.0** | `A2A_V03_COMPAT=1 python3 run_server.py` | 旧版 0.3 客户端 |
+| **1.0 → 0.3 服务端** | 旧版 0.3 服务端 | `A2A_FORCE_V03=1 python3 test_a2a.py` |
+
+### 场景 1：1.0 客户端 → 1.0 服务端（默认）
+
+```bash
+# 终端 A：1.0 服务端
+python3 run_server.py
+# 终端 B：1.0 客户端
+python3 test_a2a.py
+```
+
+### 场景 2：0.3 客户端 → 1.0 服务端
+
+服务端开 compat（同时接受 1.0 和 0.3 客户端，并发布 `/.well-known/agent.json`），**此时** 0.3 客户端无需改动：
+
+```bash
+# 终端 A：1.0 服务端 + v0.3 compat
+A2A_V03_COMPAT=1 python3 run_server.py
+# 终端 B：旧版（v0.3）客户端，例如旧版 trpc-agent-python 的 test_a2a.py
+cd old_version/trpc-agent-python/examples/a2a
+python3 test_a2a.py
+```
+
+服务端卡片会同时声明 `1.0` 和 `0.3` 接口，0.3 客户端能正确发现并调用。
+
+### 场景 3：1.0 客户端 → 0.3 服务端
+
+对端是旧 0.3 服务端、且卡片没法按默认路径用时（例如没填 url），客户端打开 `force_v0_3=True`（本示例用 `A2A_FORCE_V03=1`），强制走 0.3 报文。完整的 0.3 卡走默认即可。
+
+```bash
+# 终端 A：旧版（v0.3）服务端
+cd old_version/trpc-agent-python/examples/a2a
+python3 run_server.py
+# 终端 B：1.0 客户端，指定对端是 0.3
+cd examples/a2a
+A2A_FORCE_V03=1 python3 test_a2a.py
+```
+
+等价于在代码里：
+
+```python
+remote_agent = TrpcRemoteA2aAgent(
+    name="weather_agent",
+    agent_base_url="http://127.0.0.1:18081",
+    force_v0_3=True,  # 明确对端是 0.3，强制旧报文
+)
+```
+
+> 通常不用开：完整 1.0 / 0.3 卡跟卡片走即可。`force_v0_3=True` 用于你确认对端是 0.3、但卡不可用的情况（例如 0.3 空 url）。发现失败则初始化失败。
+
 ## 运行结果（实测）
 
 ### 服务端输出
@@ -66,7 +128,7 @@ python3 test_a2a.py
 [2026-04-01 16:23:05][INFO][trpc_agent_sdk][trpc_agent_sdk/server/a2a/_agent_service.py:108][1706047] Initialized A2A Agent Service weather_agent_standard_service for weather_agent
 Starting A2A server (standard protocol over HTTP)...
 Listening on: http://127.0.0.1:18081
-Agent card: http://127.0.0.1:18081/.well-known/agent.json
+Agent card: http://127.0.0.1:18081/.well-known/agent-card.json
 INFO:     Started server process [1706047]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
@@ -124,8 +186,8 @@ Demo completed!
 
 | 文件 | 说明 |
 |---|---|
-| `run_server.py` | A2A 服务端入口（Starlette + Uvicorn） |
-| `test_a2a.py` | A2A 客户端示例（3 轮对话） |
+| `run_server.py` | A2A 服务端入口（Starlette + Uvicorn；`A2A_V03_COMPAT=1` 开 v0.3 compat） |
+| `test_a2a.py` | A2A 客户端示例（3 轮对话；`A2A_FORCE_V03=1` 强制走 0.3 报文，不做协商） |
 | `agent/agent.py` | Agent 定义（LlmAgent + 天气工具） |
 | `agent/config.py` | 模型配置（从环境变量读取） |
 | `agent/prompts.py` | Agent 提示词 |

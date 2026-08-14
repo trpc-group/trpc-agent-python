@@ -67,7 +67,7 @@ pip3 install -e .
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`
 - `TRPC_AGENT_MODEL_NAME`
-- `REMOTE_A2A_BASE_URL`（可选，默认 `http://127.0.0.1:18081`）
+- `REMOTE_A2A_BASE_URL`（可选，默认 `http://127.0.0.1:18081`）：远程 A2A 服务地址。当它指向本地端口时，`run_agent.py` 会在同一端口自动拉起内嵌 A2A 服务（内嵌服务的 `rpc_url` 即此地址），保证"客户端 `agent_base_url`"与"内嵌服务卡片地址"始终一致
 - `TRPC_TRANSFER_AUTO_START_REMOTE_A2A`（可选，默认 `1`，当目标地址是本地且端口未占用时自动拉起内嵌 A2A 服务）
 
 ### 启动顺序（自动/手动两种方式）

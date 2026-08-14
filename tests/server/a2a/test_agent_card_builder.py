@@ -120,7 +120,9 @@ class TestAgentCardBuilderBuild:
         assert isinstance(card, AgentCard)
         assert card.name == "my-agent"
         assert card.description == "A test agent"
-        assert card.url == "http://localhost:8080"
+        # In 1.x the card exposes interfaces (url + protocol binding) instead of
+        # a single top-level url.
+        assert card.supported_interfaces[0].url == "http://localhost:8080"
 
     async def test_build_with_no_description(self):
         agent = _make_llm_agent(name="agent", description=None)
@@ -167,6 +169,14 @@ class TestCapabilitiesWithTrpcExtension:
         caps = _capabilities_with_trpc_extension(existing)
         uris = [e.uri for e in caps.extensions]
         assert uris.count(EXTENSION_TRPC_A2A_VERSION) == 1
+
+    def test_does_not_mutate_input(self):
+        original = AgentCapabilities(streaming=True)
+        result = _capabilities_with_trpc_extension(original)
+        assert result is not original
+        assert [e.uri for e in original.extensions] == []
+        assert original.streaming is True
+        assert EXTENSION_TRPC_A2A_VERSION in [e.uri for e in result.extensions]
 
     def test_none_input(self):
         caps = _capabilities_with_trpc_extension(None)

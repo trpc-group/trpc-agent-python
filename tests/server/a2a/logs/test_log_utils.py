@@ -12,12 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from a2a.types import (
-    DataPart,
-    FilePart,
-    FileWithBytes,
-    FileWithUri,
     Message,
-    MessageSendParams,
     Part,
     Role,
     SendMessageRequest,
@@ -25,18 +20,24 @@ from a2a.types import (
     Task,
     TaskState,
     TaskStatus,
-    TextPart,
 )
+from google.protobuf import struct_pb2
+from google.protobuf.json_format import ParseDict
 
 from trpc_agent_sdk.server.a2a.logs._log_utils import (
     _is_a2a_data_part,
     _is_a2a_message,
     _is_a2a_task,
     _is_a2a_text_part,
+    _metadata_dict,
     build_a2a_request_log,
     build_a2a_response_log,
     build_message_part_log,
 )
+
+
+def _data_part(data: dict) -> Part:
+    return Part(data=ParseDict(data, struct_pb2.Value()))
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ class TestIsA2aTask:
         task = Task(
             id="t1",
             context_id="ctx1",
-            status=TaskStatus(state=TaskState.completed),
+            status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED),
         )
         assert _is_a2a_task(task) is True
 
@@ -63,27 +64,50 @@ class TestIsA2aTask:
 
 class TestIsA2aMessage:
     def test_real_message(self):
-        msg = Message(message_id="m1", role=Role.agent, parts=[])
+        msg = Message(message_id="m1", role=Role.ROLE_AGENT, parts=[])
         assert _is_a2a_message(msg) is True
 
     def test_non_message(self):
         assert _is_a2a_message(42) is False
 
+    def test_duck_type_fallback(self):
+        FakeMessage = type("Message", (), {"role": "agent"})
+        obj = FakeMessage()
+        with patch("trpc_agent_sdk.server.a2a.logs._log_utils.A2AMessage", "not_a_type"):
+            assert _is_a2a_message(obj) is True
+
+
+# ---------------------------------------------------------------------------
+# _metadata_dict
+# ---------------------------------------------------------------------------
+class TestMetadataDict:
+    def test_none_returns_empty(self):
+        assert _metadata_dict(None) == {}
+
+    def test_dict_returned_as_is(self):
+        payload = {"k": "v"}
+        assert _metadata_dict(payload) is payload
+
+    def test_struct_converted(self):
+        struct = struct_pb2.Struct()
+        struct.update({"k": "v"})
+        assert _metadata_dict(struct) == {"k": "v"}
+
 
 class TestIsA2aTextPart:
     def test_real_text_part(self):
-        assert _is_a2a_text_part(TextPart(text="hello")) is True
+        assert _is_a2a_text_part(Part(text="hello")) is True
 
     def test_non_text_part(self):
-        assert _is_a2a_text_part(DataPart(data={})) is False
+        assert _is_a2a_text_part(_data_part({"k": "v"})) is False
 
 
 class TestIsA2aDataPart:
     def test_real_data_part(self):
-        assert _is_a2a_data_part(DataPart(data={"k": "v"})) is True
+        assert _is_a2a_data_part(_data_part({"k": "v"})) is True
 
     def test_non_data_part(self):
-        assert _is_a2a_data_part(TextPart(text="hi")) is False
+        assert _is_a2a_data_part(Part(text="hi")) is False
 
 
 # ---------------------------------------------------------------------------
@@ -91,37 +115,49 @@ class TestIsA2aDataPart:
 # ---------------------------------------------------------------------------
 class TestBuildMessagePartLog:
     def test_text_part_short(self):
-        part = Part(root=TextPart(text="short text"))
+        part = Part(text="short text")
         log = build_message_part_log(part)
         assert "TextPart: short text" in log
 
     def test_text_part_long_truncated(self):
         long_text = "x" * 200
-        part = Part(root=TextPart(text=long_text))
+        part = Part(text=long_text)
         log = build_message_part_log(part)
         assert "..." in log
         assert len(long_text[:100]) == 100
 
     def test_data_part(self):
-        part = Part(root=DataPart(data={"name": "tool1", "id": "t1"}))
+        part = _data_part({"name": "tool1", "id": "t1"})
         log = build_message_part_log(part)
         assert "DataPart:" in log
         assert "tool1" in log
 
     def test_data_part_large_value(self):
         large_dict = {"key": {"nested": "v" * 200}}
-        part = Part(root=DataPart(data=large_dict))
+        part = _data_part(large_dict)
         log = build_message_part_log(part)
         assert "<dict>" in log
 
-    def test_file_part_fallback(self):
-        part = Part(root=FilePart(file=FileWithUri(uri="http://example.com/file.png", mime_type="image/png")))
+    def test_data_part_scalar_value(self):
+        # MessageToDict(Value) of a non-object is a scalar/list, not a dict.
+        part = Part(data=ParseDict("scalar", struct_pb2.Value()))
+        log = build_message_part_log(part)
+        assert "DataPart:" in log
+        assert "scalar" in log
+
+    def test_url_part(self):
+        part = Part(url="http://example.com/file.png", media_type="image/png")
         log = build_message_part_log(part)
         assert "FilePart:" in log
 
+    def test_raw_part(self):
+        part = Part(raw=b"hello", media_type="application/octet-stream")
+        log = build_message_part_log(part)
+        assert "FilePart: raw bytes (5 bytes)" in log
+        assert "application/octet-stream" in log
+
     def test_metadata_included(self):
-        part = Part(root=TextPart(text="hi"))
-        part.root.metadata = {"thought": True}
+        part = Part(text="hi", metadata={"thought": True})
         log = build_message_part_log(part)
         assert "Part Metadata" in log
         assert "thought" in log
@@ -134,24 +170,22 @@ class TestBuildA2aRequestLog:
     def _make_request(self, *, parts=None, configuration=None, metadata=None, msg_metadata=None):
         msg = Message(
             message_id="msg-1",
-            role=Role.user,
-            parts=parts if parts is not None else [Part(root=TextPart(text="hello"))],
-            metadata=msg_metadata,
+            role=Role.ROLE_USER,
+            parts=parts if parts is not None else [Part(text="hello")],
         )
+        if msg_metadata:
+            msg.metadata.update(msg_metadata)
         return SendMessageRequest(
-            id="req-1",
-            params=MessageSendParams(
-                message=msg,
-                configuration=configuration,
-                metadata=metadata,
-            ),
+            tenant="",
+            message=msg,
+            configuration=configuration,
+            metadata=metadata,
         )
 
     def test_basic_request(self):
         req = self._make_request()
         log = build_a2a_request_log(req)
         assert "A2A Request:" in log
-        assert "req-1" in log
         assert "msg-1" in log
 
     def test_request_with_no_parts(self):
@@ -179,55 +213,39 @@ class TestBuildA2aResponseLog:
             id="t1",
             context_id="ctx1",
             status=TaskStatus(
-                state=TaskState.completed,
+                state=TaskState.TASK_STATE_COMPLETED,
                 message=status_msg,
             ),
             history=history,
             artifacts=artifacts,
-            metadata=metadata,
         )
-        resp_data = {"id": "resp-1", "jsonrpc": "2.0", "result": task.model_dump(by_alias=True, exclude_none=True)}
-        return SendMessageResponse.model_validate(resp_data)
+        if metadata:
+            task.metadata.update(metadata)
+        return SendMessageResponse(task=task)
 
     def _make_message_response(self, *, parts=None, metadata=None):
         msg = Message(
             message_id="m1",
-            role=Role.agent,
-            parts=parts or [Part(root=TextPart(text="answer"))],
-            metadata=metadata,
+            role=Role.ROLE_AGENT,
+            parts=parts or [Part(text="answer")],
         )
-        resp_data = {"id": "resp-1", "jsonrpc": "2.0", "result": msg.model_dump(by_alias=True, exclude_none=True)}
-        return SendMessageResponse.model_validate(resp_data)
-
-    def _make_error_response(self):
-        resp_data = {
-            "id": "resp-1",
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32600,
-                "message": "Invalid request",
-            },
-        }
-        return SendMessageResponse.model_validate(resp_data)
-
-    def test_error_response(self):
-        resp = self._make_error_response()
-        log = build_a2a_response_log(resp)
-        assert "Type: ERROR" in log
-        assert "Invalid request" in log
+        if metadata:
+            msg.metadata.update(metadata)
+        return SendMessageResponse(message=msg)
 
     def test_task_response_basic(self):
         resp = self._make_task_response()
         log = build_a2a_response_log(resp)
         assert "Type: SUCCESS" in log
         assert "Task" in log
-        assert "completed" in log
+        # Protobuf enum values serialize as ints (TASK_STATE_COMPLETED == 3).
+        assert f"Status State: {int(TaskState.TASK_STATE_COMPLETED)}" in log
 
     def test_task_response_with_status_message(self):
         status_msg = Message(
             message_id="sm-1",
-            role=Role.agent,
-            parts=[Part(root=TextPart(text="done"))],
+            role=Role.ROLE_AGENT,
+            parts=[Part(text="done")],
         )
         resp = self._make_task_response(status_msg=status_msg)
         log = build_a2a_response_log(resp)
@@ -235,8 +253,8 @@ class TestBuildA2aResponseLog:
 
     def test_task_response_with_history(self):
         history = [
-            Message(message_id="h1", role=Role.user, parts=[Part(root=TextPart(text="q"))]),
-            Message(message_id="h2", role=Role.agent, parts=[Part(root=TextPart(text="a"))]),
+            Message(message_id="h1", role=Role.ROLE_USER, parts=[Part(text="q")]),
+            Message(message_id="h2", role=Role.ROLE_AGENT, parts=[Part(text="a")]),
         ]
         resp = self._make_task_response(history=history)
         log = build_a2a_response_log(resp)
@@ -258,3 +276,52 @@ class TestBuildA2aResponseLog:
         resp = self._make_message_response(metadata={"k": "v"})
         log = build_a2a_response_log(resp)
         assert "Metadata:" in log
+
+    def test_error_response(self):
+        # a2a-sdk 1.x protobuf SendMessageResponse has no error oneof; JSON-RPC
+        # errors arrive as JSONRPCErrorResponse (compat) / JSONRPCError.
+        from a2a.compat.v0_3.types import JSONRPCErrorResponse
+
+        resp = JSONRPCErrorResponse.model_validate({
+            "id": "resp-1",
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32600,
+                "message": "Invalid request",
+                "data": {"reason": "bad payload"},
+            },
+        })
+        log = build_a2a_response_log(resp)
+        assert "Type: ERROR" in log
+        assert "Type: SUCCESS" not in log
+        assert "Error Code: -32600" in log
+        assert "Invalid request" in log
+        assert "bad payload" in log
+        assert "Response ID: resp-1" in log
+        assert "JSON-RPC: 2.0" in log
+
+    def test_error_response_proto_oneof(self):
+        class _Error:
+            code = -32001
+            message = "Task not found"
+            data = None
+
+        class _ProtoErrorResponse:
+            error = _Error()
+            id = "resp-2"
+            jsonrpc = "2.0"
+
+            def HasField(self, name):
+                return name == "error"
+
+        log = build_a2a_response_log(_ProtoErrorResponse())
+        assert "Type: ERROR" in log
+        assert "Error Code: -32001" in log
+        assert "Task not found" in log
+        assert "Error Data: None" in log
+
+    def test_empty_protobuf_response_is_success(self):
+        # 1.x SendMessageResponse has no error field; empty payload is not ERROR.
+        log = build_a2a_response_log(SendMessageResponse())
+        assert "Type: SUCCESS" in log
+        assert "No result" in log

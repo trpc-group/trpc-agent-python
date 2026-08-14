@@ -11,13 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from a2a.server.agent_execution.context import RequestContext
-try:
-    from a2a.types import Message, Part, Role, TextPart
-except ImportError:
-    pytest.skip(
-        "Installed a2a.types does not export TextPart; skip legacy A2A tests.",
-        allow_module_level=True,
-    )
+from a2a.types import Message, Part, Role
+from google.protobuf.struct_pb2 import Struct
+from google.protobuf.json_format import MessageToDict, ParseDict
 
 from trpc_agent_sdk.server.a2a.converters._request_converter import (
     _get_user_id_default,
@@ -115,8 +111,8 @@ class TestConvertA2aRequestToRunArgs:
     async def test_basic_conversion(self):
         msg = Message(
             message_id="m1",
-            role=Role.user,
-            parts=[Part(root=TextPart(text="hello"))],
+            role=Role.ROLE_USER,
+            parts=[Part(text="hello")],
         )
         ctx = _make_context(user_name="alice", context_id="s1", message=msg)
         result = await convert_a2a_request_to_trpc_agent_run_args(ctx)
@@ -134,24 +130,36 @@ class TestConvertA2aRequestToRunArgs:
     async def test_message_metadata_included(self):
         msg = Message(
             message_id="m1",
-            role=Role.user,
-            parts=[Part(root=TextPart(text="hi"))],
+            role=Role.ROLE_USER,
+            parts=[Part(text="hi")],
             metadata={"key": "val"},
         )
         ctx = _make_context(message=msg)
         result = await convert_a2a_request_to_trpc_agent_run_args(ctx)
         assert result["run_config"].agent_run_config["metadata"]["key"] == "val"
 
-    async def test_message_metadata_non_dict_treated_as_empty(self):
-        msg = Message(
-            message_id="m1",
-            role=Role.user,
-            parts=[Part(root=TextPart(text="hi"))],
-        )
-        msg.metadata = "not_a_dict"
+    async def test_message_metadata_plain_dict(self):
+        # Duck-typed messages may still carry a plain dict (0.3 / tests).
+        msg = MagicMock()
+        msg.parts = [Part(text="hi")]
+        msg.metadata = {"key": "val"}
         ctx = _make_context(message=msg)
         result = await convert_a2a_request_to_trpc_agent_run_args(ctx)
-        assert result["run_config"].agent_run_config["metadata"] == {}
+        assert result["run_config"].agent_run_config["metadata"] is msg.metadata
+
+    async def test_message_metadata_struct(self):
+        # In 1.x the message metadata is a protobuf Struct.
+        struct_meta = Struct()
+        struct_meta.update({"key": "val"})
+        msg = Message(
+            message_id="m1",
+            role=Role.ROLE_USER,
+            parts=[Part(text="hi")],
+        )
+        msg.metadata.CopyFrom(struct_meta)
+        ctx = _make_context(message=msg)
+        result = await convert_a2a_request_to_trpc_agent_run_args(ctx)
+        assert result["run_config"].agent_run_config["metadata"]["key"] == "val"
 
 
 # ---------------------------------------------------------------------------

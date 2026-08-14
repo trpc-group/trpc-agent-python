@@ -30,6 +30,9 @@ def create_agent() -> TransferAgent:
 
     model = _create_model()
 
+    # The remote A2A service address. When it points at a local port, run_agent.py
+    # auto-starts an embedded server on that same port (its rpc_url), so the card
+    # advertised by the embedded server and this client's agent_base_url always agree.
     remote_a2a_base_url = os.getenv("REMOTE_A2A_BASE_URL", "http://127.0.0.1:18081")
     remote_agent = TrpcRemoteA2aAgent(
         name="remote-weather-assistant",

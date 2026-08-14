@@ -32,6 +32,7 @@ from typing import Union
 
 from a2a.server.agent_execution import RequestContext
 from google.genai import types as genai_types
+from google.protobuf.json_format import MessageToDict
 from trpc_agent_sdk.configs import RunConfig
 
 from ._part_converter import convert_a2a_part_to_genai_part
@@ -81,8 +82,12 @@ async def convert_a2a_request_to_trpc_agent_run_args(
 
     user_id = await _resolve_user_id(request, user_id_extractor)
 
-    raw_meta = getattr(request.message, "metadata", None)
-    request_metadata = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+    message_metadata = getattr(request.message, "metadata", None)
+    if isinstance(message_metadata, dict):
+        request_metadata = message_metadata
+    else:
+        # In 1.x the message metadata is a protobuf Struct.
+        request_metadata = MessageToDict(message_metadata) if message_metadata else {}
 
     return {
         "user_id":

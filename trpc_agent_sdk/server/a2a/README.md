@@ -18,9 +18,9 @@
 flowchart LR
     U[User / Caller]
     C[TrpcRemoteA2aAgent\n客户端适配层]
-    A2AC[A2AClient]
+    A2AC[A2A Client\ncreate_client / CompatJsonRpcTransport]
     HTTP[HTTP + A2A Protocol]
-    A2AS[A2AStarletteApplication\n+ DefaultRequestHandler]
+    A2AS[create_a2a_application\n+ DefaultRequestHandler]
     SVC[TrpcA2aAgentService]
     EXE[TrpcA2aAgentExecutor]
     RUN[Runner]
@@ -72,13 +72,12 @@ def bootstrap_a2a_service(base_agent):
     )
     svc.initialize()  # 构建 AgentCard，开启 streaming capability
 
-    # 3) 交给 A2A SDK 的 HTTP App
-    app = A2AStarletteApplication(
-        agent_card=svc.agent_card,
-        http_handler=DefaultRequestHandler(agent_executor=svc),
-    )
+    # 3) 交给 SDK 的 1.x 路由装配封装
+    app = create_a2a_application(svc)
     return app
 ```
+
+> `create_a2a_application()` 是**可选便利层**——它打包了 a2a-sdk 1.x 的路由装配（卡片 url、0.3 兼容接口等默认处理）。需要深度定制 Starlette 时，可直接绕过它、用 a2a-sdk 的公开组件（`DefaultRequestHandler` / `create_agent_card_routes` / `create_jsonrpc_routes`）自己拼。
 
 ### 3.2 请求执行路径（A2A -> Runner -> A2A）
 
@@ -92,7 +91,8 @@ def bootstrap_a2a_service(base_agent):
 async def execute(context, event_queue):
     ensure context.message exists
     if first request:
-        enqueue submitted status
+        # a2a-sdk 1.x 强制"先 Task 后 update"：首个事件必须是 Task
+        enqueue Task(id=context.task_id, status=SUBMITTED, history=[user_message])
 
     # A2A RequestContext -> trpc run_args
     run_args = convert_a2a_request_to_trpc_agent_run_args(context)
@@ -129,24 +129,25 @@ async def execute(context, event_queue):
 ```python
 async def remote_agent_run(invocation_ctx):
     ensure initialized:
-        discover AgentCard (if needed)
-        create A2AClient
+        discover AgentCard (if needed), fill empty JSONRPC urls, then create_client
+        (force_v0_3=True: CompatJsonRpcTransport to card JSONRPC url, else agent_base_url)
 
     outgoing_msg = convert local content/event to A2A Message
     outgoing_msg.context_id = session_id
     outgoing_msg.metadata = build_request_message_metadata(invocation_ctx)
 
-    streaming_req = SendStreamingMessageRequest(message=outgoing_msg, metadata=run_config.metadata)
-    stream = a2a_client.send_message_streaming(streaming_req)
+    # a2a-sdk 1.x：SendMessageRequest(tenant, message, ...)，返回 StreamResponse(oneof)
+    req = SendMessageRequest(message=outgoing_msg, metadata=run_config.metadata)
+    stream = a2a_client.send_message(req)
 
     async for response in stream_with_cancel_check(stream, invocation_ctx.cancel_event):
-        result = response.result
+        result = response_payload(response)  # HasField 选择 task/message/status_update/artifact_update
         # TaskArtifactUpdateEvent / TaskStatusUpdateEvent / Task / Message
         for event in _events_from_response(result):
             yield convert_to_local_Event(event)
 
     if cancelled and task_id known:
-        call a2a_client.cancel_task(task_id)
+        call a2a_client.cancel_task(CancelTaskRequest(id=task_id))
 ```
 
 ## 4. 关键设计点
@@ -155,6 +156,50 @@ async def remote_agent_run(invocation_ctx):
 - **artifact-first 流式输出**：中间分片通过 `TaskArtifactUpdateEvent` 输出，结束时补齐最终状态。
 - **取消语义打通**：本地 cancel event 与远端 `cancel_task` 同步。
 - **可插拔扩展**：`TrpcA2aAgentExecutorConfig` 支持 `user_id_extractor`、`event_callback`。
+
+### 4.1 AgentCard 的对外 URL 配置
+
+服务端**不知道自己的对外地址**，AgentCard 里 `supported_interfaces[].url`（以及 v0.3 兼容的顶层 `url`）必须由部署方指定。url 只有**一个配置入口**：`TrpcA2aAgentService(rpc_url=...)`（或完全自定义的 `agent_card`）。
+
+```python
+# 方式 1：固定域名（推荐，有反代/域名时）
+svc = TrpcA2aAgentService(
+    service_name="weather",
+    agent=root_agent,
+    rpc_url="https://agent.example.com/a2a",   # 直接写进 AgentCard
+)
+
+# 方式 2：完全自定义卡片
+from a2a.types import AgentCard, AgentInterface
+card = AgentCard(
+    name="weather", description="...", version="1.0",
+    supported_interfaces=[AgentInterface(
+        protocol_binding="JSONRPC", protocol_version="1.0",
+        url="https://agent.example.com/a2a",
+    )],
+)
+svc = TrpcA2aAgentService(service_name="weather", agent=root_agent, agent_card=card)
+
+# 方式 3：本地/无固定域名，直接把监听地址当 rpc_url
+svc = TrpcA2aAgentService(
+    service_name="weather",
+    agent=root_agent,
+    rpc_url="http://127.0.0.1:18081",
+)
+```
+
+**规则**：`create_a2a_application()` 装配时不因卡片 url 空而阻断 **1.0-only** 启动——JSON-RPC 直连的客户端不读卡片。但若所有接口的 url 都为空（没配 `rpc_url` 也没自定义 `agent_card`），会打出一条 **warning** 提示配置缺失，因为依赖卡片发现的客户端会连不上。开启 `enable_v0_3_compat=True` 时则不同：0.3 客户端靠 well-known 卡片的顶层 `url` 发现服务，空 url **无法补救**，装配会 **raise `ValueError`**，避免服务看似起来了但旧客户端发现失败。
+
+**挂载路径自动推导**：`create_a2a_application()` **不接收挂载路径参数**——JSON-RPC 路由挂到哪由卡片 url 的 path 推导（`https://x.com/a2a` → `/a2a`，无路径则 `/`），保证"卡片声明的路径"与"实际挂载路径"永远一致，客户端不会发现 A 调 B。
+
+开启 `enable_v0_3_compat=True` 时，框架还会在 `/.well-known/agent.json` 发布同一张卡（0.3 `A2ACardResolver` 的默认发现路径），在**用于 well-known 发现的卡片副本**上追加 `protocol_version="0.3"` 接口（复用已有 url），并打开 JSON-RPC 的 0.3 解码。**须先配置可达 url**（见上文）；url 全空时装配会 raise。**默认关闭该开关**（只发布 `/.well-known/agent-card.json`，`agent.json` 为 404），旧 0.3 客户端无法发现服务。默认由本函数构造的 `DefaultRequestHandler` 也会拿到这份副本。若调用方传入**自定义 `request_handler`**，框架**不会**改写该 handler 自己的 `agent_card`——0.3 客户端仍可走 JSON-RPC 路由，但 handler 若按其 `supported_interfaces` 做版本判断，需要调用方自行在那张卡上声明 0.3 接口。
+
+```python
+svc = TrpcA2aAgentService(..., rpc_url="http://127.0.0.1:18081")
+app = create_a2a_application(svc, enable_v0_3_compat=True)
+```
+
+> 完整运行示例见 [examples/a2a](../../../examples/a2a/README.md)。
 
 ## 5. 与 `examples/a2a` 的对应关系
 
@@ -167,6 +212,6 @@ async def remote_agent_run(invocation_ctx):
 
 运行映射：
 
-1. `run_server.py` 创建 `TrpcA2aAgentService` 并挂到 `A2AStarletteApplication`。
+1. `run_server.py` 创建 `TrpcA2aAgentService` 并通过 `create_a2a_application()` 挂载为 A2A 服务。
 2. `test_a2a.py` 创建 `TrpcRemoteA2aAgent`，通过 `Runner` 发起 3 轮对话。
 3. 第 2 轮触发 `get_weather_report` 工具调用，展示工具事件与文本分片的 A2A 流式传输。
