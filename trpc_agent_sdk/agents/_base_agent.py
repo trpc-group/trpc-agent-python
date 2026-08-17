@@ -21,6 +21,7 @@ Classes:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from abc import abstractmethod
 from functools import partial
@@ -283,24 +284,57 @@ class BaseAgent(AgentABC):
             # Track all non-partial events for building action trace
             non_partial_events = []
 
+            # Track accumulated partial text as it streams in (mirrors the
+            # pattern used by LlmProcessor.call_llm_async's
+            # _build_interrupted_content). If GeneratorExit/CancelledError
+            # fires before any non-partial event exists, non_partial_events
+            # is empty and _build_action_string_from_events([]) would
+            # otherwise produce "", silently dropping everything that was
+            # already streamed to the caller.
+            partial_text_parts: list[str] = []
+
             mono_start = time.monotonic()
             t_first_visible: Optional[float] = None
             error_type: Optional[str] = None
             error_message: Optional[str] = None
+            interrupted_partial_text: Optional[str] = None
 
             try:
                 gen_co = run_stream_filters(ctx.agent_context, None, self.filters, handle)  # type: ignore
                 async for event in gen_co:
                     if t_first_visible is None and event.has_content():
                         t_first_visible = time.monotonic()
-                    if not event.partial and event.content is not None:
-                        # Collect non-partial events with content for tracing
-                        # This excludes state update events which have content=None
-                        non_partial_events.append(event)
+                    if event.partial:
+                        if event.content and event.content.parts:
+                            for part in event.content.parts:
+                                if part.text:
+                                    partial_text_parts.append(part.text)
+                    else:
+                        # A non-partial event finalizes this turn's output;
+                        # any partial text accumulated so far has now been
+                        # superseded by it, so drop it to avoid duplicating
+                        # output already captured in non_partial_events.
+                        partial_text_parts.clear()
+                        if event.content is not None:
+                            # Collect non-partial events with content for tracing
+                            # This excludes state update events which have content=None
+                            non_partial_events.append(event)
                     yield event  # type: ignore
             except GeneratorExit:
                 error_type = "AgentGeneratorExit"
                 error_message = "Agent execution stopped with GeneratorExit."
+                interrupted_partial_text = "".join(partial_text_parts)
+                raise
+            except asyncio.CancelledError:
+                # Like GeneratorExit, asyncio.CancelledError subclasses
+                # BaseException, not Exception, so it is not caught by
+                # `except Exception` below. External cancellation
+                # (task.cancel(), asyncio.wait_for() timeout, ASGI
+                # disconnect) surfaces here as this exception; salvage the
+                # partial text the same way as the GeneratorExit branch.
+                error_type = "AgentCancelledError"
+                error_message = "Agent execution stopped with asyncio.CancelledError."
+                interrupted_partial_text = "".join(partial_text_parts)
                 raise
             except RunLimitException as ex:
                 error_type = ex.error_code
@@ -314,8 +348,13 @@ class BaseAgent(AgentABC):
                 # Compute state after agent run
                 state_end = dict(ctx.session.state)
 
-                # Build formatted action string from all non-partial events
+                # Build formatted action string from all non-partial events.
+                # Fall back to the accumulated (but never finalized) partial
+                # text when the run was interrupted before producing any
+                # non-partial event, so streamed output is not silently lost.
                 agent_action = _build_action_string_from_events(non_partial_events)
+                if not agent_action and interrupted_partial_text:
+                    agent_action = f"[INTERRUPTED]\n{interrupted_partial_text}"
 
                 # Call trace function with agent execution details
                 with trace.use_span(agent_span, end_on_exit=False):

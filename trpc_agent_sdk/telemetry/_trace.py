@@ -107,13 +107,14 @@ def trace_runner(
     app_name: str,
     user_id: str,
     session_id: str,
-    invocation_context: InvocationContext,
+    invocation_context: Optional[InvocationContext] = None,
     new_message: Optional[Content] = None,
     last_event: Optional[Event] = None,
     state_begin: Optional[dict[str, Any]] = None,
     state_end: Optional[dict[str, Any]] = None,
     error_type: Optional[str] = None,
     error_message: Optional[str] = None,
+    partial_text: Optional[str] = None,
 ):
     """Traces runner execution.
 
@@ -125,21 +126,30 @@ def trace_runner(
         user_id: The user ID of the session.
         session_id: The session ID of the session.
         invocation_context: The invocation context for the current agent run.
+            May be ``None`` when the runner fails before an invocation
+            context can be constructed (e.g. during initialization). In
+            that case, attributes that depend on it are skipped.
         new_message: The new message that started this invocation.
         last_event: The last non-streaming event from the agent execution.
         state_begin: The state before the runner execution.
         state_end: The state after the runner execution.
         error_type: The error type when the runner does not complete normally.
         error_message: The error message when the runner does not complete normally.
+        partial_text: Accumulated partial (streamed but not yet finalized) text.
+            Used as a fallback for the ``runner.output`` attribute when the
+            invocation was interrupted (e.g. GeneratorExit or an external
+            asyncio.CancelledError) before any non-streaming event existed,
+            so the already-streamed output is not silently lost.
     """
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
     span.set_attribute("gen_ai.operation.name", "run_runner")
     span.set_attribute(f"{_trpc_agent_span_name}.runner.app_name", app_name)
-    span.set_attribute(
-        f"{_trpc_agent_span_name}.runner.name",
-        f"[trpc-agent]: {app_name}/{invocation_context.agent.name}",
-    )
+    if invocation_context is not None:
+        span.set_attribute(
+            f"{_trpc_agent_span_name}.runner.name",
+            f"[trpc-agent]: {app_name}/{invocation_context.agent.name}",
+        )
     span.set_attribute(f"{_trpc_agent_span_name}.runner.user_id", user_id)
     span.set_attribute(f"{_trpc_agent_span_name}.runner.session_id", session_id)
     input_str = ""
@@ -149,6 +159,8 @@ def trace_runner(
     output_str = ""
     if last_event and last_event.content and last_event.content.parts:
         output_str = _join_parts_with_thought_tag(last_event.content.parts)
+    elif partial_text:
+        output_str = f"[INTERRUPTED]\n{partial_text}"
     span.set_attribute(f"{_trpc_agent_span_name}.runner.output", output_str)
 
     # Set state attributes for begin and end
@@ -485,9 +497,18 @@ def trace_call_llm(
         llm_response_json,
     )
 
-    if error_type:
-        span.set_status(trace.StatusCode.ERROR, error_message or error_type)
-        span.set_attribute("error.type", error_type)
+    # The caller-supplied error_type reflects an exception that propagated out
+    # of the model call. But the SDK-managed retry layer (retry_model_call)
+    # can also swallow a raised exception and yield a normal-looking
+    # LlmResponse with error_code/error_message set instead of re-raising
+    # (see models/_retry.py:_build_error_response). Fall back to inspecting
+    # llm_response.error_code so those calls are still marked as errors here.
+    effective_error_type = error_type or llm_response.error_code
+    effective_error_message = error_message or llm_response.error_message
+
+    if effective_error_type:
+        span.set_status(trace.StatusCode.ERROR, effective_error_message or effective_error_type)
+        span.set_attribute("error.type", effective_error_type)
 
     if stream_function_calls_raw:
         span.set_attribute(
