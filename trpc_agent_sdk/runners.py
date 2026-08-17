@@ -37,6 +37,7 @@ from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.memory import BaseMemoryService
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import Session
+from trpc_agent_sdk.telemetry import get_trpc_agent_span_name
 from trpc_agent_sdk.telemetry import tracer
 from trpc_agent_sdk.telemetry import trace_cancellation
 from trpc_agent_sdk.telemetry import trace_runner
@@ -395,66 +396,103 @@ class Runner:
         # an async generator is cancelled, but try/finally always executes
         # even under CancelledError (PEP 492).
         with tracer.start_as_current_span("invocation") as invocation_span:
-            # Create default agent context if not provided
-            if agent_context is None:
-                agent_context = new_agent_context()
-
-            session = await self.session_service.get_session(app_name=self.app_name,
-                                                             user_id=user_id,
-                                                             session_id=session_id,
-                                                             agent_context=agent_context)
-            if not session:
-                # Create new session if not found - use create_session instead of save_session
-                session = await self.session_service.create_session(app_name=self.app_name,
-                                                                    user_id=user_id,
-                                                                    session_id=session_id,
-                                                                    agent_context=agent_context)
-                logger.debug("Created new session: %s", session.id)
-            else:
-                logger.debug("Using existing session: %s with %s events", session.id, len(session.events))
-
-            # Capture state before runner execution
-            state_begin = dict(session.state)
-
-            session.conversation_count += 1
-            history_content: Content | None = None
-            if isinstance(new_message, list):
-                user_message = new_message[-1]
-                history_content = new_message[0]
-            else:
-                user_message = new_message
-            invocation_context = self._new_invocation_context(
-                session,
-                new_message=user_message,
-                run_config=run_config,
-                agent_context=agent_context,
+            trpc_span_name = get_trpc_agent_span_name()
+            # Seed the baseline runner.name attribute immediately, before any
+            # initialization below runs. Session lookup/creation,
+            # InvocationContext construction, saving the user message, and
+            # cancel.register_run() can all raise before the main try/finally
+            # block further down is reached. When that happens, the except
+            # branch below calls trace_runner(invocation_context=None), which
+            # (by design) skips runner.name since there is no
+            # InvocationContext yet - so this is the only place that
+            # attribute gets set on the init-failure path. All other
+            # trace_runner() attributes (gen_ai.system, gen_ai.operation.name,
+            # runner.app_name/user_id/session_id) are unconditional inside
+            # trace_runner() itself, so seeding them here would just be
+            # overwritten with the same value and is intentionally omitted.
+            invocation_span.set_attribute(
+                f"{trpc_span_name}.runner.name",
+                f"[trpc-agent]: {self.app_name}/{self.agent.name}",
             )
-            root_agent = self.agent
-            if run_config.save_history_enabled and history_content:
-                history_event = Event(content=history_content,
-                                      invocation_id=invocation_context.invocation_id,
-                                      id=Event.new_id(),
-                                      author=root_agent.name)
-                await self.session_service.append_event(session=session, event=history_event)
 
-            if user_message:
-                await self._append_new_message_to_session(
+            try:
+                # Create default agent context if not provided
+                if agent_context is None:
+                    agent_context = new_agent_context()
+
+                session = await self.session_service.get_session(app_name=self.app_name,
+                                                                 user_id=user_id,
+                                                                 session_id=session_id,
+                                                                 agent_context=agent_context)
+                if not session:
+                    # Create new session if not found - use create_session instead of save_session
+                    session = await self.session_service.create_session(app_name=self.app_name,
+                                                                        user_id=user_id,
+                                                                        session_id=session_id,
+                                                                        agent_context=agent_context)
+                    logger.debug("Created new session: %s", session.id)
+                else:
+                    logger.debug("Using existing session: %s with %s events", session.id, len(session.events))
+
+                # Capture state before runner execution
+                state_begin = dict(session.state)
+
+                session.conversation_count += 1
+                history_content: Content | None = None
+                if isinstance(new_message, list):
+                    user_message = new_message[-1]
+                    history_content = new_message[0]
+                else:
+                    user_message = new_message
+                invocation_context = self._new_invocation_context(
                     session,
-                    user_message,
-                    invocation_context,
+                    new_message=user_message,
+                    run_config=run_config,
+                    agent_context=agent_context,
+                )
+                root_agent = self.agent
+                if run_config.save_history_enabled and history_content:
+                    history_event = Event(content=history_content,
+                                          invocation_id=invocation_context.invocation_id,
+                                          id=Event.new_id(),
+                                          author=root_agent.name)
+                    await self.session_service.append_event(session=session, event=history_event)
+
+                if user_message:
+                    await self._append_new_message_to_session(
+                        session,
+                        user_message,
+                        invocation_context,
+                    )
+
+                invocation_context.agent = self._find_agent_to_run(session, root_agent, run_config)
+
+                # Register for cancellation tracking
+                session_key = await cancel.register_run(
+                    app_name=self.app_name,
+                    user_id=user_id,
+                    session_id=session_id,
                 )
 
-            invocation_context.agent = self._find_agent_to_run(session, root_agent, run_config)
-
-            # Register for cancellation tracking
-            session_key = await cancel.register_run(
-                app_name=self.app_name,
-                user_id=user_id,
-                session_id=session_id,
-            )
-
-            # Store session_key in invocation_context for use by agents
-            invocation_context.session_key = session_key
+                # Store session_key in invocation_context for use by agents
+                invocation_context.session_key = session_key
+            except Exception as ex:
+                # Initialization failed before the main try/finally block
+                # below was reached, so there is no InvocationContext/Session
+                # to feed into trace_runner() yet. Call trace_runner() with
+                # invocation_context=None so the span still gets the baseline
+                # business attributes plus the error status, instead of being
+                # left as "unknown".
+                trace_runner(
+                    app_name=self.app_name,
+                    user_id=user_id,
+                    session_id=session_id,
+                    invocation_context=None,
+                    new_message=(new_message[-1] if isinstance(new_message, list) else new_message),
+                    error_type=type(ex).__name__,
+                    error_message=str(ex),
+                )
+                raise
 
             # Track the last non-streaming event for tracing
             last_non_streaming_event = None
@@ -464,6 +502,7 @@ class Runner:
             runner_trace_recorded = False
             trace_error_type: Optional[str] = None
             trace_error_message: Optional[str] = None
+            trace_partial_text: Optional[str] = None
 
             try:
                 # Support multiple levels of agent transfers
@@ -572,6 +611,7 @@ class Runner:
             except GeneratorExit:
                 trace_error_type = "RunnerGeneratorExit"
                 trace_error_message = "Runner invocation stopped with GeneratorExit."
+                trace_partial_text = "".join(temp_text_parts)
                 raise
 
             except RunLimitException as ex:
@@ -628,6 +668,25 @@ class Runner:
                     branch=invocation_context.branch,
                 )
 
+            except asyncio.CancelledError as ex:
+                # asyncio.CancelledError subclasses BaseException, not
+                # Exception, so it is NOT caught by `except Exception` below.
+                # This is how external cancellation actually happens in
+                # practice - task.cancel(), asyncio.wait_for() timing out, or
+                # an ASGI client disconnecting - as opposed to the SDK's
+                # cooperative cancel_run_async() + raise_if_cancelled()
+                # checkpoints (handled above via RunCancelledException).
+                # Without this branch, none of the except clauses above run,
+                # trace_error_type/trace_error_message stay None, and the
+                # finally: block's trace_runner() call never marks the span
+                # as an error nor surfaces the partial output that was
+                # already streamed to the caller.
+                trace_error_type = "CancelledError"
+                trace_error_message = str(ex) or "Runner invocation was cancelled (asyncio.CancelledError)."
+                trace_partial_text = "".join(temp_text_parts)
+                logger.info("Run for session %s was cancelled via asyncio.CancelledError", session_id)
+                raise
+
             except Exception as ex:
                 trace_error_type = type(ex).__name__
                 trace_error_message = str(ex)
@@ -652,6 +711,7 @@ class Runner:
                             state_end=state_end,
                             error_type=trace_error_type,
                             error_message=trace_error_message,
+                            partial_text=trace_partial_text,
                         )
 
                 # Always cleanup cancellation tracking
