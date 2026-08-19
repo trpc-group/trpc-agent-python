@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.17](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.17) (2026-08-19)
+
+### Features
+
+* Telemetry: Langfuse export now preserves user-defined span attributes. Fields prefixed with `langfuse` are passed through as-is; other custom attributes are collected into metadata so teams can observe custom instrumentation alongside built-in trace data.
+
+### Bug Fixes
+
+* AG-UI: Fixed AGUI connections being closed too early when an `AgentNode` emitted an error `Event`. The server no longer sends `RunErrorEvent` immediately on the first error event; it waits until the final event carries an error after the agent run has finished. This allows agents such as `GraphAgent` to continue executing subsequent nodes instead of terminating the client connection prematurely.
+* Telemetry: Fixed four classes of span status and output loss during agent interruption or failure:
+  * Runner initialization failures now report error status through `trace_runner()` even when `InvocationContext` is not yet available (`invocation_context` is optional), while still writing the remaining runner business attributes.
+  * LLM call failures converted by the retry layer into `LlmResponse(error_code=...)` are no longer recorded as successful spans; trace reporting now checks `llm_response.error_code`.
+  * External cancellation via `asyncio.CancelledError` now marks the root invocation span as failed and preserves accumulated partial streamed text instead of leaving the span successful with missing output.
+  * `GeneratorExit` during generator shutdown now backfills partial streamed text into `agent_action`, preventing already emitted content from being lost when the client disconnects or the stream is closed early.
+
+### Internal
+
+* Build: Optimized installation speed for faster dependency setup and project bootstrap.
+
 ## [1.1.16](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.16) (2026-08-11)
 
 ### Features
