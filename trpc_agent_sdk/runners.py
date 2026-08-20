@@ -518,6 +518,19 @@ class Runner:
                                 for part in event.content.parts:
                                     if part.text:
                                         temp_text_parts.append(part.text)
+                        elif event.is_error():
+                            # A mid-stream error event does not supersede the
+                            # partial text already streamed to the caller -
+                            # there is no successful final content to take
+                            # over from. Preserve it as a fallback for
+                            # runner.output instead of clearing it, and
+                            # surface the error so the span isn't
+                            # misreported as a successful run with empty
+                            # output.
+                            if temp_text_parts:
+                                trace_partial_text = "".join(temp_text_parts)
+                            trace_error_type = event.error_code
+                            trace_error_message = event.error_message
                         else:
                             # Clear accumulated parts on full event
                             temp_text_parts.clear()
