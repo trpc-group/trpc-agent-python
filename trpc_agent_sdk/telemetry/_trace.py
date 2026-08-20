@@ -159,7 +159,13 @@ def trace_runner(
     output_str = ""
     if last_event and last_event.content and last_event.content.parts:
         output_str = _join_parts_with_thought_tag(last_event.content.parts)
-    elif partial_text:
+    if not output_str and partial_text:
+        # Fall back to the accumulated (but never finalized) partial text
+        # when the last non-streaming event has no renderable text (e.g. a
+        # function_response event has no `.text` parts) or there was no
+        # such event at all. This covers both a run interrupted before any
+        # non-partial event existed, and a later-turn interruption after an
+        # earlier turn already produced a tool call/response.
         output_str = f"[INTERRUPTED]\n{partial_text}"
     span.set_attribute(f"{_trpc_agent_span_name}.runner.output", output_str)
 

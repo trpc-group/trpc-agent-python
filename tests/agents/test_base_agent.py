@@ -33,6 +33,33 @@ class ConcreteAgent(BaseAgent):
         )
 
 
+class MidStreamErrorAgent(BaseAgent):
+    """Agent that streams partial text then emits a mid-stream error event."""
+
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        yield Event(
+            invocation_id=ctx.invocation_id,
+            author=self.name,
+            branch=ctx.branch,
+            content=Content(parts=[Part(text="Hello")]),
+            partial=True,
+        )
+        yield Event(
+            invocation_id=ctx.invocation_id,
+            author=self.name,
+            branch=ctx.branch,
+            content=Content(parts=[Part(text=", world")]),
+            partial=True,
+        )
+        yield Event(
+            invocation_id=ctx.invocation_id,
+            author=self.name,
+            branch=ctx.branch,
+            error_code="STREAMING_ERROR",
+            error_message="simulated mid-stream network interruption",
+        )
+
+
 class MockLLMModel(LLMModel):
 
     @classmethod
@@ -240,3 +267,28 @@ class TestBaseAgentTracing:
         assert mock_trace_agent.call_args.kwargs["error_type"] == "AgentGeneratorExit"
         assert mock_trace_agent.call_args.kwargs["error_message"] == "Agent execution stopped with GeneratorExit."
         assert mock_report.call_args.kwargs["error_type"] == "AgentGeneratorExit"
+
+    def test_mid_stream_error_event_preserves_partial_text_and_marks_error(self, invocation_context):
+        """A mid-stream error event (e.g. STREAMING_ERROR from the SDK-managed
+        retry layer) must not wipe out the partial text already streamed, and
+        must mark the agent span as an error instead of silently succeeding
+        with empty output."""
+        agent = MidStreamErrorAgent(name="mid_stream_error_agent")
+        ctx = invocation_context.model_copy(update={"agent": agent})
+
+        async def run():
+            events = []
+            async for event in agent.run_async(ctx):
+                events.append(event)
+            return events
+
+        with patch("trpc_agent_sdk.agents._base_agent.report_invoke_agent") as mock_report, \
+             patch("trpc_agent_sdk.agents._base_agent.trace_agent") as mock_trace_agent, \
+             patch("trpc_agent_sdk.agents._base_agent.tracer"):
+            events = asyncio.run(run())
+
+        assert [e.error_code for e in events] == [None, None, "STREAMING_ERROR"]
+        assert mock_trace_agent.call_args.kwargs["error_type"] == "STREAMING_ERROR"
+        assert (mock_trace_agent.call_args.kwargs["error_message"] == "simulated mid-stream network interruption")
+        assert mock_trace_agent.call_args.kwargs["agent_action"] == "[INTERRUPTED]\nHello, world"
+        assert mock_report.call_args.kwargs["error_type"] == "STREAMING_ERROR"

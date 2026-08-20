@@ -311,6 +311,53 @@ class TestRunAsync:
         assert mock_trace_runner.call_args.kwargs["error_message"] == "Runner invocation stopped with GeneratorExit."
 
     @pytest.mark.asyncio
+    async def test_mid_stream_error_event_preserves_partial_text_and_marks_error(self, runner, mock_session_service,
+                                                                                 mock_agent, mock_session):
+        """A mid-stream error event (e.g. STREAMING_ERROR from the SDK-managed
+        retry layer) must not wipe out the partial text already streamed, and
+        must mark the runner span as an error instead of silently succeeding
+        with empty output."""
+        mock_session_service.get_session.return_value = mock_session
+
+        async def mock_agent_run(ctx):
+            yield Event(
+                invocation_id=ctx.invocation_id,
+                author="test_agent",
+                content=Content(parts=[Part(text="Hello")]),
+                partial=True,
+            )
+            yield Event(
+                invocation_id=ctx.invocation_id,
+                author="test_agent",
+                content=Content(parts=[Part(text=", world")]),
+                partial=True,
+            )
+            yield Event(
+                invocation_id=ctx.invocation_id,
+                author="test_agent",
+                error_code="STREAMING_ERROR",
+                error_message="simulated mid-stream network interruption",
+            )
+
+        mock_agent.run_async = mock_agent_run
+
+        with patch("trpc_agent_sdk.runners.trace_runner") as mock_trace_runner, \
+             patch("trpc_agent_sdk.runners.tracer"):
+            events = []
+            async for event in runner.run_async(
+                    user_id="test_user",
+                    session_id="test_session",
+                    new_message=Content(parts=[Part(text="Hello")]),
+                    run_config=RunConfig(streaming=True),
+            ):
+                events.append(event)
+
+        assert [e.error_code for e in events] == [None, None, "STREAMING_ERROR"]
+        assert mock_trace_runner.call_args.kwargs["error_type"] == "STREAMING_ERROR"
+        assert (mock_trace_runner.call_args.kwargs["error_message"] == "simulated mid-stream network interruption")
+        assert mock_trace_runner.call_args.kwargs["partial_text"] == "Hello, world"
+
+    @pytest.mark.asyncio
     async def test_run_async_non_streaming_mode(self, runner, mock_session_service, mock_agent, mock_session):
         """Test non-streaming mode only yields complete events."""
         # Setup
