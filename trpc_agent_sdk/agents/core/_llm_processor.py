@@ -195,6 +195,21 @@ class LlmProcessor:
                     raise
                 finally:
                     response_for_trace = final_llm_response or latest_llm_response or LlmResponse()
+                    # The SDK-managed retry layer (retry_model_call in
+                    # models/_retry.py) can swallow a raised exception and
+                    # yield a normal-looking terminal LlmResponse(content=None,
+                    # error_code=...) instead of re-raising - this arrives
+                    # here via the `async for` loop above, not through the
+                    # except branches, so _build_interrupted_content() was
+                    # never called for it and any partial text already
+                    # streamed to the caller would otherwise be missing from
+                    # the call_llm span's llm_response attribute. Back-fill it
+                    # for tracing purposes only (does not affect the Event
+                    # already yielded to the agent, nor report_call_llm below).
+                    if response_for_trace.content is None and response_for_trace.error_code:
+                        interrupted_content = _build_interrupted_content()
+                        if interrupted_content is not None:
+                            response_for_trace = response_for_trace.model_copy(update={"content": interrupted_content})
                     with trace.use_span(call_llm_span, end_on_exit=False):
                         trace_call_llm(
                             context,

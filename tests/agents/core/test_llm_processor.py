@@ -371,3 +371,58 @@ class TestCallLlmAsync:
         assert mock_trace.call_args.kwargs["error_type"] == "RuntimeError"
         assert mock_trace.call_args.kwargs["error_message"] == "upstream failed"
         assert mock_report.call_args.kwargs["error_type"] == "RuntimeError"
+
+    def test_retry_swallowed_error_traces_accumulated_partial_content(self, invocation_context):
+        """The SDK-managed retry layer (retry_model_call) can swallow a raised
+        exception and yield a normal-looking terminal LlmResponse(content=None,
+        error_code=...) instead of re-raising - this arrives via the `async for`
+        loop, not through the except branches. The call_llm span's llm_response
+        attribute must still carry the partial text already streamed, instead of
+        losing it just because content is None on the terminal response."""
+        m = MockLLMModel(model_name="test-llmproc-model")
+        m._responses = [
+            LlmResponse(content=Content(parts=[Part(text="Hello")]), partial=True),
+            LlmResponse(content=Content(parts=[Part(text=", the weather")]), partial=True),
+            # Mimics models/_retry.py:_build_error_response - a normal
+            # (non-raised) terminal response with content=None and error_code
+            # set, as yielded by retry_model_call after swallowing an exception.
+            LlmResponse(
+                content=None,
+                error_code="STREAMING_ERROR",
+                error_message="simulated mid-stream network interruption",
+                custom_metadata={"error": "simulated mid-stream network interruption"},
+            ),
+        ]
+        proc = LlmProcessor(m)
+        request = LlmRequest()
+
+        async def run():
+            events = []
+            async for event in proc.call_llm_async(request, invocation_context, stream=True):
+                events.append(event)
+            return events
+
+        with patch("trpc_agent_sdk.agents.core._llm_processor.report_call_llm") as mock_report, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm") as mock_trace, \
+             patch("trpc_agent_sdk.agents.core._llm_processor.tracer"):
+            events = asyncio.run(run())
+
+        # The terminal error event is yielded to the agent (unaffected by the
+        # trace-only back-fill).
+        assert events[-1].error_code == "STREAMING_ERROR"
+        assert events[-1].content is None
+
+        mock_trace.assert_called_once()
+        response = mock_trace.call_args.args[3]
+        assert response.error_code == "STREAMING_ERROR"
+        assert response.error_message == "simulated mid-stream network interruption"
+        # Back-filled for tracing: content now carries the already-streamed
+        # partial text instead of being None.
+        assert response.content is not None
+        assert response.content.parts[0].text == "Hello, the weather"
+
+        # The Event yielded to the agent and the response passed to
+        # report_call_llm are unaffected - only the trace_call_llm argument is
+        # back-filled.
+        report_response = mock_report.call_args.args[2]
+        assert report_response.content is None
