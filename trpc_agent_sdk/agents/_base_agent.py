@@ -309,6 +309,20 @@ class BaseAgent(AgentABC):
                             for part in event.content.parts:
                                 if part.text:
                                     partial_text_parts.append(part.text)
+                    elif event.is_error():
+                        # A mid-stream error event (e.g. the SDK-managed
+                        # retry layer swallowing a raised exception into a
+                        # terminal error LlmResponse) does not supersede the
+                        # partial text already streamed to the caller -
+                        # there is no successful final content to take over
+                        # from. Preserve it as a fallback for agent_action
+                        # instead of clearing it, and surface the error so
+                        # the span isn't misreported as a successful run
+                        # with empty output.
+                        if partial_text_parts:
+                            interrupted_partial_text = "".join(partial_text_parts)
+                        error_type = event.error_code
+                        error_message = event.error_message
                     else:
                         # A non-partial event finalizes this turn's output;
                         # any partial text accumulated so far has now been
@@ -349,12 +363,17 @@ class BaseAgent(AgentABC):
                 state_end = dict(ctx.session.state)
 
                 # Build formatted action string from all non-partial events.
-                # Fall back to the accumulated (but never finalized) partial
-                # text when the run was interrupted before producing any
-                # non-partial event, so streamed output is not silently lost.
+                # Append the accumulated (but never finalized) partial text
+                # when the run was interrupted mid-stream, so streamed
+                # output is not silently lost. This can happen even after
+                # earlier non-partial events already exist (e.g. a tool
+                # call/response from turn 1 of a multi-turn run), in which
+                # case the interrupted text from a later turn is appended
+                # rather than replacing the already-collected action string.
                 agent_action = _build_action_string_from_events(non_partial_events)
-                if not agent_action and interrupted_partial_text:
-                    agent_action = f"[INTERRUPTED]\n{interrupted_partial_text}"
+                if interrupted_partial_text:
+                    interrupted_str = f"[INTERRUPTED]\n{interrupted_partial_text}"
+                    agent_action = f"{agent_action}\n\n{interrupted_str}" if agent_action else interrupted_str
 
                 # Call trace function with agent execution details
                 with trace.use_span(agent_span, end_on_exit=False):
