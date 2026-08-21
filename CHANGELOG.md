@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.19](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.19) (2026-08-21)
+
+Version bump to keep the `main` and `r0.1` branches in sync; carries forward the fixes already included in 1.1.18 (LLM streaming interruption span fixes and CI extension package installation).
+
 ## [1.1.18](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.18) (2026-08-21)
 
 ### Bug Fixes
