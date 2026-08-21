@@ -409,10 +409,10 @@ source "${SCRIPT_DIR}/_install_deps.sh"
 # Install optional extras required by the selected mode.
 case "$RUN_MODE" in
     all)
-        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,eval"
+        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,eval,deepseek-langchain"
         ;;
     run-agent)
-        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace"
+        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,deepseek-langchain"
         ;;
     evaluation)
         EXTRAS="eval"
