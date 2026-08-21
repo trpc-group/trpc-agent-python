@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.18](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.18) (2026-08-21)
+
+### Bug Fixes
+
+* Telemetry: Fixed `agent_run` and runner spans misreporting success with empty output when LLM streaming output was interrupted mid-stream (network interruption, model business error, or a retry-swallowed failure on a later turn after a tool call).
+  * Error responses no longer clear the partial text already streamed; the span is now marked as failed and the accumulated output is preserved with an `[INTERRUPTED]` prefix.
+  * In multi-turn runs, the interrupted text is appended after already-collected turn content instead of being dropped.
+  * The `call_llm` span's `llm_response` attribute now also backfills the already-streamed content when the retry layer converts a raised exception into a terminal error response.
+
+### Internal
+
+* CI: Added extension package installation to `pipeline_test/run_all_examples.sh` so the full set of examples can be run in CI.
+
 ## [1.1.17](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.17) (2026-08-19)
 
 ### Features
