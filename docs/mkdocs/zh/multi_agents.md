@@ -653,4 +653,4 @@ LlmAgent(
 
 ### 辅助功能示例
 - AgentTool 示例：[examples/agent_tools/run_agent.py](../../../examples/agent_tools/run_agent.py)
-- TransferAgent 示例：[examples/transfer_agent/run_agent.py](../../../examples/transfer_agent/run_agent.py)
+- TransferAgent 示例：[examples/transfer_agent](../../../examples/transfer_agent/README.md)（`run_agent_v1.py` 对应 `[a2a-v1]`，`run_agent.py` 对应 `[a2a]`）

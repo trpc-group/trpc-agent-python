@@ -553,7 +553,7 @@ def serve():
     """Start the A2A service"""
     a2a_svc = create_a2a_service()
 
-    # Assemble the service using a2a-sdk standard components
+    # Assemble the service with a2a-sdk components
     request_handler = DefaultRequestHandler(
         agent_executor=a2a_svc,
         task_store=InMemoryTaskStore(),
@@ -824,7 +824,8 @@ if __name__ == "__main__":
 It is recommended to configure the same timeout value for both.
 
 **Full example:**
-- [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md)
+- [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md) (a2a-sdk 0.3)
+- [examples/a2a_v1_with_cancel](../../../examples/a2a_v1_with_cancel/README.md) (a2a-sdk 1.x)
 
 ### AG-UI
 
