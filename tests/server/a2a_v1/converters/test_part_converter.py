@@ -1,0 +1,477 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Unit tests for trpc_agent_sdk.server.a2a_v1.converters._part_converter."""
+
+from __future__ import annotations
+
+import base64
+import json
+from enum import Enum
+from unittest.mock import MagicMock
+
+import pytest
+from a2a.types import Part as A2APart
+from google.genai import types as genai_types
+from google.protobuf.json_format import MessageToDict
+
+from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
+from trpc_agent_sdk.server.a2a_v1._constants import (
+    A2A_DATA_FIELD_CODE_EXECUTION_CODE,
+    A2A_DATA_FIELD_CODE_EXECUTION_LANGUAGE,
+    A2A_DATA_FIELD_CODE_EXECUTION_OUTCOME,
+    A2A_DATA_FIELD_CODE_EXECUTION_OUTPUT,
+    A2A_DATA_FIELD_TOOL_CALL_ARGS,
+    A2A_DATA_FIELD_TOOL_CALL_RESPONSE,
+    A2A_DATA_PART_METADATA_TYPE_CODE_EXECUTION_RESULT,
+    A2A_DATA_PART_METADATA_TYPE_EXECUTABLE_CODE,
+    A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
+    A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE,
+    A2A_DATA_PART_METADATA_TYPE_KEY,
+    A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA,
+)
+from trpc_agent_sdk.server.a2a_v1.converters._part_converter import (
+    _a2a_data_to_dict,
+    _a2a_string_field,
+    _convert_a2a_data_part,
+    _convert_streaming_function_call_delta,
+    _function_call_data_for_a2a,
+    _function_response_data_for_a2a,
+    _genai_code_execution_result_to_a2a,
+    _genai_executable_code_to_a2a,
+    _genai_file_uri_to_a2a,
+    _genai_function_call_to_a2a,
+    _genai_function_response_to_a2a,
+    _genai_inline_file_to_a2a,
+    _genai_streaming_function_call_to_a2a,
+    _genai_text_to_a2a,
+    _get_genai_part_kind,
+    _normalize_function_call_data,
+    _normalize_function_response_data,
+    _stringify,
+    _to_bool_metadata,
+    _typed_metadata,
+    convert_a2a_part_to_genai_part,
+    convert_genai_part_to_a2a_part,
+)
+
+
+def _data_dict(part: A2APart) -> dict:
+    """Extract the data field of a Part as a plain dict."""
+    return MessageToDict(part.data)
+
+
+def _meta_dict(part: A2APart) -> dict:
+    """Extract the metadata field of a Part as a plain dict."""
+    return MessageToDict(part.metadata)
+
+
+def _data_part(data: dict, metadata: dict | None = None) -> A2APart:
+    """Build a Part whose ``data`` field holds structured data.
+
+    The protobuf ``data`` field is a ``google.protobuf.Value`` and must be
+    constructed via ``ParseDict`` (a raw dict is not accepted).
+    """
+    from google.protobuf import struct_pb2
+    from google.protobuf.json_format import ParseDict
+
+    return A2APart(
+        data=ParseDict(data, struct_pb2.Value()),
+        metadata=metadata,
+    )
+
+
+# ---------------------------------------------------------------------------
+# _to_bool_metadata
+# ---------------------------------------------------------------------------
+class TestToBoolMetadata:
+    def test_bool_true(self):
+        assert _to_bool_metadata(True) is True
+
+    def test_bool_false(self):
+        assert _to_bool_metadata(False) is False
+
+    def test_string_true(self):
+        assert _to_bool_metadata("true") is True
+        assert _to_bool_metadata("True") is True
+        assert _to_bool_metadata("  TRUE  ") is True
+
+    def test_string_false(self):
+        assert _to_bool_metadata("false") is False
+        assert _to_bool_metadata("  False  ") is False
+
+    def test_non_bool_string(self):
+        assert _to_bool_metadata("yes") is None
+
+    def test_none(self):
+        assert _to_bool_metadata(None) is None
+
+    def test_integer(self):
+        assert _to_bool_metadata(1) is None
+
+
+# ---------------------------------------------------------------------------
+# _stringify
+# ---------------------------------------------------------------------------
+class TestStringify:
+    def test_none(self):
+        assert _stringify(None) == ""
+
+    def test_string(self):
+        assert _stringify("hello") == "hello"
+
+    def test_integer(self):
+        assert _stringify(42) == "42"
+
+    def test_enum(self):
+        class Color(Enum):
+            RED = "red"
+        assert _stringify(Color.RED) == "red"
+
+
+# ---------------------------------------------------------------------------
+# _a2a_string_field
+# ---------------------------------------------------------------------------
+class TestA2aStringField:
+    def test_none(self):
+        assert _a2a_string_field(None) == ""
+
+    def test_string(self):
+        assert _a2a_string_field("hello") == "hello"
+
+    def test_dict(self):
+        result = _a2a_string_field({"a": 1})
+        assert json.loads(result) == {"a": 1}
+
+    def test_list(self):
+        result = _a2a_string_field([1, 2])
+        assert json.loads(result) == [1, 2]
+
+    def test_number(self):
+        assert _a2a_string_field(42) == "42"
+
+
+# ---------------------------------------------------------------------------
+# _typed_metadata
+# ---------------------------------------------------------------------------
+class TestTypedMetadata:
+    def test_returns_dict_with_type(self):
+        result = _typed_metadata("function_call")
+        assert result == {A2A_DATA_PART_METADATA_TYPE_KEY: "function_call"}
+
+
+# ---------------------------------------------------------------------------
+# _get_genai_part_kind
+# ---------------------------------------------------------------------------
+class TestGetGenaiPartKind:
+    def test_text(self):
+        part = genai_types.Part(text="hi")
+        assert _get_genai_part_kind(part) == "text"
+
+    def test_file_data(self):
+        part = genai_types.Part(file_data=genai_types.FileData(file_uri="gs://bucket/f", mime_type="text/plain"))
+        assert _get_genai_part_kind(part) == "file_uri"
+
+    def test_inline_data(self):
+        part = genai_types.Part(inline_data=genai_types.Blob(data=b"abc", mime_type="text/plain"))
+        assert _get_genai_part_kind(part) == "inline_file"
+
+    def test_function_call(self):
+        part = genai_types.Part(function_call=genai_types.FunctionCall(name="fn", args={"a": 1}))
+        assert _get_genai_part_kind(part) == "function_call"
+
+    def test_streaming_function_call(self):
+        part = genai_types.Part(function_call=genai_types.FunctionCall(
+            name="fn", args={TOOL_STREAMING_ARGS: "delta"}))
+        assert _get_genai_part_kind(part) == "streaming_function_call"
+
+    def test_function_response(self):
+        part = genai_types.Part(function_response=genai_types.FunctionResponse(name="fn", response={"r": 1}))
+        assert _get_genai_part_kind(part) == "function_response"
+
+    def test_code_execution_result(self):
+        part = genai_types.Part(code_execution_result=genai_types.CodeExecutionResult(output="out", outcome="OUTCOME_OK"))
+        assert _get_genai_part_kind(part) == "code_execution_result"
+
+    def test_executable_code(self):
+        part = genai_types.Part(executable_code=genai_types.ExecutableCode(code="print(1)", language="PYTHON"))
+        assert _get_genai_part_kind(part) == "executable_code"
+
+    def test_unknown(self):
+        part = genai_types.Part()
+        assert _get_genai_part_kind(part) is None
+
+
+# ---------------------------------------------------------------------------
+# GenAI → A2A converters
+# ---------------------------------------------------------------------------
+class TestGenaiTextToA2a:
+    def test_basic_text(self):
+        part = genai_types.Part(text="hello")
+        result = _genai_text_to_a2a(part)
+        assert result.HasField("text")
+        assert result.text == "hello"
+
+    def test_text_with_thought(self):
+        part = genai_types.Part(text="thinking...", thought=True)
+        result = _genai_text_to_a2a(part)
+        assert _meta_dict(result) == {"thought": True}
+
+    def test_text_without_thought(self):
+        part = genai_types.Part(text="no thought")
+        result = _genai_text_to_a2a(part)
+        assert not result.HasField("metadata")
+
+
+class TestGenaiFileUriToA2a:
+    def test_basic(self):
+        part = genai_types.Part(file_data=genai_types.FileData(file_uri="gs://b/f", mime_type="image/png"))
+        result = _genai_file_uri_to_a2a(part)
+        assert result.HasField("url")
+        assert result.url == "gs://b/f"
+        assert result.media_type == "image/png"
+
+
+class TestGenaiInlineFileToA2a:
+    def test_basic(self):
+        data = b"binary_data"
+        part = genai_types.Part(inline_data=genai_types.Blob(data=data, mime_type="application/octet-stream"))
+        result = _genai_inline_file_to_a2a(part)
+        assert result.HasField("raw")
+        assert result.raw == data
+
+    def test_with_video_metadata(self):
+        data = b"video_bytes"
+        part = genai_types.Part(
+            inline_data=genai_types.Blob(data=data, mime_type="video/mp4"),
+            video_metadata=genai_types.VideoMetadata(fps=24.0, start_offset="0s"),
+        )
+        result = _genai_inline_file_to_a2a(part)
+        assert result.HasField("raw")
+        assert result.raw == data
+        video_meta = _meta_dict(result)["video_metadata"]
+        assert video_meta["fps"] == 24.0
+        assert video_meta["startOffset"] == "0s"
+
+
+# ---------------------------------------------------------------------------
+# _a2a_data_to_dict
+# ---------------------------------------------------------------------------
+class TestA2aDataToDict:
+    def test_dict_returned_as_is(self):
+        payload = {"k": "v"}
+        assert _a2a_data_to_dict(payload) is payload
+
+    def test_unsupported_returns_empty(self):
+        assert _a2a_data_to_dict(None) == {}
+        assert _a2a_data_to_dict("not-a-dict") == {}
+
+
+class TestGenaiStreamingFunctionCallToA2a:
+    def test_basic(self):
+        part = genai_types.Part(function_call=genai_types.FunctionCall(
+            id="tool1", name="fn", args={TOOL_STREAMING_ARGS: "partial"}))
+        result = _genai_streaming_function_call_to_a2a(part)
+        assert result.HasField("data")
+        data = _data_dict(result)
+        assert data["name"] == "fn"
+        assert data["delta_args"] == "partial"
+        assert _meta_dict(result)[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_STREAMING_FUNCTION_CALL_DELTA
+
+
+class TestGenaiFunctionCallToA2a:
+    def test_basic(self):
+        part = genai_types.Part(function_call=genai_types.FunctionCall(name="fn", args={"x": 1}))
+        result = _genai_function_call_to_a2a(part)
+        assert result.HasField("data")
+        assert _meta_dict(result)[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL
+
+
+class TestGenaiFunctionResponseToA2a:
+    def test_basic(self):
+        part = genai_types.Part(function_response=genai_types.FunctionResponse(name="fn", response={"r": "ok"}))
+        result = _genai_function_response_to_a2a(part)
+        assert result.HasField("data")
+        assert _meta_dict(result)[A2A_DATA_PART_METADATA_TYPE_KEY] == A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE
+
+
+class TestGenaiCodeExecutionResultToA2a:
+    def test_basic(self):
+        part = genai_types.Part(code_execution_result=genai_types.CodeExecutionResult(output="result", outcome="OUTCOME_OK"))
+        result = _genai_code_execution_result_to_a2a(part)
+        assert result.HasField("data")
+        assert _data_dict(result)[A2A_DATA_FIELD_CODE_EXECUTION_OUTPUT] == "result"
+
+
+class TestGenaiExecutableCodeToA2a:
+    def test_basic(self):
+        part = genai_types.Part(executable_code=genai_types.ExecutableCode(code="print(1)", language="PYTHON"))
+        result = _genai_executable_code_to_a2a(part)
+        assert result.HasField("data")
+        assert _data_dict(result)[A2A_DATA_FIELD_CODE_EXECUTION_CODE] == "print(1)"
+
+
+# ---------------------------------------------------------------------------
+# convert_genai_part_to_a2a_part (dispatch)
+# ---------------------------------------------------------------------------
+class TestConvertGenaiPartToA2aPart:
+    def test_text_dispatch(self):
+        part = genai_types.Part(text="hi")
+        result = convert_genai_part_to_a2a_part(part)
+        assert result.HasField("text")
+
+    def test_unknown_returns_none(self):
+        part = genai_types.Part()
+        result = convert_genai_part_to_a2a_part(part)
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# A2A → GenAI helpers
+# ---------------------------------------------------------------------------
+class TestFunctionCallDataForA2a:
+    def test_dict_input(self):
+        result = _function_call_data_for_a2a({"name": "fn", "args": {"a": 1}})
+        assert result["type"] == "function"
+        assert result["args"] == '{"a": 1}'
+
+    def test_non_dict_with_model_dump(self):
+        obj = MagicMock()
+        obj.model_dump.return_value = {"name": "fn", "args": {"a": 1}}
+        result = _function_call_data_for_a2a(obj)
+        assert result["type"] == "function"
+
+
+class TestFunctionResponseDataForA2a:
+    def test_dict_input(self):
+        result = _function_response_data_for_a2a({"name": "fn", "response": {"r": 1}})
+        assert result["response"] == '{"r": 1}'
+
+    def test_non_dict_with_model_dump(self):
+        obj = MagicMock()
+        obj.model_dump.return_value = {"name": "fn", "response": "ok"}
+        result = _function_response_data_for_a2a(obj)
+        assert "name" in result
+
+
+class TestNormalizeFunctionCallData:
+    def test_parses_args_json(self):
+        result = _normalize_function_call_data({"name": "fn", "args": '{"x": 1}', "type": "function"})
+        assert result["args"] == {"x": 1}
+        assert "type" not in result
+
+    def test_invalid_json_args_fallback(self):
+        result = _normalize_function_call_data({"args": "not json"})
+        assert result["args"] == {}
+
+    def test_non_dict_input(self):
+        result = _normalize_function_call_data("not a dict")
+        assert result == {}
+
+
+class TestNormalizeFunctionResponseData:
+    def test_parses_response_json(self):
+        result = _normalize_function_response_data({"name": "fn", "response": '{"r": 1}'})
+        assert result["response"] == {"r": 1}
+
+    def test_invalid_json_wraps_in_content(self):
+        result = _normalize_function_response_data({"response": "plain text"})
+        assert result["response"] == {"content": "plain text"}
+
+    def test_non_dict_input(self):
+        result = _normalize_function_response_data("not a dict")
+        assert result == {}
+
+
+class TestConvertStreamingFunctionCallDelta:
+    def test_basic(self):
+        data = {"id": "t1", "name": "fn", "delta_args": "partial"}
+        result = _convert_streaming_function_call_delta(data)
+        assert result.function_call.name == "fn"
+        assert result.function_call.args[TOOL_STREAMING_ARGS] == "partial"
+
+    def test_none_data(self):
+        result = _convert_streaming_function_call_delta(None)
+        assert result.function_call is not None
+
+
+# ---------------------------------------------------------------------------
+# _convert_a2a_data_part
+# ---------------------------------------------------------------------------
+class TestConvertA2aDataPart:
+    def test_function_call(self):
+        part = _data_part(
+            {"name": "fn", "args": '{"x": 1}'},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        )
+        result = _convert_a2a_data_part(part)
+        assert result.function_call is not None
+        assert result.function_call.name == "fn"
+
+    def test_unknown_type_falls_back_to_json_text(self):
+        part = _data_part({"custom": "value"}, {"type": "unknown"})
+        result = _convert_a2a_data_part(part)
+        assert result.text is not None
+        parsed = json.loads(result.text)
+        assert parsed["custom"] == "value"
+
+    def test_no_metadata_type(self):
+        part = _data_part({"k": "v"})
+        result = _convert_a2a_data_part(part)
+        assert result.text is not None
+
+
+# ---------------------------------------------------------------------------
+# convert_a2a_part_to_genai_part (dispatch)
+# ---------------------------------------------------------------------------
+class TestConvertA2aPartToGenaiPart:
+    def test_text_part(self):
+        a2a_part = A2APart(text="hello")
+        result = convert_a2a_part_to_genai_part(a2a_part)
+        assert result.text == "hello"
+
+    def test_text_part_with_thought(self):
+        a2a_part = A2APart(text="thinking", metadata={"thought": "true"})
+        result = convert_a2a_part_to_genai_part(a2a_part)
+        assert result.text == "thinking"
+        assert result.thought is True
+
+    def test_file_with_uri(self):
+        a2a_part = A2APart(url="gs://b/f", media_type="text/plain")
+        result = convert_a2a_part_to_genai_part(a2a_part)
+        assert result.file_data.file_uri == "gs://b/f"
+
+    def test_file_with_bytes(self):
+        data = b"hello"
+        a2a_part = A2APart(raw=data, media_type="text/plain")
+        result = convert_a2a_part_to_genai_part(a2a_part)
+        assert result.inline_data.data == data
+
+    def test_data_part(self):
+        a2a_part = _data_part(
+            {"name": "fn", "args": "{}"},
+            {A2A_DATA_PART_METADATA_TYPE_KEY: A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL},
+        )
+        result = convert_a2a_part_to_genai_part(a2a_part)
+        assert result.function_call is not None
+
+    def test_unsupported_part_returns_none(self):
+        mock_part = MagicMock(spec=A2APart)
+        mock_part.HasField.side_effect = lambda f: False
+        result = convert_a2a_part_to_genai_part(mock_part)
+        assert result is None
+
+    def test_duck_typed_text_part_without_hasfield(self):
+        from types import SimpleNamespace
+
+        result = convert_a2a_part_to_genai_part(SimpleNamespace(text="hello", metadata=None))
+        assert result is not None
+        assert result.text == "hello"
+
+    def test_duck_typed_unsupported_part_without_hasfield_returns_none(self):
+        from types import SimpleNamespace
+
+        result = convert_a2a_part_to_genai_part(SimpleNamespace())
+        assert result is None

@@ -3,6 +3,15 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
+"""A2A adapter for a2a-sdk 0.3.x (extra ``trpc-agent-py[a2a]``).
+
+For a2a-sdk 1.x use ``trpc_agent_sdk.server.a2a_v1``
+(extra ``trpc-agent-py[a2a-v1]``). The two extras cannot be installed together.
+"""
+
+from .._a2a_detect import require_a2a_sdk_major
+
+require_a2a_sdk_major(0)
 
 from ._agent_card_builder import AgentCardBuilder
 from ._agent_service import TrpcA2aAgentService

@@ -1,1 +1,3 @@
 [run]
+omit =
+    trpc_agent_sdk/server/a2a/*

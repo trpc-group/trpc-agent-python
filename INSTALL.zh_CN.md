@@ -152,7 +152,8 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 
 | 扩展名           | 用途                          | 安装命令                                |
 | ---------------- | ----------------------------- | --------------------------------------- |
-| `a2a`            | Google A2A 协议               | `pip install "trpc-agent-py[a2a]"`            |
+| `a2a`            | Google A2A 协议（a2a-sdk 0.3；`trpc_agent_sdk.server.a2a`） | `pip install "trpc-agent-py[a2a]"`            |
+| `a2a-v1`         | Google A2A 协议（a2a-sdk 1.x；`trpc_agent_sdk.server.a2a_v1`；不能与 `a2a` 同装） | `pip install "trpc-agent-py[a2a-v1]"` |
 | `ag-ui`          | AG-UI 协议                    | `pip install "trpc-agent-py[ag-ui]"`          |
 | `agent-claude`   | Claude Agent                  | `pip install "trpc-agent-py[agent-claude]"`   |
 | `graph`          | LangGraphAgent 与图 DSL（含 langchain） | `pip install "trpc-agent-py[graph]"`          |
@@ -164,7 +165,7 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 | `eval`           | 评测框架                      | `pip install "trpc-agent-py[eval]"`           |
 | `openclaw`       | OpenClaw 集成                 | `pip install "trpc-agent-py[openclaw]"`       |
 | `dev`            | 开发环境（lint/格式化/测试）  | `pip install "trpc-agent-py[dev]"`            |
-| `all`            | 所有可选依赖                  | `pip install "trpc-agent-py[all]"`            |
+| `all`            | 所有可选依赖（A2A 为 a2a-sdk 0.3 / `[a2a]`，不含 `[a2a-v1]`） | `pip install "trpc-agent-py[all]"`            |
 
 ---
 

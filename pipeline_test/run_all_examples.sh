@@ -72,6 +72,9 @@ SKIPPED_EXAMPLES=(
     "examples/skills_with_container/run_agent.py"
     "examples/skills_with_cube/run_agent.py"
     "examples/skills_code_review_agent/run_agent.py"
+    # 0.3 extra [a2a] cannot be installed with [a2a-v1]. 1.x entry is
+    # examples/transfer_agent/run_agent_v1.py and is auto-discovered.
+    "examples/transfer_agent/run_agent.py"
 )
 
 show_usage() {
@@ -84,7 +87,7 @@ Modes:
   all          Run run_agent.py examples, evaluation tests, and A2A example.
   run-agent    Run every discovered examples/**/run_agent.py.
   evaluation   Run every examples/evaluation/**/test_*.py.
-  a2a          Run the A2A server/client example.
+  a2a          Run the A2A server/client example (a2a-sdk 1.x, examples/a2a_v1).
 
 Options:
   --fail-fast        Stop on the first failure.
@@ -297,7 +300,7 @@ run_a2a_example() {
     local test_status=0
 
     (
-        cd "${REPO_ROOT}/examples/a2a"
+        cd "${REPO_ROOT}/examples/a2a_v1"
         exec python3 run_server.py
     ) &
     server_pid=$!
@@ -314,13 +317,13 @@ run_a2a_example() {
     }
 
     if ! wait_for_port "127.0.0.1" "18081" "30"; then
-        echo "FAILED: examples/a2a server did not start on 127.0.0.1:18081"
+        echo "FAILED: examples/a2a_v1 server did not start on 127.0.0.1:18081"
         cleanup_a2a
         return 1
     fi
 
     (
-        cd "${REPO_ROOT}/examples/a2a"
+        cd "${REPO_ROOT}/examples/a2a_v1"
         timeout "$EXAMPLE_TIMEOUT_SECONDS" python3 test_a2a.py
     )
     test_status=$?
@@ -331,7 +334,7 @@ run_a2a_example() {
 discover_run_agent_examples() {
     mapfile -t RUN_AGENT_EXAMPLES < <(
         cd "$REPO_ROOT"
-        find examples -path "*/run_agent.py" -type f | sort
+        find examples -type f \( -name "run_agent.py" -o -name "run_agent_v1.py" \) | sort
     )
 }
 
@@ -407,18 +410,20 @@ cd "$REPO_ROOT"
 source "${SCRIPT_DIR}/_install_deps.sh"
 
 # Install optional extras required by the selected mode.
+# [a2a] and [a2a-v1] are mutually exclusive; CI runs the 1.x stack
+# (examples/a2a_v1 and examples/transfer_agent/run_agent_v1.py).
 case "$RUN_MODE" in
     all)
-        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,eval,deepseek-langchain"
+        EXTRAS="graph,a2a-v1,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,eval,deepseek-langchain"
         ;;
     run-agent)
-        EXTRAS="graph,a2a,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,deepseek-langchain"
+        EXTRAS="graph,a2a-v1,agent-claude,knowledge,knowledge-hf,langchain_tool,mempalace,deepseek-langchain"
         ;;
     evaluation)
         EXTRAS="eval"
         ;;
     a2a)
-        EXTRAS="a2a"
+        EXTRAS="a2a-v1"
         ;;
 esac
 
@@ -435,7 +440,7 @@ case "$RUN_MODE" in
     all)
         run_discovered_agents
         run_evaluation_tests
-        run_command "examples/a2a" run_a2a_example
+        run_command "examples/a2a_v1" run_a2a_example
         ;;
     run-agent)
         run_discovered_agents
@@ -444,7 +449,7 @@ case "$RUN_MODE" in
         run_evaluation_tests
         ;;
     a2a)
-        run_command "examples/a2a" run_a2a_example
+        run_command "examples/a2a_v1" run_a2a_example
         ;;
 esac
 

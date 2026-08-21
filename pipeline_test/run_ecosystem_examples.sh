@@ -40,13 +40,13 @@ source "${PROJECT_VENV_DIR}/bin/activate"
 # shellcheck source=pipeline_test/_install_deps.sh
 source "${SCRIPT_DIR}/_install_deps.sh"
 
-# A2A + Claude team member examples
-pipeline_uv_install_extras "a2a,agent-claude"
+# A2A (1.x) + Claude team member examples
+pipeline_uv_install_extras "a2a-v1,agent-claude"
 pipeline_uv_install_requirements "pipeline_test/requirements-ecosystem.txt"
 
 # 启动A2A服务端（后台运行）
 echo "启动A2A服务端..."
-python3 examples/a2a/trpc_main.py &
+python3 examples/a2a_v1/run_server.py &
 SERVER_PID=$!
 
 # 等待服务端启动
@@ -54,9 +54,7 @@ sleep 5
 
 # 运行A2A客户端测试
 echo "运行A2A客户端测试..."
-python3 examples/a2a/test_a2a.py
-# python3 examples/a2a/raw_client.py
-# python3 examples/a2a/client.py
+python3 examples/a2a_v1/test_a2a.py
 
 # # TeamAgent with Remote A2A Member
 # echo "运行 TeamAgent with Remote A2A Member..."
