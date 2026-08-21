@@ -4,6 +4,7 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 
+import asyncio
 from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -11,9 +12,29 @@ from unittest.mock import patch
 import pytest
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.models._openai_model import _HTTPCORE2_ATHROW_ERROR
+from trpc_agent_sdk.models._openai_model import _aclose_async_iterator
+from trpc_agent_sdk.models._openai_model import _aclose_openai_stream
+from trpc_agent_sdk.models._openai_model import _await_drain_task
+from trpc_agent_sdk.models._openai_model import _patch_stream_response_to_drain_http_body
+from trpc_agent_sdk.models._openai_model import _read_http_iterator_to_end
+from trpc_agent_sdk.models._openai_model import _responses_create_parameters_for_resource
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import Part
+
+
+def _make_fake_http_response(module_name: str, aiter_raw, aclose):
+    """Build a response-like object whose type module mimics httpx or httpx2."""
+
+    class _FakeResponse:
+        def __init__(self):
+            self.aiter_raw = aiter_raw
+            self.aclose = aclose
+
+    _FakeResponse.__module__ = module_name
+    _FakeResponse.__name__ = "Response"
+    return _FakeResponse()
 
 
 class TestOpenAIModel:
@@ -625,6 +646,192 @@ class TestOpenAIModel:
             # Should have multiple partial responses plus final response
             assert len(responses) > 1
 
+    @pytest.mark.asyncio
+    async def test_generate_async_streaming_closes_openai_stream(self):
+        """Chat Completions streaming must aclose the SDK stream after use."""
+        model = OpenAIModel(model_name="gpt-4", api_key="test_key")
+        content = Content(parts=[Part.from_text(text="Tell me a story")], role="user")
+        request = LlmRequest(contents=[content], config=None, tools_dict={})
+        chunk = Mock()
+        chunk.model_dump.return_value = {
+            "choices": [{
+                "delta": {"content": "Hi"},
+                "finish_reason": "stop",
+                "index": 0,
+            }],
+            "usage": None,
+        }
+
+        class _CloseableStream:
+            def __init__(self):
+                self.aclose = AsyncMock()
+
+            async def __aiter__(self):
+                yield chunk
+
+        stream = _CloseableStream()
+        with patch.object(model, "_create_async_client") as mock_client_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=stream)
+            mock_client.close = AsyncMock()
+            mock_client_factory.return_value = mock_client
+            async for _ in model.generate_async(request, stream=True):
+                pass
+        stream.aclose.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_patch_skips_httpx_response(self):
+        """openai 1.x/2.x httpx responses must keep the original close path."""
+        inner_finished = False
+
+        async def paused_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        orig_aiter_raw = paused_body
+        closed = False
+
+        async def orig_aclose():
+            nonlocal closed
+            closed = True
+
+        class _FakeStream:
+            def __init__(self):
+                self.response = _make_fake_http_response("httpx._models", paused_body, orig_aclose)
+
+        stream = _FakeStream()
+        _patch_stream_response_to_drain_http_body(stream)
+        assert stream.response.aiter_raw is orig_aiter_raw
+        await stream.response.aclose()
+        assert closed is True
+        assert inner_finished is False
+
+    @pytest.mark.asyncio
+    async def test_patch_stream_response_drains_paused_http_body(self):
+        """httpx2 response.aclose() after SSE [DONE] must exhaust leftover HTTP bytes."""
+        inner_finished = False
+
+        async def paused_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        closed = False
+
+        async def orig_aclose():
+            nonlocal closed
+            closed = True
+
+        class _FakeStream:
+            def __init__(self):
+                self.response = _make_fake_http_response("httpx2._models", paused_body, orig_aclose)
+
+        stream = _FakeStream()
+        _patch_stream_response_to_drain_http_body(stream)
+        assert stream.response.aiter_raw is not paused_body
+
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        await stream.response.aclose()
+        await agen.aclose()
+        assert inner_finished is True
+        assert closed is True
+
+    @pytest.mark.asyncio
+    async def test_patch_closes_connection_before_retrying_hung_drain(self):
+        """If leftover body hangs, close TCP first so the iterator can finish."""
+        inner_finished = False
+        connection_closed = asyncio.Event()
+        aclose_before_finish = []
+
+        async def hung_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            await connection_closed.wait()
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        async def orig_aclose():
+            aclose_before_finish.append(inner_finished)
+            connection_closed.set()
+
+        class _FakeStream:
+            def __init__(self):
+                self.response = _make_fake_http_response("httpx2._models", hung_body, orig_aclose)
+
+        stream = _FakeStream()
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        with patch("trpc_agent_sdk.models._openai_model._HTTP_BODY_DRAIN_TIMEOUT_S", 0.05):
+            await stream.response.aclose()
+        await agen.aclose()
+        assert aclose_before_finish == [False]
+        assert inner_finished is True
+
+    @pytest.mark.asyncio
+    async def test_patch_concurrent_aclose_and_generator_exit_drains_once(self):
+        """response.aclose() and aiter_raw GeneratorExit must share one drain."""
+        inner_finished = False
+        connection_closed = asyncio.Event()
+        drain_calls = {"n": 0}
+
+        async def hung_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            await connection_closed.wait()
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        async def orig_aclose():
+            connection_closed.set()
+
+        class _FakeStream:
+            def __init__(self):
+                self.response = _make_fake_http_response("httpx2._models", hung_body, orig_aclose)
+
+        async def counting_drain(iterator):
+            drain_calls["n"] += 1
+            await _read_http_iterator_to_end(iterator)
+
+        stream = _FakeStream()
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        with patch("trpc_agent_sdk.models._openai_model._read_http_iterator_to_end", counting_drain), \
+             patch("trpc_agent_sdk.models._openai_model._HTTP_BODY_DRAIN_TIMEOUT_S", 0.05):
+            await asyncio.gather(stream.response.aclose(), agen.aclose())
+        assert drain_calls["n"] == 1
+        assert inner_finished is True
+
+    @pytest.mark.asyncio
+    async def test_await_drain_task_reuses_completed_task(self):
+        drain_calls = {"n": 0}
+
+        async def body():
+            yield b"chunk"
+
+        async def counting_drain(iterator):
+            drain_calls["n"] += 1
+            await _read_http_iterator_to_end(iterator)
+
+        iterator = body().__aiter__()
+        held = {"iterator": iterator, "drain_task": None}
+        with patch("trpc_agent_sdk.models._openai_model._read_http_iterator_to_end", counting_drain):
+            assert await _await_drain_task(held) is True
+            assert await _await_drain_task(held) is True
+        assert drain_calls["n"] == 1
+
     async def test_generate_async_streaming_preserves_text_with_native_tool_call(self):
         """Final streaming response keeps regular text alongside native tool calls."""
         model = OpenAIModel(model_name="gpt-4", api_key="test_key")
@@ -1042,3 +1249,335 @@ class TestOpenAIBuildUsageMetadata:
         }
         meta = OpenAIModel._build_usage_metadata(usage_data)
         assert meta.cache_read_input_tokens is None
+
+
+def _httpx2_stream(aiter_raw, aclose):
+    class _FakeStream:
+        def __init__(self):
+            self.response = _make_fake_http_response("httpx2._models", aiter_raw, aclose)
+
+    return _FakeStream()
+
+
+def _httpx2_stream_aclose_on_aiter_end(body, orig_aclose):
+    """Mimic httpx2 Response.aiter_raw(), which calls self.aclose() in finally."""
+
+    class _FakeResponse:
+        def __init__(self):
+            self.aclose = orig_aclose
+
+        async def aiter_raw(self, chunk_size=None):
+            try:
+                async for chunk in body(chunk_size):
+                    yield chunk
+            finally:
+                await self.aclose()
+
+    _FakeResponse.__module__ = "httpx2._models"
+    _FakeResponse.__name__ = "Response"
+
+    class _FakeStream:
+        def __init__(self):
+            self.response = _FakeResponse()
+
+    return _FakeStream()
+
+
+class TestOpenAIHttpBodyDrainExceptions:
+    """Exception and edge paths for httpx2 SSE body drain helpers."""
+
+    async def test_await_drain_task_missing_iterator_is_success(self):
+        assert await _await_drain_task({"iterator": None, "drain_task": None}) is True
+
+    async def test_await_drain_task_cancelled_task_is_failure(self):
+        async def hanging():
+            await asyncio.Event().wait()
+            yield b"x"
+
+        iterator = hanging().__aiter__()
+        task = asyncio.create_task(iterator.__anext__())
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        held = {"iterator": iterator, "drain_task": task}
+        assert await _await_drain_task(held) is False
+
+    async def test_await_drain_task_iterator_error_is_failure(self):
+        class _Boom:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise RuntimeError("truncated body")
+
+        assert await _await_drain_task({"iterator": _Boom(), "drain_task": None}) is False
+
+    async def test_aclose_async_iterator_without_aclose_is_noop(self):
+        await _aclose_async_iterator(object())
+
+    async def test_aclose_async_iterator_ignores_httpcore2_athrow(self):
+        class _HttpcoreBoom:
+            async def aclose(self):
+                raise RuntimeError(_HTTPCORE2_ATHROW_ERROR)
+
+        await _aclose_async_iterator(_HttpcoreBoom())
+
+    async def test_aclose_async_iterator_reraises_other_runtime_error(self):
+        class _Boom:
+            async def aclose(self):
+                raise RuntimeError("unrelated close failure")
+
+        with pytest.raises(RuntimeError, match="unrelated close failure"):
+            await _aclose_async_iterator(_Boom())
+
+    async def test_aclose_async_iterator_swallows_generic_error(self):
+        class _Boom:
+            async def aclose(self):
+                raise ValueError("close failed")
+
+        await _aclose_async_iterator(_Boom())
+
+    async def test_patch_skips_none_stream_and_missing_response(self):
+        _patch_stream_response_to_drain_http_body(None)
+        _patch_stream_response_to_drain_http_body(object())
+
+    async def test_patch_is_idempotent(self):
+        async def body(chunk_size=None):
+            yield b"data: hello\n\n"
+
+        async def orig_aclose():
+            return None
+
+        stream = _httpx2_stream(body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        wrapped = stream.response.aiter_raw
+        _patch_stream_response_to_drain_http_body(stream)
+        assert stream.response.aiter_raw is wrapped
+
+    async def test_patch_swallows_immutable_response(self):
+        async def body(chunk_size=None):
+            yield b"data: hello\n\n"
+
+        async def orig_aclose():
+            return None
+
+        class _FrozenResponse:
+            def __init__(self):
+                object.__setattr__(self, "aiter_raw", body)
+                object.__setattr__(self, "aclose", orig_aclose)
+
+            def __setattr__(self, name, value):
+                raise AttributeError(name)
+
+        _FrozenResponse.__module__ = "httpx2._models"
+
+        class _FakeStream:
+            def __init__(self):
+                self.response = _FrozenResponse()
+
+        stream = _FakeStream()
+        _patch_stream_response_to_drain_http_body(stream)
+        assert stream.response.aiter_raw is body
+
+    async def test_exhausted_aiter_raw_does_not_close_http_response(self):
+        response_closed = False
+
+        async def body(chunk_size=None):
+            yield b"data: hello\n\n"
+
+        async def orig_aclose():
+            nonlocal response_closed
+            response_closed = True
+
+        stream = _httpx2_stream(body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        with pytest.raises(StopAsyncIteration):
+            await agen.__anext__()
+        assert response_closed is False
+
+    async def test_second_aclose_does_not_reclose_tcp(self):
+        orig_calls = []
+
+        async def body(chunk_size=None):
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            yield b"0\r\n\r\n"
+
+        async def orig_aclose():
+            orig_calls.append(1)
+
+        stream = _httpx2_stream(body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        await stream.response.aclose()
+        await stream.response.aclose()
+        await agen.aclose()
+        assert orig_calls == [1]
+
+    async def test_patch_drain_does_not_deadlock_when_inner_aiter_closes_response(self):
+        """httpx2 aiter_raw finally calls response.aclose(); drain must not join itself."""
+        inner_finished = False
+
+        async def paused_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        closed = False
+
+        async def orig_aclose():
+            nonlocal closed
+            closed = True
+
+        stream = _httpx2_stream_aclose_on_aiter_end(paused_body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        await asyncio.wait_for(stream.response.aclose(), timeout=1.0)
+        await asyncio.wait_for(agen.aclose(), timeout=1.0)
+        assert inner_finished is True
+        assert closed is True
+
+    async def test_patch_hung_drain_does_not_deadlock_when_inner_aiter_closes_response(self):
+        """TCP close unblocks leftover bytes; inner aiter_raw.aclose must not deadlock."""
+        inner_finished = False
+        connection_closed = asyncio.Event()
+
+        async def hung_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            await connection_closed.wait()
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        async def orig_aclose():
+            connection_closed.set()
+
+        stream = _httpx2_stream_aclose_on_aiter_end(hung_body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        with patch("trpc_agent_sdk.models._openai_model._HTTP_BODY_DRAIN_TIMEOUT_S", 0.05):
+            await asyncio.wait_for(stream.response.aclose(), timeout=1.0)
+        await asyncio.wait_for(agen.aclose(), timeout=1.0)
+        assert inner_finished is True
+
+    async def test_follower_aclose_skips_orig_aclose_after_leader_tcp_close(self):
+        orig_calls = []
+        connection_closed = asyncio.Event()
+        tcp_closed = asyncio.Event()
+
+        async def hung_body(chunk_size=None):
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            await connection_closed.wait()
+            yield b"0\r\n\r\n"
+
+        async def orig_aclose():
+            orig_calls.append(1)
+            connection_closed.set()
+            tcp_closed.set()
+
+        stream = _httpx2_stream(hung_body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        with patch("trpc_agent_sdk.models._openai_model._HTTP_BODY_DRAIN_TIMEOUT_S", 0.05):
+            gen_close = asyncio.create_task(agen.aclose())
+            await asyncio.wait_for(tcp_closed.wait(), timeout=1.0)
+            await stream.response.aclose()
+            await gen_close
+        assert orig_calls == [1]
+
+    async def test_follower_aclose_joins_failed_drain(self):
+        orig_calls = []
+
+        async def boom_body(chunk_size=None):
+            yield b"data: hello\n\n"
+            raise RuntimeError("truncated")
+
+        async def orig_aclose():
+            orig_calls.append(1)
+
+        stream = _httpx2_stream(boom_body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        await asyncio.gather(stream.response.aclose(), stream.response.aclose())
+        assert orig_calls
+
+    async def test_hung_drain_survives_orig_aclose_error(self):
+        inner_finished = False
+        connection_closed = asyncio.Event()
+
+        async def hung_body(chunk_size=None):
+            nonlocal inner_finished
+            yield b"data: hello\n\n"
+            yield b"data: [DONE]\n\n"
+            await connection_closed.wait()
+            yield b"0\r\n\r\n"
+            inner_finished = True
+
+        async def orig_aclose():
+            connection_closed.set()
+            raise RuntimeError("tcp close failed")
+
+        stream = _httpx2_stream(hung_body, orig_aclose)
+        _patch_stream_response_to_drain_http_body(stream)
+        agen = stream.response.aiter_raw()
+        assert await agen.__anext__() == b"data: hello\n\n"
+        assert await agen.__anext__() == b"data: [DONE]\n\n"
+        with patch("trpc_agent_sdk.models._openai_model._HTTP_BODY_DRAIN_TIMEOUT_S", 0.05):
+            await stream.response.aclose()
+        await agen.aclose()
+        assert inner_finished is True
+
+    async def test_aclose_openai_stream_none_and_missing_closer(self):
+        await _aclose_openai_stream(None)
+        await _aclose_openai_stream(object())
+
+    async def test_aclose_openai_stream_sync_close(self):
+        class _SyncClose:
+            def __init__(self):
+                self.closed = False
+
+            def close(self):
+                self.closed = True
+
+        stream = _SyncClose()
+        await _aclose_openai_stream(stream)
+        assert stream.closed is True
+
+    async def test_aclose_openai_stream_ignores_httpcore2_athrow(self):
+        class _HttpcoreBoom:
+            async def aclose(self):
+                raise RuntimeError(_HTTPCORE2_ATHROW_ERROR)
+
+        await _aclose_openai_stream(_HttpcoreBoom())
+
+    async def test_aclose_openai_stream_reraises_other_runtime_error(self):
+        class _Boom:
+            async def aclose(self):
+                raise RuntimeError("stream close failed")
+
+        with pytest.raises(RuntimeError, match="stream close failed"):
+            await _aclose_openai_stream(_Boom())
+
+    def test_responses_create_parameters_wraps_signature_errors(self):
+        class _BadResource:
+            create = 123
+
+        _responses_create_parameters_for_resource.cache_clear()
+        with pytest.raises(ValueError, match="Unable to determine Responses logprobs support"):
+            _responses_create_parameters_for_resource(_BadResource)

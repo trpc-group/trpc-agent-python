@@ -10,6 +10,7 @@ for interacting with OpenAI's API. It supports both streaming and non-streaming
 responses, tool calls, and various OpenAI-specific features.
 """
 
+import asyncio
 import base64
 import functools
 import inspect
@@ -52,6 +53,199 @@ from .openai_adapter import get_openai_adapter
 from .tool_prompt import ToolPromptFactory
 from .tool_prompt import get_factory
 from .tool_prompt import ToolPrompt
+
+_HTTPCORE2_ATHROW_ERROR = "generator didn't stop after athrow"
+_HTTP_BODY_DRAIN_TIMEOUT_S = 2.0
+
+
+def _is_httpx2_response(http_response: Any) -> bool:
+    """Return True when the streaming body is an httpx2 Response."""
+    module = getattr(type(http_response), "__module__", "") or ""
+    return module.startswith("httpx2")
+
+
+async def _read_http_iterator_to_end(iterator: Any) -> None:
+    try:
+        while True:
+            await iterator.__anext__()
+    except StopAsyncIteration:
+        return
+
+
+def _drain_task_succeeded(task: asyncio.Task) -> bool:
+    if task.cancelled():
+        return False
+    return task.exception() is None
+
+
+async def _await_drain_task(held: dict[str, Any], timeout: float | None = None) -> bool:
+    """Continue (or start) draining the held iterator without cancelling it."""
+    iterator = held.get("iterator")
+    if iterator is None:
+        return True
+    task = held.get("drain_task")
+    if task is None:
+        task = asyncio.create_task(_read_http_iterator_to_end(iterator))
+        held["drain_task"] = task
+    elif task.done():
+        return _drain_task_succeeded(task)
+    try:
+        if timeout is None:
+            await task
+            return True
+        await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+        return True
+    except asyncio.TimeoutError:
+        return False
+    except Exception:  # pylint: disable=broad-except
+        logger.debug("Error draining HTTP body after SSE close", exc_info=True)
+        return False
+
+
+async def _aclose_async_iterator(iterator: Any) -> None:
+    closer = getattr(iterator, "aclose", None)
+    if closer is None:
+        return
+    try:
+        await closer()
+    except RuntimeError as exc:
+        if _HTTPCORE2_ATHROW_ERROR not in str(exc):
+            raise
+        logger.debug("Ignored httpcore2 stream close error", exc_info=True)
+    except Exception:  # pylint: disable=broad-except
+        logger.debug("Error closing HTTP body iterator", exc_info=True)
+
+
+async def _call_maybe_awaitable(func: Any, *args: Any, **kwargs: Any) -> None:
+    result = func(*args, **kwargs)
+    if inspect.isawaitable(result):
+        await result
+
+
+def _patch_stream_response_to_drain_http_body(stream: Any) -> None:
+    """Drain leftover HTTP bytes before httpx2 closes a paused SSE body.
+
+    openai 3.x ``AsyncStream.__stream__`` breaks at ``[DONE]`` and then calls
+    ``response.aclose()``. That closes the connection while
+    ``PoolByteStream.__aiter__`` is still paused at ``yield`` and the inner
+    HTTP/1.1 generator is awaiting the chunked terminator. httpcore2's nested
+    ``safe_async_iterate`` then fails with ``generator didn't stop after
+    athrow()`` when those generators are later finalized.
+
+    Only httpx2 responses are wrapped. openai 1.x/2.x (httpx) keep the original
+    close path. If leftover bytes do not arrive in time, close the TCP
+    connection first so the iterator can finish on EOF instead of athrow-ing a
+    paused generator.
+    """
+    if stream is None:
+        return
+    http_response = getattr(stream, "response", None)
+    orig_aiter_raw = getattr(http_response, "aiter_raw", None)
+    orig_aclose = getattr(http_response, "aclose", None)
+    if http_response is None or orig_aiter_raw is None or orig_aclose is None:
+        return
+    if not _is_httpx2_response(http_response):
+        return
+    if getattr(http_response, "_trpc_drain_on_close", False):
+        return
+
+    held: dict[str, Any] = {
+        "iterator": None,
+        "closing": False,
+        "drain_task": None,
+        "tcp_closed": False,
+    }
+
+    async def _join_drain() -> None:
+        task = held.get("drain_task")
+        # httpx2 Response.aiter_raw() calls self.aclose() in its finally
+        # block. That re-enters this wrapper from the drain task itself;
+        # joining would deadlock on asyncio.shield(drain_task).
+        if task is None or task is asyncio.current_task():
+            return
+        try:
+            await asyncio.shield(task)
+        except Exception:  # pylint: disable=broad-except
+            logger.debug("Error joining HTTP body drain", exc_info=True)
+
+    async def _close_http_body(*,
+                               always_tcp_close: bool,
+                               aclose_args: tuple = (),
+                               aclose_kwargs: Optional[Dict[str, Any]] = None) -> None:
+        """Drain leftover bytes once, then close. Followers join the leader."""
+        aclose_kwargs = aclose_kwargs or {}
+        leader = not held["closing"]
+        held["closing"] = True
+        iterator = held.get("iterator")
+
+        if not leader:
+            await _join_drain()
+            if always_tcp_close and not held["tcp_closed"]:
+                await _call_maybe_awaitable(orig_aclose, *aclose_args, **aclose_kwargs)
+                held["tcp_closed"] = True
+            return
+
+        if iterator is not None:
+            drained = await _await_drain_task(held, timeout=_HTTP_BODY_DRAIN_TIMEOUT_S)
+            if not drained:
+                try:
+                    await _call_maybe_awaitable(orig_aclose, *aclose_args, **aclose_kwargs)
+                except Exception:  # pylint: disable=broad-except
+                    logger.debug("Error closing HTTP response after hung SSE drain", exc_info=True)
+                held["tcp_closed"] = True
+                await _await_drain_task(held, timeout=None)
+            await _aclose_async_iterator(iterator)
+            if held.get("iterator") is iterator:
+                held["iterator"] = None
+                held["drain_task"] = None
+
+        if always_tcp_close and not held["tcp_closed"]:
+            await _call_maybe_awaitable(orig_aclose, *aclose_args, **aclose_kwargs)
+            held["tcp_closed"] = True
+
+    async def aiter_raw(chunk_size: int | None = None) -> AsyncGenerator[bytes, None]:
+        inner = orig_aiter_raw() if chunk_size is None else orig_aiter_raw(chunk_size)
+        iterator = inner.__aiter__()
+        held["iterator"] = iterator
+        try:
+            while True:
+                yield await iterator.__anext__()
+        except StopAsyncIteration:
+            return
+        except GeneratorExit:
+            await _close_http_body(always_tcp_close=False)
+            raise
+        finally:
+            if not held["closing"]:
+                await _aclose_async_iterator(iterator)
+                if held.get("iterator") is iterator:
+                    held["iterator"] = None
+                    held["drain_task"] = None
+
+    async def aclose(*args: Any, **kwargs: Any) -> None:
+        await _close_http_body(always_tcp_close=True, aclose_args=args, aclose_kwargs=kwargs)
+
+    try:
+        http_response.aiter_raw = aiter_raw
+        http_response.aclose = aclose
+        http_response._trpc_drain_on_close = True
+    except (AttributeError, TypeError):
+        logger.debug("Unable to wrap OpenAI HTTP stream close path", exc_info=True)
+
+
+async def _aclose_openai_stream(stream: Any) -> None:
+    """Close an OpenAI streaming response after the consumer finishes."""
+    if stream is None:
+        return
+    closer = getattr(stream, "aclose", None) or getattr(stream, "close", None)
+    if closer is None:
+        return
+    try:
+        await _call_maybe_awaitable(closer)
+    except RuntimeError as exc:
+        if _HTTPCORE2_ATHROW_ERROR not in str(exc):
+            raise
+        logger.debug("Ignored httpcore2 stream close error", exc_info=True)
 
 
 def _responses_create_parameters(client: Any) -> frozenset:
@@ -2062,6 +2256,7 @@ class OpenAIModel(LLMModel):
             )
             if response is None:
                 raise ValueError("Empty response from Responses API")
+            _patch_stream_response_to_drain_http_body(response)
 
             async for event in response:
                 event_dict = self._model_dump(event)
@@ -2181,8 +2376,7 @@ class OpenAIModel(LLMModel):
             final_response.custom_metadata = {"stream_complete": True}
             yield final_response
         finally:
-            if response is not None and hasattr(response, "aclose"):
-                await response.aclose()
+            await _aclose_openai_stream(response)
             try:
                 await self._http_client_provider.close_http_client(client)
             except Exception:  # pylint: disable=broad-except
@@ -2222,11 +2416,13 @@ class OpenAIModel(LLMModel):
         api_params[ApiParamsKey.STREAM_OPTS] = {ApiParamsKey.INCLUDE_USAGE: True}
 
         client = self._create_async_client()
+        response: Any = None
         logger.debug("openai invoke with params: %s", api_params)
         try:
             response = await client.chat.completions.create(**api_params, **http_options)
             if response is None:
                 raise ValueError("Empty response from API")
+            _patch_stream_response_to_drain_http_body(response)
 
             async for chunk in response:
                 if chunk is None:
@@ -2441,4 +2637,5 @@ class OpenAIModel(LLMModel):
                 custom_metadata={"stream_complete": True},
             )
         finally:
+            await _aclose_openai_stream(response)
             await self._http_client_provider.close_http_client(client)
