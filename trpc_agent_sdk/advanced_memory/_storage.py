@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Basic disk stores for long-term memory, session memory, and transcripts."""
 
 from __future__ import annotations
@@ -14,11 +19,11 @@ from datetime import timezone
 from pathlib import Path
 from typing import Any
 
-from .config import AdvancedMemoryConfig
-from .formats import MemoryDocument
-from .formats import MemoryIndexEntry
-from .formats import SessionMemoryDocument
-from .paths import AdvancedMemoryPaths
+from ._config import AdvancedMemoryConfig
+from ._formats import MemoryDocument
+from ._formats import MemoryIndexEntry
+from ._formats import SessionMemoryDocument
+from ._paths import AdvancedMemoryPaths
 
 
 def _atomic_write_text(path: Path, content: str, *, encoding: str) -> None:

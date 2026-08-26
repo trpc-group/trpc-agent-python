@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Limit tool-result context usage before model requests."""
 
 from __future__ import annotations
@@ -10,8 +15,8 @@ from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
 
-from .callbacks import install_staged_callback
-from .runtime import AdvancedMemoryRuntime
+from ._callbacks import install_staged_callback
+from ._runtime import AdvancedMemoryRuntime
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.agents import LlmAgent

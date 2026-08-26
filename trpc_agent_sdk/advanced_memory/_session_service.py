@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Decorate a SessionService to record a complete transcript."""
 
 from __future__ import annotations
@@ -14,11 +19,11 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.context import AgentContext
     from trpc_agent_sdk.context import InvocationContext
 
-from .runtime import AdvancedMemoryRuntime
-from .coordination import CrossLoopLock
-from .session_memory import SessionMemoryExtractor
-from .transcript import build_event_transcript_record
-from .transcript import find_last_event_id
+from ._runtime import AdvancedMemoryRuntime
+from ._coordination import CrossLoopLock
+from ._session_memory import SessionMemoryExtractor
+from ._transcript import build_event_transcript_record
+from ._transcript import find_last_event_id
 
 
 class TranscriptSessionService(SessionServiceABC):

@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Automatically compact history before model requests and circuit-break failures."""
 
 from __future__ import annotations
@@ -13,19 +18,18 @@ from typing import Protocol
 from typing import TYPE_CHECKING
 
 from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.models import LlmResponse
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
-from .callbacks import install_staged_callback
-from .formats import SESSION_MEMORY_SECTIONS
-from .formats import SessionMemoryDocument
-from .history_snip import estimate_request_chars
-from .runtime import AdvancedMemoryRuntime
-from .token_budget import TokenContextTracker
+from ._callbacks import install_staged_callback
+from ._formats import SESSION_MEMORY_SECTIONS
+from ._formats import SessionMemoryDocument
+from ._history_snip import estimate_request_chars
+from ._runtime import AdvancedMemoryRuntime
+from ._token_budget import TokenContextTracker
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.agents import LlmAgent as ParentLlmAgent
@@ -179,7 +183,6 @@ class ForkedLegacySummaryGenerator:
             app_name=app_name,
             agent=agent,
             session_service=InMemorySessionService(),
-            memory_service=InMemoryMemoryService(),
             enable_post_turn_processing=False,
         )
         last_event = None

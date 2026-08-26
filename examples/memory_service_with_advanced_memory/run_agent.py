@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Run the two-session Advanced Memory demonstration."""
 
 import asyncio
@@ -89,7 +95,7 @@ async def main() -> None:
             prompt="What do you remember about my favorite programming language?",
         )
 
-        print("\n⏳ Waiting 1 minutes for the session TTL cleanup...")
+        print("\n⏳ Waiting for the session TTL cleanup...")
         await asyncio.sleep(125)
         print("🧹 Expired Advanced Memory sessions should now be removed.")
     finally:

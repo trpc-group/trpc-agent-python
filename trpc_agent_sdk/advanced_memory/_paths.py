@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Safe path resolution for the independent memory mechanism."""
 
 from __future__ import annotations
@@ -7,7 +12,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import AdvancedMemoryConfig
+from ._config import AdvancedMemoryConfig
 
 _SAFE_COMPONENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
