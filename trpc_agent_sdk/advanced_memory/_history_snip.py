@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Clean old tool results when the context nears its budget."""
 
 from __future__ import annotations
@@ -8,13 +13,13 @@ from dataclasses import dataclass
 from typing import Any
 from typing import TYPE_CHECKING
 
-from .callbacks import install_staged_callback
-from .runtime import AdvancedMemoryRuntime
-from .tool_result_budget import is_budget_replacement_response
-from .tool_result_budget import serialize_tool_response
-from .tool_result_budget import stable_tool_result_id
-from .tool_result_budget import tool_result_sha256
-from .token_budget import TokenContextTracker
+from ._callbacks import install_staged_callback
+from ._runtime import AdvancedMemoryRuntime
+from ._tool_result_budget import is_budget_replacement_response
+from ._tool_result_budget import serialize_tool_response
+from ._tool_result_budget import stable_tool_result_id
+from ._tool_result_budget import tool_result_sha256
+from ._token_budget import TokenContextTracker
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.agents import LlmAgent

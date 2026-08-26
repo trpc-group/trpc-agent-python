@@ -27,7 +27,8 @@ Advanced Memory 上下文管理整合到一个 SessionService 中，用户不需
 脚本使用同一个 Runner 执行多个 Session：
 
 1. `session-1` 连续输入多轮 Python 开发偏好。
-2. 低阈值配置会触发 session memory 提取，并写入 `session_memory.md`。
+2. 当累计上下文和工具调用达到配置阈值后，系统会提取 session memory，并写入
+   `session_memory.md`。
 3. `session-1` 请求总结已经学习到的开发偏好。
 4. `session-2` 查询长期记忆，验证不同 Session 共享同一个 `MEMORY/`。
 
@@ -64,9 +65,7 @@ runner = Runner(
 - `AutoCompact`
 - `ToolResultBudget`
 
-`AdvancedMemoryConfig` 默认已经启用这些能力。示例中额外降低了
-session-memory 的阈值，只是为了用较少的对话轮数演示提取流程；生产环境可以
-删除这些阈值配置，使用默认值。
+`AdvancedMemoryConfig` 默认已经启用这些能力，本示例直接使用默认配置。
 
 ## 数据目录
 
@@ -130,9 +129,6 @@ python3 run_agent.py
 session_service = AdvancedMemorySessionService(
     config=AdvancedMemoryConfig(
         root_dir=Path(__file__).resolve().parent, # 当前示例目录
-        # root_dir=Path(
-        # "/data/workspace/trpc-agent-python/examples/memory_service_with_advanced_memory"
-        # ),
         # Optional
         enabled=True,                             # 总开关和存储路径
         memory_dir_name="MEMORY",                 # 长期记忆目录

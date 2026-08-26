@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Provide the one-shot entry point for the context pipeline."""
 
 from __future__ import annotations
@@ -6,26 +11,26 @@ from dataclasses import dataclass
 from typing import Any
 from typing import TYPE_CHECKING
 
-from .autocompact import AutoCompact
-from .autocompact import LegacySummaryGenerator
-from .autocompact import setup_autocompact
-from .history_snip import HistorySnip
-from .history_snip import setup_history_snip
-from .memory_context import LongTermMemoryContext
-from .memory_context import setup_long_term_memory_context
-from .microcompact import Microcompact
-from .microcompact import setup_microcompact
-from .runtime import AdvancedMemoryRuntime
-from .session_memory import SessionMemoryExtractor
-from .session_memory import SessionMemoryGenerator
-from .session_service import TranscriptSessionService
-from .tool_result_budget import setup_tool_result_budget
-from .tool_result_budget import ToolResultBudget
+from ._autocompact import AutoCompact
+from ._autocompact import LegacySummaryGenerator
+from ._autocompact import setup_autocompact
+from ._history_snip import HistorySnip
+from ._history_snip import setup_history_snip
+from ._memory_context import LongTermMemoryContext
+from ._memory_context import setup_long_term_memory_context
+from ._microcompact import Microcompact
+from ._microcompact import setup_microcompact
+from ._runtime import AdvancedMemoryRuntime
+from ._session_memory import SessionMemoryExtractor
+from ._session_memory import SessionMemoryGenerator
+from ._session_service import TranscriptSessionService
+from ._tool_result_budget import setup_tool_result_budget
+from ._tool_result_budget import ToolResultBudget
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.agents import LlmAgent
     from trpc_agent_sdk.sessions import SessionServiceABC
-    from trpc_agent_sdk.tools.advanced_memory_tool import AdvancedMemoryTools
+    from trpc_agent_sdk.tools._advanced_memory_tool import AdvancedMemoryTools
 
 
 @dataclass(frozen=True)
@@ -54,9 +59,9 @@ def _setup_long_term_memory_tools(
     memory_runtime: AdvancedMemoryRuntime,
 ) -> "AdvancedMemoryTools":
     """Install the three official memory tools idempotently."""
-    from trpc_agent_sdk.tools.advanced_memory_tool import (
+    from trpc_agent_sdk.tools._advanced_memory_tool import (
         ADVANCED_MEMORY_TOOL_NAMES, )
-    from trpc_agent_sdk.tools.advanced_memory_tool import AdvancedMemoryTools
+    from trpc_agent_sdk.tools._advanced_memory_tool import AdvancedMemoryTools
 
     matching_tools = [tool for tool in agent.tools if getattr(tool, "name", None) in ADVANCED_MEMORY_TOOL_NAMES]
     if matching_tools:
@@ -85,8 +90,8 @@ def _setup_preload_memory_tool(
     """Install the automatic topic-memory preprocessor when enabled."""
     if not memory_runtime.config.enabled or not memory_runtime.config.preload_memory_enabled:
         return
-    from trpc_agent_sdk.advanced_memory.preload_memory import MemoryPreloader
-    from trpc_agent_sdk.advanced_memory.preload_memory import (
+    from trpc_agent_sdk.advanced_memory._preload_memory import MemoryPreloader
+    from trpc_agent_sdk.advanced_memory._preload_memory import (
         ModelMemoryRelevanceSelector, )
     from trpc_agent_sdk.tools import PreloadMemoryTool
 

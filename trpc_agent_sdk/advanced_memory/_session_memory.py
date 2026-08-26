@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Maintain structured session memory with an isolated sub-agent."""
 
 from __future__ import annotations
@@ -19,11 +24,11 @@ from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
-from .formats import SESSION_MEMORY_SECTION_DESCRIPTIONS
-from .formats import SESSION_MEMORY_SECTIONS
-from .formats import SessionMemoryDocument
-from .runtime import AdvancedMemoryRuntime
-from .token_budget import TokenContextTracker
+from ._formats import SESSION_MEMORY_SECTION_DESCRIPTIONS
+from ._formats import SESSION_MEMORY_SECTIONS
+from ._formats import SessionMemoryDocument
+from ._runtime import AdvancedMemoryRuntime
+from ._token_budget import TokenContextTracker
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.abc import SessionABC

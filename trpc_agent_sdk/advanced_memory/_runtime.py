@@ -1,16 +1,21 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Unified runtime entry point for the independent memory mechanism."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import AdvancedMemoryConfig
-from .coordination import SessionOperationCoordinator
-from .paths import AdvancedMemoryPaths
-from .storage import LongTermMemoryStore
-from .storage import SessionMemoryStore
-from .storage import ToolResultStore
-from .storage import TranscriptStore
+from ._config import AdvancedMemoryConfig
+from ._coordination import SessionOperationCoordinator
+from ._paths import AdvancedMemoryPaths
+from ._storage import LongTermMemoryStore
+from ._storage import SessionMemoryStore
+from ._storage import ToolResultStore
+from ._storage import TranscriptStore
 
 
 @dataclass(frozen=True)

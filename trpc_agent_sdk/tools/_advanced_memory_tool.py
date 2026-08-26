@@ -1,4 +1,9 @@
-"""为独立 Advanced Memory 提供长期记忆读写工具。"""
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Provide long-term memory read/write tools for standalone Advanced Memory."""
 
 from __future__ import annotations
 
@@ -6,12 +11,12 @@ import asyncio
 import re
 from typing import Any
 
-from trpc_agent_sdk.advanced_memory.formats import MemoryDocument
-from trpc_agent_sdk.advanced_memory.formats import MemoryIndexEntry
-from trpc_agent_sdk.advanced_memory.formats import MemoryType
-from trpc_agent_sdk.advanced_memory.formats import memory_freshness
-from trpc_agent_sdk.advanced_memory.formats import parse_memory_updated_at
-from trpc_agent_sdk.advanced_memory.runtime import AdvancedMemoryRuntime
+from trpc_agent_sdk.advanced_memory._formats import MemoryDocument
+from trpc_agent_sdk.advanced_memory._formats import MemoryIndexEntry
+from trpc_agent_sdk.advanced_memory._formats import MemoryType
+from trpc_agent_sdk.advanced_memory._formats import memory_freshness
+from trpc_agent_sdk.advanced_memory._formats import parse_memory_updated_at
+from trpc_agent_sdk.advanced_memory._runtime import AdvancedMemoryRuntime
 
 from ._function_tool import FunctionTool
 
@@ -24,7 +29,7 @@ _INDEX_PATTERN = re.compile(r"^- \[(?P<name>.+?)\]（(?P<filename>.+?)）:(?P<su
 
 
 def _parse_index(index: str) -> list[MemoryIndexEntry]:
-    """解析 Advanced Memory 的标准 MEMORY.md 索引行。"""
+    """Parse standard Advanced Memory index entries from MEMORY.md."""
     entries: list[MemoryIndexEntry] = []
     for line in index.splitlines():
         match = _INDEX_PATTERN.match(line.strip())
@@ -35,10 +40,10 @@ def _parse_index(index: str) -> list[MemoryIndexEntry]:
 
 
 class AdvancedMemoryTools:
-    """把长期记忆存储包装为 Agent 可调用的三个正式工具。"""
+    """Wrap long-term memory storage as three official Agent-callable tools."""
 
     def __init__(self, runtime: AdvancedMemoryRuntime) -> None:
-        """保存运行时并创建索引更新锁。"""
+        """Store the runtime and create the index update lock."""
         self._runtime = runtime
         self._index_lock = asyncio.Lock()
         self._tools = (
@@ -49,15 +54,15 @@ class AdvancedMemoryTools:
 
     @property
     def runtime(self) -> AdvancedMemoryRuntime:
-        """返回工具绑定的新记忆运行时。"""
+        """Return the Advanced Memory runtime bound to these tools."""
         return self._runtime
 
     def as_tools(self) -> list[FunctionTool]:
-        """返回可直接追加到 LlmAgent.tools 的工具列表。"""
+        """Return tools that can be appended directly to LlmAgent.tools."""
         return list(self._tools)
 
     def owns_tool(self, tool: Any) -> bool:
-        """判断给定 FunctionTool 是否由当前工具容器创建。"""
+        """Return whether this container created the given FunctionTool."""
         function = getattr(tool, "func", None)
         return getattr(function, "__self__", None) is self
 
@@ -70,7 +75,7 @@ class AdvancedMemoryTools:
         summary: str,
         content: str,
     ) -> dict:
-        """保存或覆盖长期记忆详情文件，并同步更新 MEMORY.md 索引。"""
+        """Save or overwrite a long-term memory file and update MEMORY.md."""
         try:
             resolved_type = MemoryType(memory_type)
         except ValueError as exc:
@@ -106,7 +111,7 @@ class AdvancedMemoryTools:
         }
 
     async def read_memory(self, filename: str) -> dict:
-        """按 MEMORY.md 中的文件名读取一条长期记忆全文。"""
+        """Read a complete long-term memory by its filename in MEMORY.md."""
         content = await self._runtime.long_term_memory.read_topic(filename)
         if content is None:
             return {"found": False, "filename": filename}
@@ -129,7 +134,7 @@ class AdvancedMemoryTools:
         }
 
     async def list_memory_index(self) -> dict:
-        """返回当前长期记忆索引及其磁盘路径。"""
+        """Return the current long-term memory index and its disk path."""
         return {
             "index_path": str(self._runtime.paths.memory_index_path),
             "index": await self._runtime.long_term_memory.read_index(),
@@ -137,5 +142,5 @@ class AdvancedMemoryTools:
 
 
 def create_advanced_memory_tools(runtime: AdvancedMemoryRuntime, ) -> list[FunctionTool]:
-    """创建绑定指定运行时的正式 Advanced Memory 工具列表。"""
+    """Create the official Advanced Memory tools bound to the given runtime."""
     return AdvancedMemoryTools(runtime).as_tools()
