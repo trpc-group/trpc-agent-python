@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Select and preload long-term memories for the current model request."""
 
 from __future__ import annotations
@@ -19,9 +24,9 @@ from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
-from .formats import memory_freshness
-from .formats import parse_memory_updated_at
-from .runtime import AdvancedMemoryRuntime
+from ._formats import memory_freshness
+from ._formats import parse_memory_updated_at
+from ._runtime import AdvancedMemoryRuntime
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.context import InvocationContext

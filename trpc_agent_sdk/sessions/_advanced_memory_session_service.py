@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Session service backed by Advanced Memory transcript storage."""
 
 from __future__ import annotations
@@ -19,9 +24,9 @@ from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory.coordination import CrossLoopLock
-from trpc_agent_sdk.advanced_memory.transcript import build_event_transcript_record
-from trpc_agent_sdk.advanced_memory.transcript import find_last_event_id
+from trpc_agent_sdk.advanced_memory._coordination import CrossLoopLock
+from trpc_agent_sdk.advanced_memory._transcript import build_event_transcript_record
+from trpc_agent_sdk.advanced_memory._transcript import find_last_event_id
 
 from ._base_session_service import BaseSessionService
 from ._session import Session

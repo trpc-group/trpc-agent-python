@@ -1,3 +1,8 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Agent definition for the Advanced Memory example."""
 
 from trpc_agent_sdk.agents import LlmAgent
@@ -8,7 +13,7 @@ from .prompts import INSTRUCTION
 
 
 def create_agent() -> LlmAgent:
-    """Create an agent; Advanced Memory tools are installed by run_agent.py."""
+    """Create an agent; the Runner installs Advanced Memory tools."""
     api_key, base_url, model_name = get_model_config()
     return LlmAgent(
         name="advanced_memory_assistant",
