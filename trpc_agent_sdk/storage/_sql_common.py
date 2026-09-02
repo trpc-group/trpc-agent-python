@@ -32,9 +32,12 @@ from typing import Optional
 
 from sqlalchemy import Dialect
 from sqlalchemy import Text
+from sqlalchemy import func
 from sqlalchemy.dialects import mysql
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.sql.functions import FunctionElement
 from sqlalchemy.types import DateTime
 from sqlalchemy.types import PickleType
 from sqlalchemy.types import String
@@ -301,6 +304,27 @@ class PreciseTimestamp(TypeDecorator):
         if hook_result is not None:
             return hook_result
         return value
+
+
+class PreciseNow(FunctionElement):
+    """Return the current database timestamp with MySQL microsecond precision."""
+
+    type = DateTime()
+    inherit_cache = True
+
+
+@compiles(PreciseNow)
+def _compile_precise_now(element: PreciseNow, compiler: Any, **kwargs: Any) -> str:
+    """Preserve SQLAlchemy's dialect-specific ``now()`` behavior by default."""
+    del element
+    return compiler.process(func.now(), **kwargs)
+
+
+@compiles(PreciseNow, "mysql")
+def _compile_precise_now_mysql(element: PreciseNow, compiler: Any, **kwargs: Any) -> str:
+    """Use the precision declared by MySQL ``DATETIME(6)`` columns."""
+    del element, compiler, kwargs
+    return "CURRENT_TIMESTAMP(6)"
 
 
 class DynamicPickleType(TypeDecorator):

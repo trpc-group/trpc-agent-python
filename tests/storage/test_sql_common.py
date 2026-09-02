@@ -20,6 +20,7 @@ import pytest
 from sqlalchemy import Text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.types import DateTime
 from sqlalchemy.types import PickleType
@@ -29,6 +30,7 @@ from trpc_agent_sdk.storage._sql_common import (
     DynamicJSON,
     DynamicJSONOptions,
     DynamicPickleType,
+    PreciseNow,
     PreciseTimestamp,
     SpannerPickleType,
     StorageData,
@@ -278,6 +280,26 @@ class TestUTF8MB4String:
 
 
 # ---------------------------------------------------------------------------
+# PreciseNow SQL expression
+# ---------------------------------------------------------------------------
+
+
+class TestPreciseNow:
+
+    def test_compile_mysql_uses_microsecond_precision(self):
+        sql = str(PreciseNow().compile(dialect=mysql.dialect()))
+        assert sql == "CURRENT_TIMESTAMP(6)"
+
+    def test_compile_postgresql_preserves_default_now(self):
+        sql = str(PreciseNow().compile(dialect=postgresql.dialect()))
+        assert sql == "now()"
+
+    def test_compile_sqlite_preserves_default_now(self):
+        sql = str(PreciseNow().compile(dialect=sqlite.dialect()))
+        assert sql == "CURRENT_TIMESTAMP"
+
+
+# ---------------------------------------------------------------------------
 # PreciseTimestamp TypeDecorator
 # ---------------------------------------------------------------------------
 
@@ -464,6 +486,7 @@ class TestSqlCommonReexports:
             DynamicJSON as _DJ,
             DynamicJSONOptions as _DJO,
             DynamicPickleType as _DPT,
+            PreciseNow as _PN,
             PreciseTimestamp as _PT,
             SpannerPickleType as _SPT,
             StorageData as _SD,
@@ -475,6 +498,7 @@ class TestSqlCommonReexports:
         assert _DJ is DynamicJSON
         assert _DJO is DynamicJSONOptions
         assert _DPT is DynamicPickleType
+        assert _PN is PreciseNow
         assert _PT is PreciseTimestamp
         assert _SPT is SpannerPickleType
         assert _SD is StorageData
