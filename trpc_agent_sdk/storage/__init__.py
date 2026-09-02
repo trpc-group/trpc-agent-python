@@ -26,6 +26,7 @@ from ._sql import SqlStorage
 from ._sql_common import DynamicJSON
 from ._sql_common import DynamicJSONOptions
 from ._sql_common import DynamicPickleType
+from ._sql_common import PreciseNow
 from ._sql_common import PreciseTimestamp
 from ._sql_common import SpannerPickleType
 from ._sql_common import StorageData
@@ -59,6 +60,7 @@ __all__ = [
     "DynamicJSON",
     "DynamicJSONOptions",
     "DynamicPickleType",
+    "PreciseNow",
     "PreciseTimestamp",
     "SpannerPickleType",
     "StorageData",
