@@ -57,6 +57,7 @@ from trpc_agent_sdk.storage import DEFAULT_MAX_KEY_LENGTH
 from trpc_agent_sdk.storage import DEFAULT_MAX_VARCHAR_LENGTH
 from trpc_agent_sdk.storage import DynamicJSON
 from trpc_agent_sdk.storage import DynamicPickleType
+from trpc_agent_sdk.storage import PreciseNow
 from trpc_agent_sdk.storage import PreciseTimestamp
 from trpc_agent_sdk.storage import SqlCondition
 from trpc_agent_sdk.storage import SqlKey
@@ -155,8 +156,8 @@ class StorageSession(SessionStorageBase):
                                                                               nullable=True)
     conversation_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    create_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now())
-    update_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now(), onupdate=func.now())
+    create_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=PreciseNow())
+    update_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=PreciseNow(), onupdate=PreciseNow())
 
     storage_events: Mapped[list[SessionStorageEvent]] = relationship(
         "SessionStorageEvent",
@@ -731,7 +732,7 @@ class SqlSessionService(BaseSessionService):
             logger.debug("Session %s is expired", session_id)
             return None
 
-        storage_session.update_time = func.now()
+        storage_session.update_time = PreciseNow()
         await self._sql_storage.commit(sql_session)
 
         return storage_session

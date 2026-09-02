@@ -479,8 +479,8 @@ CREATE TABLE sessions (
     id VARCHAR(255) NOT NULL,
     state JSON,
     conversation_count INT DEFAULT 0,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    create_time DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    update_time DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (app_name, user_id, id),
     INDEX idx_update_time (update_time)  -- 用于清理任务
 );
@@ -523,6 +523,8 @@ async def _cleanup_expired_async(self) -> None:
 - `pool_recycle=3600` 设置连接回收时间，避免长时间连接
 - 清理任务使用批量 SQL DELETE，性能优化
 - 外键级联删除：删除会话时自动删除关联事件
+- **MySQL 时间精度**：`sessions.create_time` 和 `sessions.update_time` 使用微秒精度。框架会根据数据库连接 URL 自动识别 SQLAlchemy dialect；MySQL 使用 `CURRENT_TIMESTAMP(6)` 与 `DATETIME(6)` 对齐，PostgreSQL、SQLite 等数据库继续使用各自原生的当前时间表达式，无需业务代码手动判断数据库类型
+- 如果使用框架自动建表，无需额外迁移；如果复用旧表，请确认 MySQL 中上述两个字段为 `DATETIME(6)`，避免更新时间微秒被截断
 
 **相关示例**：
 - 📁 [`examples/session_service_with_sql/run_agent.py`](../../../examples/session_service_with_sql/run_agent.py) - 完整的 SQL Session Service 使用示例
