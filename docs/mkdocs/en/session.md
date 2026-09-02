@@ -479,8 +479,8 @@ CREATE TABLE sessions (
     id VARCHAR(255) NOT NULL,
     state JSON,
     conversation_count INT DEFAULT 0,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    create_time DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    update_time DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (app_name, user_id, id),
     INDEX idx_update_time (update_time)  -- Used for cleanup task
 );
@@ -523,6 +523,8 @@ async def _cleanup_expired_async(self) -> None:
 - `pool_recycle=3600` sets the connection recycle time to avoid long-lived connections
 - The cleanup task uses batch SQL DELETE for performance optimization
 - Foreign key cascade delete: deleting a session automatically deletes associated events
+- **MySQL timestamp precision**: `sessions.create_time` and `sessions.update_time` use microsecond precision. The framework detects the SQLAlchemy dialect automatically from the database URL; MySQL uses `CURRENT_TIMESTAMP(6)` to match `DATETIME(6)`, while PostgreSQL, SQLite, and other databases retain their native current-time expressions. Application code does not need to detect the database type
+- No migration is needed for tables created automatically by the current framework. When reusing an older MySQL table, verify that both columns are `DATETIME(6)` so fractional seconds are not truncated
 
 **Related Examples**:
 - 📁 [`examples/session_service_with_sql/run_agent.py`](../../../examples/session_service_with_sql/run_agent.py) - Complete SQL Session Service usage example
