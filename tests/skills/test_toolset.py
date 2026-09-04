@@ -7,16 +7,16 @@
 
 Covers:
 - SkillToolSet initialization
-- SkillToolSet.get_tools: returns expected tool set
+- SkillToolSet.get_tools: default set omits dynamic tool-selection helpers
+- SkillToolSetWithDynamicTools.get_tools: opt-in skill_list_tools / skill_select_tools
 - repository property
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
+from trpc_agent_sdk.skills._dynamic_toolset import SkillToolSetWithDynamicTools
 from trpc_agent_sdk.skills._toolset import SkillToolSet
 
 
@@ -63,12 +63,34 @@ class TestSkillToolSetGetTools:
         assert "skill_load" in tool_names
         assert "skill_list" in tool_names
         assert "skill_list_docs" in tool_names
-        assert "skill_list_tools" in tool_names
         assert "skill_select_docs" in tool_names
-        assert "skill_select_tools" in tool_names
+        assert "skill_list_tools" not in tool_names
+        assert "skill_select_tools" not in tool_names
 
     async def test_get_tools_sets_metadata(self, tmp_path):
         ts = SkillToolSet(paths=[str(tmp_path)])
         ctx = _make_ctx()
         await ts.get_tools(ctx)
         ctx.agent_context.with_metadata.assert_called()
+
+
+class TestSkillToolSetWithDynamicTools:
+    async def test_get_tools_includes_dynamic_selection_helpers(self, tmp_path):
+        ts = SkillToolSetWithDynamicTools(paths=[str(tmp_path)])
+        ctx = _make_ctx()
+        tools = await ts.get_tools(ctx)
+        tool_names = [t.name for t in tools]
+        assert "skill_load" in tool_names
+        assert "skill_list" in tool_names
+        assert "skill_list_tools" in tool_names
+        assert "skill_select_tools" in tool_names
+
+    async def test_get_tools_does_not_duplicate_helpers_on_second_call(self, tmp_path):
+        ts = SkillToolSetWithDynamicTools(paths=[str(tmp_path)])
+        ctx = _make_ctx()
+        first = [t.name for t in await ts.get_tools(ctx)]
+        second = [t.name for t in await ts.get_tools(ctx)]
+        assert first.count("skill_list_tools") == 1
+        assert first.count("skill_select_tools") == 1
+        assert second.count("skill_list_tools") == 1
+        assert second.count("skill_select_tools") == 1

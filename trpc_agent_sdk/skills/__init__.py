@@ -55,6 +55,7 @@ from ._constants import SkillProfileNames
 from ._constants import SkillToolsNames
 from . import hub
 from ._dynamic_toolset import DynamicSkillToolSet
+from ._dynamic_toolset import SkillToolSetWithDynamicTools
 from ._registry import SkillRegistry
 from ._repository import BaseSkillRepository
 from ._repository import CachedFsSkillRepository
@@ -140,6 +141,7 @@ __all__ = [
     "SkillProfileNames",
     "SkillToolsNames",
     "DynamicSkillToolSet",
+    "SkillToolSetWithDynamicTools",
     "SkillRegistry",
     "BaseSkillRepository",
     "CachedFsSkillRepository",
