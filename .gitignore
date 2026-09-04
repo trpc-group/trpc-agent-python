@@ -1,6 +1,7 @@
 .idea
 .vscode
 .DS_Store
+.cursor
 *.lock
 *.log
 examples/*.log

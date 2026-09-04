@@ -15,8 +15,8 @@ Agent Skills 将可重用的工作流打包为包含 `SKILL.md` 规范文件以�
 - 🔎 概览注入（名称 + 描述）以指导选择
 - 📥 `skill_load` 按需拉取 `SKILL.md` 主体和选定的文档，自动加载技能中定义的工具
 - 📋 `skill_list` 列出所有可用的技能名称
-- 🔧 `skill_list_tools` 列出指定技能在 `SKILL.md` 中定义的工具名称
-- ⚙️ `skill_select_tools` 动态选择技能的工具（add/replace/clear 模式），实现 token 优化
+- 🔧 `skill_list_tools` 列出指定技能在 `SKILL.md` 中定义的工具名称（仅用于动态工具加载）
+- ⚙️ `skill_select_tools` 动态选择技能的工具，实现 token 优化（仅用于动态工具加载）
 - 📚 `skill_select_docs` 添加/替换/清除文档
 - 🧾 `skill_list_docs` 列出可用文档
 - 🏃 `skill_run` 执行命令，返回 stdout/stderr 和输出文件
@@ -149,24 +149,18 @@ agent = LlmAgent(
 INSTRUCTION = """
 You are an AI assistant with access to Agent Skills.
 
-## Complete Skill Workflow
+## Standard Skill Workflow
 
 When handling user requests:
 
 1. **Discover** → Call skill_list() to see available skills
-2. **Inspect** → Call skill_list_tools(skill_name="...") to preview tools
-3. **Load** → Call skill_load(skill_name="...") to load the skill
-4. **Optimize** → Call skill_select_tools(...) to select only needed tools (saves tokens)
-5. **Document** → Call skill_list_docs(...) and skill_select_docs(...) if more info needed
-6. **Execute** → Call skill_run(...) to execute commands or use skill's tools directly
+2. **Load** → Call skill_load(skill_name="...") to load the skill
+3. **Document** → Call skill_list_docs(...) and skill_select_docs(...) if more info is needed
+4. **Execute** → Call skill_run(...) to execute commands
 
-Example Complete Flow:
-User: "What's the weather in Beijing?"
-→ skill_list() → see "weather-tools"
-→ skill_list_tools(skill_name="weather-tools") → see available tools
-→ skill_load(skill_name="weather-tools") → load full content
-→ skill_select_tools(skill_name="weather-tools", tools=["get_current_weather"]) → optimize
-→ get_current_weather(city="Beijing") → execute
+如果 Agent 需要查看并按需暴露 Skill 的业务工具，请组合使用
+SkillToolSetWithDynamicTools 和 DynamicSkillToolSet。该配置还会提供
+skill_list_tools 和 skill_select_tools。
 
 Always use environment variables in commands:
 - $WORKSPACE_DIR, $SKILLS_DIR, $WORK_DIR, $OUTPUT_DIR, $RUN_DIR, $SKILL_NAME
@@ -176,14 +170,15 @@ Always use environment variables in commands:
 关键点：
 - **工具自动注册**：通过 `SkillToolSet` 自动注册以下工具，无需手动连接：
   - `skill_list`：列出所有可用技能
-  - `skill_list_tools`：列出技能的工具
   - `skill_load`：加载技能内容
-  - `skill_select_tools`：选择特定工具（优化 token）
   - `skill_list_docs`：列出可用文档
   - `skill_select_docs`：选择特定文档
   - `skill_run`：执行技能命令
+- **动态工具管理**：`SkillToolSetWithDynamicTools` 会额外注册
+  `skill_list_tools` 和 `skill_select_tools`。它需要与 `DynamicSkillToolSet`
+  配合使用；普通 `SkillToolSet` 不会暴露这两个工具。
 - **智能提示指导**：在提示词中明确说明工作流程，引导 LLM 按正确顺序调用工具
-- **Token 优化**：通过 `skill_select_tools` 仅加载需要的工具，显著减少上下文大小
+- **Token 优化**：在动态工具配置中，通过 `skill_select_tools` 仅加载需要的工具，显著减少上下文大小
 - **代码位置**：
   - 工具包入口（聚合导出）：[trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
   - `skill_run` 实现：[trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)（其余工具见下文各节「声明位置」）
@@ -549,6 +544,28 @@ Assistant: Let me check what skills are available.
 
 **声明位置**：[trpc_agent_sdk/skills/tools/_skill_list_tool.py](../../../trpc_agent_sdk/skills/tools/_skill_list_tool.py)
 
+**可用范围**：
+- 该工具由 `SkillToolSetWithDynamicTools` 暴露，普通 `SkillToolSet` 不包含它。
+- 它应与 `DynamicSkillToolSet` 配合使用，后者负责从工具池中解析并加载选中的业务工具：
+
+```python
+from trpc_agent_sdk.skills import DynamicSkillToolSet
+from trpc_agent_sdk.skills import SkillToolSetWithDynamicTools
+
+skill_tool_set = SkillToolSetWithDynamicTools(repository=repository)
+dynamic_tool_set = DynamicSkillToolSet(
+    skill_repository=repository,
+    available_tools=available_tools,
+    only_active_skills=True,
+)
+
+agent = LlmAgent(
+    # ...
+    tools=[skill_tool_set, dynamic_tool_set],
+    skill_repository=repository,
+)
+```
+
 **输入参数**：
 - `skill_name`（必需）：技能名称
 
@@ -637,7 +654,7 @@ Overview
 **功能行为**：
 - 优化 LLM 上下文：仅激活当前对话需要的工具
 - 更新 `temp:skill:tools:<name>` 会话键
-- 与 `DynamicSkillToolSet` 配合使用时，只有选中的工具会被加载到 LLM 上下文
+- `SkillToolSetWithDynamicTools` 暴露该选择工具，`DynamicSkillToolSet` 仅将选中的工具加载到 LLM 上下文
 
 **提示词指导**：
 
@@ -1329,7 +1346,7 @@ LLM 调用对应的工具：get_current_weather(city="Beijing")
 |------|------|------|
 | **工具暴露方式** | 所有工具在 Agent 创建时**全部注入** LLM 上下文 | 初始无业务工具，`skill_load` 后才根据 SKILL.md 的 `Tools:` 声明**按需注入** |
 | **SKILL.md `Tools:` 部分** | 可选，仅用于信息展示 | **核心机制**，决定哪些工具会被加载到 LLM 上下文 |
-| **所需组件** | 仅 `SkillToolSet` | `SkillToolSet` + `DynamicSkillToolSet`（两者配合） |
+| **所需组件** | 仅 `SkillToolSet` | `SkillToolSetWithDynamicTools` + `DynamicSkillToolSet`（两者配合） |
 | **工具注册方式** | 工具直接挂在 Agent 的 `tools` 列表中 | 工具放入 `available_tools` 工具池，通过 SKILL.md 声明式过滤 |
 | **Token 消耗** | 固定消耗（所有工具定义常驻上下文） | 按需消耗（仅加载激活 skill 声明的工具），**工具多时节省 85-95%** |
 | **工具可见性控制** | 无，LLM 始终看到所有工具 | 精细控制，可通过 `skill_select_tools` 动态增减 |
@@ -1423,9 +1440,15 @@ Example 4: Ask someone name information
 
 #### 3. 配置 Agent
 
-**文件**: `agent/tools/_dynamic.py` 和 `agent/agent.py`
+**文件**: `agent/tools/_skill_tools.py`、`agent/tools/_dynamic.py` 和 `agent/agent.py`
 
 ```python
+# agent/tools/_skill_tools.py
+from trpc_agent_sdk.skills import SkillToolSetWithDynamicTools
+
+def create_skill_tool_set(repository):
+    return SkillToolSetWithDynamicTools(repository=repository)
+
 # agent/tools/_dynamic.py
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.skills import DynamicSkillToolSet, BaseSkillRepository

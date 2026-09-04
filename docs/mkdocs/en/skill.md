@@ -15,8 +15,8 @@ Background references:
 - 🔎 Overview injection (name + description) to guide selection
 - 📥 `skill_load` fetches `SKILL.md` body and selected documentation on demand, automatically loading tools defined in the skill
 - 📋 `skill_list` lists all available skill names
-- 🔧 `skill_list_tools` lists tool names defined in a specified skill's `SKILL.md`
-- ⚙️ `skill_select_tools` dynamically selects skill tools (add/replace/clear modes) for token optimization
+- 🔧 `skill_list_tools` lists tool names defined in a specified skill's `SKILL.md` (dynamic tool loading only)
+- ⚙️ `skill_select_tools` dynamically selects skill tools for token optimization (dynamic tool loading only)
 - 📚 `skill_select_docs` adds/replaces/clears documentation
 - 🧾 `skill_list_docs` lists available documentation
 - 🏃 `skill_run` executes commands and returns stdout/stderr and output files
@@ -149,24 +149,18 @@ The `INSTRUCTION` should include complete skill usage workflow guidance:
 INSTRUCTION = """
 You are an AI assistant with access to Agent Skills.
 
-## Complete Skill Workflow
+## Standard Skill Workflow
 
 When handling user requests:
 
 1. **Discover** → Call skill_list() to see available skills
-2. **Inspect** → Call skill_list_tools(skill_name="...") to preview tools
-3. **Load** → Call skill_load(skill_name="...") to load the skill
-4. **Optimize** → Call skill_select_tools(...) to select only needed tools (saves tokens)
-5. **Document** → Call skill_list_docs(...) and skill_select_docs(...) if more info needed
-6. **Execute** → Call skill_run(...) to execute commands or use skill's tools directly
+2. **Load** → Call skill_load(skill_name="...") to load the skill
+3. **Document** → Call skill_list_docs(...) and skill_select_docs(...) if more info is needed
+4. **Execute** → Call skill_run(...) to execute commands
 
-Example Complete Flow:
-User: "What's the weather in Beijing?"
-→ skill_list() → see "weather-tools"
-→ skill_list_tools(skill_name="weather-tools") → see available tools
-→ skill_load(skill_name="weather-tools") → load full content
-→ skill_select_tools(skill_name="weather-tools", tools=["get_current_weather"]) → optimize
-→ get_current_weather(city="Beijing") → execute
+Use SkillToolSetWithDynamicTools together with DynamicSkillToolSet when the
+agent must inspect and selectively expose a skill's business tools. That setup
+also provides skill_list_tools and skill_select_tools.
 
 Always use environment variables in commands:
 - $WORKSPACE_DIR, $SKILLS_DIR, $WORK_DIR, $OUTPUT_DIR, $RUN_DIR, $SKILL_NAME
@@ -176,14 +170,15 @@ Always use environment variables in commands:
 Key points:
 - **Automatic tool registration**: The following tools are automatically registered via `SkillToolSet`, requiring no manual wiring:
   - `skill_list`: Lists all available skills
-  - `skill_list_tools`: Lists tools of a skill
   - `skill_load`: Loads skill content
-  - `skill_select_tools`: Selects specific tools (token optimization)
   - `skill_list_docs`: Lists available documentation
   - `skill_select_docs`: Selects specific documentation
   - `skill_run`: Executes skill commands
+- **Dynamic tool management**: `SkillToolSetWithDynamicTools` additionally registers
+  `skill_list_tools` and `skill_select_tools`. Use it with `DynamicSkillToolSet`;
+  the standard `SkillToolSet` intentionally does not expose these two tools.
 - **Intelligent prompt guidance**: Explicitly describe the workflow in the prompt to guide the LLM to call tools in the correct order
-- **Token optimization**: Use `skill_select_tools` to load only the needed tools, significantly reducing context size
+- **Token optimization**: In the dynamic setup, use `skill_select_tools` to load only the needed tools and reduce context size
 - **Code location**:
   - Package entry (aggregated exports): [trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
   - `skill_run` implementation: [trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py) (for other tools, see **Declaration location** in each section below)
@@ -550,6 +545,28 @@ Assistant: Let me check what skills are available.
 
 **Declaration location**: [trpc_agent_sdk/skills/tools/_skill_list_tool.py](../../../trpc_agent_sdk/skills/tools/_skill_list_tool.py)
 
+**Availability**:
+- This tool is exposed by `SkillToolSetWithDynamicTools`, not by the standard `SkillToolSet`.
+- Use it together with `DynamicSkillToolSet`, which resolves the selected business tools from the tool pool:
+
+```python
+from trpc_agent_sdk.skills import DynamicSkillToolSet
+from trpc_agent_sdk.skills import SkillToolSetWithDynamicTools
+
+skill_tool_set = SkillToolSetWithDynamicTools(repository=repository)
+dynamic_tool_set = DynamicSkillToolSet(
+    skill_repository=repository,
+    available_tools=available_tools,
+    only_active_skills=True,
+)
+
+agent = LlmAgent(
+    # ...
+    tools=[skill_tool_set, dynamic_tool_set],
+    skill_repository=repository,
+)
+```
+
 **Input parameters**:
 - `skill_name` (required): Skill name
 
@@ -638,7 +655,7 @@ Overview
 **Behavior**:
 - Optimizes LLM context: activates only the tools needed for the current conversation
 - Updates the `temp:skill:tools:<name>` session key
-- When used with `DynamicSkillToolSet`, only selected tools are loaded into the LLM context
+- `SkillToolSetWithDynamicTools` exposes this selection tool, while `DynamicSkillToolSet` loads only the selected tools into the LLM context
 
 **Prompt guidance**:
 
@@ -1330,7 +1347,7 @@ By declaring which tools a skill needs through the **Tools section in SKILL.md**
 |------|------|------|
 | **Tool exposure method** | All tools are **fully injected** into the LLM context at agent creation | No business tools initially; tools are **injected on demand** based on the `Tools:` declaration in SKILL.md after `skill_load` |
 | **SKILL.md `Tools:` section** | Optional, used only for informational display | **Core mechanism** that determines which tools are loaded into the LLM context |
-| **Required components** | Only `SkillToolSet` | `SkillToolSet` + `DynamicSkillToolSet` (used together) |
+| **Required components** | Only `SkillToolSet` | `SkillToolSetWithDynamicTools` + `DynamicSkillToolSet` (used together) |
 | **Tool registration method** | Tools are attached directly to the agent's `tools` list | Tools are placed in the `available_tools` pool and declaratively filtered through SKILL.md |
 | **Token consumption** | Fixed consumption (all tool definitions always present in context) | On-demand consumption (only loads tools declared by active skills), **saves 85-95% with many tools** |
 | **Tool visibility control** | None, LLM always sees all tools | Fine-grained control via `skill_select_tools` for dynamic add/remove |
@@ -1424,9 +1441,15 @@ Example 4: Ask someone name information
 
 #### 3. Configure the Agent
 
-**File**: `agent/tools/_dynamic.py` and `agent/agent.py`
+**File**: `agent/tools/_skill_tools.py`, `agent/tools/_dynamic.py`, and `agent/agent.py`
 
 ```python
+# agent/tools/_skill_tools.py
+from trpc_agent_sdk.skills import SkillToolSetWithDynamicTools
+
+def create_skill_tool_set(repository):
+    return SkillToolSetWithDynamicTools(repository=repository)
+
 # agent/tools/_dynamic.py
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.skills import DynamicSkillToolSet, BaseSkillRepository

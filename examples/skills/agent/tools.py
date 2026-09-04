@@ -54,7 +54,8 @@ def create_skill_tool_set(is_link_stager: bool = True, use_cached_repository: bo
     workspace_runtime = _create_workspace_runtime(**workspace_runtime_args)
     skill_paths = _get_skill_paths()
     # use_cached_repository: Whether to use cached repository.
-    repository = create_default_skill_repository(skill_paths, workspace_runtime=workspace_runtime, 
+    repository = create_default_skill_repository(skill_paths,
+                                                 workspace_runtime=workspace_runtime,
                                                  use_cached_repository=use_cached_repository)
     skill_stager = LinkSkillStager() if is_link_stager else CopySkillStager()
     # skill_stager: The stager to use for staging skills.

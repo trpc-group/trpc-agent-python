@@ -37,10 +37,8 @@ from ._skill_config import DEFAULT_SKILL_CONFIG
 from ._skill_config import set_skill_config
 from ._skill_config import is_exist_skill_config
 from .tools import skill_list_docs
-from .tools import skill_list_tools
 from .tools import SkillLoadTool
 from .tools import skill_select_docs
-from .tools import skill_select_tools
 from .tools import skill_list
 from .tools import SkillExecTool
 from .tools import SkillRunTool
@@ -86,12 +84,17 @@ class SkillToolSet(ToolSetABC):
         Args:
             paths: Optional list of skill paths. If None, will create a new one.
             repository: Skill repository. If None, will be retrieved from context metadata.
-            enable_hot_reload: Whether to enable skill hot reload checks for
-                auto-created repositories.
+            repo_resolver: Skill repository resolver. If None, will use the default repository resolver.
+            workspace_runtime_resolver: Workspace runtime resolver.
+            If None, will use the default workspace runtime resolver.
+            enable_hot_reload: Whether to enable skill hot reload checks for auto-created repositories.
             tool_filter: Optional tool filter. If None, will include all tools.
             is_include_all_tools: Optional flag to include all tools. If True, will include all tools.
-            user_tools: Optional list of user tools. If None, will not include any user tools.
-            run_tool_kwargs: Optional keyword arguments for skill run tool. If None, will use default values.
+            create_ws_name_cb: Optional workspace name callback. If None, will use the default workspace name callback.
+            runtime_tools: Optional list of runtime tools. If None, will use the default runtime tools.
+            skill_stager: Optional skill stager. If None, will use the default skill stager.
+            skill_config: Optional skill config. If None, will use the default skill config.
+            **run_tool_kwargs: Optional keyword arguments for skill run tool. If None, will use default values.
         """
         super().__init__(tool_filter=tool_filter, is_include_all_tools=is_include_all_tools)
         self.name = "skill_toolset"
@@ -118,9 +121,7 @@ class SkillToolSet(ToolSetABC):
         self._function_tools: List[SkillToolFunction] = [
             skill_list,
             skill_list_docs,
-            skill_list_tools,
             skill_select_docs,
-            skill_select_tools,
         ]
         if runtime_tools:
             self._runtime_tools = runtime_tools
@@ -136,6 +137,7 @@ class SkillToolSet(ToolSetABC):
                 WorkspaceWriteStdinTool(workspace_exec_tool),
                 WorkspaceKillSessionTool(workspace_exec_tool),
             ]
+        self._default_tools: List[ToolABC] = []
 
     @property
     def repository(self) -> BaseSkillRepository:
@@ -152,9 +154,6 @@ class SkillToolSet(ToolSetABC):
         Returns:
             List of tools from all registered skills
         """
-        tools: List[ToolABC] = []
-        skill_functions: List[SkillToolFunction] = SKILL_REGISTRY.get_all()
-        skill_functions.extend(self._function_tools)
         if self._repo_resolver is not None:
             repository = self._repo_resolver(invocation_context)
         else:
@@ -167,10 +166,16 @@ class SkillToolSet(ToolSetABC):
             agent_context.with_metadata(SKILL_REPOSITORY_KEY, repository)
             if not is_exist_skill_config(agent_context):
                 set_skill_config(agent_context, self._skill_config)
+        if self._default_tools:
+            return self._default_tools.copy()
+
+        tools: List[ToolABC] = []
         tools.append(self._load_tool)
         tools.append(self._run_tool)
         tools.append(self._exec_tool)
         tools.extend(self._runtime_tools)
+        skill_functions: List[SkillToolFunction] = SKILL_REGISTRY.get_all()
+        skill_functions.extend(self._function_tools)
         for skill_function in skill_functions:
             try:
                 tools.append(FunctionTool(func=skill_function))
@@ -178,5 +183,5 @@ class SkillToolSet(ToolSetABC):
                 # Log error but continue loading other tools
                 logger.warning("Failed to get tools from skill '%s': %s", skill_function.__name__, ex)
                 continue
-
+        self._default_tools.extend(tools)
         return tools

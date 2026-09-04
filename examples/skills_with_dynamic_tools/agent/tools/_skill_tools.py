@@ -14,6 +14,7 @@ from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.skills import BaseSkillRepository
 from trpc_agent_sdk.skills import ENV_SKILLS_ROOT
 from trpc_agent_sdk.skills import SkillToolSet
+from trpc_agent_sdk.skills import SkillToolSetWithDynamicTools
 from trpc_agent_sdk.skills import create_default_skill_repository
 
 
@@ -62,4 +63,5 @@ def create_skill_tool_set(workspace_runtime_type: str = "local") -> tuple[SkillT
                                                   **workspace_runtime_args)
     skill_paths = _get_skill_paths()
     repository = create_default_skill_repository(skill_paths, workspace_runtime=workspace_runtime)
-    return SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs), repository
+
+    return SkillToolSetWithDynamicTools(repository=repository, run_tool_kwargs=tool_kwargs), repository

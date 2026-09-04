@@ -17,6 +17,7 @@ from typing import List
 from typing import Optional
 from typing_extensions import override
 
+from trpc_agent_sdk.abc import ToolABC
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.tools import BaseTool
@@ -28,8 +29,11 @@ from trpc_agent_sdk.tools import get_tool_set
 from ._common import loaded_scan_prefix
 from ._common import tool_scan_prefix
 from ._common import tool_state_key
+from ._toolset import SkillToolSet
 from ._repository import BaseSkillRepository
 from ._utils import get_state_delta
+from .tools import skill_list_tools
+from .tools import skill_select_tools
 
 
 class DynamicSkillToolSet(BaseToolSet):
@@ -387,3 +391,26 @@ class DynamicSkillToolSet(BaseToolSet):
         except Exception as ex:  # pylint: disable=broad-except
             logger.warning("Failed to get default tools for skill '%s': %s", skill_name, ex)
             return []
+
+
+class SkillToolSetWithDynamicTools(SkillToolSet):
+    """ToolSet that dynamically loads tools based on skill selections.
+
+    This toolset monitors skill loading state and tool selection state, then dynamically
+    provides only the tools that are selected for loaded skills. This approach saves tokens
+    by only including relevant tool definitions in the LLM context.
+    """
+
+    @override
+    async def get_tools(self, invocation_context: Optional[InvocationContext] = None) -> List[ToolABC]:
+        """Get all tools from registered skills.
+
+        Args:
+            invocation_context: Optional invocation context (not used currently)
+
+        Returns:
+            List of tools from all registered skills
+        """
+        if not self._default_tools:
+            self._function_tools.extend([skill_list_tools, skill_select_tools])
+        return await super().get_tools(invocation_context)
