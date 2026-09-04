@@ -13,13 +13,12 @@ import pytest
 
 from trpc_agent_sdk.skills._types import Skill, SkillSummary
 from trpc_agent_sdk.skills.tools._skill_list_tool import (
-    skill_list_tools,
-)
-
+    skill_list_tools, )
 
 # ---------------------------------------------------------------------------
 # skill_list_tools
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx(repository=None):
     ctx = MagicMock()
@@ -28,6 +27,7 @@ def _make_ctx(repository=None):
 
 
 class TestSkillListTools:
+
     def test_returns_tools(self):
         skill = Skill(
             summary=SkillSummary(name="test"),
@@ -39,7 +39,10 @@ class TestSkillListTools:
         ctx = _make_ctx(repository=repo)
 
         result = skill_list_tools(ctx, "test")
+        assert result["skill_name"] == "test"
         assert result["available_tools"] == ["get_weather", "get_data"]
+        assert result["scope"] == "skill_declared_tools_only"
+        assert "not represent all tools available to the agent" in result["note"]
 
     def test_skill_not_found(self):
         repo = MagicMock()
@@ -47,7 +50,10 @@ class TestSkillListTools:
         ctx = _make_ctx(repository=repo)
 
         result = skill_list_tools(ctx, "nonexistent")
-        assert result == {"available_tools": []}
+        assert result["skill_name"] == "nonexistent"
+        assert result["available_tools"] == []
+        assert result["scope"] == "skill_declared_tools_only"
+        assert "not represent all tools available to the agent" in result["note"]
 
     def test_no_repository_raises(self):
         ctx = _make_ctx(repository=None)
@@ -61,4 +67,6 @@ class TestSkillListTools:
         ctx = _make_ctx(repository=repo)
 
         result = skill_list_tools(ctx, "test")
+        assert result["skill_name"] == "test"
         assert result["available_tools"] == []
+        assert result["scope"] == "skill_declared_tools_only"
