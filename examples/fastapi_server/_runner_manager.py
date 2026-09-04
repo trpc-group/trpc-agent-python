@@ -88,7 +88,7 @@ class RunnerManager:
 
     async def close(self) -> None:
         """Gracefully close the runner and release resources."""
-        self._runner.close()
+        await self._runner.close()
         logger.info("RunnerManager closed: app=%s", self.app_name)
 
     # ------------------------------------------------------------------

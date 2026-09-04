@@ -58,5 +58,6 @@ def create_skill_tool_set(is_link_stager: bool = True, use_cached_repository: bo
                                                  use_cached_repository=use_cached_repository)
     skill_stager = LinkSkillStager() if is_link_stager else CopySkillStager()
     # skill_stager: The stager to use for staging skills.
-    skill_toolset = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs, skill_stager=skill_stager)
+    skill_toolset = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs,
+                                 skill_stager=skill_stager, excluded_tools=["skill_list_tools"])
     return skill_toolset, repository
