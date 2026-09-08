@@ -79,6 +79,9 @@ FINISH_REASON: str = 'finish_reason'
 CHUNK: str = 'chunk'
 """Chunk field name in streaming responses."""
 
+PROVIDER_RESPONSE_METADATA: str = 'provider_response_metadata'
+"""Allowlisted provider-specific metadata extracted from model responses."""
+
 TOOL_STREAMING: str = 'tool_streaming'
 """Tool streaming mode indicator name."""
 
