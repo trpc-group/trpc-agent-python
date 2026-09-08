@@ -37,6 +37,7 @@ from ._constants import TOOL_STREAMING
 from ._constants import TOOL_STREAMING_ARGS
 from ._constants import USAGE
 from ._constants import USER
+from ._constants import PROVIDER_RESPONSE_METADATA
 from ._litellm_model import LiteLLMModel
 from ._llm_model import LLMModel
 from ._llm_request import LlmRequest
@@ -81,6 +82,7 @@ __all__ = [
     "TOOL_STREAMING_ARGS",
     "THINKING_ENABLED",
     "THINKING_TOKENS",
+    "PROVIDER_RESPONSE_METADATA",
     "AnthropicModel",
     "LiteLLMModel",
     "LLMModel",

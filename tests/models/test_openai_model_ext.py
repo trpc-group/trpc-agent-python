@@ -1442,6 +1442,99 @@ class TestGenerateAsyncEdgeCases:
         assert captured[ApiParamsKey.N] == 2
 
     @pytest.mark.asyncio
+    async def test_non_streaming_extracts_provider_metadata(self):
+        """Provider metadata is attached to a non-streaming response."""
+        model = _model(response_metadata_extractor=lambda data: {"provider_request_id": data["providerRequestId"]}
+                       if data.get("providerRequestId") else None)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+        mock_response = Mock()
+        mock_response.model_dump.return_value = {
+            "choices": [{
+                "message": {
+                    "content": "ok",
+                    "role": "assistant"
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+            "providerRequestId": "request-123",
+        }
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=False):
+                responses.append(response)
+
+        assert responses[0].custom_metadata == {"provider_response_metadata": {"provider_request_id": "request-123"}}
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_extracts_nested_message_metadata(self):
+        """Extractor can read vendor fields nested under choices[0].message."""
+
+        def extract_metadata(response_data):
+            choices = response_data.get("choices") or []
+            message = choices[0].get("message", {}) if choices else {}
+            marker = message.get("venusMarker")
+            if not isinstance(marker, dict):
+                return None
+            return {"venus_marker": {"span_id": marker["spanId"]}}
+
+        model = _model(response_metadata_extractor=extract_metadata)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+        mock_response = Mock()
+        mock_response.model_dump.return_value = {
+            "choices": [{
+                "message": {
+                    "content": "ok",
+                    "role": "assistant",
+                    "venusMarker": {
+                        "spanId": "nested-span"
+                    },
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+        }
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=False):
+                responses.append(response)
+
+        assert responses[0].custom_metadata == {
+            "provider_response_metadata": {
+                "venus_marker": {
+                    "span_id": "nested-span"
+                }
+            }
+        }
+
+    def test_extractor_exception_and_invalid_results_are_ignored(self):
+        """Extractor failures must not break model calls."""
+
+        def boom(_data):
+            raise RuntimeError("bad extractor")
+
+        model = _model(response_metadata_extractor=boom)
+        assert model._extract_provider_response_metadata({"providerRequestId": "x"}) == {}
+
+        model = _model(response_metadata_extractor=lambda _: "not-a-dict")
+        assert model._extract_provider_response_metadata({"providerRequestId": "x"}) == {}
+
+        model = _model(response_metadata_extractor=lambda _: None)
+        assert model._extract_provider_response_metadata({"providerRequestId": "x"}) == {}
+
+    @pytest.mark.asyncio
     async def test_streaming_with_thinking_content(self):
         """Streaming mode correctly tags reasoning_content as thought."""
         model = _model()
@@ -1492,6 +1585,255 @@ class TestGenerateAsyncEdgeCases:
         partial_responses = [r for r in responses if r.partial]
         thought_partials = [r for r in partial_responses if r.content and r.content.parts[0].thought]
         assert len(thought_partials) >= 1
+
+    @pytest.mark.asyncio
+    async def test_streaming_extracts_provider_metadata_from_first_chunk(self):
+        """Provider metadata is extracted once from the first stream chunk."""
+
+        def extract_metadata(response_data):
+            marker = response_data.get("venusMarker")
+            if not marker:
+                return None
+            return {"venus_marker": {"span_id": marker["spanId"]}}
+
+        model = _model(response_metadata_extractor=extract_metadata)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+
+        content_chunk = Mock()
+        content_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [{
+                "delta": {
+                    "content": "hello"
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+            "venusMarker": {
+                "spanId": "9d3e43a402a76a5b"
+            },
+        }
+        usage_chunk = Mock()
+        usage_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+            },
+            "venusMarker": {
+                "spanId": "9d3e43a402a76a5b"
+            },
+        }
+
+        async def mock_stream():
+            yield content_chunk
+            yield usage_chunk
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+
+        final_response = next(response for response in responses if not response.partial)
+        assert final_response.custom_metadata == {
+            "stream_complete": True,
+            "provider_response_metadata": {
+                "venus_marker": {
+                    "span_id": "9d3e43a402a76a5b"
+                }
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_streaming_keeps_metadata_from_earlier_chunk(self):
+        """A later usage-only chunk without metadata must not drop earlier fields."""
+
+        def extract_metadata(response_data):
+            marker = response_data.get("venusMarker")
+            if not marker:
+                return None
+            return {"venus_marker": {"span_id": marker["spanId"]}}
+
+        model = _model(response_metadata_extractor=extract_metadata)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+
+        content_chunk = Mock()
+        content_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [{
+                "delta": {
+                    "content": "hello"
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+            "venusMarker": {
+                "spanId": "early-span"
+            },
+        }
+        usage_chunk = Mock()
+        usage_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+            },
+        }
+
+        async def mock_stream():
+            yield content_chunk
+            yield usage_chunk
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+
+        final_response = next(response for response in responses if not response.partial)
+        assert final_response.custom_metadata == {
+            "stream_complete": True,
+            "provider_response_metadata": {
+                "venus_marker": {
+                    "span_id": "early-span"
+                }
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_responses_streaming_keeps_metadata_from_earlier_event(self):
+        """Responses stream merges metadata even if response.completed lacks it."""
+
+        def extract_metadata(response_data):
+            marker = response_data.get("venusMarker")
+            if not marker:
+                return None
+            return {"venus_marker": {"span_id": marker["spanId"]}}
+
+        model = _model(use_responses_api=True, response_metadata_extractor=extract_metadata)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+
+        async def stream_events():
+            yield {
+                "type": "response.created",
+                "response": {
+                    "id": "resp_meta",
+                },
+                "venusMarker": {
+                    "spanId": "responses-span"
+                },
+            }
+            yield {"type": "response.output_text.delta", "delta": "hello"}
+            yield {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_meta",
+                    "status": "completed",
+                    "output": [{
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{
+                            "type": "output_text",
+                            "text": "hello"
+                        }],
+                    }],
+                },
+            }
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.responses.create = AsyncMock(return_value=stream_events())
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+
+        final_response = next(response for response in responses if not response.partial)
+        assert final_response.custom_metadata["provider_response_metadata"] == {
+            "venus_marker": {
+                "span_id": "responses-span"
+            }
+        }
+
+    @pytest.mark.asyncio
+    async def test_streaming_skips_extractor_after_first_nonempty(self):
+        """Later chunks must not rerun the extractor once metadata is found."""
+        calls = {"count": 0}
+
+        def extract_metadata(response_data):
+            calls["count"] += 1
+            marker = response_data.get("venusMarker")
+            if not marker:
+                return None
+            return {"venus_marker": {"span_id": marker["spanId"]}}
+
+        model = _model(response_metadata_extractor=extract_metadata)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+
+        first_chunk = Mock()
+        first_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [{
+                "delta": {
+                    "content": "hello"
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+            "venusMarker": {
+                "spanId": "first-span"
+            },
+        }
+        later_chunk = Mock()
+        later_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+            },
+            "venusMarker": {
+                "spanId": "later-span"
+            },
+        }
+
+        async def mock_stream():
+            yield first_chunk
+            yield later_chunk
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+
+        final_response = next(response for response in responses if not response.partial)
+        assert final_response.custom_metadata["provider_response_metadata"] == {
+            "venus_marker": {
+                "span_id": "first-span"
+            }
+        }
+        assert calls["count"] == 1
 
     @pytest.mark.asyncio
     async def test_streaming_null_response_raises(self):

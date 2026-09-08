@@ -11,6 +11,7 @@ tRPC-Agent 内的模型具有以下核心特性：
 - **多模态能力**：支持文本、图像等多模态内容处理（如 hunyuan 多模态模型）
 - **Prompt Cache 支持**：支持跨 OpenAI、Anthropic 与 LiteLLM 路由的统一 prompt cache 配置，降低长提示词和多轮会话的重复输入成本
 - **模型重试支持**：支持在模型层配置重试，SDK 将在限流等异常发生时自动重试，并按指数退避策略进行退避
+- **Provider 元数据提取**：支持将 OpenAI 兼容服务返回的厂商扩展字段加入白名单，并附加到模型响应和 tracing span
 - **可扩展配置**：支持 GenerateContentConfig、HttpOptions、client_args 等自定义配置项，满足不同场景需求
 
 ## 快速上手
@@ -163,6 +164,67 @@ model = OpenAIModel(
 支持的档位（`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`）随模型而异，
 具体以 OpenAI reasoning 指南及模型文档为准。SDK 刻意不做 `thinking_budget` → `effort` 的映射；
 仅在开启 thinking 时请求 `reasoning.summary`，保证推理输出可读。
+
+#### 提取厂商响应扩展字段
+
+部分 OpenAI 兼容服务会在响应中增加请求标识、链路标识等厂商扩展字段。可以配置
+`response_metadata_extractor`，明确选择并规范化允许暴露给业务代码和 tracing 的字段：
+
+```python
+from typing import Any
+
+from trpc_agent_sdk.models import OpenAIModel
+
+
+def extract_provider_metadata(
+    response_data: dict[str, Any],
+) -> dict[str, Any] | None:
+    some_marker = response_data.get("some_marker")
+    if not isinstance(some_marker, dict):
+        return None
+    some_field = some_marker.get("some_field")
+    if not isinstance(some_field, str) or not some_field:
+        return None
+    return {
+        "some_marker": {
+            "some_field": some_field,
+        },
+    }
+
+
+model = OpenAIModel(
+    model_name="your-model",
+    api_key="your-api-key",
+    base_url="https://your-openai-compatible-endpoint/v1",
+    response_metadata_extractor=extract_provider_metadata,
+)
+```
+
+回调接收厂商响应完整的 `model_dump()` 字典，可以读取顶层或嵌套字段，但应只返回业务所需的、
+体积较小且可 JSON 序列化的数据。返回 `None` 表示没有提取到元数据。返回值非法或回调抛出异常时，
+SDK 会记录日志并忽略该元数据，不会导致模型调用失败。
+
+对于流式请求，为避免产生逐 token 开销，提取器只会使用第一个响应事件调用一次。因此兼容服务
+必须在首个事件中携带需要提取的厂商字段。
+
+提取结果存放在稳定的 `provider_response_metadata` 命名空间中：
+
+```python
+from trpc_agent_sdk.models import PROVIDER_RESPONSE_METADATA
+
+async for event in runner.run_async(...):
+    provider_metadata = (event.custom_metadata or {}).get(
+        PROVIDER_RESPONSE_METADATA
+    )
+    if provider_metadata:
+        print(provider_metadata)
+```
+
+同一份元数据也会附加到模型调用的 tracing span。不要从提取器返回完整原始响应，以免泄漏敏感信息
+或引入不必要的大体积数据。
+
+完整可运行示例参见
+[examples/llmagent_with_model_extra_fields](../../../examples/llmagent_with_model_extra_fields/README.md)。
 
 #### 高级用法
 
