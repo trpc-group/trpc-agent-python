@@ -1442,6 +1442,37 @@ class TestGenerateAsyncEdgeCases:
         assert captured[ApiParamsKey.N] == 2
 
     @pytest.mark.asyncio
+    async def test_non_streaming_extracts_provider_metadata(self):
+        """Provider metadata is attached to a non-streaming response."""
+        model = _model(response_metadata_extractor=lambda data: {"provider_request_id": data["providerRequestId"]}
+                       if data.get("providerRequestId") else None)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+        mock_response = Mock()
+        mock_response.model_dump.return_value = {
+            "choices": [{
+                "message": {
+                    "content": "ok",
+                    "role": "assistant"
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+            "providerRequestId": "request-123",
+        }
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=False):
+                responses.append(response)
+
+        assert responses[0].custom_metadata == {"provider_response_metadata": {"provider_request_id": "request-123"}}
+
+    @pytest.mark.asyncio
     async def test_streaming_with_thinking_content(self):
         """Streaming mode correctly tags reasoning_content as thought."""
         model = _model()
@@ -1492,6 +1523,68 @@ class TestGenerateAsyncEdgeCases:
         partial_responses = [r for r in responses if r.partial]
         thought_partials = [r for r in partial_responses if r.content and r.content.parts[0].thought]
         assert len(thought_partials) >= 1
+
+    @pytest.mark.asyncio
+    async def test_streaming_extracts_provider_metadata_from_usage_chunk(self):
+        """Provider metadata survives a final usage-only chunk."""
+
+        def extract_metadata(response_data):
+            marker = response_data.get("venusMarker")
+            if not marker:
+                return None
+            return {"venus_marker": {"span_id": marker["spanId"]}}
+
+        model = _model(response_metadata_extractor=extract_metadata)
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+
+        content_chunk = Mock()
+        content_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [{
+                "delta": {
+                    "content": "hello"
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": None,
+        }
+        usage_chunk = Mock()
+        usage_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+            },
+            "venusMarker": {
+                "spanId": "9d3e43a402a76a5b"
+            },
+        }
+
+        async def mock_stream():
+            yield content_chunk
+            yield usage_chunk
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+
+        final_response = next(response for response in responses if not response.partial)
+        assert final_response.custom_metadata == {
+            "stream_complete": True,
+            "provider_response_metadata": {
+                "venus_marker": {
+                    "span_id": "9d3e43a402a76a5b"
+                }
+            },
+        }
 
     @pytest.mark.asyncio
     async def test_streaming_null_response_raises(self):

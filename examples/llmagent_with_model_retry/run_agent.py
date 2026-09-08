@@ -6,6 +6,7 @@
 """Run the model retry weather agent example."""
 
 import asyncio
+import json
 import uuid
 
 from dotenv import load_dotenv
@@ -47,6 +48,9 @@ async def run_weather_agent() -> None:
     assistant_started = True
 
     async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_content):
+        provider_metadata = (event.custom_metadata or {}).get("provider_response_metadata")
+        if provider_metadata:
+            print("\nProvider metadata: ", f"{json.dumps(provider_metadata, ensure_ascii=False)}")
         if event.is_error():
             if assistant_started:
                 print()

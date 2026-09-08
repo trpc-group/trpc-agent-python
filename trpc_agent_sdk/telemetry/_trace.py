@@ -37,6 +37,7 @@ from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import LlmResponse
+from trpc_agent_sdk.models import PROVIDER_RESPONSE_METADATA
 from trpc_agent_sdk.tools import BaseTool
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import InstructionMetadata
@@ -502,6 +503,15 @@ def trace_call_llm(
         f"{_trpc_agent_span_name}.llm_response",
         llm_response_json,
     )
+
+    custom_metadata = llm_response.custom_metadata
+    if isinstance(custom_metadata, dict):
+        provider_metadata = custom_metadata.get(PROVIDER_RESPONSE_METADATA)
+        if isinstance(provider_metadata, dict) and provider_metadata:
+            span.set_attribute(
+                f"{_trpc_agent_span_name}.{PROVIDER_RESPONSE_METADATA}",
+                _safe_json_serialize(provider_metadata),
+            )
 
     # The caller-supplied error_type reflects an exception that propagated out
     # of the model call. But the SDK-managed retry layer (retry_model_call)
