@@ -19,6 +19,7 @@ import uuid
 from enum import Enum
 from typing import Any
 from typing import AsyncGenerator
+from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -56,6 +57,7 @@ from .tool_prompt import ToolPrompt
 
 _HTTPCORE2_ATHROW_ERROR = "generator didn't stop after athrow"
 _HTTP_BODY_DRAIN_TIMEOUT_S = 2.0
+ResponseMetadataExtractor = Callable[[dict[str, Any]], Optional[dict[str, Any]]]
 
 
 def _is_httpx2_response(http_response: Any) -> bool:
@@ -358,6 +360,15 @@ class OpenAIModel(LLMModel):
                               the openai SDK's ``ResponseCreateParams`` and passed
                               through verbatim to ``responses.create``. The model,
                               input, and stream parameters remain managed by this class.
+        response_metadata_extractor: Optional callback that extracts a small,
+                                     JSON-serializable metadata dictionary from a
+                                     provider response. The callback receives the full
+                                     ``model_dump()`` dictionary and is responsible for
+                                     reading any nested fields. For streams, it is
+                                     called exactly once with the first event; providers
+                                     must include their metadata in that event.
+                                     Extracted values are attached to the final
+                                     ``LlmResponse`` and trace.
         **kwargs: Additional arguments passed to parent LLMModel class
                  (e.g., api_key, base_url, etc.)
 
@@ -397,6 +408,7 @@ class OpenAIModel(LLMModel):
         http_client_provider_factory: HttpClientProviderFactory = temporary_http_client_provider_factory,
         use_responses_api: bool = False,
         responses_api_params: Optional[ResponseCreateParams] = None,
+        response_metadata_extractor: Optional[ResponseMetadataExtractor] = None,
         **kwargs,
     ):
         super().__init__(model_name, filters_name, **kwargs)
@@ -407,6 +419,7 @@ class OpenAIModel(LLMModel):
         self.client_args = kwargs.get(const.CLIENT_ARGS, {})
         self.use_responses_api = use_responses_api
         self.responses_api_params = dict(responses_api_params or {})
+        self._response_metadata_extractor = response_metadata_extractor
         reserved_response_params = {"model", "input", "stream"}.intersection(self.responses_api_params)
         if reserved_response_params:
             names = ", ".join(sorted(reserved_response_params))
@@ -451,6 +464,41 @@ class OpenAIModel(LLMModel):
 
     def is_retriable_status_code(self, status_code: int) -> Optional[bool]:
         return status_code in {408, 409, 429} or status_code >= 500
+
+    def _extract_provider_response_metadata(self, response_data: dict[str, Any]) -> dict[str, Any]:
+        """Extract allowlisted provider metadata without affecting model calls."""
+        extractor = self._response_metadata_extractor
+        if extractor is None or not response_data:
+            return {}
+        try:
+            metadata = extractor(response_data)
+            if metadata is None:
+                return {}
+            if not isinstance(metadata, dict):
+                logger.warning(
+                    "response_metadata_extractor returned %s instead of dict; ignoring it",
+                    type(metadata).__name__,
+                )
+                return {}
+            # LlmResponse.custom_metadata must remain JSON serializable.
+            json.dumps(metadata)
+            return metadata
+        except Exception:  # pylint: disable=broad-except
+            logger.warning("Failed to extract provider response metadata", exc_info=True)
+            return {}
+
+    @staticmethod
+    def _attach_provider_response_metadata(
+        response: LlmResponse,
+        metadata: dict[str, Any],
+    ) -> LlmResponse:
+        """Attach extracted metadata under a stable, provider-neutral namespace."""
+        if not metadata:
+            return response
+        custom_metadata = dict(response.custom_metadata or {})
+        custom_metadata[const.PROVIDER_RESPONSE_METADATA] = metadata
+        response.custom_metadata = custom_metadata
+        return response
 
     def is_retriable_exception(self, ex: Exception) -> bool:
         if isinstance(ex, httpx.TimeoutException):
@@ -1753,7 +1801,12 @@ class OpenAIModel(LLMModel):
                 **self._prepare_responses_api_params(client, api_params),
                 **(http_options or {}),
             )
-            return self._create_responses_response(self._model_dump(response))
+            response_dict = self._model_dump(response)
+            llm_response = self._create_responses_response(response_dict)
+            return self._attach_provider_response_metadata(
+                llm_response,
+                self._extract_provider_response_metadata(response_dict),
+            )
         finally:
             await self._http_client_provider.close_http_client(client)
 
@@ -1783,8 +1836,11 @@ class OpenAIModel(LLMModel):
 
             # Create response with content if we have text or tool calls
             if has_text_content or has_tool_calls:
-                return self._create_response_with_content(response_dict)
-            return self._create_response_without_content(response_dict)
+                llm_response = self._create_response_with_content(response_dict)
+            else:
+                llm_response = self._create_response_without_content(response_dict)
+            provider_response_metadata = self._extract_provider_response_metadata(response_dict)
+            return self._attach_provider_response_metadata(llm_response, provider_response_metadata)
         finally:
             await self._http_client_provider.close_http_client(client)
 
@@ -2257,9 +2313,13 @@ class OpenAIModel(LLMModel):
             if response is None:
                 raise ValueError("Empty response from Responses API")
             _patch_stream_response_to_drain_http_body(response)
-
+            provider_response_metadata: dict[str, Any] = {}
+            metadata_extraction_attempted = False
             async for event in response:
                 event_dict = self._model_dump(event)
+                if not metadata_extraction_attempted:
+                    provider_response_metadata = self._extract_provider_response_metadata(event_dict)
+                    metadata_extraction_attempted = True
                 event_type = event_dict.get("type", "")
                 logger.debug("OpenAI Responses event: %s", json.dumps(event_dict, ensure_ascii=False))
 
@@ -2374,7 +2434,8 @@ class OpenAIModel(LLMModel):
             final_response = self._create_responses_response(completed_response)
             final_response.partial = False
             final_response.custom_metadata = {"stream_complete": True}
-            yield final_response
+
+            yield self._attach_provider_response_metadata(final_response, provider_response_metadata)
         finally:
             await _aclose_openai_stream(response)
             try:
@@ -2424,12 +2485,17 @@ class OpenAIModel(LLMModel):
                 raise ValueError("Empty response from API")
             _patch_stream_response_to_drain_http_body(response)
 
+            provider_response_metadata: dict[str, Any] = {}
+            metadata_extraction_attempted = False
             async for chunk in response:
                 if chunk is None:
                     continue
 
                 chunk_dict: dict = chunk.model_dump()
                 logger.debug("🔥 RAW LLM CHUNK: %s", json.dumps(chunk_dict, ensure_ascii=False))
+                if not metadata_extraction_attempted:
+                    provider_response_metadata = self._extract_provider_response_metadata(chunk_dict)
+                    metadata_extraction_attempted = True
 
                 # Capture response ID from chunk (only set once from first chunk that has it)
                 if response_id is None and chunk_dict.get("id"):
@@ -2628,14 +2694,14 @@ class OpenAIModel(LLMModel):
             if last_usage:
                 # Create a compatible usage metadata object
                 final_usage = last_usage  # Use the existing usage object for now
-
-            yield LlmResponse(
+            final_response = LlmResponse(
                 content=final_content,
                 usage_metadata=final_usage,
                 partial=False,
                 response_id=response_id,
                 custom_metadata={"stream_complete": True},
             )
+            yield self._attach_provider_response_metadata(final_response, provider_response_metadata)
         finally:
             await _aclose_openai_stream(response)
             await self._http_client_provider.close_http_client(client)

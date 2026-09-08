@@ -11,6 +11,7 @@ Models in tRPC-Agent have the following core features:
 - **Multimodal capabilities**: Supports multimodal content processing including text, images, etc. (e.g., Hunyuan multimodal models)
 - **Prompt Cache support**: Provides unified prompt cache configuration across OpenAI, Anthropic, and LiteLLM routes to reduce repeated input cost for long prompts and multi-turn conversations
 - **Model retry support**: Supports configuring retry at the model layer. The SDK automatically retries when exceptions such as rate limits occur, and backs off using an exponential backoff strategy
+- **Provider metadata extraction**: Allows OpenAI-compatible provider-specific response fields to be allowlisted and attached to model responses and tracing spans
 - **Extensible configuration**: Supports custom configuration options such as GenerateContentConfig, HttpOptions, client_args to meet various scenario requirements
 
 ## Quick Start
@@ -166,6 +167,69 @@ Supported effort values (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `m
 see the OpenAI reasoning guide for model-specific support. The SDK deliberately does not map
 `thinking_budget` to `effort`; it only requests `reasoning.summary` when thinking is enabled so the
 reasoning output stays readable.
+
+#### Extracting Provider-Specific Response Fields
+
+Some OpenAI-compatible providers add proprietary fields to the response, such as a request or tracing
+identifier. Configure `response_metadata_extractor` to explicitly allowlist and normalize the fields
+that should be exposed to application code and tracing:
+
+```python
+from typing import Any
+
+from trpc_agent_sdk.models import OpenAIModel
+
+
+def extract_provider_metadata(
+    response_data: dict[str, Any],
+) -> dict[str, Any] | None:
+    some_marker = response_data.get("some_marker")
+    if not isinstance(some_marker, dict):
+        return None
+    some_field = some_marker.get("some_field")
+    if not isinstance(some_field, str) or not some_field:
+        return None
+    return {
+        "some_marker": {
+            "some_field": some_field,
+        },
+    }
+
+
+model = OpenAIModel(
+    model_name="your-model",
+    api_key="your-api-key",
+    base_url="https://your-openai-compatible-endpoint/v1",
+    response_metadata_extractor=extract_provider_metadata,
+)
+```
+
+The callback receives the complete `model_dump()` dictionary for the provider response. It may read
+top-level or nested fields, but should return only the small, JSON-serializable values required by the
+application. Returning `None` means that no metadata was extracted. Invalid return values and callback
+exceptions are logged and ignored without failing the model call.
+
+For streaming requests, the extractor is invoked exactly once with the first response event to avoid
+per-token overhead. The compatible provider must therefore include its metadata in the first event.
+
+The extracted value is stored under the stable `provider_response_metadata` namespace:
+
+```python
+from trpc_agent_sdk.models import PROVIDER_RESPONSE_METADATA
+
+async for event in runner.run_async(...):
+    provider_metadata = (event.custom_metadata or {}).get(
+        PROVIDER_RESPONSE_METADATA
+    )
+    if provider_metadata:
+        print(provider_metadata)
+```
+
+The same metadata is also attached to the model invocation tracing span. Do not return the full raw
+provider response from the extractor, because it may contain sensitive or unnecessarily large data.
+
+For a complete runnable example, see
+[examples/llmagent_with_model_extra_fields](../../../examples/llmagent_with_model_extra_fields/README.md).
 
 #### Advanced Usage
 
