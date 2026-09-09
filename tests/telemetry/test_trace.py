@@ -933,6 +933,26 @@ class TestTraceCallLlm:
         span.set_attribute.assert_any_call("trpc.python.agent.event_id", "e-1")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_reports_provider_response_metadata(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+        req = self._make_llm_request()
+        resp = self._make_llm_response(
+            custom_metadata={"provider_response_metadata": {
+                "some_field": {
+                    "some_value": "some_value"
+                }
+            }})
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.provider_response_metadata",
+            '{"some_field": {"some_value": "some_value"}}',
+        )
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_explicit_error_sets_status_message_and_keeps_llm_response_output(self, mock_get_span):
         span = _mock_span()
         mock_get_span.return_value = span

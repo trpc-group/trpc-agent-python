@@ -5,6 +5,8 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Agent module for the model retry example."""
 
+from typing import Any
+
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
@@ -15,6 +17,19 @@ from .config import get_model_retry_config
 from .prompts import INSTRUCTION
 from .tools import get_weather_report
 
+def _extract_some_field(response_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Allowlist Venus tracing metadata from an OpenAI-compatible response."""
+    marker = response_data.get("some_field")
+    if not isinstance(marker, dict):
+        return None
+    some_value = marker.get("some_value")
+    if not isinstance(some_value, str) or not some_value:
+        return None
+    return {
+        "some_field": {
+            "some_value": some_value,
+        },
+    }
 
 def _create_model() -> LLMModel:
     """Create an OpenAI-compatible model with SDK-managed retry enabled."""
@@ -26,6 +41,7 @@ def _create_model() -> LLMModel:
         api_key=api_key,
         base_url=base_url,
         model_retry_config=retry_config,
+        response_metadata_extractor=_extract_some_field,
     )
 
 
