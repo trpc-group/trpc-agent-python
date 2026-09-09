@@ -1,6 +1,6 @@
 # A2A Agent 示例（Standard Protocol over HTTP）
 
-本示例演示如何通过标准 HTTP 运行 A2A 服务，并用远程客户端发起多轮对话。
+本示例演示如何通过标准 HTTP 运行 **a2a-sdk 0.3** A2A 服务，并用远程客户端发起多轮对话。
 
 ## 功能说明
 
@@ -119,7 +119,7 @@ Demo completed!
 
 | 文件 | 说明 |
 |---|---|
-| `run_server.py` | A2A 服务端入口（Starlette + Uvicorn） |
+| `run_server.py` | A2A 服务端入口（a2a-sdk 0.3，`A2AStarletteApplication`） |
 | `test_a2a.py` | A2A 客户端示例（3 轮对话） |
 | `agent/agent.py` | Agent 定义（LlmAgent + 天气工具） |
 | `agent/config.py` | 模型配置（从环境变量读取） |
@@ -127,6 +127,8 @@ Demo completed!
 | `agent/tools.py` | 天气查询工具（`get_weather_report`） |
 | `.env` | 环境变量配置文件 |
 
+a2a-sdk 1.x 示例见独立目录 [examples/a2a_v1](../a2a_v1/README.md)（`uv pip install -e '.[a2a-v1]'`）。两个 extra 不能同时安装。
+
 ## a2a 实现
 
-参考： [trpc_agent_sdk/server/a2a/README.md](../../trpc_agent_sdk/server/a2a/README.md)
+参考：[trpc_agent_sdk/server/a2a/README.md](../../trpc_agent_sdk/server/a2a/README.md)

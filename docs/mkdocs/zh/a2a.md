@@ -2,6 +2,8 @@
 
 trpc-agent SDK 内置了 Agent-to-Agent (A2A) 协议支持，让你可以将本地 Agent 发布为标准 A2A 服务，也可以作为客户端远程调用其他 A2A Agent。
 
+本文中的 **0.3** 和 **1.x（1.0）** 指底层 a2a-sdk 的大版本：0.3 是旧版（extra `[a2a]`，包 `trpc_agent_sdk.server.a2a`），1.x 是现行协议与推荐版本（extra `[a2a-v1]`，包 `trpc_agent_sdk.server.a2a_v1`），二者不能同时安装。
+
 ## 🚀 核心优势
 
 - **部署简单**：几行代码即可将 Agent 发布为 A2A HTTP 服务
@@ -13,8 +15,13 @@ trpc-agent SDK 内置了 Agent-to-Agent (A2A) 协议支持，让你可以将本�
 
 ## 安装
 
+框架通过 extra 选择 a2a-sdk 版本（**不能同时安装**）。**推荐 `[a2a-v1]`（a2a-sdk 1.x）**；`[a2a]` 仅用于尚未升级的 0.3 代码。
+
 ```bash
-pip install -e ".[a2a]"
+uv pip install -e ".[a2a-v1]"   # 推荐：a2a-sdk 1.x（create_a2a_application / 1.0 Agent Card）
+                             # import: trpc_agent_sdk.server.a2a_v1
+uv pip install -e ".[a2a]"      # 现有 0.3 代码：a2a-sdk 0.3
+                             # import: trpc_agent_sdk.server.a2a
 ```
 
 需要使用 Python3.12。
@@ -22,6 +29,8 @@ pip install -e ".[a2a]"
 ---
 
 ## 服务端部署
+
+两端共用同一份 Agent 定义。**新服务请用 1.0**（extra `[a2a-v1]`）；0.3 只给还没升级的现有部署。
 
 ### 1. 定义 Agent
 
@@ -53,22 +62,19 @@ root_agent = LlmAgent(
 )
 ```
 
-### 2. 创建 A2A 服务并启动
+### 2. 创建 a2a 1.0 服务端（推荐）
 
-使用 `TrpcA2aAgentService` 将 Agent 包装为 A2A 服务，然后通过 A2A SDK 的 `A2AStarletteApplication` 以标准 HTTP 方式运行：
+安装 `[a2a-v1]`，从 `trpc_agent_sdk.server.a2a_v1` 导入。用 `TrpcA2aAgentService` 包装 Agent，再用 `create_a2a_application` 装配 HTTP 服务。
+
+#### 创建 A2A 服务并启动
 
 ```python
 # run_server.py
 import uvicorn
 
-# A2A SDK 提供的 HTTP 服务框架组件
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-
-# SDK 提供的 A2A 服务封装
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentService
+from trpc_agent_sdk.server.a2a_v1 import create_a2a_application
 
 HOST = "127.0.0.1"
 PORT = 18081
@@ -77,13 +83,119 @@ PORT = 18081
 def create_a2a_service() -> TrpcA2aAgentService:
     from agent.agent import root_agent
 
-    # 执行器配置（可选），可在此配置 user_id_extractor、event_callback 等
+    a2a_svc = TrpcA2aAgentService(
+        service_name="weather_agent_service",
+        agent=root_agent,
+        rpc_url=f"http://{HOST}:{PORT}",  # 写入 Agent Card，供发现型客户端调用
+        executor_config=TrpcA2aAgentExecutorConfig(),
+    )
+    a2a_svc.initialize()  # 必须调用，完成 Agent Card 构建等初始化
+    return a2a_svc
+
+
+def serve():
+    a2a_svc = create_a2a_service()
+    app = create_a2a_application(a2a_svc)
+
+    print(f"Starting A2A server on http://{HOST}:{PORT}")
+    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent-card.json")
+
+    uvicorn.run(app, host=HOST, port=PORT)
+
+
+if __name__ == "__main__":
+    serve()
+```
+
+启动后，服务会发布 Agent Card 到 `/.well-known/agent-card.json`。完整示例见 [examples/a2a_v1](../../../examples/a2a_v1/README.md)。
+
+#### Agent Card URL
+
+服务端不知道自己的对外地址。Agent Card 里 `supported_interfaces[].url` 由部署方指定，配置入口只有一个：`TrpcA2aAgentService(rpc_url=...)`，或传入自定义 `agent_card`。
+
+```python
+# 方式 1：固定域名（推荐，有反代/域名时）
+svc = TrpcA2aAgentService(
+    service_name="weather",
+    agent=root_agent,
+    rpc_url="https://agent.example.com/a2a",
+)
+
+# 方式 2：本地/无固定域名，直接把监听地址当 rpc_url
+svc = TrpcA2aAgentService(
+    service_name="weather",
+    agent=root_agent,
+    rpc_url="http://127.0.0.1:18081",
+)
+```
+
+发现型客户端需要可达的 `supported_interfaces[].url`，否则会报 `no compatible transports found`。url 为空仍能启动（JSON-RPC 直连不读卡），但会打 warning。`create_a2a_application()` 不另收路径参数；JSON-RPC 路由挂到卡片 url 的 path（`https://x.com/a2a` → `/a2a`，无路径则 `/`），保证卡片声明和实际端点一致。
+
+#### 服务端关键要点
+
+| 要点 | 说明 |
+|------|------|
+| `create_a2a_application` | 装配 Agent Card 与 JSON-RPC 路由；也可自行用 a2a-sdk 的 `DefaultRequestHandler` / `create_agent_card_routes` / `create_jsonrpc_routes` |
+| `rpc_url` | 自动建卡时应配置，写入 `supported_interfaces[].url`；发现型客户端依赖它 |
+| `TrpcA2aAgentService` | 实现了 A2A SDK 的 `AgentExecutor` 接口 |
+| `agent_card` | 自动根据 Agent 的 name、description、tools 等信息构建；自定义时用 1.0 的 `supported_interfaces[]` |
+| `initialize()` | 必须在使用前调用，完成 Agent Card 构建和内部初始化 |
+| `session_service` | 可选，默认使用 `InMemorySessionService`；可替换为持久化实现 |
+| `executor_config` | 可选，用于配置 `user_id_extractor`、`event_callback`、`cancel_wait_timeout` 等行为 |
+
+#### 兼容旧 0.3 客户端
+
+1.0 服务端默认按 1.0 报文工作，并发布 `/.well-known/agent-card.json`。a2a-sdk 0.3.22+ 的 `A2ACardResolver` 本来就拉这条路径，因此旧客户端**能拉到卡**，但会因缺少顶层 `url` 校验失败，且服务端默认不解码 0.3 JSON-RPC。`/.well-known/agent.json` 默认 404。
+
+如果线上仍有旧版 0.3 客户端，在**同一端点**同时接受 1.0 和 0.3 报文：
+
+```python
+from trpc_agent_sdk.server.a2a_v1 import create_a2a_application
+
+app = create_a2a_application(a2a_svc, enable_v0_3_compat=True)
+```
+
+开启开关后，框架会：
+
+- 往 **well-known 发现用的卡片副本**追加 `protocol_version="0.3"` 接口（复用同一个 url），使序列化结果带上 0.3 必填的顶层 `url`
+- 打开 JSON-RPC 的 0.3 解码
+- 额外在 `/.well-known/agent.json` 发布同一张卡（给仍硬编码废弃路径的客户端）
+
+**仅在该开关开启时**，旧 0.3 客户端**无需改动**。默认关闭时，0.3 客户端无法正常使用该服务。
+
+Compat **要求**卡片上有可达 url（`TrpcA2aAgentService(rpc_url=...)` 或自定义 `agent_card`）。0.3 well-known 卡的顶层 `url` 从该接口复制而来，空 url 无法凭空补上。`create_a2a_application(..., enable_v0_3_compat=True)` 在所有接口 url 都为空时会 **raise `ValueError`**。
+
+未传入自定义 `request_handler` 时，内部构造的 `DefaultRequestHandler` 使用同一份带 0.3 接口的副本。传入自定义 handler 时，开关**不会**改写 `handler.agent_card`：JSON-RPC 仍可按 0.3 报文工作，但若 handler 自己读 `supported_interfaces` 做版本判断，**须由调用方在该卡上自行声明 0.3 接口**。
+
+### 3. 创建 a2a 0.3 服务端
+
+安装 `[a2a]`，从 `trpc_agent_sdk.server.a2a` 导入。用 `TrpcA2aAgentService` 包装 Agent，再通过 A2A SDK 的 `A2AStarletteApplication` 以标准 HTTP 方式运行。
+
+#### 创建 A2A 服务并启动
+
+```python
+# run_server.py
+import uvicorn
+
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+
+from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
+
+HOST = "127.0.0.1"
+PORT = 18081
+
+
+def create_a2a_service() -> TrpcA2aAgentService:
+    from agent.agent import root_agent
+
     executor_config = TrpcA2aAgentExecutorConfig()
 
-    # 将 Agent 包装为 A2A 服务，实现了 A2A SDK 的 AgentExecutor 接口
     a2a_svc = TrpcA2aAgentService(
-        service_name="weather_agent_service",  # 服务名称，用于标识服务
-        agent=root_agent,                      # 要部署的 Agent
+        service_name="weather_agent_service",
+        agent=root_agent,
         executor_config=executor_config,
     )
     a2a_svc.initialize()  # 必须调用，完成 Agent Card 构建等初始化
@@ -93,20 +205,18 @@ def create_a2a_service() -> TrpcA2aAgentService:
 def serve():
     a2a_svc = create_a2a_service()
 
-    # 使用 A2A SDK 的 DefaultRequestHandler 处理 A2A 协议请求
     request_handler = DefaultRequestHandler(
-        agent_executor=a2a_svc,        # 传入我们的 A2A 服务作为执行器
-        task_store=InMemoryTaskStore(), # 任务存储，生产环境可替换为持久化实现
+        agent_executor=a2a_svc,
+        task_store=InMemoryTaskStore(),
     )
 
-    # 构建 Starlette HTTP 应用，自动注册 Agent Card 和 A2A 协议端点
     server = A2AStarletteApplication(
-        agent_card=a2a_svc.agent_card,  # Agent Card 会发布到 /.well-known/agent.json
+        agent_card=a2a_svc.agent_card,  # 主路径 /.well-known/agent-card.json；兼容别名 /.well-known/agent.json
         http_handler=request_handler,
     )
 
     print(f"Starting A2A server on http://{HOST}:{PORT}")
-    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent.json")
+    print(f"Agent card: http://{HOST}:{PORT}/.well-known/agent-card.json")
 
     uvicorn.run(server.build(), host=HOST, port=PORT)
 
@@ -115,14 +225,15 @@ if __name__ == "__main__":
     serve()
 ```
 
-启动后，服务会自动发布 Agent Card 到 `/.well-known/agent.json`，客户端可通过该地址发现并调用 Agent。
+启动后，服务会发布 Agent Card 到 `/.well-known/agent-card.json`（同时兼容废弃路径 `/.well-known/agent.json`）。0.3 对卡片 url 不做强制要求。完整示例见 [examples/a2a](../../../examples/a2a/README.md)。
 
-### 3. 服务端关键要点
+#### 服务端关键要点
 
 | 要点 | 说明 |
 |------|------|
+| `A2AStarletteApplication` | a2a-sdk 0.3 的 HTTP 装配；启动时调用 `server.build()` |
 | `TrpcA2aAgentService` | 实现了 A2A SDK 的 `AgentExecutor` 接口，可直接作为 `DefaultRequestHandler` 的执行器 |
-| `agent_card` | 自动根据 Agent 的 name、description、tools 等信息构建，也可手动传入 |
+| `agent_card` | 自动根据 Agent 的 name、description、tools 等信息构建，也可手动传入（0.3 布局：顶层 `url`、`preferredTransport`） |
 | `initialize()` | 必须在使用前调用，完成 Agent Card 构建和内部初始化 |
 | `session_service` | 可选，默认使用 `InMemorySessionService`；可替换为持久化实现 |
 | `executor_config` | 可选，用于配置 `user_id_extractor`、`event_callback`、`cancel_wait_timeout` 等行为 |
@@ -130,6 +241,8 @@ if __name__ == "__main__":
 ---
 
 ## 客户端调用
+
+推荐 extra `[a2a-v1]`，从 `trpc_agent_sdk.server.a2a_v1` 导入。0.3 客户端把 import 换成 `trpc_agent_sdk.server.a2a` 即可；发现路径同样是 `/.well-known/agent-card.json`。
 
 ### 1. 创建远程 Agent 并发起调用
 
@@ -142,7 +255,7 @@ import uuid
 
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
+from trpc_agent_sdk.server.a2a_v1 import TrpcRemoteA2aAgent
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
@@ -151,7 +264,7 @@ AGENT_BASE_URL = "http://127.0.0.1:18081"
 
 
 async def main():
-    # 创建远程 Agent，指定服务 URL；客户端会自动从 /.well-known/agent.json 发现 Agent Card
+    # 创建远程 Agent，指定服务 URL；客户端会自动从 /.well-known/agent-card.json 发现 Agent Card
     remote_agent = TrpcRemoteA2aAgent(
         name="weather_agent",
         agent_base_url=AGENT_BASE_URL,
@@ -243,10 +356,40 @@ run_config = RunConfig(
 | 要点 | 说明 |
 |------|------|
 | `TrpcRemoteA2aAgent` | 继承 `BaseAgent`，可像本地 Agent 一样通过 `Runner` 使用 |
-| `agent_base_url` | 远程 A2A 服务的 HTTP 地址，客户端会自动从 `/.well-known/agent.json` 发现 Agent Card |
+| `agent_base_url` | 远程 A2A 服务的 HTTP 地址，客户端会自动从 `/.well-known/agent-card.json` 发现 Agent Card |
 | `initialize()` | 异步初始化，完成 Agent Card 发现和客户端创建 |
 | `agent_card` / `a2a_client` | 可选参数，如果已有 AgentCard 或 A2AClient 实例可直接传入，跳过自动发现 |
 | `RunConfig` | 通过 `metadata` 字段传递业务参数（如 `user_id`），服务端可通过回调读取 |
+
+### 5. 对接 0.3 服务端（`force_v0_3`）
+
+默认跟 AgentCard 走：完整的 1.0 卡、完整的 0.3 卡都不必开这个开关。1.0 客户端发现后若 JSONRPC 接口 url 为空，会用 `agent_base_url` 补上，所以「旧 0.3 服务没填卡片 url」通常也不必开。
+
+只有你**明确知道对端是 0.3 服务端**，且默认跟卡走不通（或不该信这张卡）时再开，例如卡片声明和进程不一致、你确认对端收的是 0.3 报文。
+
+`force_v0_3=True` 时，POST 地址优先用卡片上的 JSONRPC url，没有时才回退 `agent_base_url`。
+
+```python
+from trpc_agent_sdk.server.a2a_v1 import TrpcRemoteA2aAgent
+
+remote_agent = TrpcRemoteA2aAgent(
+    name="weather_agent",
+    agent_base_url="http://127.0.0.1:18081",
+    force_v0_3=True,  # 明确对端是 0.3，强制旧报文
+)
+```
+
+### 6. 三种协议组合对照
+
+| 场景 | 服务端 | 客户端 |
+|---|---|---|
+| **1.0 → 1.0**（推荐） | `create_a2a_application(a2a_svc)` | 默认 |
+| **0.3 客户端 → 1.0 服务端** | `create_a2a_application(a2a_svc, enable_v0_3_compat=True)` | 旧 0.3 客户端，无需改动 |
+| **1.0 客户端 → 0.3 服务端** | 旧 0.3 服务端 | 完整 0.3 卡用默认；卡片不可信或跟卡走不通时 `force_v0_3=True` |
+
+> 客户端 `force_v0_3=True` 表示「我确认对端是 0.3，强制旧报文」，通常不用开。服务端 `enable_v0_3_compat` 仍表示「1.0 服务同时收 0.3 客户端」，两者不要混用。
+
+> 完整可运行示例见 [examples/a2a_v1](../../../examples/a2a_v1/README.md)（服务端 `A2A_V03_COMPAT` 和客户端 `A2A_FORCE_V03` 覆盖三种协议组合）。0.3 示例见 [examples/a2a](../../../examples/a2a/README.md)。
 
 ---
 
@@ -259,8 +402,8 @@ SDK 支持在 Agent 执行过程中取消任务，包括 LLM 流式生成阶段�
 通过 `cancel_wait_timeout` 控制服务端等待 Agent 完成取消的超时时间：
 
 ```python
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentService
 
 executor_config = TrpcA2aAgentExecutorConfig(
     cancel_wait_timeout=3.0,  # 收到 cancel 请求后，等待 Agent 完成取消清理的最大秒数
@@ -269,10 +412,13 @@ executor_config = TrpcA2aAgentExecutorConfig(
 a2a_svc = TrpcA2aAgentService(
     service_name="weather_agent_cancel_service",
     agent=root_agent,
+    rpc_url="http://127.0.0.1:18081",
     executor_config=executor_config,  # 传入带取消超时配置的执行器
 )
 a2a_svc.initialize()
 ```
+
+0.3 从 `trpc_agent_sdk.server.a2a` 导入，且不需要 `rpc_url`。
 
 ### 客户端取消
 
@@ -332,7 +478,7 @@ async for event in runner.run_async(...):
 
 ## TrpcA2aAgentExecutorConfig 配置项
 
-`TrpcA2aAgentExecutorConfig` 用于配置服务端 Agent 执行器的行为，从 `trpc_agent_sdk.server.a2a` 导入：
+`TrpcA2aAgentExecutorConfig` 用于配置服务端 Agent 执行器的行为。1.0 从 `trpc_agent_sdk.server.a2a_v1` 导入；0.3 从 `trpc_agent_sdk.server.a2a` 导入：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -343,7 +489,7 @@ async for event in runner.run_async(...):
 示例：
 
 ```python
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentExecutorConfig
 
 # 完整配置示例：同时设置 user_id 提取、事件回调和取消超时
 executor_config = TrpcA2aAgentExecutorConfig(
@@ -361,7 +507,7 @@ executor_config = TrpcA2aAgentExecutorConfig(
 
 ```python
 from a2a.server.agent_execution import RequestContext
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentExecutorConfig
 
 
 def custom_user_id_extractor(request: RequestContext) -> str:
@@ -471,6 +617,25 @@ def custom_event_callback(event: Event, context: RequestContext) -> Event | None
 
 ---
 
+## 从 0.3 升级到 1.0
+
+如果服务想从 0.3 版本升级到 1.0，由于官方 a2a sdk 没有完全兼容旧版本，所以需要进行一些代码的改造。
+
+客户端日常用法两边一致，一般只换 import（`trpc_agent_sdk.server.a2a` → `trpc_agent_sdk.server.a2a_v1`）。不兼容主要出在服务端装配。两个 extra 不能同时安装，升级时改为 `uv pip install -e ".[a2a-v1]"`。
+
+| 0.3 写法 | 1.0 写法 | 说明 |
+|---|---|---|
+| `from a2a.server.apps import A2AStarletteApplication` + `server = A2AStarletteApplication(...)` | `from trpc_agent_sdk.server.a2a_v1 import create_a2a_application` + `app = create_a2a_application(a2a_svc)` | **`A2AStarletteApplication` 在 1.0 已删除**。装配结果是 Starlette app，直接 `uvicorn.run(app, ...)`，**没有** `server.build()` |
+| `DefaultRequestHandler(agent_executor=..., task_store=...)` | 通常无需手拼（`create_a2a_application` 内部构造）；自定义时必须加 `agent_card=...` | **`DefaultRequestHandler` 新增必填 `agent_card`** |
+| `TrpcA2aAgentService(service_name=..., agent=...)` | 自动建卡时增加 `rpc_url=...` | 见 [Agent Card URL](#agent-card-url) |
+| 手写 / 传入的 `AgentCard`（顶层 `url`、`preferredTransport`） | `supported_interfaces[]`（`url`、`protocol_binding`、`protocol_version`） | 自定义卡必须改成 1.0 布局，不能只填顶层 `url` |
+
+a2a-sdk 底层还有 `A2AClient`（已删除 → `await create_client()`）等 API 变化，都被封装在 SDK 内部，业务代码无需处理。若还用到了其他不兼容的 API，请参考官方 a2a-sdk 的最新用法修改。
+
+若升级后仍要和未升级的对端互通，见上文 [兼容旧 0.3 客户端](#兼容旧-03-客户端) 和 [对接 0.3 服务端](#5-对接-03-服务端force_v0_3)。
+
+---
+
 ## 架构概览
 
 ```text
@@ -486,17 +651,22 @@ def custom_event_callback(event: Event, context: RequestContext) -> Event | None
 ┌─────────────────▼──────────────────────────────┐
 │                  服务端                         │
 │  ┌──────────────────────────────────────────┐  │
-│  │  A2AStarletteApplication (a2a-sdk)      │  │
-│  │    └─ DefaultRequestHandler             │  │
-│  │         └─ TrpcA2aAgentService          │  │
-│  │              └─ LlmAgent (你的 Agent)    │  │
+│  │  1.0: create_a2a_application（推荐）     │  │
+│  │  0.3: A2AStarletteApplication            │  │
+│  │    └─ DefaultRequestHandler          │  │
+│  │         └─ TrpcA2aAgentService       │  │
+│  │              └─ LlmAgent (你的 Agent)│  │
 │  └──────────────────────────────────────────┘  │
 └────────────────────────────────────────────────┘
 ```
+
+1.0 从 `trpc_agent_sdk.server.a2a_v1` 导入并用 `create_a2a_application`；0.3 从 `trpc_agent_sdk.server.a2a` 导入并用 `A2AStarletteApplication`。后面的执行链路相同。
 
 ---
 
 ## 完整示例
 
-- **基本使用**：[examples/a2a](../../../examples/a2a/README.md) — A2A 服务部署 + 3 轮多轮对话
-- **支持任务取消**：[examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md) — LLM 流式阶段取消 + 工具执行阶段取消
+- **基本使用（1.x，推荐）**：[examples/a2a_v1](../../../examples/a2a_v1/README.md) — `create_a2a_application` + 3 轮多轮对话
+- **支持任务取消（1.x）**：[examples/a2a_v1_with_cancel](../../../examples/a2a_v1_with_cancel/README.md)
+- **基本使用（0.3）**：[examples/a2a](../../../examples/a2a/README.md) — A2A 服务部署 + 3 轮多轮对话
+- **支持任务取消（0.3）**：[examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md) — LLM 流式阶段取消 + 工具执行阶段取消

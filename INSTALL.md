@@ -150,7 +150,8 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 
 | Extension        | Purpose                       | Install Command                         |
 | ---------------- | ----------------------------- | --------------------------------------- |
-| `a2a`            | Google A2A protocol           | `pip install "trpc-agent-py[a2a]"`            |
+| `a2a`            | Google A2A protocol (a2a-sdk 0.3; `trpc_agent_sdk.server.a2a`) | `pip install "trpc-agent-py[a2a]"`            |
+| `a2a-v1`         | Google A2A protocol (a2a-sdk 1.x; `trpc_agent_sdk.server.a2a_v1`; cannot install with `a2a`) | `pip install "trpc-agent-py[a2a-v1]"` |
 | `ag-ui`          | AG-UI protocol                | `pip install "trpc-agent-py[ag-ui]"`          |
 | `agent-claude`   | Claude Agent                  | `pip install "trpc-agent-py[agent-claude]"`   |
 | `graph`          | LangGraphAgent and graph DSL (includes langchain) | `pip install "trpc-agent-py[graph]"`          |
@@ -162,7 +163,7 @@ uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
 | `eval`           | Evaluation framework          | `pip install "trpc-agent-py[eval]"`           |
 | `openclaw`       | OpenClaw integration          | `pip install "trpc-agent-py[openclaw]"`       |
 | `dev`            | Development (lint/format/test)| `pip install "trpc-agent-py[dev]"`            |
-| `all`            | All optional dependencies     | `pip install "trpc-agent-py[all]"`            |
+| `all`            | All optional dependencies (A2A is a2a-sdk 0.3 / `[a2a]`, not `[a2a-v1]`) | `pip install "trpc-agent-py[all]"`            |
 
 ---
 

@@ -50,7 +50,7 @@ weather_agent (LlmAgent) — 部署在 A2A 服务端
 
 关键文件：
 
-- [examples/a2a_with_cancel/run_server.py](./run_server.py)：A2A 服务端入口（配置 cancel_wait_timeout）
+- [examples/a2a_with_cancel/run_server.py](./run_server.py)：A2A 服务端入口（a2a-sdk 0.3；配置 cancel_wait_timeout）
 - [examples/a2a_with_cancel/test_a2a_cancel.py](./test_a2a_cancel.py)：A2A 客户端取消测试（两个场景）
 - [examples/a2a_with_cancel/agent/agent.py](./agent/agent.py)：Agent 定义（LlmAgent + 天气工具）
 - [examples/a2a_with_cancel/agent/tools.py](./agent/tools.py)：天气查询工具（含延时与执行日志）
@@ -128,7 +128,7 @@ python3 run_server.py
 服务地址：
 
 - API：`http://127.0.0.1:18082`
-- Agent Card：`http://127.0.0.1:18082/.well-known/agent.json`
+- Agent Card：`http://127.0.0.1:18082/.well-known/agent-card.json`
 
 #### 启动客户端（新开终端）
 
@@ -145,7 +145,7 @@ python3 test_a2a_cancel.py
 [2026-04-02 15:19:26][INFO][trpc_agent_sdk][trpc_agent_sdk/server/a2a/_agent_service.py:108][66551] Initialized A2A Agent Service weather_agent_cancel_service for weather_agent
 Starting A2A server with cancel support...
 Listening on: http://127.0.0.1:18082
-Agent card: http://127.0.0.1:18082/.well-known/agent.json
+Agent card: http://127.0.0.1:18082/.well-known/agent-card.json
 Cancel wait timeout: 3.0s
 INFO:     Started server process [66551]
 INFO:     Waiting for application startup.
@@ -287,7 +287,7 @@ Would you like me to try fetching the weather for Beijing again?
 
 | 文件 | 说明 |
 |---|---|
-| `run_server.py` | A2A 服务端入口（配置 cancel_wait_timeout） |
+| `run_server.py` | A2A 服务端入口（a2a-sdk 0.3；配置 cancel_wait_timeout） |
 | `test_a2a_cancel.py` | A2A 客户端取消示例（两个场景） |
 | `agent/agent.py` | Agent 定义（LlmAgent + 天气工具） |
 | `agent/config.py` | 模型配置（从环境变量读取） |
@@ -300,4 +300,5 @@ Would you like me to try fetching the weather for Beijing again?
 - 需要验证 A2A 协议远程取消能力：适合使用本示例
 - 需要验证 `cancel_wait_timeout` 配置效果：适合使用本示例
 - 需要验证基本 A2A 服务（不含 Cancel）：建议使用 `examples/a2a`
+- a2a-sdk 1.x 取消示例：建议使用 `examples/a2a_v1_with_cancel`
 - 需要验证单机 Agent 取消能力：建议使用 `examples/llmagent_with_cancel`

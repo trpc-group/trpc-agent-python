@@ -3,8 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Route Agent example module"""
+"""Transfer Agent example module.
 
-from .agent import root_agent
-
-__all__ = ["root_agent"]
+Import ``agent.agent`` (a2a-sdk 0.3) or ``agent.agent_v1`` (a2a-sdk 1.x) explicitly.
+"""

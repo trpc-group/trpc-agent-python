@@ -3,11 +3,10 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""A2A Server Example
+"""AG-UI Server Example
 
-This example uses the standard A2A SDK server (A2AStarletteApplication) to serve
-a trpc-agent as an A2A service over plain HTTP, with the standard protocol
-(artifact-first streaming and unprefixed metadata keys).
+This example serves a trpc-agent as an AG-UI service over plain HTTP (SSE),
+using the SDK's ``create_agui_runner`` helper.
 """
 
 from dotenv import load_dotenv

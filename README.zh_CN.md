@@ -303,7 +303,7 @@ async for event in runner.run_async(user_id=user_id, session_id=current_session_
 - [examples/multi_agent_chain](./examples/multi_agent_chain/README.md) - ChainAgent
 - [examples/multi_agent_parallel](./examples/multi_agent_parallel/README.md) - ParallelAgent
 - [examples/multi_agent_cycle](./examples/multi_agent_cycle/README.md) - CycleAgent
-- [examples/transfer_agent](./examples/transfer_agent/README.md) - TransferAgent 交接执行
+- [examples/transfer_agent](./examples/transfer_agent/README.md) - TransferAgent 交接执行（`run_agent_v1.py` 对应 `[a2a-v1]`，`run_agent.py` 对应 `[a2a]`）
 - [examples/multi_agent_subagent](./examples/multi_agent_subagent/README.md) - Sub-agent 委派
 - [examples/multi_agent_compose](./examples/multi_agent_compose/README.md) - 组合式编排
 - [examples/multi_agent_start_from_last](./examples/multi_agent_start_from_last/README.md) - 从上轮 Agent 继续执行
@@ -517,7 +517,8 @@ skill_tool_set = SkillToolSet(repository=repository, run_tool_kwargs=tool_kwargs
 建议先看：
 
 - [examples/fastapi_server](./examples/fastapi_server/README.md) - HTTP 服务（同步 + SSE）
-- [examples/a2a](./examples/a2a/README.md) / [examples/a2a_with_cancel](./examples/a2a_with_cancel/README.md) - A2A 服务与取消
+- [examples/a2a](./examples/a2a/README.md) / [examples/a2a_with_cancel](./examples/a2a_with_cancel/README.md) - A2A 服务与取消（a2a-sdk 0.3）
+- [examples/a2a_v1](./examples/a2a_v1/README.md) / [examples/a2a_v1_with_cancel](./examples/a2a_v1_with_cancel/README.md) - A2A 服务与取消（a2a-sdk 1.x）
 - [examples/agui](./examples/agui/README.md) / [examples/agui_with_cancel](./examples/agui_with_cancel/README.md) - AG-UI 服务与取消
 
 相关文档：[a2a.md](./docs/mkdocs/zh/a2a.md) / [agui.md](./docs/mkdocs/zh/agui.md) / [cancel.md](./docs/mkdocs/zh/cancel.md)

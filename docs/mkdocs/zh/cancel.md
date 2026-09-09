@@ -824,7 +824,8 @@ if __name__ == "__main__":
 建议两者配置相同的超时时间。
 
 **完整示例：**
-- [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md)
+- [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md)（a2a-sdk 0.3）
+- [examples/a2a_v1_with_cancel](../../../examples/a2a_v1_with_cancel/README.md)（a2a-sdk 1.x）
 
 ### AG-UI
 

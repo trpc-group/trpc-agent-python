@@ -1,6 +1,13 @@
 # trpc-agent A2A Framework 原理说明
 
-本文说明 `trpc_agent_sdk.server.a2a` 如何把 `trpc-agent` 接入 A2A 协议，并给出可对照的运行示例。
+`trpc_agent_sdk.server.a2a` 是 a2a-sdk **0.3** 适配层（extra `trpc-agent-py[a2a]`）。a2a-sdk 1.x 使用并列包 [`a2a_v1/`](../a2a_v1/README.md)（extra `trpc-agent-py[a2a-v1]`）。两个 extra **不能同时安装**。
+
+| extra | a2a-sdk | import |
+| --- | --- | --- |
+| `trpc-agent-py[a2a]` | 0.3.x | `from trpc_agent_sdk.server.a2a import TrpcA2aAgentService` |
+| `trpc-agent-py[a2a-v1]` | 1.x | `from trpc_agent_sdk.server.a2a_v1 import TrpcA2aAgentService, create_a2a_application` |
+
+本文说明 0.3 适配层如何把 `trpc-agent` 接入 A2A 协议，并给出可对照的运行示例。
 
 ## 1. 框架支持 A2A 的核心原理
 
