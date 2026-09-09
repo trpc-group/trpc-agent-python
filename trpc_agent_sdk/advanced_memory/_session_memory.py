@@ -607,14 +607,14 @@ class SessionMemoryExtractor:
 
         return [], None
 
-    async def _read_current_memory(self, session_id: str) -> str:
+    async def _read_current_memory(self, session: "SessionABC") -> str:
         """Read old session memory or return the complete empty template."""
-        current = await self._runtime.session_memory.read(session_id)
+        current = await self._runtime.for_session(session).session_memory.read(session.id)
         return current if current is not None else SessionMemoryDocument().to_markdown()
 
     async def _persist_checkpoint(
         self,
-        session_id: str,
+        session: "SessionABC",
         included_records: list[dict[str, Any]],
         document: SessionMemoryDocument,
         context_tokens: int | None,
@@ -634,8 +634,9 @@ class SessionMemoryExtractor:
             document.key_results,
             document.worklog,
         )
-        await self._runtime.transcripts.append_unique(
-            session_id,
+        runtime = self._runtime.for_session(session)
+        await runtime.transcripts.append_unique(
+            session.id,
             {
                 "schema_version": SESSION_MEMORY_CHECKPOINT_SCHEMA_VERSION,
                 "kind": "session-memory-checkpoint",
@@ -661,11 +662,13 @@ class SessionMemoryExtractor:
         config = self._runtime.config
         if not config.enabled or not config.session_memory_enabled:
             return SessionMemoryExtractionResult(False, "disabled")
-        await self._runtime.initialize()
-        async with self._runtime.coordination.guard(session.id) as acquired:
+        runtime = self._runtime.for_session(session)
+        await runtime.initialize()
+        session_key = runtime.session_key(session.id)
+        async with self._runtime.coordination.guard(session_key) as acquired:
             if not acquired:
                 return SessionMemoryExtractionResult(False, "coordination-timeout")
-            records = await self._runtime.transcripts.read_all(session.id)
+            records = await runtime.transcripts.read_all(session.id)
             checkpoint = self._last_checkpoint(records)
             checkpoint_event_id = checkpoint["last_event_id"] if checkpoint is not None else None
             checkpoint_recorded_at = checkpoint.get("recorded_at") if checkpoint is not None else None
@@ -699,7 +702,7 @@ class SessionMemoryExtractor:
                 return SessionMemoryExtractionResult(False, "threshold-not-met")
 
             included, extraction_input = self._build_extraction_input(
-                await self._read_current_memory(session.id),
+                await self._read_current_memory(session),
                 pending,
                 ctx,
                 tracker,
@@ -715,9 +718,9 @@ class SessionMemoryExtractor:
                     max_chars=config.session_memory_section_max_chars,
                     total_max_chars=config.session_memory_total_max_chars,
                 )
-                await self._runtime.session_memory.write(session.id, document)
+                await runtime.session_memory.write(session.id, document)
                 await self._persist_checkpoint(
-                    session.id,
+                    session,
                     included,
                     document,
                     context_tokens,

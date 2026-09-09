@@ -19,6 +19,10 @@ _SAFE_COMPONENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 def _safe_component(value: str, *, field_name: str) -> str:
     """Convert an external identifier into a safe path component."""
+    if value != value.strip() or any(character.isspace() and character not in {" "} for character in value):
+        raise ValueError(f"{field_name} must not contain leading/trailing or control whitespace")
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise ValueError(f"{field_name} must not contain control characters")
     normalized = _SAFE_COMPONENT_PATTERN.sub("_", value.strip()).strip("._")
     if not normalized:
         raise ValueError(f"{field_name} must contain at least one safe character")
@@ -36,20 +40,56 @@ def _collision_safe_component(value: str, *, field_name: str) -> str:
 
 
 @dataclass(frozen=True)
+class MemoryScope:
+    """Identify the application and user that own Advanced Memory data."""
+
+    app_name: str
+    user_id: str
+
+    def __post_init__(self) -> None:
+        _safe_component(self.app_name, field_name="app_name")
+        _safe_component(self.user_id, field_name="user_id")
+
+    @property
+    def storage_key(self) -> str:
+        """Return a stable process-local key for locks and caches."""
+        return repr((self.app_name, self.user_id))
+
+
+@dataclass(frozen=True)
 class AdvancedMemoryPaths:
     """Build all disk paths for long-term and session memory."""
 
     config: AdvancedMemoryConfig
+    scope: MemoryScope | None = None
+
+    def for_scope(self, app_name: str, user_id: str) -> "AdvancedMemoryPaths":
+        """Return paths rooted in the given application's user namespace."""
+        return AdvancedMemoryPaths(self.config, MemoryScope(app_name, user_id))
+
+    @property
+    def tenant_root_dir(self) -> Path:
+        """Return this scope's root, or the legacy root when unscoped."""
+        if self.scope is None:
+            return self.config.root_dir
+        return (self.config.root_dir / "tenants" /
+                _collision_safe_component(self.scope.app_name, field_name="app_name") /
+                _collision_safe_component(self.scope.user_id, field_name="user_id"))
+
+    @property
+    def scope_key(self) -> str:
+        """Return a key suitable for lock and cache partitioning."""
+        return self.scope.storage_key if self.scope is not None else "legacy\0global"
 
     @property
     def memory_dir(self) -> Path:
         """Return the long-term memory directory."""
-        return self.config.root_dir / self.config.memory_dir_name
+        return self.tenant_root_dir / self.config.memory_dir_name
 
     @property
     def session_root_dir(self) -> Path:
         """Return the root directory for session memory."""
-        return self.config.root_dir / self.config.session_dir_name
+        return self.tenant_root_dir / self.config.session_dir_name
 
     @property
     def memory_index_path(self) -> Path:

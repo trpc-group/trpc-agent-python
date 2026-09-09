@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -88,6 +89,7 @@ class HistorySnip:
         self._runtime = memory_runtime
         self._states: dict[str, HistorySnipState] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
+        self._scoped_processors: dict[object, "HistorySnip"] = {}
 
     @property
     def runtime(self) -> AdvancedMemoryRuntime:
@@ -96,15 +98,17 @@ class HistorySnip:
 
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """Return the unique history-snip lock for a session."""
-        lock = self._session_locks.get(session_id)
+        key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        lock = self._session_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
-            self._session_locks[session_id] = lock
+            self._session_locks[key] = lock
         return lock
 
     async def _load_state(self, session_id: str) -> HistorySnipState:
         """Restore prior history-snip decisions from the transcript."""
-        state = self._states.get(session_id)
+        state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        state = self._states.get(state_key)
         if state is not None:
             return state
         records = await self._runtime.transcripts.read_all(session_id)
@@ -122,7 +126,7 @@ class HistorySnip:
             snipped_ids=snipped_ids,
             result_hashes=result_hashes,
         )
-        self._states[session_id] = state
+        self._states[state_key] = state
         return state
 
     def _collect_candidates(self, request: "LlmRequest") -> list[HistorySnipCandidate]:
@@ -191,12 +195,33 @@ class HistorySnip:
     ) -> HistorySnipResult:
         """Clean old tool results when over budget or explicitly forced."""
         config = self._runtime.config
-        tracker = TokenContextTracker(config)
         if not config.enabled or not config.history_snip_enabled:
             request_chars = estimate_request_chars(request)
             return HistorySnipResult(None, 0, 0, 0, request_chars, request_chars)
+        if ctx is None or hasattr(self._runtime, "scope"):
+            await self._runtime.initialize()
+            return await self._apply_scoped(request, session_id=session_id, ctx=ctx, force=force)
+        runtime = self._runtime.for_session(ctx.session)
+        processor = self._scoped_processors.get(runtime.scope)
+        if processor is None:
+            processor = copy.copy(self)
+            processor._runtime = runtime
+            processor._states = {}
+            processor._session_locks = {}
+            self._scoped_processors[runtime.scope] = processor
+        return await processor.apply(request, session_id=session_id, ctx=ctx, force=force)
 
-        await self._runtime.initialize()
+    async def _apply_scoped(
+        self,
+        request: "LlmRequest",
+        *,
+        session_id: str,
+        ctx: "InvocationContext",
+        force: bool,
+    ) -> HistorySnipResult:
+        """Apply one tenant-bound history-snipping operation."""
+        config = self._runtime.config
+        tracker = TokenContextTracker(config)
         async with self._session_lock(session_id):
             request.contents = [content.model_copy(deep=True) for content in request.contents]
             state = await self._load_state(session_id)

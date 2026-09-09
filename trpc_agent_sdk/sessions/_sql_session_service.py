@@ -397,6 +397,10 @@ class SqlSessionService(BaseSessionService):
         if is_default_config:
             # Default to store historical events for persistent backends.
             self._session_config.store_historical_events = True
+        # AsyncSession cannot perform an implicit refresh when an ORM
+        # attribute is accessed after commit. Keep committed values available
+        # because this service reads StorageSession state after committing.
+        kwargs.setdefault("expire_on_commit", False)
         self._sql_storage = SqlStorage(is_async=is_async, db_url=db_url, metadata=SessionStorageBase.metadata, **kwargs)
         self.__cleanup_task: Optional[asyncio.Task] = None
         self.__cleanup_stop_event: Optional[asyncio.Event] = None
@@ -704,6 +708,7 @@ class SqlSessionService(BaseSessionService):
                 app_state = storage_app_state.state
                 storage_app_state.update_time = func.now()
                 await self._sql_storage.commit(sql_session)
+                await self._sql_storage.refresh(sql_session, storage_app_state)
 
         return app_state
 
@@ -717,6 +722,7 @@ class SqlSessionService(BaseSessionService):
                 user_state = storage_user_state.state
                 storage_user_state.update_time = func.now()
                 await self._sql_storage.commit(sql_session)
+                await self._sql_storage.refresh(sql_session, storage_user_state)
 
         return user_state
 
@@ -733,6 +739,10 @@ class SqlSessionService(BaseSessionService):
 
         storage_session.update_time = func.now()
         await self._sql_storage.commit(sql_session)
+        # Assigning a SQL expression expires the server-generated timestamp
+        # even when expire_on_commit=False. Refresh it before callers access
+        # update_time outside SQLAlchemy's async greenlet.
+        await self._sql_storage.refresh(sql_session, storage_session)
 
         return storage_session
 

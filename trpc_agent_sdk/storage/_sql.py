@@ -293,6 +293,18 @@ class SqlStorage(BaseStorage):
             return await db.get(key.storage_cls, key.key)
         return db.get(key.storage_cls, key.key)
 
+    async def get_for_update(self, db: SqlSession, key: SqlKey) -> Any:
+        """Get one row while holding a database row lock until commit."""
+        stmt = select(key.storage_cls)
+        for column, value in zip(inspect(key.storage_cls).primary_key, key.key):
+            stmt = stmt.where(column == value)
+        stmt = stmt.with_for_update()
+        if isinstance(db, AsyncSession):
+            result = await db.execute(stmt)
+        else:
+            result = db.execute(stmt)
+        return result.scalars().first()
+
     @override
     async def query(self, db: SqlSession, key: SqlKey, conditions: SqlCondition) -> Any:
         """Query the data"""
