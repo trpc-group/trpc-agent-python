@@ -100,7 +100,7 @@ class CodeExecutionUtils:
         # code execution result parts.
         total_len = len(content.parts)
         for idx, part in enumerate(content.parts):
-            if part.executable_code:
+            if part.executable_code and not getattr(part, "thought", False):
                 code_str = part.executable_code.code or ""
                 if cls._is_ignored_code_block(code_str, ignore_codes):
                     continue
@@ -113,7 +113,8 @@ class CodeExecutionUtils:
             return code_blocks
 
         # Extract the code from the text parts.
-        text_parts = [p for p in content.parts if p.text]
+        # Reasoning is model scratch work, not an instruction to execute.
+        text_parts = [part for part in content.parts if part.text and not getattr(part, "thought", False)]
         if not text_parts:
             return code_blocks
 

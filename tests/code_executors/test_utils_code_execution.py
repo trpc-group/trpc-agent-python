@@ -140,6 +140,42 @@ class TestCodeExecutionUtilsExtractCodeAndTruncateContent:
         assert len(code_blocks) >= 1
         assert any(block.code == "print('hello')" for block in code_blocks)
 
+    def test_does_not_extract_code_from_thought_text(self):
+        """Code fences in model reasoning must never become executable."""
+        thought_part = Part(text="Draft:\n```python\nraise RuntimeError('must not run')\n```")
+        thought_part.thought = True
+        content = Content(parts=[thought_part])
+        delimiters = [CodeBlockDelimiter(start="```python\n", end="\n```")]
+
+        code_blocks = CodeExecutionUtils.extract_code_and_truncate_content(content, delimiters)
+
+        assert code_blocks == []
+        assert content.parts == [thought_part]
+
+    def test_extracts_only_visible_code_when_thought_also_contains_code(self):
+        """Only code from the final visible response is executable."""
+        thought_part = Part(text="Draft:\n```python\nprint('thought')\n```")
+        thought_part.thought = True
+        visible_part = Part(text="Run this:\n```python\nprint('visible')\n```")
+        content = Content(parts=[thought_part, visible_part])
+        delimiters = [CodeBlockDelimiter(start="```python\n", end="\n```")]
+
+        code_blocks = CodeExecutionUtils.extract_code_and_truncate_content(content, delimiters)
+
+        assert [block.code for block in code_blocks] == ["print('visible')"]
+        assert all("thought" not in block.code for block in code_blocks)
+
+    def test_does_not_extract_thought_executable_code_part(self):
+        """A thought flag also protects an already structured code part."""
+        thought_part = Part.from_executable_code(code="print('thought')", language="PYTHON")
+        thought_part.thought = True
+        content = Content(parts=[thought_part])
+        delimiters = [CodeBlockDelimiter(start="```python\n", end="\n```")]
+
+        code_blocks = CodeExecutionUtils.extract_code_and_truncate_content(content, delimiters)
+
+        assert code_blocks == []
+
     def test_extract_code_empty_content(self):
         """Test extracting code from empty content."""
         content = Content(parts=[])
