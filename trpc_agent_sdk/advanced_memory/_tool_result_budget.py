@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 from dataclasses import dataclass
@@ -120,6 +121,7 @@ class ToolResultBudget:
         self._runtime = memory_runtime
         self._states: dict[str, ToolResultBudgetState] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
+        self._scoped_processors: dict[object, "ToolResultBudget"] = {}
 
     @property
     def runtime(self) -> AdvancedMemoryRuntime:
@@ -128,15 +130,17 @@ class ToolResultBudget:
 
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """Return the unique async budget lock for a session."""
-        lock = self._session_locks.get(session_id)
+        key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        lock = self._session_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
-            self._session_locks[session_id] = lock
+            self._session_locks[key] = lock
         return lock
 
     async def _load_state(self, session_id: str) -> ToolResultBudgetState:
         """Restore frozen results and historical replacements from the transcript."""
-        state = self._states.get(session_id)
+        state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        state = self._states.get(state_key)
         if state is not None:
             return state
         records = await self._runtime.transcripts.read_all(session_id)
@@ -163,7 +167,7 @@ class ToolResultBudget:
             replacements=replacements,
             result_hashes=result_hashes,
         )
-        self._states[session_id] = state
+        self._states[state_key] = state
         return state
 
     def _collect_candidates(self, request: "LlmRequest") -> list[list[ToolResultCandidate]]:
@@ -206,7 +210,15 @@ class ToolResultBudget:
         candidate: ToolResultCandidate,
     ) -> ToolResultReplacement:
         """Build a deterministic storage path and model-visible preview."""
-        persisted_path = self._runtime.paths.tool_result_path(session_id, candidate.result_id)
+        persisted_path = (
+            Path(
+                f"advanced-memory://{self._runtime.config.redis_key_prefix}/"
+                f"{self._runtime.scope.app_name}/{self._runtime.scope.user_id}/{session_id}/"
+                f"tool/{candidate.result_id}"
+            )
+            if hasattr(self._runtime, "scope") and self._runtime.config.storage_backend == "redis"
+            else self._runtime.paths.tool_result_path(session_id, candidate.result_id)
+        )
         preview, truncated = _preview_text(
             candidate.serialized_result,
             self._runtime.config.tool_result_preview_chars,
@@ -217,7 +229,7 @@ class ToolResultBudget:
                 "schema_version": TOOL_RESULT_REPLACEMENT_SCHEMA_VERSION,
             },
             "persisted_output": {
-                "message": "The tool result exceeded the context budget; the complete content was saved to disk.",
+                "message": "The tool result exceeded the context budget; the complete content was persisted.",
                 "path": str(persisted_path),
                 "original_chars": candidate.original_size,
                 "preview": preview,
@@ -322,11 +334,31 @@ class ToolResultBudget:
             unique_key="decision_id",
         )
 
-    async def apply(self, request: "LlmRequest", *, session_id: str) -> ToolResultBudgetResult:
+    async def apply(
+        self,
+        request: "LlmRequest",
+        *,
+        session_id: str,
+        ctx: "InvocationContext | None" = None,
+    ) -> ToolResultBudgetResult:
         """Process a model request without mutating session Events."""
         if not self._runtime.config.enabled:
             return ToolResultBudgetResult(0, 0, 0)
-        await self._runtime.initialize()
+        if ctx is None or hasattr(self._runtime, "scope"):
+            await self._runtime.initialize()
+            return await self._apply_scoped(request, session_id)
+        runtime = self._runtime.for_session(ctx.session)
+        processor = self._scoped_processors.get(runtime.scope)
+        if processor is None:
+            processor = copy.copy(self)
+            processor._runtime = runtime
+            processor._states = {}
+            processor._session_locks = {}
+            self._scoped_processors[runtime.scope] = processor
+        return await processor.apply(request, session_id=session_id, ctx=ctx)
+
+    async def _apply_scoped(self, request: "LlmRequest", session_id: str) -> ToolResultBudgetResult:
+        """Apply budgeting while ``_runtime`` is bound to the current tenant."""
         async with self._session_lock(session_id):
             request.contents = [content.model_copy(deep=True) for content in request.contents]
             state = await self._load_state(session_id)
@@ -390,7 +422,7 @@ class ToolResultBudgetCallback:
 
     async def __call__(self, ctx: "InvocationContext", request: "LlmRequest") -> None:
         """Apply tool-result budgeting without truncating model calls."""
-        await self._budget.apply(request, session_id=ctx.session_id)
+        await self._budget.apply(request, session_id=ctx.session_id, ctx=ctx)
         return None
 
 

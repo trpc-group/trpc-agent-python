@@ -104,6 +104,23 @@ async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
     assert "secrets, credentials, tokens, and other sensitive data" in instruction
 
 
+async def test_custom_memory_focus_is_injected_into_system_instruction(tmp_path: Path) -> None:
+    """Ensure applications can prioritize a custom long-term memory focus."""
+    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
+        enabled=True,
+        root_dir=tmp_path,
+        memory_focus_instruction="重点记住用户长期稳定的兴趣爱好。",
+    ))
+    request = LlmRequest(model="test-model")
+
+    applied = await LongTermMemoryContext(runtime).apply(request)
+
+    instruction = str(request.config.system_instruction)
+    assert applied is True
+    assert "## Custom memory focus" in instruction
+    assert "重点记住用户长期稳定的兴趣爱好。" in instruction
+
+
 async def test_unified_setup_installs_complete_pipeline_in_order(tmp_path: Path) -> None:
     """Ensure unified setup installs the five components in order."""
     runtime = _runtime(tmp_path)

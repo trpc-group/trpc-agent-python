@@ -32,17 +32,27 @@ class LongTermMemoryContext:
         """Return the runtime bound to this long-term memory context."""
         return self._runtime
 
-    async def apply(self, request: "LlmRequest") -> bool:
+    async def apply(self, request: "LlmRequest", ctx: "InvocationContext | None" = None) -> bool:
         """Append the MEMORY.md index and on-demand read guidance."""
-        config = self._runtime.config
+        runtime = self._runtime.for_session(ctx.session) if ctx is not None else self._runtime
+        config = runtime.config
         if not config.enabled or not config.long_term_memory_injection_enabled:
             return False
-        await self._runtime.initialize()
+        await runtime.initialize()
         existing_instruction = (str(request.config.system_instruction)
                                 if request.config is not None and request.config.system_instruction else "")
         if LONG_TERM_MEMORY_MARKER in existing_instruction:
             return False
-        index = await self._runtime.long_term_memory.read_index()
+        index = await runtime.long_term_memory.read_index()
+        focus_instruction = (config.memory_focus_instruction or "").strip()
+        custom_focus = (
+            "\n\n## Custom memory focus\n"
+            "The following is an additional application-level memory preference. "
+            "Give it extra attention when deciding whether stable, explicit information "
+            "is worth saving, while still following the safety and quality rules above:\n"
+            f"{focus_instruction}\n"
+            if focus_instruction else ""
+        )
         instruction = (
             f"{LONG_TERM_MEMORY_MARKER}\n"
             "The following is a bounded index of this project's long-term memory. It is a trusted cross-session "
@@ -66,13 +76,13 @@ class LongTermMemoryContext:
             "Do not save temporary task details, information reconstructable from current code, unverified guesses, "
             "duplicates, the model's own reasoning, or secrets, credentials, tokens, and other sensitive data. "
             "Do not write information that is uncertain, useful only in the current conversation, or not clearly "
-            "worth preserving.\n\n"
+            f"worth preserving.{custom_focus}\n\n"
             "save_memory writes both the detail file and the index. Pass a stable filename and concise "
             "name/description/summary, and use one of user, feedback, project, or reference for memory_type. "
             "Keep the description short and general; put detailed information in content. "
             "If save_memory is unavailable, do not claim that the information was saved.\n"
-            f"Memory directory: {self._runtime.paths.memory_dir}\n"
-            f"Index file: {self._runtime.paths.memory_index_path}\n"
+            f"Memory directory: {runtime.paths.memory_dir if config.storage_backend == 'local' else 'Redis'}\n"
+            f"Index file: {runtime.paths.memory_index_path if config.storage_backend == 'local' else 'Redis memory index'}\n"
             f"<index>\n{index.rstrip()}\n</index>\n"
             f"</advanced-memory-index>")
         request.append_instructions([instruction])
@@ -95,8 +105,7 @@ class LongTermMemoryContextCallback:
 
     async def __call__(self, ctx: "InvocationContext", request: "LlmRequest") -> None:
         """Inject the long-term memory index before a model request."""
-        del ctx
-        await self._memory_context.apply(request)
+        await self._memory_context.apply(request, ctx)
         return None
 
 

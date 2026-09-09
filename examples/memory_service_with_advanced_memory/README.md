@@ -2,25 +2,22 @@
 
 ## Advanced Memory 简介
 
-`Advanced Memory` 是一套面向 Agent 的本地化记忆与上下文管理机制，重点增强
-Agent 在长期信息沉淀和超长对话处理方面的能力：
+`Advanced Memory` 是一套面向 Agent 的本地化记忆与上下文管理机制，重点增强 Agent 在长期信息沉淀和超长对话处理方面的能力：
 
-- **本地化持久存储**：记忆和上下文数据以本地文件形式持久化，存储位置、数据边界
-  和组织方式清晰可控，适合本地开发、调试、迁移和审计。
-- **更强的长期记忆能力**：支持将对话中的稳定事实、用户偏好和重要经验主动沉淀为
-  可组织、可更新、可跨 Session 使用的长期记忆，而不是简单堆积历史消息。
-- **分层记忆管理**：分别管理原始对话、Session 级记忆和跨 Session 长期记忆，让不同
-  类型的信息以合适的粒度参与后续推理。
-- **上下文管理**：根据上下文规模、信息类型和使用情况，对历史消息、工具结果及记忆
-  内容进行统一治理，在保留关键信息的同时控制模型输入规模。
-- **上下文压缩**：支持对历史上下文和工具结果进行渐进式裁剪、压缩和摘要，降低长
-  对话导致的上下文膨胀以及超出模型窗口限制的风险。
-- **结构化记忆提取**：从持续增长的对话中提取结构化信息，形成更稳定、更易维护的
-  Session Memory，提升后续对话对历史信息的利用效率。
+- **更强的长期记忆能力**：支持将对话中的稳定事实、用户偏好和重要经验主动沉淀为可组织、可更新、可跨 Session 使用的长期记忆，而不是简单堆积历史消息。
+- **分层记忆管理**：分别管理原始对话、Session 级记忆和跨 Session 长期记忆，让不同类型的信息以合适的粒度参与后续推理。
+- **上下文管理**：根据上下文规模、信息类型和使用情况，对历史消息、工具结果及记忆内容进行统一治理，在保留关键信息的同时控制模型输入规模。
+- **上下文压缩**：支持对历史上下文和工具结果进行渐进式裁剪、压缩和摘要，降低长对话导致的上下文膨胀以及超出模型窗口限制的风险。
+- **结构化记忆提取**：从持续增长的对话中提取结构化信息，形成更稳定、更易维护的Session Memory，提升后续对话对历史信息的利用效率。
+- **本地化持久存储**：记忆和上下文数据以本地文件形式持久化，存储位置、数据边界和组织方式清晰可控，适合本地开发、调试、迁移和审计。
 
-本示例演示如何使用 `AdvancedMemorySessionService`。它把 Session 持久化和
-Advanced Memory 上下文管理整合到一个 SessionService 中，用户不需要显式调用
-`setup_advanced_memory()`，也不需要再创建 `InMemorySessionService`。
+本示例演示如何使用 `AdvancedMemorySessionService`。它把 Session 持久化和Advanced Memory 上下文管理整合到一个 SessionService 中，用户不需要显式调用`setup_advanced_memory()`，也不需要再创建 `InMemorySessionService`。
+
+**Advanced Memory 在 Redis 存储：**
+[Redis `run_agent.py`](../memory_service_with_advanced_memory_redis/run_agent.py)
+
+**Advanced Memory 在 SQL 存储：**
+[SQL `run_agent.py`](../memory_service_with_advanced_memory_sql/run_agent.py)
 
 ## 示例流程
 
@@ -67,6 +64,21 @@ runner = Runner(
 
 `AdvancedMemoryConfig` 默认已经启用这些能力，本示例直接使用默认配置。
 
+## 不同存储后端的 SessionService 选择
+
+`AdvancedMemorySessionService` 是本地文件版 SessionService。使用 Redis 或 SQL 时，不要继续使用它，否则可能形成 Session 数据与 Advanced Memory 数据分开存储的混合模式。
+
+推荐组合：
+
+- local：`AdvancedMemorySessionService`
+- Redis：`RedisSessionService` + `AdvancedMemoryService`
+- SQL：`SqlSessionService` + `AdvancedMemoryService`
+
+Redis 和 SQL 的完整示例分别见：
+
+- [Advanced Memory Redis 示例](../memory_service_with_advanced_memory_redis/README.md)
+- [Advanced Memory SQL 示例](../memory_service_with_advanced_memory_sql/README.md)
+
 ## 数据目录
 
 运行后，数据默认写入当前示例目录：
@@ -112,18 +124,22 @@ python3 run_agent.py
 - `TRPC_AGENT_MODEL_NAME`
 - `TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS`（可选，模型总上下文窗口大小，单位为 token）
 - `TRPC_AGENT_MAX_OUTPUT_TOKENS`（可选，模型最大输出窗口大小，单位为 token）
+- `M_TTL`（可选，长期 memory 过期时间，单位为秒）
+- `SESSION_TTL`（可选，session 相关数据过期时间，单位为秒）
 
-`.env` 中留空的变量不会覆盖默认值；如果同时在 Python 中传入
-`model_context_window_tokens` 或 `max_output_tokens`，Python 显式配置优先。
+`M_TTL` 和 `SESSION_TTL` 未配置时不会自动删除数据。Session 的后台清理检查间隔由示例内部设置，不需要单独配置。
 
-如果配置了模型上下文窗口，Advanced Memory 会用
-`TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS - TRPC_AGENT_MAX_OUTPUT_TOKENS`
+本示例提供的 `.env` 默认使用 `M_TTL=120` 和 `SESSION_TTL=60`，方便直接观察
+过期清理；如果不希望自动删除，将这两个值留空即可。
+
+`.env` 中留空的变量不会覆盖默认值；如果同时在 Python 中传入`model_context_window_tokens` 或 `max_output_tokens`，Python 显式配置优先。
+
+如果配置了模型上下文窗口，Advanced Memory 会用`TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS - TRPC_AGENT_MAX_OUTPUT_TOKENS`
 作为可用于输入内容的窗口；两个变量都留空时使用字符数阈值。
 
 ## `AdvancedMemoryConfig` 配置项
 
-下面列出当前所有可直接传入 `AdvancedMemoryConfig` 的配置项。**没有特殊需求时，
-只设置 `root_dir` 即可**；示例中的值均为默认值。
+下面列出当前所有可直接传入 `AdvancedMemoryConfig` 的配置项。**没有特殊需求时，只设置 `root_dir` 即可**；示例中的值均为默认值。
 
 ```python
 session_service = AdvancedMemorySessionService(
@@ -139,10 +155,15 @@ session_service = AdvancedMemorySessionService(
         encoding="utf-8",                         # 文件编码
         transcript_fsync=False,                   # transcript 写入后是否 fsync
 
+        # TTL（单位：秒；None 表示不过期）
+        memory_ttl_seconds=None,                  # 长期记忆清理时间间隔
+        session_ttl_seconds=None,                 # 会话记忆清理时间间隔
+
         # 长期记忆
         memory_index_max_lines=200,               # 注入 prompt 的索引最大行数
         memory_index_max_bytes=25_000,            # 注入 prompt 的索引最大字节数
         long_term_memory_injection_enabled=True,  # 是否注入 MEMORY.md
+        memory_focus_instruction=None,            # 可选：重点记忆要求
 
         # 工具结果
         tool_result_max_chars=50_000,              # 单个工具结果最大字符数
@@ -209,6 +230,26 @@ session_service = AdvancedMemorySessionService(
         preload_memory_max_chars=50_000,           # 预加载内容总字符上限
         preload_memory_candidate_limit=200,       # 筛选模型的候选 topic 数
     ),
+)
+```
+
+`memory_focus_instruction` 可以传入应用级的自定义记忆偏好，例如：
+
+```python
+memory_focus_instruction="特别关注用户长期稳定的兴趣爱好和开发习惯。"
+```
+
+它会追加到长期记忆的 system instruction 中，提示模型优先关注这些内容。
+
+本示例还会把同一个 `SESSION_TTL` 传给 `SessionServiceConfig`，用于清理`session.json` 和 Session 目录；`cleanup_interval_seconds=5` 只是内部检查频率，不是另一个需要用户配置的 TTL：
+
+```python
+session_config = SessionServiceConfig(
+    ttl=SessionServiceConfig.create_ttl_config(
+        enable=True,
+        ttl_seconds=60,              # SESSION_TTL
+        cleanup_interval_seconds=5,  # 内部检查频率
+    )
 )
 ```
 

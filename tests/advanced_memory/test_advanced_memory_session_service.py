@@ -51,7 +51,8 @@ async def test_session_service_persists_and_restores_events(tmp_path: Path) -> N
         },
     )
     await first.append_event(session, _event("event-1", "hello"))
-    metadata = json.loads((first.runtime.paths.session_dir(session.id) / "session.json").read_text(encoding="utf-8"))
+    metadata = json.loads((first.runtime.for_session(session).paths.session_dir(session.id) / "session.json").read_text(
+        encoding="utf-8"))
     assert metadata["state"] == {"session-key": "session-value"}
 
     second = AdvancedMemorySessionService(config=_config(tmp_path))
@@ -68,25 +69,28 @@ async def test_session_service_persists_and_restores_events(tmp_path: Path) -> N
     assert restored.state["user:name"] == "alice"
 
 
-async def test_session_id_collision_between_users_is_rejected(tmp_path: Path) -> None:
-    """Prevent different users from silently sharing one session directory."""
+async def test_same_session_id_is_isolated_between_users(tmp_path: Path) -> None:
+    """Allow matching IDs because each user owns a separate session directory."""
     service = AdvancedMemorySessionService(config=_config(tmp_path))
-    await service.create_session(
+    first = await service.create_session(
         app_name="demo-app",
         user_id="user-a",
         session_id="shared-session",
     )
+    second = await service.create_session(
+        app_name="demo-app",
+        user_id="user-b",
+        session_id="shared-session",
+    )
+    await service.append_event(first, _event("event-a", "for user a"))
+    await service.append_event(second, _event("event-b", "for user b"))
 
-    try:
-        await service.create_session(
-            app_name="demo-app",
-            user_id="user-b",
-            session_id="shared-session",
-        )
-    except ValueError as exc:
-        assert "already used" in str(exc)
-    else:
-        raise AssertionError("Expected a cross-user session ID collision to fail")
+    assert (await service.get_session(
+        app_name="demo-app", user_id="user-a", session_id="shared-session")).events[0].id == "event-a"
+    assert (await service.get_session(
+        app_name="demo-app", user_id="user-b", session_id="shared-session")).events[0].id == "event-b"
+    assert service.runtime.for_session(first).paths.session_dir(first.id) != service.runtime.for_session(
+        second).paths.session_dir(second.id)
 
 
 async def test_delete_session_removes_persistent_session_data(tmp_path: Path) -> None:
@@ -102,7 +106,8 @@ async def test_delete_session_removes_persistent_session_data(tmp_path: Path) ->
         },
     )
     await service.append_event(session, _event("event-1", "hello"))
-    metadata = json.loads((service.runtime.paths.session_dir(session.id) / "session.json").read_text(encoding="utf-8"))
+    metadata = json.loads((service.runtime.for_session(session).paths.session_dir(session.id) / "session.json").read_text(
+        encoding="utf-8"))
     assert metadata["state"] == {}
 
     await service.delete_session(
@@ -116,7 +121,7 @@ async def test_delete_session_removes_persistent_session_data(tmp_path: Path) ->
         user_id="demo-user",
         session_id=session.id,
     ) is None
-    assert not service.runtime.paths.session_dir(session.id).exists()
+    assert not service.runtime.for_session(session).paths.session_dir(session.id).exists()
 
 
 async def test_ttl_cleanup_removes_expired_persistent_sessions(tmp_path: Path) -> None:
@@ -216,6 +221,7 @@ def test_transcript_decorator_can_cross_event_loops(tmp_path: Path) -> None:
 
     asyncio.run(create())
     asyncio.run(append())
-    records = asyncio.run(service.runtime.transcripts.read_all("wrapped-session"))
+    records = asyncio.run(service.runtime.for_scope(
+        "demo-app", "demo-user").transcripts.read_all("wrapped-session"))
     assert [record["event_id"] for record in records if record.get("kind") == "event"] == ["event-1"]
     asyncio.run(runner.close())

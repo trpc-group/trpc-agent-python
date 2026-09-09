@@ -62,7 +62,7 @@ def _runtime(
             autocompact_max_failures=max_failures,
             autocompact_summary_input_max_chars=10_000,
             autocompact_summary_retries=2,
-        ))
+        )).for_scope("demo-app", "demo-user")
 
 
 def _request(count: int, *, text_size: int = 800) -> LlmRequest:
@@ -83,6 +83,11 @@ def _ctx(session_id: str = "session-a"):
     return SimpleNamespace(
         session_id=session_id,
         app_name="demo-app",
+        session=SimpleNamespace(
+            app_name="demo-app",
+            user_id="demo-user",
+            id=session_id,
+        ),
         agent=SimpleNamespace(model="fake-model"),
     )
 
@@ -122,7 +127,7 @@ async def test_token_budget_triggers_autocompact_and_records_diagnostics(tmp_pat
             autocompact_summary_input_max_chars=10_000,
             model_context_window_tokens=1_100,
             max_output_tokens=100,
-        ))
+        )).for_scope("demo-app", "demo-user")
     result = await AutoCompact(runtime, FakeSummaryGenerator()).apply(
         _request(5),
         session_id="session-a",
@@ -435,7 +440,7 @@ async def test_disabled_autocompact_does_not_copy_request(tmp_path: Path) -> Non
 
     assert result.compacted is False
     assert request.contents[0] is original_content
-    assert not (tmp_path / "SESSION").exists()
+    assert not (tmp_path / "tenants" / "demo-app" / "demo-user" / "SESSION").exists()
 
 
 def test_setup_orders_full_context_pipeline(tmp_path: Path) -> None:

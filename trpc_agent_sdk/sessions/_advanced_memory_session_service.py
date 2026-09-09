@@ -51,17 +51,24 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
         """Enable or disable transcript persistence for this backend."""
         self._transcript_enabled = enabled
 
-    def _metadata_path(self, session_id: str) -> Path:
-        return self._runtime.paths.session_dir(session_id) / "session.json"
+    def _scoped_runtime(self, app_name: str, user_id: str) -> AdvancedMemoryRuntime:
+        return self._runtime.for_scope(app_name, user_id)
 
-    @property
-    def _state_path(self) -> Path:
-        return self._runtime.paths.session_root_dir / "_state.json"
+    def _metadata_path(self, app_name: str, user_id: str, session_id: str) -> Path:
+        return self._scoped_runtime(app_name, user_id).paths.session_dir(session_id) / "session.json"
+
+    def _app_state_path(self, app_name: str, user_id: str) -> Path:
+        """Return state shared by every user of one app."""
+        return self._scoped_runtime(app_name, user_id).paths.tenant_root_dir.parent / "_state.json"
+
+    def _user_state_path(self, app_name: str, user_id: str) -> Path:
+        """Return state private to one application user."""
+        return self._scoped_runtime(app_name, user_id).paths.tenant_root_dir / "_state.json"
 
     async def _write_session(self, session: Session) -> None:
         payload = session.model_dump(mode="json", by_alias=True, exclude={"events", "historical_events"})
         payload["state"] = extract_state_delta(session.state).session_state
-        path = self._metadata_path(session.id)
+        path = self._metadata_path(session.app_name, session.user_id, session.id)
         await asyncio.to_thread(self._write_json, path, payload, self._runtime.config.encoding)
 
     @staticmethod
@@ -81,8 +88,8 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
                 pass
             raise
 
-    async def _read_session(self, session_id: str) -> Session | None:
-        path = self._metadata_path(session_id)
+    async def _read_session(self, app_name: str, user_id: str, session_id: str) -> Session | None:
+        path = self._metadata_path(app_name, user_id, session_id)
         if not path.exists():
             return None
         payload = await asyncio.to_thread(path.read_text, encoding=self._runtime.config.encoding)
@@ -120,10 +127,10 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
     def _cleanup_expired_sessions(self) -> None:
         """Delete session directories idle longer than the configured TTL."""
         cutoff = time.time() - self.session_config.ttl.ttl_seconds
-        root = self._runtime.paths.session_root_dir
-        if not root.exists():
+        tenants_root = self._runtime.config.root_dir / "tenants"
+        if not tenants_root.exists():
             return
-        for metadata_path in root.glob("*/session.json"):
+        for metadata_path in tenants_root.glob(f"*/*/{self._runtime.config.session_dir_name}/*/session.json"):
             try:
                 if metadata_path.stat().st_mtime < cutoff:
                     shutil.rmtree(metadata_path.parent, ignore_errors=True)
@@ -142,24 +149,34 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
         await asyncio.gather(task, return_exceptions=True)
         self._cleanup_stop_event = None
 
-    async def _read_global_state(self) -> dict[str, dict[str, Any]]:
-        if not self._state_path.exists():
-            return {"app": {}, "user": {}}
-        payload = await asyncio.to_thread(
-            self._state_path.read_text,
-            encoding=self._runtime.config.encoding,
-        )
-        parsed = json.loads(payload)
+    async def _read_global_state(self, app_name: str, user_id: str) -> dict[str, dict[str, Any]]:
+        async def read(path: Path) -> dict[str, Any]:
+            if not path.exists():
+                return {}
+            payload = await asyncio.to_thread(path.read_text, encoding=self._runtime.config.encoding)
+            return dict(json.loads(payload))
+
         return {
-            "app": dict(parsed.get("app", {})),
-            "user": dict(parsed.get("user", {})),
+            "app": await read(self._app_state_path(app_name, user_id)),
+            "user": await read(self._user_state_path(app_name, user_id)),
         }
 
-    async def _write_global_state(self, state: dict[str, dict[str, Any]]) -> None:
-        await asyncio.to_thread(self._write_json, self._state_path, state, self._runtime.config.encoding)
+    async def _write_global_state(self, app_name: str, user_id: str, state: dict[str, dict[str, Any]]) -> None:
+        await asyncio.to_thread(
+            self._write_json,
+            self._app_state_path(app_name, user_id),
+            state["app"],
+            self._runtime.config.encoding,
+        )
+        await asyncio.to_thread(
+            self._write_json,
+            self._user_state_path(app_name, user_id),
+            state["user"],
+            self._runtime.config.encoding,
+        )
 
     async def _restore_events(self, session: Session) -> Session:
-        records = await self._runtime.transcripts.read_all(session.id)
+        records = await self._scoped_runtime(session.app_name, session.user_id).transcripts.read_all(session.id)
         events: list[Event] = []
         for record in records:
             event_payload = record.get("event")
@@ -191,24 +208,19 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
             save_key=f"{app_name}/{user_id}",
         )
         async with self._lock:
-            await self._runtime.initialize()
-            existing = await self._read_session(resolved_id)
-            if existing is not None and (existing.app_name != app_name or existing.user_id != user_id):
-                raise ValueError(f"Session ID {resolved_id!r} is already used by another app or user")
-            global_state = await self._read_global_state()
-            global_state["app"].setdefault(app_name, {}).update(state_delta.app_state_delta)
-            global_state["user"].setdefault(f"{app_name}/{user_id}", {}).update(state_delta.user_state_delta)
-            await self._write_global_state(global_state)
+            await self._scoped_runtime(app_name, user_id).initialize()
+            existing = await self._read_session(app_name, user_id, resolved_id)
+            global_state = await self._read_global_state(app_name, user_id)
+            global_state["app"].update(state_delta.app_state_delta)
+            global_state["user"].update(state_delta.user_state_delta)
+            await self._write_global_state(app_name, user_id, global_state)
             await self._write_session(session)
         session.state = merge_state(
             extract_state_delta(session.state),
             need_copy=True,
         )
-        session.state.update({f"app:{key}": value for key, value in global_state["app"].get(app_name, {}).items()})
-        session.state.update({
-            f"user:{key}": value
-            for key, value in global_state["user"].get(f"{app_name}/{user_id}", {}).items()
-        })
+        session.state.update({f"app:{key}": value for key, value in global_state["app"].items()})
+        session.state.update({f"user:{key}": value for key, value in global_state["user"].items()})
         return session
 
     async def get_session(
@@ -221,12 +233,12 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
     ) -> Session | None:
         self._start_cleanup_task()
         async with self._lock:
-            session = await self._read_session(session_id)
-            if session is None or session.app_name != app_name or session.user_id != user_id:
+            session = await self._read_session(app_name, user_id, session_id)
+            if session is None:
                 return None
-            global_state = await self._read_global_state()
-            app_state = global_state["app"].get(app_name, {})
-            user_state = global_state["user"].get(f"{app_name}/{user_id}", {})
+            global_state = await self._read_global_state(app_name, user_id)
+            app_state = global_state["app"]
+            user_state = global_state["user"]
             session.state = merge_state(
                 extract_state_delta(session.state),
                 need_copy=True,
@@ -242,10 +254,17 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
         user_id: Optional[str] = None,
     ) -> ListSessionsResponse:
         self._start_cleanup_task()
-        if not self._runtime.paths.session_root_dir.exists():
+        tenants_root = self._runtime.config.root_dir / "tenants"
+        if not tenants_root.exists():
             return ListSessionsResponse()
         sessions: list[Session] = []
-        for path in await asyncio.to_thread(lambda: list(self._runtime.paths.session_root_dir.glob("*/session.json"))):
+        if user_id is not None:
+            root = self._scoped_runtime(app_name, user_id).paths.session_root_dir
+            session_glob = "*/session.json"
+        else:
+            root = tenants_root
+            session_glob = f"*/*/{self._runtime.config.session_dir_name}/*/session.json"
+        for path in await asyncio.to_thread(lambda: list(root.glob(session_glob))):
             try:
                 session = await asyncio.to_thread(lambda path=path: Session.model_validate(
                     json.loads(path.read_text(encoding=self._runtime.config.encoding))))
@@ -266,7 +285,7 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
         )
         if session is not None:
             async with self._lock:
-                await asyncio.to_thread(shutil.rmtree, self._runtime.paths.session_dir(session_id), True)
+                await asyncio.to_thread(shutil.rmtree, self._metadata_path(app_name, user_id, session_id).parent, True)
 
     async def append_event(self, session: Session, event: Event) -> Event:
         self._start_cleanup_task()
@@ -275,22 +294,22 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
             if not event.partial:
                 state_delta = extract_state_delta(event.actions.state_delta if event.actions else None)
                 if state_delta.app_state_delta or state_delta.user_state_delta:
-                    global_state = await self._read_global_state()
-                    global_state["app"].setdefault(session.app_name, {}).update(state_delta.app_state_delta)
-                    global_state["user"].setdefault(f"{session.app_name}/{session.user_id}",
-                                                    {}).update(state_delta.user_state_delta)
-                    await self._write_global_state(global_state)
+                    global_state = await self._read_global_state(session.app_name, session.user_id)
+                    global_state["app"].update(state_delta.app_state_delta)
+                    global_state["user"].update(state_delta.user_state_delta)
+                    await self._write_global_state(session.app_name, session.user_id, global_state)
                     session.state.update({f"app:{key}": value for key, value in state_delta.app_state_delta.items()})
                     session.state.update({f"user:{key}": value for key, value in state_delta.user_state_delta.items()})
                 await self._write_session(session)
             if not event.partial and self._transcript_enabled:
-                records = await self._runtime.transcripts.read_all(session.id)
+                runtime = self._scoped_runtime(session.app_name, session.user_id)
+                records = await runtime.transcripts.read_all(session.id)
                 record = build_event_transcript_record(
                     session,
                     persisted,
                     parent_event_id=find_last_event_id(records),
                 )
-                await self._runtime.transcripts.append_unique(
+                await runtime.transcripts.append_unique(
                     session.id,
                     record,
                     unique_key="event_id",
@@ -315,6 +334,7 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
 
     async def close(self) -> None:
         await self._stop_cleanup_task()
+        await self._runtime.close()
 
 
 class AdvancedMemorySessionService(BaseSessionService):
@@ -331,6 +351,11 @@ class AdvancedMemorySessionService(BaseSessionService):
         if runtime is not None and config is not None and runtime.config != config:
             raise ValueError("runtime and config must describe the same Advanced Memory configuration")
         self._runtime = runtime or AdvancedMemoryRuntime.create(config)
+        if self._runtime.config.storage_backend == "redis":
+            raise ValueError(
+                "AdvancedMemorySessionService is file-backed; use RedisSessionService with "
+                "AdvancedMemoryService when AdvancedMemoryConfig.storage_backend='redis'"
+            )
         self._preload_memory_model = preload_memory_model
         self._backend = _AdvancedMemorySessionBackend(self._runtime, session_config=session_config)
         self._integration: Any | None = None
