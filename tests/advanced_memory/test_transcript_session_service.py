@@ -42,7 +42,7 @@ async def test_append_event_writes_versioned_parent_chain(tmp_path: Path) -> Non
     await service.append_event(session, _event("event-1", "hello"))
     await service.append_event(session, _event("event-2", "world"))
 
-    records = await runtime.transcripts.read_all(session.id)
+    records = await runtime.for_session(session).transcripts.read_all(session.id)
     assert [record["event_id"] for record in records] == ["event-1", "event-2"]
     assert records[0]["parent_event_id"] is None
     assert records[1]["parent_event_id"] == "event-1"
@@ -65,7 +65,7 @@ async def test_duplicate_event_id_is_not_written_twice(tmp_path: Path) -> None:
     await service.append_event(session, duplicate)
     await service.append_event(session, duplicate.model_copy(deep=True))
 
-    records = await runtime.transcripts.read_all(session.id)
+    records = await runtime.for_session(session).transcripts.read_all(session.id)
     assert [record["event_id"] for record in records] == ["event-1"]
 
 
@@ -79,7 +79,7 @@ async def test_old_duplicate_does_not_rewind_parent_chain(tmp_path: Path) -> Non
     await service.append_event(session, _event("event-1", "first"))
     await service.append_event(session, _event("event-3", "third"))
 
-    records = await runtime.transcripts.read_all(session.id)
+    records = await runtime.for_session(session).transcripts.read_all(session.id)
 
     assert [record["event_id"] for record in records] == ["event-1", "event-2", "event-3"]
     assert records[-1]["parent_event_id"] == "event-2"
@@ -97,7 +97,7 @@ async def test_new_wrapper_restores_parent_from_existing_transcript(tmp_path: Pa
     second_service = TranscriptSessionService(delegate, second_runtime)
     await second_service.append_event(session, _event("event-2", "second"))
 
-    records = await second_runtime.transcripts.read_all(session.id)
+    records = await second_runtime.for_session(session).transcripts.read_all(session.id)
     assert records[-1]["parent_event_id"] == "event-1"
 
 
@@ -124,4 +124,4 @@ async def test_partial_event_is_not_written_to_transcript(tmp_path: Path) -> Non
     await service.append_event(session, _event("partial-1", "chunk", partial=True))
 
     assert session.events == []
-    assert await runtime.transcripts.read_all(session.id) == []
+    assert await runtime.for_session(session).transcripts.read_all(session.id) == []

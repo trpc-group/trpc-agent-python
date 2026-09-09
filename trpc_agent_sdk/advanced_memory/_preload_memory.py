@@ -228,18 +228,19 @@ class MemoryPreloader:
         self._runtime = runtime
         self._selector = selector or ModelMemoryRelevanceSelector()
 
-    async def _candidates(self) -> list[MemoryCandidate]:
+    async def _candidates(self, ctx: "InvocationContext") -> list[MemoryCandidate]:
         """Read and sort bounded topic metadata for selection."""
+        runtime = self._runtime.for_session(ctx.session)
         candidates: list[MemoryCandidate] = []
-        for path in await self._runtime.long_term_memory.list_topics():
-            frontmatter = await self._runtime.long_term_memory.read_topic_frontmatter(path.name)
+        for path in await runtime.long_term_memory.list_topics():
+            frontmatter = await runtime.long_term_memory.read_topic_frontmatter(path.name)
             if frontmatter is not None:
                 candidates.append(_candidate_from_content(path.name, frontmatter))
         candidates.sort(
             key=lambda candidate: candidate.updated_at or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
         )
-        return candidates[:self._runtime.config.preload_memory_candidate_limit]
+        return candidates[:runtime.config.preload_memory_candidate_limit]
 
     async def preload(self, query: str, ctx: "InvocationContext") -> str | None:
         """Select and render relevant topic bodies within the configured budget."""
@@ -247,7 +248,7 @@ class MemoryPreloader:
         if not config.enabled or not config.preload_memory_enabled or not query.strip():
             return None
         try:
-            candidates = await self._candidates()
+            candidates = await self._candidates(ctx)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Advanced Memory preload candidate loading failed: %s", exc)
             return None
@@ -272,7 +273,7 @@ class MemoryPreloader:
             if candidate is None:
                 continue
             try:
-                full_content = await self._runtime.long_term_memory.read_topic(filename)
+                full_content = await self._runtime.for_session(ctx.session).long_term_memory.read_topic(filename)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Advanced Memory preload topic loading failed for %s: %s", filename, exc)
                 continue

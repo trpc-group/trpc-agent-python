@@ -43,9 +43,9 @@ class AdvancedMemoryTools:
     """Wrap long-term memory storage as three official Agent-callable tools."""
 
     def __init__(self, runtime: AdvancedMemoryRuntime) -> None:
-        """Store the runtime and create the index update lock."""
+        """Store the runtime and create tenant-scoped index update locks."""
         self._runtime = runtime
-        self._index_lock = asyncio.Lock()
+        self._index_locks: dict[str, asyncio.Lock] = {}
         self._tools = (
             FunctionTool(self.save_memory),
             FunctionTool(self.read_memory),
@@ -66,6 +66,23 @@ class AdvancedMemoryTools:
         function = getattr(tool, "func", None)
         return getattr(function, "__self__", None) is self
 
+    def _runtime_for_context(self, tool_context: Any | None) -> Any:
+        """Resolve storage from the authenticated session, never tool arguments."""
+        if tool_context is None:
+            return self._runtime
+        session = getattr(tool_context, "session", None)
+        return self._runtime.for_session(session)
+
+    def _index_lock(self, runtime: Any) -> asyncio.Lock:
+        """Return a lock for one long-term-memory tenant index."""
+        scope = getattr(runtime, "scope", None)
+        key = scope.storage_key if scope is not None else str(runtime.paths.root_dir)
+        lock = self._index_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._index_locks[key] = lock
+        return lock
+
     async def save_memory(
         self,
         filename: str,
@@ -74,6 +91,7 @@ class AdvancedMemoryTools:
         memory_type: str,
         summary: str,
         content: str,
+        tool_context: Any | None = None,
     ) -> dict:
         """Save or overwrite a long-term memory file and update MEMORY.md."""
         try:
@@ -87,12 +105,13 @@ class AdvancedMemoryTools:
             memory_type=resolved_type,
             content=content,
         )
-        async with self._index_lock:
-            path = await self._runtime.long_term_memory.write_topic(
+        runtime = self._runtime_for_context(tool_context)
+        async with self._index_lock(runtime):
+            path = await runtime.long_term_memory.write_topic(
                 filename,
                 document,
             )
-            entries = _parse_index(await self._runtime.long_term_memory.read_index())
+            entries = _parse_index(await runtime.long_term_memory.read_index())
             new_entry = MemoryIndexEntry(
                 name=name,
                 filename=path.name,
@@ -100,8 +119,8 @@ class AdvancedMemoryTools:
             )
             entries = [entry for entry in entries if entry.filename != new_entry.filename]
             entries.insert(0, new_entry)
-            await self._runtime.long_term_memory.write_index(entries)
-        updated_at = parse_memory_updated_at(await self._runtime.long_term_memory.read_topic(filename) or "")
+            await runtime.long_term_memory.write_index(entries)
+        updated_at = parse_memory_updated_at(await runtime.long_term_memory.read_topic(filename) or "")
         return {
             "saved": True,
             "filename": path.name,
@@ -110,9 +129,9 @@ class AdvancedMemoryTools:
             "updated_at": updated_at.isoformat() if updated_at is not None else None,
         }
 
-    async def read_memory(self, filename: str) -> dict:
+    async def read_memory(self, filename: str, tool_context: Any | None = None) -> dict:
         """Read a complete long-term memory by its filename in MEMORY.md."""
-        content = await self._runtime.long_term_memory.read_topic(filename)
+        content = await self._runtime_for_context(tool_context).long_term_memory.read_topic(filename)
         if content is None:
             return {"found": False, "filename": filename}
         updated_at = parse_memory_updated_at(content)
@@ -133,11 +152,12 @@ class AdvancedMemoryTools:
                                  "update this memory if it is outdated or incorrect."),
         }
 
-    async def list_memory_index(self) -> dict:
+    async def list_memory_index(self, tool_context: Any | None = None) -> dict:
         """Return the current long-term memory index and its disk path."""
+        runtime = self._runtime_for_context(tool_context)
         return {
-            "index_path": str(self._runtime.paths.memory_index_path),
-            "index": await self._runtime.long_term_memory.read_index(),
+            "index_path": str(runtime.paths.memory_index_path),
+            "index": await runtime.long_term_memory.read_index(),
         }
 
 

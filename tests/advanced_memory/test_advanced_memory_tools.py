@@ -17,7 +17,7 @@ def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     return AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
         enabled=True,
         root_dir=tmp_path,
-    ))
+    )).for_scope("demo-app", "demo-user")
 
 
 async def test_save_read_and_update_memory_index(tmp_path: Path) -> None:

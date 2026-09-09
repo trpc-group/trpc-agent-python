@@ -73,30 +73,33 @@ class TranscriptSessionService(SessionServiceABC):
             raise ValueError("Session memory extractor uses another runtime")
         self._session_memory_extractor = extractor
 
-    async def _ensure_initialized(self) -> None:
+    async def _ensure_initialized(self, session: SessionABC) -> None:
         """Initialize memory directories before the first transcript write."""
         if self._initialized or not self._memory_runtime.config.enabled:
             return
         async with self._initialize_lock:
             if self._initialized:
                 return
-            self._initialized = await self._memory_runtime.initialize()
+            self._initialized = await self._memory_runtime.for_session(session).initialize()
 
-    def _session_lock(self, session_id: str) -> CrossLoopLock:
+    def _session_lock(self, session: SessionABC) -> CrossLoopLock:
         """Return an independent asynchronous write lock per session."""
-        lock = self._session_locks.get(session_id)
+        key = self._memory_runtime.for_session(session).session_key(session.id)
+        lock = self._session_locks.get(key)
         if lock is None:
             lock = CrossLoopLock()
-            self._session_locks[session_id] = lock
+            self._session_locks[key] = lock
         return lock
 
-    async def _load_parent_if_needed(self, session_id: str) -> None:
+    async def _load_parent_if_needed(self, session: SessionABC) -> None:
         """Restore the parent-chain tail before the first session write."""
-        if session_id in self._loaded_parent_sessions:
+        runtime = self._memory_runtime.for_session(session)
+        key = runtime.session_key(session.id)
+        if key in self._loaded_parent_sessions:
             return
-        records = await self._memory_runtime.transcripts.read_all(session_id)
-        self._last_event_ids[session_id] = find_last_event_id(records)
-        self._loaded_parent_sessions.add(session_id)
+        records = await runtime.transcripts.read_all(session.id)
+        self._last_event_ids[key] = find_last_event_id(records)
+        self._loaded_parent_sessions.add(key)
 
     async def create_session(
         self,
@@ -142,16 +145,20 @@ class TranscriptSessionService(SessionServiceABC):
         return await self._delegate.list_sessions(app_name=app_name, user_id=user_id)
 
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
-        """Delete only the legacy session and retain transcript records."""
-        async with self._session_lock(session_id):
+        """Delete the framework session and all Advanced Memory session data."""
+        runtime = self._memory_runtime.for_scope(app_name, user_id)
+        scope_key = runtime.session_key(session_id)
+        lock = self._session_locks.setdefault(scope_key, CrossLoopLock())
+        async with lock:
             await self._delegate.delete_session(
                 app_name=app_name,
                 user_id=user_id,
                 session_id=session_id,
             )
-        self._session_locks.pop(session_id, None)
-        self._loaded_parent_sessions.discard(session_id)
-        self._last_event_ids.pop(session_id, None)
+            await runtime.delete_session(session_id)
+        self._session_locks.pop(scope_key, None)
+        self._loaded_parent_sessions.discard(scope_key)
+        self._last_event_ids.pop(scope_key, None)
 
     async def append_event(self, session: SessionABC, event: ResponseABC) -> ResponseABC:
         """Append each persisted non-streaming Event in order."""
@@ -167,21 +174,23 @@ class TranscriptSessionService(SessionServiceABC):
         if not self._memory_runtime.config.enabled or getattr(persisted_event, "partial", False):
             return persisted_event
 
-        await self._ensure_initialized()
-        async with self._session_lock(session.id):
-            await self._load_parent_if_needed(session.id)
+        await self._ensure_initialized(session)
+        runtime = self._memory_runtime.for_session(session)
+        key = runtime.session_key(session.id)
+        async with self._session_lock(session):
+            await self._load_parent_if_needed(session)
             record = build_event_transcript_record(
                 session,
                 persisted_event,
-                parent_event_id=self._last_event_ids.get(session.id),
+                parent_event_id=self._last_event_ids.get(key),
             )
-            _, appended = await self._memory_runtime.transcripts.append_unique(
+            _, appended = await runtime.transcripts.append_unique(
                 session.id,
                 record,
                 unique_key="event_id",
             )
             if appended:
-                self._last_event_ids[session.id] = record["event_id"]
+                self._last_event_ids[key] = record["event_id"]
         return persisted_event
 
     async def update_session(self, session: SessionABC) -> None:

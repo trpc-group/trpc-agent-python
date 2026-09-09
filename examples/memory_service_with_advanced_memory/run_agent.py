@@ -8,6 +8,7 @@
 """Run the two-session Advanced Memory demonstration."""
 
 import asyncio
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,17 +20,27 @@ from trpc_agent_sdk.types import Part
 
 from agent.agent import create_agent
 
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"))
 
 
 def create_session_service() -> AdvancedMemorySessionService:
     """Create the persistent Advanced Memory session service."""
+    memory_ttl = os.getenv("M_TTL")
+    session_ttl = os.getenv("SESSION_TTL")
+    session_ttl_seconds = int(session_ttl) if session_ttl else 0
     return AdvancedMemorySessionService(
-        config=AdvancedMemoryConfig(root_dir=Path(__file__).resolve().parent),
+        config=AdvancedMemoryConfig(
+            root_dir=Path(__file__).resolve().parent,
+            memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
+            session_ttl_seconds=session_ttl_seconds or None,
+            memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
+                                      "编程语言偏好、开发习惯和测试习惯。"),
+        ),
         session_config=SessionServiceConfig(ttl=SessionServiceConfig.create_ttl_config(
-            ttl_seconds=60,
+            enable=bool(session_ttl),
+            ttl_seconds=session_ttl_seconds,
             cleanup_interval_seconds=5,
-        )),
+        ), ),
     )
 
 
@@ -64,6 +75,10 @@ async def main() -> None:
         agent=agent,
         session_service=session_service,
     )
+    memory_ttl = os.getenv("M_TTL")
+    memory_ttl_seconds = int(memory_ttl) if memory_ttl else 0
+    session_ttl = os.getenv("SESSION_TTL")
+    session_ttl_seconds = int(session_ttl) if session_ttl else 0
     try:
         session_one_prompts = [
             ("Please remember that my favorite programming language is Python. "
@@ -95,9 +110,11 @@ async def main() -> None:
             prompt="What do you remember about my favorite programming language?",
         )
 
-        print("\n⏳ Waiting for the session TTL cleanup...")
-        await asyncio.sleep(125)
-        print("🧹 Expired Advanced Memory sessions should now be removed.")
+        wait_seconds = max(memory_ttl_seconds, session_ttl_seconds)
+        if wait_seconds:
+            print(f"\n⏳ Waiting for TTL cleanup ({wait_seconds + 5}s)...")
+            await asyncio.sleep(wait_seconds + 5)
+            print("🧹 Expired Advanced Memory data should now be removed.")
     finally:
         await runner.close()
 

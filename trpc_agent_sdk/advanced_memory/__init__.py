@@ -33,12 +33,14 @@ from ._microcompact import MicrocompactCallback
 from ._microcompact import MicrocompactResult
 from ._microcompact import setup_microcompact
 from ._paths import AdvancedMemoryPaths
+from ._paths import MemoryScope
 from ._preload_memory import MemoryCandidate
 from ._preload_memory import MemoryPreloader
 from ._preload_memory import MemoryRelevanceSelector
 from ._preload_memory import ModelMemoryRelevanceSelector
 from ._preload_memory import select_relevant_memory_filenames
 from ._runtime import AdvancedMemoryRuntime
+from ._runtime import ScopedAdvancedMemoryRuntime
 from ._session_memory import build_session_memory_prompt
 from ._session_memory import ForkedSessionMemoryGenerator
 from ._session_memory import has_session_memory_content
@@ -55,6 +57,8 @@ from ._storage import LongTermMemoryStore
 from ._storage import SessionMemoryStore
 from ._storage import ToolResultStore
 from ._storage import TranscriptStore
+from ._storage_backend import AdvancedMemoryStorageBackend
+from ._storage_backend import LocalAdvancedMemoryStorageBackend
 from ._tool_result_budget import setup_tool_result_budget
 from ._tool_result_budget import ToolResultBudget
 from ._tool_result_budget import ToolResultBudgetCallback
@@ -71,11 +75,13 @@ __all__ = [
     "AutoCompact",
     "AutoCompactCallback",
     "AutoCompactResult",
+    "AdvancedMemoryStorageBackend",
     "AdvancedMemoryConfig",
     "AdvancedContextManagement",
     "AdvancedMemoryIntegration",
     "AdvancedMemoryPaths",
     "AdvancedMemoryRuntime",
+    "ScopedAdvancedMemoryRuntime",
     "ContextBudget",
     "ContextTokenEstimate",
     "build_session_memory_prompt",
@@ -89,9 +95,11 @@ __all__ = [
     "HistorySnipResult",
     "HeuristicTokenEstimator",
     "LongTermMemoryStore",
+    "LocalAdvancedMemoryStorageBackend",
     "LongTermMemoryContext",
     "LongTermMemoryContextCallback",
     "MemoryDocument",
+    "MemoryScope",
     "MemoryIndexEntry",
     "MemoryType",
     "MemoryCandidate",

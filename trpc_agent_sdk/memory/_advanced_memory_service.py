@@ -134,4 +134,4 @@ class AdvancedMemoryService(BaseMemoryService):
         Advanced Memory stores are file-backed and do not own an external
         connection. The wrapped session service is closed by Runner.
         """
-        return None
+        await self._runtime.close()

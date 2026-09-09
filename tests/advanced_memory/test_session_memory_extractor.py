@@ -130,6 +130,11 @@ def _ctx(session):
     return SimpleNamespace(session=session, agent=SimpleNamespace(model="fake-model"))
 
 
+def _scoped(runtime: AdvancedMemoryRuntime):
+    """Return the tenant runtime used by the test sessions."""
+    return runtime.for_scope("demo-app", "demo-user")
+
+
 async def test_first_extraction_writes_document_and_checkpoint(tmp_path: Path) -> None:
     """Ensure the first threshold hit generates a document and records a boundary."""
     runtime = _runtime(tmp_path)
@@ -143,8 +148,9 @@ async def test_first_extraction_writes_document_and_checkpoint(tmp_path: Path) -
         _ctx(session),
     )
 
-    memory = await runtime.session_memory.read(session.id)
-    records = await runtime.transcripts.read_all(session.id)
+    scoped = _scoped(runtime)
+    memory = await scoped.session_memory.read(session.id)
+    records = await scoped.transcripts.read_all(session.id)
     checkpoints = [record for record in records if record["kind"] == "session-memory-checkpoint"]
     assert result.extracted is True
     assert result.processed_events == 2
@@ -312,7 +318,7 @@ async def test_missing_checkpoint_recovers_only_newer_timestamped_events(tmp_pat
     runtime = _runtime(tmp_path)
     service, session = await _service_and_session(runtime)
     await service.append_event(session, _event("event-old", "旧内容"))
-    await runtime.transcripts.append(
+    await _scoped(runtime).transcripts.append(
         session.id,
         {
             "kind": "session-memory-checkpoint",
@@ -384,7 +390,7 @@ async def test_empty_document_does_not_overwrite_or_advance_checkpoint(tmp_path:
         session_title="已有记忆",
         current_state="等待新事件。",
     )
-    await runtime.session_memory.write(session.id, old_document)
+    await _scoped(runtime).session_memory.write(session.id, old_document)
     await service.append_event(session, _event("event-1", "first"))
 
     result = await SessionMemoryExtractor(
@@ -396,9 +402,9 @@ async def test_empty_document_does_not_overwrite_or_advance_checkpoint(tmp_path:
         force=True,
     )
 
-    records = await runtime.transcripts.read_all(session.id)
+    records = await _scoped(runtime).transcripts.read_all(session.id)
     assert result.reason == "extraction-failed"
-    assert await runtime.session_memory.read(session.id) == old_document.to_markdown()
+    assert await _scoped(runtime).session_memory.read(session.id) == old_document.to_markdown()
     assert not any(record.get("kind") == "session-memory-checkpoint" for record in records)
 
 
@@ -471,7 +477,7 @@ async def test_session_service_runs_extractor_after_old_summary(tmp_path: Path) 
     await service.create_session_summary(session, ctx=_ctx(session))
 
     assert len(generator.inputs) == 1
-    assert await runtime.session_memory.read(session.id) is not None
+    assert await _scoped(runtime).session_memory.read(session.id) is not None
 
 
 async def test_forked_generator_uses_isolated_runner_and_returns_memory() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 from datetime import datetime
 from datetime import timezone
@@ -150,6 +151,30 @@ async def test_session_memory_is_isolated_by_session_id(tmp_path: Path) -> None:
     assert all(f"# {section}" in first_content for section in SESSION_MEMORY_SECTIONS)
 
 
+async def test_scoped_storage_isolates_users_and_allows_same_session_id(tmp_path: Path) -> None:
+    """Keep all Advanced Memory records inside the app and user namespace."""
+    runtime = AdvancedMemoryRuntime.create(_enabled_config(tmp_path))
+    first = runtime.for_scope("demo-app", "user-a")
+    second = runtime.for_scope("demo-app", "user-b")
+    await first.initialize()
+    await second.initialize()
+
+    await first.long_term_memory.write_index([MemoryIndexEntry(name="A", filename="a.md", summary="A")])
+    await second.long_term_memory.write_index([MemoryIndexEntry(name="B", filename="b.md", summary="B")])
+    await first.session_memory.write("shared", SessionMemoryDocument(session_title="A"))
+    await second.session_memory.write("shared", SessionMemoryDocument(session_title="B"))
+    await first.transcripts.append("shared", {"kind": "event", "event_id": "a"})
+    await second.transcripts.append("shared", {"kind": "event", "event_id": "b"})
+
+    assert "a.md" in await first.long_term_memory.read_index()
+    assert "b.md" not in await first.long_term_memory.read_index()
+    assert "b.md" in await second.long_term_memory.read_index()
+    assert (await first.session_memory.read("shared")) != await second.session_memory.read("shared")
+    assert [record["event_id"] for record in await first.transcripts.read_all("shared")] == ["a"]
+    assert [record["event_id"] for record in await second.transcripts.read_all("shared")] == ["b"]
+    assert first.paths.session_dir("shared") != second.paths.session_dir("shared")
+
+
 async def test_transcript_appends_jsonl_in_order(tmp_path: Path) -> None:
     """Ensure transcripts preserve order and payloads as JSONL."""
     runtime = AdvancedMemoryRuntime.create(_enabled_config(tmp_path))
@@ -210,6 +235,38 @@ async def test_transcript_append_unique_uses_persisted_ids(tmp_path: Path) -> No
     assert len(await second_runtime.transcripts.read_all("session-a")) == 1
 
 
+async def test_transcript_unique_cache_is_reset_after_session_ttl(tmp_path: Path, ) -> None:
+    """Allow a reused session ID to append after local TTL expiration."""
+    runtime = AdvancedMemoryRuntime.create(_enabled_config(
+        tmp_path,
+        session_ttl_seconds=1,
+    ))
+    transcript = runtime.transcripts
+    await transcript.append_unique(
+        "session-a",
+        {
+            "kind": "event",
+            "event_id": "event-1"
+        },
+        unique_key="event_id",
+    )
+    activity_path = runtime.paths.session_dir("session-a") / ".advanced-memory-activity"
+    os.utime(activity_path, (1.0, 1.0))
+
+    _, appended = await transcript.append_unique(
+        "session-a",
+        {
+            "kind": "event",
+            "event_id": "event-1"
+        },
+        unique_key="event_id",
+    )
+
+    assert appended is True
+    assert len(await transcript.read_all("session-a")) == 1
+    await runtime.close()
+
+
 async def test_transcript_read_waits_for_in_progress_append(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -266,6 +323,37 @@ async def test_memory_index_is_truncated_when_read_over_byte_budget(tmp_path: Pa
     await runtime.long_term_memory.write_index(entries)
 
     assert await runtime.long_term_memory.read_index() == ""
+
+
+async def test_local_ttl_expires_memory_and_session_groups(tmp_path: Path) -> None:
+    """Expire local memory groups after their last activity."""
+    runtime = AdvancedMemoryRuntime.create(_enabled_config(
+        tmp_path,
+        memory_ttl_seconds=1,
+        session_ttl_seconds=1,
+    ))
+    scoped = runtime.for_scope("app", "user")
+    await scoped.initialize()
+    await scoped.long_term_memory.write_index([
+        MemoryIndexEntry(name="Profile", filename="profile.md", summary="Profile"),
+    ])
+    await scoped.long_term_memory.write_topic(
+        "profile",
+        MemoryDocument(name="Profile", description="Profile", memory_type=MemoryType.USER, content="data"),
+    )
+    await scoped.session_memory.write("session", SessionMemoryDocument(session_title="Session"))
+    await scoped.tool_results.write("session", "result", "data")
+    await scoped.transcripts.append("session", {"event_id": "event"})
+
+    old = 1.0
+    os.utime(scoped.paths.memory_index_path, (old, old))
+    os.utime(scoped.paths.session_dir("session") / ".advanced-memory-activity", (old, old))
+
+    assert await scoped.long_term_memory.read_index() == ""
+    assert await scoped.long_term_memory.read_topic("profile") is None
+    assert await scoped.session_memory.read("session") is None
+    assert not scoped.paths.session_dir("session").exists()
+    await runtime.close()
 
 
 def test_paths_sanitize_external_identifiers(tmp_path: Path) -> None:

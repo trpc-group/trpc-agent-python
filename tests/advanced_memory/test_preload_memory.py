@@ -39,7 +39,7 @@ async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> N
             preload_memory_max_chars=200,
         ))
     await runtime.initialize()
-    await runtime.long_term_memory.write_topic(
+    await runtime.for_scope("demo-app", "demo-user").long_term_memory.write_topic(
         "project.md",
         MemoryDocument(
             name="Project",
@@ -48,10 +48,15 @@ async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> N
             content="important project details",
         ),
     )
+    ctx = SimpleNamespace(session=SimpleNamespace(
+        app_name="demo-app",
+        user_id="demo-user",
+        id="session-a",
+    ))
 
     result = await MemoryPreloader(runtime, _FakeSelector()).preload(
         "What is relevant?",
-        SimpleNamespace(),
+        ctx,
     )
 
     assert result is not None
@@ -70,7 +75,7 @@ async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
             preload_memory_max_chars=12,
         ))
     await runtime.initialize()
-    await runtime.long_term_memory.write_topic(
+    await runtime.for_scope("demo-app", "demo-user").long_term_memory.write_topic(
         "project.md",
         MemoryDocument(
             name="Project",
@@ -79,10 +84,15 @@ async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
             content="important project details",
         ),
     )
+    ctx = SimpleNamespace(session=SimpleNamespace(
+        app_name="demo-app",
+        user_id="demo-user",
+        id="session-a",
+    ))
 
     result = await MemoryPreloader(runtime, _FakeSelector()).preload(
         "What is relevant?",
-        SimpleNamespace(),
+        ctx,
     )
 
     assert result is not None
@@ -99,7 +109,7 @@ async def test_preloader_failure_is_best_effort(tmp_path: Path) -> None:
             preload_memory_enabled=True,
         ))
     await runtime.initialize()
-    await runtime.long_term_memory.write_topic(
+    await runtime.for_scope("demo-app", "demo-user").long_term_memory.write_topic(
         "project.md",
         MemoryDocument(
             name="Project",

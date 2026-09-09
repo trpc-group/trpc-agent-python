@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import re
@@ -234,6 +235,7 @@ class AutoCompact:
         self._summary_generator = summary_generator or ForkedLegacySummaryGenerator(model)
         self._states: dict[str, AutoCompactState] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
+        self._scoped_processors: dict[object, "AutoCompact"] = {}
 
     @property
     def runtime(self) -> AdvancedMemoryRuntime:
@@ -242,15 +244,17 @@ class AutoCompact:
 
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """Return the unique compaction lock for a session."""
-        lock = self._session_locks.get(session_id)
+        key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        lock = self._session_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
-            self._session_locks[session_id] = lock
+            self._session_locks[key] = lock
         return lock
 
     async def _load_state(self, session_id: str) -> AutoCompactState:
         """Restore the latest compaction and failure count from the transcript."""
-        state = self._states.get(session_id)
+        state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        state = self._states.get(state_key)
         if state is not None:
             return state
         records = await self._runtime.transcripts.read_all(session_id)
@@ -274,7 +278,7 @@ class AutoCompact:
             elif record.get("kind") == "autocompact-failure":
                 failures += 1
         state = AutoCompactState(latest_compaction=latest, consecutive_failures=failures)
-        self._states[session_id] = state
+        self._states[state_key] = state
         return state
 
     def _summary_content(self, summary: str) -> Content:
@@ -531,6 +535,27 @@ class AutoCompact:
         )
 
     async def apply(
+        self,
+        request: "LlmRequest",
+        *,
+        session_id: str,
+        ctx: "InvocationContext",
+        force: bool = False,
+    ) -> AutoCompactResult:
+        """Run compaction against the current session's tenant namespace."""
+        if hasattr(self._runtime, "scope"):
+            return await self._apply_scoped(request, session_id=session_id, ctx=ctx, force=force)
+        runtime = self._runtime.for_session(ctx.session)
+        processor = self._scoped_processors.get(runtime.scope)
+        if processor is None:
+            processor = copy.copy(self)
+            processor._runtime = runtime
+            processor._states = {}
+            processor._session_locks = {}
+            self._scoped_processors[runtime.scope] = processor
+        return await processor.apply(request, session_id=session_id, ctx=ctx, force=force)
+
+    async def _apply_scoped(
         self,
         request: "LlmRequest",
         *,

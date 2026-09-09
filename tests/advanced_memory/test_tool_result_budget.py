@@ -70,6 +70,28 @@ async def test_single_large_result_is_persisted_and_replaced(tmp_path: Path) -> 
     assert "x" * 100 in persisted
 
 
+async def test_sql_replacement_reports_sql_storage_path(tmp_path: Path) -> None:
+    """Expose the path returned by the SQL tool-result store."""
+    root = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
+        enabled=True,
+        storage_backend="sql",
+        sql_url=f"sqlite:///{tmp_path / 'memory.db'}",
+        sql_is_async=False,
+        tool_result_max_chars=200,
+        tool_results_per_message_max_chars=5_000,
+        tool_result_preview_chars=40,
+    ))
+    runtime = root.for_scope("demo-app", "demo-user")
+    budget = ToolResultBudget(runtime)
+    request, _ = _request(("result-1", "x" * 500))
+
+    await budget.apply(request, session_id="session-a")
+
+    replacement = request.contents[0].parts[0].function_response.response
+    assert replacement["persisted_output"]["path"].startswith("advanced-memory://sql/")
+    assert await runtime.tool_results.read("session-a", "result-1") is not None
+
+
 async def test_aggregate_budget_replaces_largest_fresh_results(tmp_path: Path) -> None:
     """Ensure aggregate pressure replaces the largest new result first."""
     runtime = _runtime(tmp_path, per_result=5_000, per_message=2_300, preview=50)
