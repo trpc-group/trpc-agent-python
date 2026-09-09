@@ -136,7 +136,7 @@ runner = Runner(
 ----- Runner A, query 1 -----
 📝 user: Do you remember my name?
 🔧 tool call: list_memory_index({})
-📊 Tool Result: {'index_path': '/data/workspace/trpc-agent-python-am-service/examples/memory_service_with_advanced_memory_sql/tenants/advanced-memory-sql-demo/sql-demo-user/MEMORY/MEMORY.md', 'index': ''}
+📊 Tool Result: {'index_path': 'advanced-memory://sql/advanced-memory-sql-demo/sql-demo-user/memory/index', 'index': ''}
 🤖 Assistant: I checked my long-term memory index, and it's currently empty — I don't have any saved memories about you yet, so I don't remember your name.
 
 If you'd like, tell me your name (or anything else you'd like me to remember about you), and I'll save it to my memory so I can remember it across future conversations.
@@ -144,7 +144,7 @@ If you'd like, tell me your name (or anything else you'd like me to remember abo
 ----- Runner A, query 2 -----
 📝 user: Do you remember my favorite color?
 🔧 tool call: list_memory_index({})
-📊 Tool Result: {'index_path': '/data/workspace/trpc-agent-python-am-service/examples/memory_service_with_advanced_memory_sql/tenants/advanced-memory-sql-demo/sql-demo-user/MEMORY/MEMORY.md', 'index': ''}
+📊 Tool Result: {'index_path': 'advanced-memory://sql/advanced-memory-sql-demo/sql-demo-user/memory/index', 'index': ''}
 🤖 Assistant: I checked my long-term memory index, and it's currently empty — I don't have any saved memories yet, so I don't remember your favorite color.
 
 If you tell me your favorite color (or any other preferences you'd like me to keep in mind), I can save it for future conversations!
@@ -163,7 +163,7 @@ If you tell me your favorite color (or any other preferences you'd like me to ke
 📝 user: Do you remember my name?
 🔧 tool call: list_memory_index({})
 🔧 tool call: read_memory({'filename': 'user_identity.md'})
-📊 Tool Result: {'index_path': '/data/workspace/trpc-agent-python-am-service/examples/memory_service_with_advanced_memory_sql/tenants/advanced-memory-sql-demo/sql-demo-user/MEMORY/MEMORY.md', 'index': '- [User identity]（user_identity.md）:Alice, favorite color blue.\n'}
+📊 Tool Result: {'index_path': 'advanced-memory://sql/advanced-memory-sql-demo/sql-demo-user/memory/index', 'index': '- [User identity]（user_identity.md）:Alice, favorite color blue.\n'}
 📊 Tool Result: {'found': True, 'filename': 'user_identity.md', 'content': "---\nname: User identity\ndescription: The user's name and basic identity.\ntype: user\nupdated_at: 2026-09-08T07:26:18.283583+00:00\n---\n---\nname: User identity\ndescription: The user's name and basic identity.\ntype: user\nupdated_at: 2026-09-08T07:26:06.708029+00:00\n---\nThe user's name is Alice. She introduced herself in conversation. Her favorite color is blue.\n", 'updated_at': '2026-09-08T07:26:18.283583+00:00', 'freshness': 'today', 'freshness_notice': 'This memory was last updated today. It is a point-in-time observation and may no longer reflect the current state. Verify it when necessary, and update this memory if it is outdated or incorrect.'}
 🤖 Assistant: Yes, I remember! Your name is **Alice** — from my long-term memory, that's how you introduced yourself. I also have noted that your favorite color is blue. 😊
 

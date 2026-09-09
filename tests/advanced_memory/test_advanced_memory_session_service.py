@@ -150,6 +150,35 @@ async def test_ttl_cleanup_removes_expired_persistent_sessions(tmp_path: Path) -
     await service.close()
 
 
+async def test_ttl_cleanup_preserves_transcript_by_default(tmp_path: Path) -> None:
+    """Keep the transcript when session metadata expires."""
+    session_config = SessionServiceConfig(ttl=SessionServiceConfig.create_ttl_config(
+        ttl_seconds=1,
+        cleanup_interval_seconds=0.05,
+    ))
+    service = AdvancedMemorySessionService(
+        config=_config(tmp_path),
+        session_config=session_config,
+    )
+    session = await service.create_session(
+        app_name="demo-app",
+        user_id="demo-user",
+        session_id="preserve-transcript",
+    )
+    await service.append_event(session, _event("event-1", "hello"))
+    transcript_path = service.runtime.for_session(session).paths.transcript_path(session.id)
+
+    await asyncio.sleep(1.1)
+
+    assert await service.get_session(
+        app_name="demo-app",
+        user_id="demo-user",
+        session_id=session.id,
+    ) is None
+    assert transcript_path.exists()
+    await service.close()
+
+
 async def test_runner_binds_standalone_session_service(tmp_path: Path) -> None:
     """Ensure Runner installs Advanced callbacks without a memory service."""
     service = AdvancedMemorySessionService(config=_config(tmp_path))

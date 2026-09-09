@@ -104,10 +104,11 @@ class _RedisStore:
             )
 
     async def _refresh_ttl_group(
-        self,
-        registry: str,
-        keys: list[str],
-        ttl: int | None,
+            self,
+            registry: str,
+            keys: list[str],
+            ttl: int | None,
+            skip_prefixes: tuple[str, ...] = (),
     ) -> None:
         """Track and refresh every key in one logical memory group."""
         if ttl is None:
@@ -118,15 +119,19 @@ class _RedisStore:
         tracked_keys = {self._text(value) for value in tracked}
         tracked_keys.update(keys)
         for key in tracked_keys:
-            if key:
+            if key and not key.startswith(skip_prefixes):
                 await self._command("expire", key, ttl)
         await self._command("expire", registry, ttl)
 
     async def _refresh_session_ttl(self, session_id: str, *keys: str) -> None:
+        skip_prefixes: tuple[str, ...] = ()
+        if not self._config.session_ttl_delete_transcripts:
+            skip_prefixes = (f"{self._session_base(session_id)}:transcript", )
         await self._refresh_ttl_group(
             self._session_registry(session_id),
             list(keys),
             self._config.session_ttl_seconds,
+            skip_prefixes=skip_prefixes,
         )
 
     async def _refresh_memory_ttl(self, *keys: str) -> None:

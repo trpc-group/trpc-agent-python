@@ -175,6 +175,7 @@ class AdvancedMemoryConfig:
     preload_memory_max_topics: int = 5
     preload_memory_max_chars: int = 50_000
     preload_memory_candidate_limit: int = 200
+    session_ttl_delete_transcripts: bool = False
 
     def __post_init__(self) -> None:
         """Validate the configuration and normalize the root directory."""

@@ -223,7 +223,7 @@ runner = Runner(
 ```text
  user: Do you remember my name?
 🔧 tool call: list_memory_index({})
-📊 Tool Result: {'index_path': '/data/workspace/trpc-agent-python-am-service/examples/memory_service_with_advanced_memory_redis/tenants/advanced-memory-redis-demo/redis-demo-user/MEMORY/MEMORY.md', 'index': ''}
+📊 Tool Result: {'index_path': 'advanced-memory://redis/advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:index', 'index': ''}
 🤖 Assistant: I checked my long-term memory, but I'm afraid I don't have anything saved yet — the memory index is currently empty, so I don't know your name. 
 
 If you'd like, just tell me your name (and anything else you'd like me to remember about you), and I'll save it so I can recall it in future conversations!
@@ -232,7 +232,7 @@ If you'd like, just tell me your name (and anything else you'd like me to rememb
 
 📝 user: Do you remember my favorite color?
 🔧 tool call: list_memory_index({})
-📊 Tool Result: {'index_path': '/data/workspace/trpc-agent-python-am-service/examples/memory_service_with_advanced_memory_redis/tenants/advanced-memory-redis-demo/redis-demo-user/MEMORY/MEMORY.md', 'index': ''}
+📊 Tool Result: {'index_path': 'advanced-memory://redis/advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:index', 'index': ''}
 🤖 Assistant: I checked my long-term memory, but I don't have anything saved about your favorite color yet — my memory index is currently empty.
 
 If you'd like, tell me your favorite color and I'll remember it for future conversations. 💬

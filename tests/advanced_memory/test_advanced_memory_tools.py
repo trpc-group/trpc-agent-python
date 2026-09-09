@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedMemoryPaths
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
 from trpc_agent_sdk.tools import AdvancedMemoryTools
 from trpc_agent_sdk.tools import create_advanced_memory_tools
@@ -66,6 +69,34 @@ async def test_save_memory_rejects_unknown_type(tmp_path: Path) -> None:
             summary="无效",
             content="无效",
         )
+
+
+@pytest.mark.parametrize(
+    ("storage_backend", "expected_prefix"),
+    (("redis", "advanced-memory://redis/"), ("sql", "advanced-memory://sql/")),
+)
+async def test_list_memory_index_reports_backend_storage_reference(
+    storage_backend: str,
+    expected_prefix: str,
+) -> None:
+    """Avoid exposing a local filesystem path for external memory stores."""
+    config = AdvancedMemoryConfig(
+        storage_backend=storage_backend,
+        redis_url="redis://localhost:6379/0" if storage_backend == "redis" else None,
+        sql_url="sqlite:///advanced-memory.db" if storage_backend == "sql" else None,
+    )
+    paths = AdvancedMemoryPaths(config).for_scope("demo-app", "demo-user")
+    runtime = SimpleNamespace(
+        config=config,
+        paths=paths,
+        scope=paths.scope,
+        long_term_memory=SimpleNamespace(read_index=AsyncMock(return_value="")),
+    )
+
+    result = await AdvancedMemoryTools(runtime).list_memory_index()
+
+    assert result["index_path"].startswith(expected_prefix)
+    assert str(paths.memory_index_path) not in result["index_path"]
 
 
 def test_factory_returns_three_named_tools(tmp_path: Path) -> None:

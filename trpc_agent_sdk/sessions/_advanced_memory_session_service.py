@@ -70,6 +70,7 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
         payload["state"] = extract_state_delta(session.state).session_state
         path = self._metadata_path(session.app_name, session.user_id, session.id)
         await asyncio.to_thread(self._write_json, path, payload, self._runtime.config.encoding)
+        await asyncio.to_thread(path.parent.joinpath(".advanced-memory-activity").touch, exist_ok=True)
 
     @staticmethod
     def _write_json(path: Path, payload: dict[str, Any], encoding: str) -> None:
@@ -94,6 +95,7 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
             return None
         payload = await asyncio.to_thread(path.read_text, encoding=self._runtime.config.encoding)
         await asyncio.to_thread(path.touch)
+        await asyncio.to_thread(path.parent.joinpath(".advanced-memory-activity").touch, exist_ok=True)
         return Session.model_validate(json.loads(payload))
 
     def _start_cleanup_task(self) -> None:
@@ -133,7 +135,18 @@ class _AdvancedMemorySessionBackend(BaseSessionService):
         for metadata_path in tenants_root.glob(f"*/*/{self._runtime.config.session_dir_name}/*/session.json"):
             try:
                 if metadata_path.stat().st_mtime < cutoff:
-                    shutil.rmtree(metadata_path.parent, ignore_errors=True)
+                    session_dir = metadata_path.parent
+                    if self._runtime.config.session_ttl_delete_transcripts:
+                        shutil.rmtree(session_dir, ignore_errors=True)
+                    else:
+                        transcript_path = session_dir / self._runtime.config.transcript_name
+                        for child in session_dir.iterdir():
+                            if child == transcript_path:
+                                continue
+                            if child.is_dir():
+                                shutil.rmtree(child, ignore_errors=True)
+                            else:
+                                child.unlink(missing_ok=True)
             except FileNotFoundError:
                 continue
 

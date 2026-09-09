@@ -236,11 +236,13 @@ async def test_transcript_append_unique_uses_persisted_ids(tmp_path: Path) -> No
 
 
 async def test_transcript_unique_cache_is_reset_after_session_ttl(tmp_path: Path, ) -> None:
-    """Allow a reused session ID to append after local TTL expiration."""
-    runtime = AdvancedMemoryRuntime.create(_enabled_config(
-        tmp_path,
-        session_ttl_seconds=1,
-    ))
+    """Allow a reused session ID to append after transcript deletion."""
+    runtime = AdvancedMemoryRuntime.create(
+        _enabled_config(
+            tmp_path,
+            session_ttl_seconds=1,
+            session_ttl_delete_transcripts=True,
+        ))
     transcript = runtime.transcripts
     await transcript.append_unique(
         "session-a",
@@ -327,11 +329,13 @@ async def test_memory_index_is_truncated_when_read_over_byte_budget(tmp_path: Pa
 
 async def test_local_ttl_expires_memory_and_session_groups(tmp_path: Path) -> None:
     """Expire local memory groups after their last activity."""
-    runtime = AdvancedMemoryRuntime.create(_enabled_config(
-        tmp_path,
-        memory_ttl_seconds=1,
-        session_ttl_seconds=1,
-    ))
+    runtime = AdvancedMemoryRuntime.create(
+        _enabled_config(
+            tmp_path,
+            memory_ttl_seconds=1,
+            session_ttl_seconds=1,
+            session_ttl_delete_transcripts=True,
+        ))
     scoped = runtime.for_scope("app", "user")
     await scoped.initialize()
     await scoped.long_term_memory.write_index([
@@ -353,6 +357,28 @@ async def test_local_ttl_expires_memory_and_session_groups(tmp_path: Path) -> No
     assert await scoped.long_term_memory.read_topic("profile") is None
     assert await scoped.session_memory.read("session") is None
     assert not scoped.paths.session_dir("session").exists()
+    await runtime.close()
+
+
+async def test_local_session_ttl_preserves_transcripts_by_default(tmp_path: Path) -> None:
+    """Keep local transcripts when session TTL cleanup uses its default."""
+    runtime = AdvancedMemoryRuntime.create(_enabled_config(
+        tmp_path,
+        session_ttl_seconds=1,
+    ))
+    scoped = runtime.for_scope("app", "user")
+    await scoped.initialize()
+    await scoped.session_memory.write("session", SessionMemoryDocument(session_title="Session"))
+    await scoped.transcripts.append("session", {"event_id": "event"})
+
+    activity_path = scoped.paths.session_dir("session") / ".advanced-memory-activity"
+    os.utime(activity_path, (1.0, 1.0))
+
+    assert await scoped.session_memory.read("session") is None
+    assert scoped.paths.transcript_path("session").exists()
+    records = await scoped.transcripts.read_all("session")
+    assert len(records) == 1
+    assert records[0]["event_id"] == "event"
     await runtime.close()
 
 

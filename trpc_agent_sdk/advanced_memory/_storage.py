@@ -89,7 +89,17 @@ def _expire_session_dir(session_dir: Path, config: AdvancedMemoryConfig) -> bool
         expired = bool(files) and time.time() - max(path.stat().st_mtime
                                                     for path in files) >= config.session_ttl_seconds
     if expired:
-        shutil.rmtree(session_dir, ignore_errors=True)
+        if config.session_ttl_delete_transcripts:
+            shutil.rmtree(session_dir, ignore_errors=True)
+        else:
+            transcript_path = session_dir / config.transcript_name
+            for child in session_dir.iterdir():
+                if child == transcript_path:
+                    continue
+                if child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    child.unlink(missing_ok=True)
     return expired
 
 
@@ -399,7 +409,8 @@ class TranscriptStore:
     def _read_all_sync(self, path: Path) -> list[dict[str, Any]]:
         """Parse a consistent transcript snapshot under the file lock."""
         with self._write_lock:
-            if _expire_session_dir(path.parent, self._config):
+            expired = _expire_session_dir(path.parent, self._config)
+            if expired and self._config.session_ttl_delete_transcripts:
                 return []
             if not path.exists():
                 return []

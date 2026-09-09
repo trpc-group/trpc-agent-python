@@ -136,8 +136,10 @@ python3 run_agent.py
 
 `M_TTL` 和 `SESSION_TTL` 未配置时不会自动删除数据。Session 的后台清理检查间隔由示例内部设置，不需要单独配置。
 
-本示例提供的 `.env` 默认使用 `M_TTL=120` 和 `SESSION_TTL=60`，方便直接观察
-过期清理；如果不希望自动删除，将这两个值留空即可。
+默认情况下，Session TTL 过期会保留 transcript，便于审计；只有将
+`session_ttl_delete_transcripts=True` 时，transcript 才会随 Session TTL 一起删除。
+
+本示例提供的 `.env` 默认使用 `M_TTL=120` 和 `SESSION_TTL=60`，方便直接观察过期清理；如果不希望自动删除，将这两个值留空即可。
 
 `.env` 中留空的变量不会覆盖默认值；如果同时在 Python 中传入`model_context_window_tokens` 或 `max_output_tokens`，Python 显式配置优先。
 
@@ -165,6 +167,7 @@ session_service = AdvancedMemorySessionService(
         # TTL（单位：秒；None 表示不过期）
         memory_ttl_seconds=120,                   # 长期记忆 TTL（秒）
         session_ttl_seconds=60,                   # 会话记忆 TTL（秒）
+        session_ttl_delete_transcripts=False,    # Session TTL 是否删除 transcript
 
         # 长期记忆
         memory_index_max_lines=200,               # 注入 prompt 的索引最大行数
