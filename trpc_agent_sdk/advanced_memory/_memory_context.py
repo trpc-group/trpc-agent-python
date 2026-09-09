@@ -79,9 +79,9 @@ class LongTermMemoryContext:
             "Keep the description short and general; put detailed information in content. "
             "If save_memory is unavailable, do not claim that the information was saved.\n"
             f"Memory directory: "
-            f"{runtime.paths.memory_dir if config.storage_backend == 'local' else 'Redis'}\n"
+            f"{runtime.paths.memory_dir if config.storage_backend == 'local' else config.storage_backend.upper()}\n"
             f"Index file: "
-            f"{runtime.paths.memory_index_path if config.storage_backend == 'local' else 'Redis memory index'}\n"
+            f"{runtime.paths.storage_reference('memory_index')}\n"
             f"<index>\n{index.rstrip()}\n</index>\n"
             f"</advanced-memory-index>")
         request.append_instructions([instruction])

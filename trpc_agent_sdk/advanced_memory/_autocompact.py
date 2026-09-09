@@ -292,9 +292,9 @@ class AutoCompact:
         """Append recovery paths for the full transcript and session memory."""
         return (f"{summary.rstrip()}\n\n"
                 "For exact content from before compaction, read the complete transcript: "
-                f"{self._runtime.paths.transcript_path(session_id)}\n"
+                f"{self._runtime.paths.storage_reference('transcript', session_id=session_id)}\n"
                 "Current session memory: "
-                f"{self._runtime.paths.session_memory_path(session_id)}")
+                f"{self._runtime.paths.storage_reference('session_memory', session_id=session_id)}")
 
     def _find_signature_index(
         self,

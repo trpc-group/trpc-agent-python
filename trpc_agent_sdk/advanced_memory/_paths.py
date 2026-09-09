@@ -129,6 +129,73 @@ class AdvancedMemoryPaths:
         safe_result_id = _collision_safe_component(result_id, field_name="result_id")
         return self.tool_results_dir(session_id) / f"{safe_result_id}.json"
 
+    def storage_reference(
+        self,
+        resource: str,
+        *,
+        session_id: str | None = None,
+        topic_name: str | None = None,
+        result_id: str | None = None,
+    ) -> str:
+        """Return a model-visible reference for a stored Advanced Memory resource."""
+        if resource == "memory_index":
+            local_path = self.memory_index_path
+        elif resource == "memory_topic":
+            if topic_name is None:
+                raise ValueError("topic_name is required for a memory topic reference")
+            local_path = self.memory_topic_path(topic_name)
+        elif resource == "transcript":
+            if session_id is None:
+                raise ValueError("session_id is required for a transcript reference")
+            local_path = self.transcript_path(session_id)
+        elif resource == "session_memory":
+            if session_id is None:
+                raise ValueError("session_id is required for a session memory reference")
+            local_path = self.session_memory_path(session_id)
+        elif resource == "tool_result":
+            if session_id is None or result_id is None:
+                raise ValueError("session_id and result_id are required for a tool result reference")
+            local_path = self.tool_result_path(session_id, result_id)
+        else:
+            raise ValueError(f"Unknown Advanced Memory resource: {resource}")
+        if self.config.storage_backend == "local":
+            return str(local_path)
+        if self.scope is None:
+            raise ValueError("A scoped path is required for non-local memory storage")
+
+        app_component = self.tenant_root_dir.parent.name
+        user_component = self.tenant_root_dir.name
+        if self.config.storage_backend == "redis":
+            user_base = f"{self.config.redis_key_prefix}:{{{app_component}:{user_component}}}"
+            if resource == "memory_index":
+                key = f"{user_base}:memory:index"
+            elif resource == "memory_topic":
+                key = f"{user_base}:memory:topic:{local_path.name}"
+            else:
+                safe_session_id = self.session_dir(session_id or "").name
+                session_base = f"{self.config.redis_key_prefix}:{{{app_component}:{user_component}:{safe_session_id}}}"
+                if resource == "transcript":
+                    key = f"{session_base}:transcript"
+                elif resource == "session_memory":
+                    key = f"{session_base}:summary"
+                else:
+                    key = f"{session_base}:tool:{result_id}"
+            return f"advanced-memory://redis/{key}"
+
+        app_name = self.scope.app_name
+        user_id = self.scope.user_id
+        if resource == "memory_index":
+            suffix = "memory/index"
+        elif resource == "memory_topic":
+            suffix = f"memory/topic/{local_path.name}"
+        elif resource == "transcript":
+            suffix = f"{session_id}/transcript"
+        elif resource == "session_memory":
+            suffix = f"{session_id}/summary"
+        else:
+            suffix = f"{session_id}/tool/{self.tool_result_path(session_id or '', result_id or '').stem}"
+        return f"advanced-memory://sql/{app_name}/{user_id}/{suffix}"
+
     def ensure_base_directories(self) -> None:
         """Create the long-term and session memory directories."""
         self.memory_dir.mkdir(parents=True, exist_ok=True)

@@ -210,11 +210,17 @@ class ToolResultBudget:
         candidate: ToolResultCandidate,
     ) -> ToolResultReplacement:
         """Build a deterministic storage path and model-visible preview."""
-        persisted_path = (Path(f"advanced-memory://{self._runtime.config.redis_key_prefix}/"
-                               f"{self._runtime.scope.app_name}/{self._runtime.scope.user_id}/{session_id}/"
-                               f"tool/{candidate.result_id}") if hasattr(self._runtime, "scope")
-                          and self._runtime.config.storage_backend == "redis" else self._runtime.paths.tool_result_path(
-                              session_id, candidate.result_id))
+        persisted_path = Path(
+            self._runtime.paths.storage_reference(
+                "tool_result",
+                session_id=session_id,
+                result_id=candidate.result_id,
+            ))
+        persisted_path_text = str(persisted_path).replace(
+            "advanced-memory:/",
+            "advanced-memory://",
+            1,
+        )
         preview, truncated = _preview_text(
             candidate.serialized_result,
             self._runtime.config.tool_result_preview_chars,
@@ -226,7 +232,7 @@ class ToolResultBudget:
             },
             "persisted_output": {
                 "message": "The tool result exceeded the context budget; the complete content was persisted.",
-                "path": str(persisted_path),
+                "path": persisted_path_text,
                 "original_chars": candidate.original_size,
                 "preview": preview,
                 "truncated": truncated,

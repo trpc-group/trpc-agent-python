@@ -28,6 +28,11 @@ ADVANCED_MEMORY_TOOL_NAMES = frozenset({
 _INDEX_PATTERN = re.compile(r"^- \[(?P<name>.+?)\]（(?P<filename>.+?)）:(?P<summary>.+)$")
 
 
+def _memory_index_reference(runtime: Any) -> str:
+    """Return a storage-accurate reference to the tenant memory index."""
+    return runtime.paths.storage_reference("memory_index")
+
+
 def _parse_index(index: str) -> list[MemoryIndexEntry]:
     """Parse standard Advanced Memory index entries from MEMORY.md."""
     entries: list[MemoryIndexEntry] = []
@@ -124,7 +129,7 @@ class AdvancedMemoryTools:
         return {
             "saved": True,
             "filename": path.name,
-            "path": str(path),
+            "path": runtime.paths.storage_reference("memory_topic", topic_name=path.name),
             "memory_type": resolved_type.value,
             "updated_at": updated_at.isoformat() if updated_at is not None else None,
         }
@@ -153,10 +158,10 @@ class AdvancedMemoryTools:
         }
 
     async def list_memory_index(self, tool_context: Any | None = None) -> dict:
-        """Return the current long-term memory index and its disk path."""
+        """Return the current long-term memory index and its storage reference."""
         runtime = self._runtime_for_context(tool_context)
         return {
-            "index_path": str(runtime.paths.memory_index_path),
+            "index_path": _memory_index_reference(runtime),
             "index": await runtime.long_term_memory.read_index(),
         }
 

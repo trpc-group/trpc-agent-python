@@ -67,7 +67,7 @@ async def test_session_writes_refresh_all_session_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_ttl_refresh_includes_previously_tracked_keys() -> None:
-    store = _store(RedisSessionMemoryStore)
+    store = _store(RedisSessionMemoryStore, session_ttl_delete_transcripts=True)
     session_base = store._session_base("session-1")
     old_key = f"{session_base}:transcript"
     store._command = AsyncMock(side_effect=[
@@ -82,6 +82,27 @@ async def test_ttl_refresh_includes_previously_tracked_keys() -> None:
 
     commands = [call.args for call in store._command.await_args_list]
     assert ("expire", old_key, 60) in commands
+    assert ("expire", f"{session_base}:summary", 60) in commands
+
+
+@pytest.mark.asyncio
+async def test_ttl_refresh_preserves_transcript_by_default() -> None:
+    store = _store(RedisSessionMemoryStore)
+    session_base = store._session_base("session-1")
+    old_key = f"{session_base}:transcript"
+    old_seen_key = f"{old_key}:seen:event_id"
+    store._command = AsyncMock(side_effect=[
+        None,  # SADD
+        [old_key.encode(), old_seen_key.encode()],  # SMEMBERS
+        None,  # EXPIRE current key
+        None,  # EXPIRE registry
+    ])
+
+    await store._refresh_session_ttl("session-1", f"{session_base}:summary")
+
+    commands = [call.args for call in store._command.await_args_list]
+    assert ("expire", old_key, 60) not in commands
+    assert ("expire", old_seen_key, 60) not in commands
     assert ("expire", f"{session_base}:summary", 60) in commands
 
 

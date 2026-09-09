@@ -157,10 +157,14 @@ class _SqlStore:
             return
         tables = (
             (SqlSessionMemory, (self._app_name, self._user_id, session_id)),
-            (SqlTranscript, (self._app_name, self._user_id, session_id)),
-            (SqlTranscriptSeen, (self._app_name, self._user_id, session_id)),
             (SqlToolResult, (self._app_name, self._user_id, session_id)),
         )
+        if self._config.session_ttl_delete_transcripts:
+            tables = (
+                (SqlTranscript, (self._app_name, self._user_id, session_id)),
+                (SqlTranscriptSeen, (self._app_name, self._user_id, session_id)),
+                *tables,
+            )
         for model, key in tables:
             rows = await self._storage.query(
                 db,
@@ -404,7 +408,8 @@ class SqlTranscriptStore(_SqlStore):
                     session_id=session_id,
                     record_id=uuid.uuid4().hex,
                     payload=json.dumps(payload, ensure_ascii=False),
-                    expires_at=self._expiry(self._config.session_ttl_seconds),
+                    expires_at=(self._expiry(self._config.session_ttl_seconds)
+                                if self._config.session_ttl_delete_transcripts else None),
                 ))
             await self._refresh_session_scope(db, session_id)
             await self._storage.commit(db)
@@ -450,7 +455,8 @@ class SqlTranscriptStore(_SqlStore):
                     session_id=seen_key[2],
                     unique_key=seen_key[3],
                     unique_value=seen_key[4],
-                    expires_at=self._expiry(self._config.session_ttl_seconds),
+                    expires_at=(self._expiry(self._config.session_ttl_seconds)
+                                if self._config.session_ttl_delete_transcripts else None),
                 ))
             await self._storage.add(
                 db,
@@ -460,7 +466,8 @@ class SqlTranscriptStore(_SqlStore):
                     session_id=session_id,
                     record_id=uuid.uuid4().hex,
                     payload=json.dumps(payload, ensure_ascii=False),
-                    expires_at=self._expiry(self._config.session_ttl_seconds),
+                    expires_at=(self._expiry(self._config.session_ttl_seconds)
+                                if self._config.session_ttl_delete_transcripts else None),
                 ))
             await self._refresh_session_scope(db, session_id)
             await self._storage.commit(db)
@@ -514,7 +521,9 @@ class SqlAdvancedMemoryCleanup:
     async def cleanup_once(self) -> None:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         async with self._storage.create_db_session() as db:
-            for model in self._models:
+            models = self._models if self._config.session_ttl_delete_transcripts else tuple(
+                model for model in self._models if model is not SqlTranscript)
+            for model in models:
                 await self._storage.delete(
                     db,
                     SqlKey(key=tuple(), storage_cls=model),
