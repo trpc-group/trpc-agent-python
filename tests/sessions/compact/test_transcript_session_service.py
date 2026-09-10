@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import TranscriptSessionService
+import pytest
+
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact import TranscriptSessionService
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
@@ -35,7 +37,7 @@ async def _session(service: TranscriptSessionService):
 
 async def test_append_event_writes_versioned_parent_chain(tmp_path: Path) -> None:
     """Ensure persisted Events produce an ordered parent-linked transcript."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=True, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
     service = TranscriptSessionService(InMemorySessionService(), runtime)
     session = await _session(service)
 
@@ -57,7 +59,7 @@ async def test_append_event_writes_versioned_parent_chain(tmp_path: Path) -> Non
 
 async def test_duplicate_event_id_is_not_written_twice(tmp_path: Path) -> None:
     """Ensure duplicate Event IDs are not written twice."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=True, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
     service = TranscriptSessionService(InMemorySessionService(), runtime)
     session = await _session(service)
     duplicate = _event("event-1", "hello")
@@ -71,7 +73,7 @@ async def test_duplicate_event_id_is_not_written_twice(tmp_path: Path) -> None:
 
 async def test_old_duplicate_does_not_rewind_parent_chain(tmp_path: Path) -> None:
     """Ensure replaying an old Event does not rewind the parent chain."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=True, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
     service = TranscriptSessionService(InMemorySessionService(), runtime)
     session = await _session(service)
     await service.append_event(session, _event("event-1", "first"))
@@ -87,13 +89,13 @@ async def test_old_duplicate_does_not_rewind_parent_chain(tmp_path: Path) -> Non
 
 async def test_new_wrapper_restores_parent_from_existing_transcript(tmp_path: Path) -> None:
     """Ensure a rebuilt wrapper restores the parent-chain tail from disk."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=True, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
     delegate = InMemorySessionService()
     first_service = TranscriptSessionService(delegate, runtime)
     session = await _session(first_service)
     await first_service.append_event(session, _event("event-1", "first"))
 
-    second_runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=True, root_dir=tmp_path))
+    second_runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
     second_service = TranscriptSessionService(delegate, second_runtime)
     await second_service.append_event(session, _event("event-2", "second"))
 
@@ -103,7 +105,7 @@ async def test_new_wrapper_restores_parent_from_existing_transcript(tmp_path: Pa
 
 async def test_disabled_runtime_preserves_old_service_without_disk_writes(tmp_path: Path) -> None:
     """Ensure disabled mode preserves the legacy service without disk writes."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=False, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=False, root_dir=tmp_path))
     service = TranscriptSessionService(InMemorySessionService(), runtime)
     session = await _session(service)
 
@@ -115,9 +117,18 @@ async def test_disabled_runtime_preserves_old_service_without_disk_writes(tmp_pa
     assert not (tmp_path / "SESSION").exists()
 
 
+async def test_nested_transcript_wrapper_is_rejected(tmp_path: Path) -> None:
+    """Ensure a transcript decorator cannot wrap another decorator."""
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
+    inner = TranscriptSessionService(InMemorySessionService(), runtime)
+
+    with pytest.raises(ValueError, match="already wrapped"):
+        TranscriptSessionService(inner, runtime)
+
+
 async def test_partial_event_is_not_written_to_transcript(tmp_path: Path) -> None:
     """Ensure streaming partial Events enter neither session nor transcript."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=True, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
     service = TranscriptSessionService(InMemorySessionService(), runtime)
     session = await _session(service)
 

@@ -36,6 +36,8 @@ class TranscriptSessionService(SessionServiceABC):
         session_memory_extractor: SessionMemoryExtractor | None = None,
     ) -> None:
         """Store the legacy service and optional Advanced Memory runtime."""
+        if isinstance(delegate, TranscriptSessionService):
+            raise ValueError("Transcript session service is already wrapped")
         self._delegate = delegate
         self._memory_runtime = memory_runtime
         self._session_memory_extractor = session_memory_extractor
@@ -54,6 +56,16 @@ class TranscriptSessionService(SessionServiceABC):
     def memory_runtime(self) -> AdvancedMemoryRuntime:
         """Return the Advanced Memory runtime used by the decorator."""
         return self._memory_runtime
+
+    @property
+    def session_config(self) -> Any:
+        """Expose the original service configuration."""
+        return getattr(self._delegate, "session_config", None)
+
+    @property
+    def summarizer_manager(self) -> Any:
+        """Expose the original service summarizer, when configured."""
+        return getattr(self._delegate, "summarizer_manager", None)
 
     @property
     def session_memory_extractor(self) -> SessionMemoryExtractor | None:
@@ -196,6 +208,14 @@ class TranscriptSessionService(SessionServiceABC):
     async def update_session(self, session: SessionABC) -> None:
         """Delegate session updates to the underlying service."""
         await self._delegate.update_session(session)
+
+    async def patch_session_state(
+        self,
+        session: SessionABC,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Delegate state-only updates without touching persisted Events."""
+        await self._delegate.patch_session_state(session, state_delta)
 
     async def create_session_summary(
         self,

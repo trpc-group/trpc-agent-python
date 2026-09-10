@@ -19,6 +19,7 @@ from typing import Protocol
 from typing import TYPE_CHECKING
 
 from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LlmResponse
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -27,7 +28,9 @@ from trpc_agent_sdk.types import Part
 
 from ._callbacks import install_staged_callback
 from ._formats import SESSION_MEMORY_SECTIONS
+from ._formats import SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
+from ._formats import parse_session_memory_state
 from ._history_snip import estimate_request_chars
 from ._runtime import AdvancedMemoryRuntime
 from ._token_budget import TokenContextTracker
@@ -36,6 +39,7 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.agents import LlmAgent as ParentLlmAgent
     from trpc_agent_sdk.context import InvocationContext
     from trpc_agent_sdk.models import LlmRequest
+    from ._session_memory import SessionMemoryExtractor
 
 AUTOCOMPACT_SCHEMA_VERSION = 1
 AUTOCOMPACT_BLOCKED_MESSAGE = (
@@ -69,6 +73,8 @@ class AutoCompactRecord:
     boundary_occurrence: int
     summary: str
     source: str
+    boundary_event_id: str | None = None
+    compaction_id: str | None = None
 
 
 @dataclass
@@ -227,12 +233,14 @@ class AutoCompact:
         summary_generator: LegacySummaryGenerator | None = None,
         *,
         model: Any | None = None,
+        session_memory_extractor: "SessionMemoryExtractor | None" = None,
     ) -> None:
         """Initialize the compressor, summary generator, and session locks."""
         if summary_generator is not None and model is not None:
             raise ValueError("Provide either summary_generator or model, not both")
         self._runtime = memory_runtime
         self._summary_generator = summary_generator or ForkedLegacySummaryGenerator(model)
+        self._session_memory_extractor = session_memory_extractor
         self._states: dict[str, AutoCompactState] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._scoped_processors: dict[object, "AutoCompact"] = {}
@@ -241,6 +249,15 @@ class AutoCompact:
     def runtime(self) -> AdvancedMemoryRuntime:
         """Return the runtime bound to this compressor."""
         return self._runtime
+
+    def attach_session_memory_extractor(
+        self,
+        extractor: "SessionMemoryExtractor",
+    ) -> None:
+        """Attach the extractor invoked only when AutoCompact is reached."""
+        if (self._session_memory_extractor is not None and self._session_memory_extractor is not extractor):
+            raise ValueError("Autocompact session memory extractor is already configured")
+        self._session_memory_extractor = extractor
 
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """Return the unique compaction lock for a session."""
@@ -273,6 +290,10 @@ class AutoCompact:
                         occurrence,
                         summary,
                         source,
+                        record.get("boundary_event_id")
+                        if isinstance(record.get("boundary_event_id"), str) else None,
+                        record.get("compaction_id")
+                        if isinstance(record.get("compaction_id"), str) else None,
                     )
                     failures = 0
             elif record.get("kind") == "autocompact-failure":
@@ -290,6 +311,11 @@ class AutoCompact:
 
     def _summary_with_recovery_path(self, summary: str, session_id: str) -> str:
         """Append recovery paths for the full transcript and session memory."""
+        if self._runtime.config.storage_backend in {"redis", "sql"}:
+            return (f"{summary.rstrip()}\n\n"
+                    "For exact content from before compaction, read the original "
+                    "SessionService Events. Current session memory is stored in "
+                    f"session.state[{SESSION_MEMORY_STATE_KEY!r}].")
         return (f"{summary.rstrip()}\n\n"
                 "For exact content from before compaction, read the complete transcript: "
                 f"{self._runtime.paths.storage_reference('transcript', session_id=session_id)}\n"
@@ -309,6 +335,17 @@ class AutoCompact:
                 seen += 1
                 if seen == occurrence:
                     return index
+        return None
+
+    def _find_last_signature_index(
+        self,
+        contents: list[Content],
+        signature: str,
+    ) -> int | None:
+        """Find the newest matching boundary after an earlier replay."""
+        for index in range(len(contents) - 1, -1, -1):
+            if content_signature(contents[index]) == signature:
+                return index
         return None
 
     def _signature_occurrence(
@@ -376,13 +413,31 @@ class AutoCompact:
     async def _latest_session_memory_record(
         self,
         session_id: str,
-    ) -> tuple[str, str] | None:
+        ctx: "InvocationContext",
+    ) -> tuple[str, str, int, str] | None:
         """Read session memory and its checkpoint Event for model-free compaction."""
+        if self._runtime.config.storage_backend in {"redis", "sql"}:
+            parsed = parse_session_memory_state(ctx.session.state.get(SESSION_MEMORY_STATE_KEY))
+            if parsed is None:
+                return None
+            document, checkpoint, _ = parsed
+            signature = checkpoint.get("boundary_signature")
+            occurrence = checkpoint.get("boundary_occurrence")
+            event_id = checkpoint.get("last_event_id")
+            if (not isinstance(signature, str) or not isinstance(occurrence, int) or occurrence <= 0
+                    or not isinstance(event_id, str)):
+                return None
+            memory = document.to_markdown()
+            if memory.strip() == SessionMemoryDocument().to_markdown().strip():
+                return None
+            return memory, signature, occurrence, event_id
         async with self._runtime.coordination.guard(
                 session_id,
                 timeout=self._runtime.config.session_memory_wait_timeout_seconds,
         ) as acquired:
             if not acquired:
+                return None
+            if self._runtime.session_memory is None:
                 return None
             memory = await self._runtime.session_memory.read(session_id)
             if memory is None or memory.strip() == SessionMemoryDocument().to_markdown().strip():
@@ -390,7 +445,12 @@ class AutoCompact:
             records = await self._runtime.transcripts.read_all(session_id)
         for record in reversed(records):
             if record.get("kind") == "session-memory-checkpoint" and isinstance(record.get("last_event_id"), str):
-                return memory, record["last_event_id"]
+                boundary = self._event_content_signature(
+                    records,
+                    record["last_event_id"],
+                )
+                if boundary is not None:
+                    return memory, boundary[0], boundary[1], record["last_event_id"]
         return None
 
     def _event_content_signature(
@@ -423,6 +483,7 @@ class AutoCompact:
         boundary_index: int,
         source: str,
         strict_boundary: bool = False,
+        boundary_event_id: str | None = None,
     ) -> AutoCompactRecord:
         """Replace the old prefix with a summary and return a replay record."""
         boundary_signature = content_signature(request.contents[boundary_index])
@@ -439,7 +500,97 @@ class AutoCompact:
             boundary_occurrence,
             summary,
             source,
+            boundary_event_id,
+            f"autocompact:{uuid.uuid4().hex}",
         )
+
+    def _resolve_boundary_event_id(
+        self,
+        ctx: "InvocationContext",
+        signature: str,
+        occurrence: int,
+    ) -> str | None:
+        """Map one request-content boundary back to an active Session Event."""
+        seen = 0
+        for event in getattr(ctx.session, "events", []) or []:
+            content = getattr(event, "content", None)
+            if content is None or content_signature(content) != signature:
+                continue
+            seen += 1
+            if seen == occurrence:
+                event_id = getattr(event, "id", None)
+                return event_id if isinstance(event_id, str) and event_id else None
+        return None
+
+    def _legacy_boundary_event_id(self, ctx: "InvocationContext") -> str | None:
+        """Choose a stable active-Event boundary for legacy compaction."""
+        content_events = [
+            event
+            for event in (getattr(ctx.session, "events", []) or [])
+            if getattr(event, "content", None) is not None
+        ]
+        if len(content_events) <= 1:
+            return None
+        keep_count = min(
+            self._runtime.config.autocompact_keep_recent_contents,
+            len(content_events) - 1,
+        )
+        boundary_index = len(content_events) - keep_count - 1
+        start = self._compaction_start(
+            [event.content for event in content_events],
+            boundary_index,
+        )
+        event_id = getattr(content_events[max(0, start - 1)], "id", None)
+        return event_id if isinstance(event_id, str) and event_id else None
+
+    async def _persist_session_compaction(
+        self,
+        ctx: "InvocationContext",
+        record: AutoCompactRecord,
+    ) -> None:
+        """Persist the compacted active window through the original SessionService."""
+        compact_events = getattr(ctx.session, "compact_events", None)
+        if not callable(compact_events):
+            # AutoCompact remains usable as a request-only primitive in unit
+            # tests and custom integrations. setup_context_compression always
+            # supplies the framework Session and persists the compacted window.
+            return
+
+        boundary_event_id = record.boundary_event_id or self._resolve_boundary_event_id(
+            ctx,
+            record.boundary_signature,
+            record.boundary_occurrence,
+        )
+        if boundary_event_id is None:
+            raise ValueError("Cannot map the AutoCompact boundary to an active Session Event")
+
+        compaction_id = record.compaction_id or f"autocompact:{uuid.uuid4().hex}"
+        summary_event = Event(
+            invocation_id="summary",
+            author="system",
+            content=self._summary_content(record.summary),
+            custom_metadata={
+                "session_compaction_source": record.source,
+                "session_compaction_boundary_signature": record.boundary_signature,
+                "session_compaction_boundary_occurrence": record.boundary_occurrence,
+            },
+        )
+        active_before = list(ctx.session.events)
+        historical_before = list(ctx.session.historical_events)
+        last_update_before = ctx.session.last_update_time
+        try:
+            changed = compact_events(
+                summary_event,
+                boundary_event_id,
+                compaction_id=compaction_id,
+            )
+            if changed:
+                await ctx.session_service.update_session(ctx.session)
+        except Exception:
+            ctx.session.events = active_before
+            ctx.session.historical_events = historical_before
+            ctx.session.last_update_time = last_update_before
+            raise
 
     def _bounded_history(self, contents: list[Content]) -> str:
         """Bound old history to the configured summary-input character limit."""
@@ -486,14 +637,16 @@ class AutoCompact:
         token_source: str | None = None,
     ) -> None:
         """Persist a successful compaction and reset the circuit-breaker count."""
+        compaction_id = record.compaction_id or f"autocompact:{uuid.uuid4().hex}"
         await self._runtime.transcripts.append(
             session_id,
             {
                 "schema_version": AUTOCOMPACT_SCHEMA_VERSION,
                 "kind": "autocompact-success",
-                "compaction_id": f"autocompact:{uuid.uuid4().hex}",
+                "compaction_id": compaction_id,
                 "boundary_signature": record.boundary_signature,
                 "boundary_occurrence": record.boundary_occurrence,
+                "boundary_event_id": record.boundary_event_id,
                 "summary": record.summary,
                 "source": record.source,
                 "request_chars_before": before_chars,
@@ -581,6 +734,9 @@ class AutoCompact:
             token_budget_before = tracker.budget(request, ctx)
             token_mode = token_budget_before.token_mode_enabled
             request_tokens_before = token_budget_before.estimate.tokens
+            comparison_tokens_before = (
+                tracker.estimate_request_tokens(request) if token_mode else None
+            )
             blocking_reached = (request_tokens_before >= token_budget_before.blocking_threshold_tokens
                                 if token_mode else request_chars_before >= config.autocompact_blocking_chars)
             if state.consecutive_failures >= config.autocompact_max_failures and blocking_reached:
@@ -619,38 +775,46 @@ class AutoCompact:
             original_contents = [content.model_copy(deep=True) for content in request.contents]
             try:
                 compact_record: AutoCompactRecord | None = None
-                session_memory = await self._latest_session_memory_record(session_id)
-                if session_memory is not None:
-                    memory, checkpoint_event_id = session_memory
-                    transcript_records = await self._runtime.transcripts.read_all(session_id)
-                    boundary = self._event_content_signature(
-                        transcript_records,
-                        checkpoint_event_id,
+                if (self._session_memory_extractor is not None and self._session_memory_extractor.uses_session_state):
+                    await self._session_memory_extractor.extract_if_needed(
+                        ctx.session,
+                        ctx,
+                        force=True,
                     )
-                    if boundary is not None:
-                        boundary_signature, boundary_occurrence = boundary
-                        boundary_index = self._find_signature_index(
+                session_memory = await self._latest_session_memory_record(
+                    session_id,
+                    ctx,
+                )
+                if session_memory is not None:
+                    memory, boundary_signature, boundary_occurrence, boundary_event_id = session_memory
+                    boundary_index = self._find_signature_index(
+                        request.contents,
+                        boundary_signature,
+                        boundary_occurrence,
+                    )
+                    if boundary_index is None and reapplied:
+                        boundary_index = self._find_last_signature_index(
                             request.contents,
                             boundary_signature,
-                            boundary_occurrence,
                         )
-                        if boundary_index is not None:
-                            compact_record = self._compact_with_summary(
-                                request,
-                                summary=self._summary_with_recovery_path(
-                                    memory,
-                                    session_id,
-                                ),
-                                boundary_index=boundary_index,
-                                source="session-memory",
-                                strict_boundary=True,
-                            )
-                            target_reached = (tracker.budget(request, ctx).estimate.tokens
-                                              <= token_budget_before.warning_threshold_tokens if token_mode else
-                                              estimate_request_chars(request) <= config.autocompact_target_chars)
-                            if not target_reached:
-                                request.contents = [content.model_copy(deep=True) for content in original_contents]
-                                compact_record = None
+                    if boundary_index is not None:
+                        compact_record = self._compact_with_summary(
+                            request,
+                            summary=self._summary_with_recovery_path(
+                                memory,
+                                session_id,
+                            ),
+                            boundary_index=boundary_index,
+                            source="session-memory",
+                            strict_boundary=True,
+                            boundary_event_id=boundary_event_id,
+                        )
+                        target_reached = (tracker.budget(
+                            request, ctx).estimate.tokens <= token_budget_before.warning_threshold_tokens if token_mode
+                                          else estimate_request_chars(request) <= config.autocompact_target_chars)
+                        if not target_reached:
+                            request.contents = [content.model_copy(deep=True) for content in original_contents]
+                            compact_record = None
 
                 if compact_record is None:
                     keep_count = min(
@@ -673,22 +837,27 @@ class AutoCompact:
                         ),
                         boundary_index=boundary_index,
                         source="legacy",
+                        boundary_event_id=self._legacy_boundary_event_id(ctx),
                     )
 
                 request_chars_after = estimate_request_chars(request)
-                if request_chars_after >= request_chars_before:
-                    raise ValueError("Autocompact did not reduce request size")
                 token_budget_after = tracker.budget(request, ctx)
-                if token_mode and token_budget_after.estimate.tokens >= request_tokens_before:
-                    raise ValueError("Autocompact did not reduce request token estimate")
+                if token_mode:
+                    comparison_tokens_after = tracker.estimate_request_tokens(request)
+                    if (comparison_tokens_after >= comparison_tokens_before
+                            and request_chars_after >= request_chars_before):
+                        raise ValueError("Autocompact did not reduce request token estimate")
+                elif request_chars_after >= request_chars_before:
+                    raise ValueError("Autocompact did not reduce request size")
+                await self._persist_session_compaction(ctx, compact_record)
                 await self._persist_success(
                     session_id,
                     compact_record,
                     request_chars_before,
                     request_chars_after,
-                    request_tokens_before if token_mode else None,
-                    token_budget_after.estimate.tokens if token_mode else None,
-                    token_budget_after.estimate.source if token_mode else None,
+                    comparison_tokens_before if token_mode else None,
+                    comparison_tokens_after if token_mode else None,
+                    "estimated" if token_mode else None,
                 )
                 state.latest_compaction = compact_record
                 state.consecutive_failures = 0
@@ -700,9 +869,9 @@ class AutoCompact:
                     request_chars_before,
                     request_chars_after,
                     0,
-                    request_tokens_before=request_tokens_before if token_mode else None,
-                    request_tokens_after=(token_budget_after.estimate.tokens if token_mode else None),
-                    token_source=token_budget_after.estimate.source if token_mode else None,
+                    request_tokens_before=comparison_tokens_before if token_mode else None,
+                    request_tokens_after=comparison_tokens_after if token_mode else None,
+                    token_source="estimated" if token_mode else None,
                 )
             except Exception as exc:  # noqa: BLE001
                 request.contents = original_contents

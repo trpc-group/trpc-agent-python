@@ -34,6 +34,7 @@ from datetime import timezone
 from typing import Any
 from typing import List
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from sqlalchemy import Boolean
@@ -76,6 +77,10 @@ from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import extract_state_delta
 from ._utils import merge_state
+
+if TYPE_CHECKING:
+    from .compact._base_manager import BaseSessionCompactManager
+    from .compact._base_config import BaseSessionCompactConfig
 
 
 def _event_field_or_default(field_name: str, value: Any) -> Any:
@@ -391,9 +396,18 @@ class SqlSessionService(BaseSessionService):
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
                  is_async: bool = False,
                  session_config: Optional[SessionServiceConfig] = None,
+                 session_compact_config: "BaseSessionCompactConfig | None" = None,
+                 session_compact_manager: BaseSessionCompactManager | None = None,
                  **kwargs: Any):
+        self._db_url = db_url
+        self._is_async = is_async
         is_default_config = session_config is None
-        super().__init__(summarizer_manager=summarizer_manager, session_config=session_config)
+        super().__init__(
+            summarizer_manager=summarizer_manager,
+            session_config=session_config,
+            session_compact_config=session_compact_config,
+            session_compact_manager=session_compact_manager,
+        )
         if is_default_config:
             # Default to store historical events for persistent backends.
             self._session_config.store_historical_events = True
@@ -406,6 +420,16 @@ class SqlSessionService(BaseSessionService):
         self.__cleanup_stop_event: Optional[asyncio.Event] = None
 
         self._start_cleanup_task()
+
+    @property
+    def db_url(self) -> str:
+        """Return the configured SQL connection URL."""
+        return self._db_url
+
+    @property
+    def is_async(self) -> bool:
+        """Return whether this service uses asynchronous SQL sessions."""
+        return self._is_async
 
     @override
     async def create_session(
@@ -533,6 +557,11 @@ class SqlSessionService(BaseSessionService):
             session_key = SqlKey(key=(app_name, user_id, session_id), storage_cls=StorageSession)
             await self._sql_storage.delete(sql_session, session_key, conditions)
             await self._sql_storage.commit(sql_session)
+        await self._delete_session_compact_data(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
@@ -547,7 +576,10 @@ class SqlSessionService(BaseSessionService):
 
         async with self._sql_storage.create_db_session() as sql_session:
             session_key = SqlKey(key=(app_name, user_id, session_id), storage_cls=StorageSession)
-            storage_session: Optional[StorageSession] = await self._sql_storage.get(sql_session, session_key)
+            storage_session: Optional[StorageSession] = await self._sql_storage.get_for_update(
+                sql_session,
+                session_key,
+            )
             if not storage_session:
                 logger.warning("Session %s not found in storage, it will be created", session_id)
                 return event
@@ -653,6 +685,29 @@ class SqlSessionService(BaseSessionService):
             await self._sql_storage.commit(sql_session)
             await self._sql_storage.refresh(sql_session, storage_session)
 
+            session.last_update_time = storage_session.update_timestamp_tz
+
+    @override
+    async def patch_session_state(
+        self,
+        session: Session,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Merge state under a row lock without touching persisted Events."""
+        key = SqlKey(
+            key=(session.app_name, session.user_id, session.id),
+            storage_cls=StorageSession,
+        )
+        async with self._sql_storage.create_db_session() as sql_session:
+            storage_session: Optional[StorageSession] = (await self._sql_storage.get_for_update(sql_session, key))
+            if storage_session is None:
+                raise ValueError(f"Session {session.id} was not found")
+            merged_state = dict(storage_session.state or {})
+            merged_state.update(state_delta)
+            storage_session.state = merged_state  # type: ignore
+            await self._sql_storage.commit(sql_session)
+            await self._sql_storage.refresh(sql_session, storage_session)
+            session.state.update(state_delta)
             session.last_update_time = storage_session.update_timestamp_tz
 
     @override

@@ -31,6 +31,7 @@ import time
 import uuid
 from typing import Any
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from pydantic import BaseModel
@@ -50,6 +51,10 @@ from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import extract_state_delta
 from ._utils import merge_state
+
+if TYPE_CHECKING:
+    from .compact._base_manager import BaseSessionCompactManager
+    from .compact._base_config import BaseSessionCompactConfig
 
 
 class SessionWithTTL(BaseModel):
@@ -108,8 +113,15 @@ class InMemorySessionService(BaseSessionService):
 
     def __init__(self,
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
-                 session_config: Optional[SessionServiceConfig] = None):
-        super().__init__(summarizer_manager=summarizer_manager, session_config=session_config)
+                 session_config: Optional[SessionServiceConfig] = None,
+                 session_compact_config: "BaseSessionCompactConfig | None" = None,
+                 session_compact_manager: BaseSessionCompactManager | None = None):
+        super().__init__(
+            summarizer_manager=summarizer_manager,
+            session_config=session_config,
+            session_compact_config=session_compact_config,
+            session_compact_manager=session_compact_manager,
+        )
         # Storage with TTL support
         # Map: app_name -> user_id -> session_id -> SessionWithTTL
         self._sessions: dict[str, dict[str, dict[str, SessionWithTTL]]] = {}
@@ -213,9 +225,13 @@ class InMemorySessionService(BaseSessionService):
 
     @override
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
-        if not self._is_session_exist(app_name=app_name, user_id=user_id, session_id=session_id):
-            return
-        del self._sessions[app_name][user_id][session_id]
+        if self._is_session_exist(app_name=app_name, user_id=user_id, session_id=session_id):
+            del self._sessions[app_name][user_id][session_id]
+        await self._delete_session_compact_data(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
@@ -293,6 +309,21 @@ class InMemorySessionService(BaseSessionService):
 
         # Update the stored session and refresh TTL
         self._set_session(app_name, user_id, session_id, session)
+
+    @override
+    async def patch_session_state(
+        self,
+        session: Session,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Merge state into the stored session without replacing its Events."""
+        stored = (self._sessions.get(session.app_name, {}).get(session.user_id, {}).get(session.id))
+        if stored is None:
+            raise ValueError(f"Session {session.id} was not found")
+        stored.session.state.update(state_delta)
+        stored.ttl.update_expired_at()
+        session.state.update(state_delta)
+        session.last_update_time = time.time()
 
     def _cleanup_expired(self) -> None:
         """Remove all expired sessions and states.

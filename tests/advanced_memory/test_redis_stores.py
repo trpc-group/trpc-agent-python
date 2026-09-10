@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryPaths
 from trpc_agent_sdk.advanced_memory import MemoryIndexEntry
-from trpc_agent_sdk.advanced_memory import SessionMemoryDocument
 from trpc_agent_sdk.advanced_memory._redis_stores import RedisLongTermMemoryStore
-from trpc_agent_sdk.advanced_memory._redis_stores import RedisSessionMemoryStore
+from trpc_agent_sdk.sessions.compact._redis_stores import RedisToolResultStore
+from trpc_agent_sdk.sessions.compact._redis_stores import RedisTranscriptStore
 
 
 def _store(store_type: type, **overrides: object):
-    config = AdvancedMemoryConfig(
+    config = AdvancedCompactConfig(
         storage_backend="redis",
         redis_url="redis://localhost:6379/0",
         root_dir=Path("/tmp/advanced-memory-redis-tests"),
@@ -53,21 +53,22 @@ async def test_memory_writes_refresh_all_memory_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_session_writes_refresh_all_session_keys() -> None:
-    store = _store(RedisSessionMemoryStore)
+    store = _store(RedisToolResultStore)
 
-    await store.write("session-1", SessionMemoryDocument(session_title="Test session"))
+    await store.write("session-1", "result-1", "complete result")
 
     session_base = store._session_base("session-1")
     commands = [call.args for call in store._command.await_args_list]
-    assert any(command[0] == "set" and command[1] == f"{session_base}:summary" for command in commands)
-    assert ("sadd", f"{session_base}:keys", f"{session_base}:summary") in commands
-    assert ("expire", f"{session_base}:summary", 60) in commands
+    tool_key = f"{session_base}:tool:result-1"
+    assert any(command[0] == "set" and command[1] == tool_key for command in commands)
+    assert ("sadd", f"{session_base}:keys", tool_key) in commands
+    assert ("expire", tool_key, 60) in commands
     assert ("expire", f"{session_base}:keys", 60) in commands
 
 
 @pytest.mark.asyncio
 async def test_ttl_refresh_includes_previously_tracked_keys() -> None:
-    store = _store(RedisSessionMemoryStore, session_ttl_delete_transcripts=True)
+    store = _store(RedisToolResultStore, session_ttl_delete_transcripts=True)
     session_base = store._session_base("session-1")
     old_key = f"{session_base}:transcript"
     store._command = AsyncMock(side_effect=[
@@ -78,16 +79,17 @@ async def test_ttl_refresh_includes_previously_tracked_keys() -> None:
         None,  # EXPIRE registry
     ])
 
-    await store._refresh_session_ttl("session-1", f"{session_base}:summary")
+    current_key = f"{session_base}:tool:result-1"
+    await store._refresh_session_ttl("session-1", current_key)
 
     commands = [call.args for call in store._command.await_args_list]
     assert ("expire", old_key, 60) in commands
-    assert ("expire", f"{session_base}:summary", 60) in commands
+    assert ("expire", current_key, 60) in commands
 
 
 @pytest.mark.asyncio
 async def test_ttl_refresh_preserves_transcript_by_default() -> None:
-    store = _store(RedisSessionMemoryStore)
+    store = _store(RedisToolResultStore)
     session_base = store._session_base("session-1")
     old_key = f"{session_base}:transcript"
     old_seen_key = f"{old_key}:seen:event_id"
@@ -98,12 +100,27 @@ async def test_ttl_refresh_preserves_transcript_by_default() -> None:
         None,  # EXPIRE registry
     ])
 
-    await store._refresh_session_ttl("session-1", f"{session_base}:summary")
+    current_key = f"{session_base}:tool:result-1"
+    await store._refresh_session_ttl("session-1", current_key)
 
     commands = [call.args for call in store._command.await_args_list]
     assert ("expire", old_key, 60) not in commands
     assert ("expire", old_seen_key, 60) not in commands
-    assert ("expire", f"{session_base}:summary", 60) in commands
+    assert ("expire", current_key, 60) in commands
+
+
+@pytest.mark.asyncio
+async def test_transcript_rejects_event_copies() -> None:
+    store = _store(RedisTranscriptStore)
+
+    with pytest.raises(ValueError, match="context-compression"):
+        await store.append(
+            "session-1",
+            {
+                "kind": "event",
+                "event_id": "event-1"
+            },
+        )
 
 
 @pytest.mark.asyncio

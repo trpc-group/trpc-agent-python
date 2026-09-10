@@ -7,13 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import ForkedSessionMemoryGenerator
-from trpc_agent_sdk.advanced_memory import SessionMemoryExtractionInput
-from trpc_agent_sdk.advanced_memory import SessionMemoryDocument
-from trpc_agent_sdk.advanced_memory import SessionMemoryExtractor
-from trpc_agent_sdk.advanced_memory import TranscriptSessionService
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact import ForkedSessionMemoryGenerator
+from trpc_agent_sdk.sessions.compact import SessionMemoryExtractionInput
+from trpc_agent_sdk.sessions.compact import SessionMemoryDocument
+from trpc_agent_sdk.sessions.compact import SessionMemoryExtractor
+from trpc_agent_sdk.sessions.compact import TranscriptSessionService
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import LlmResponse
@@ -94,7 +94,7 @@ def _runtime(
 ) -> AdvancedMemoryRuntime:
     """Create an isolated runtime with small extraction limits."""
     return AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=True,
             root_dir=tmp_path,
             session_memory_initial_chars=initial_chars,
@@ -163,7 +163,7 @@ async def test_first_extraction_writes_document_and_checkpoint(tmp_path: Path) -
 async def test_token_threshold_triggers_extraction_before_character_threshold(tmp_path: Path) -> None:
     """Ensure session memory uses token thresholds when configured."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=True,
             root_dir=tmp_path,
             session_memory_initial_chars=100_000,

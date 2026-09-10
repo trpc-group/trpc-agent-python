@@ -227,12 +227,13 @@ class Runner:
         # the traditional memory-service hook. Bind it here so callers can
         # use the same construction pattern as Redis/Mem0 memory services.
         from trpc_agent_sdk.memory import AdvancedMemoryService
-        from trpc_agent_sdk.sessions import AdvancedMemorySessionService
 
         if isinstance(memory_service, AdvancedMemoryService):
             session_service = memory_service.bind(agent, session_service)
-        elif isinstance(session_service, AdvancedMemorySessionService):
-            session_service = session_service.bind(agent)
+        compact_config = getattr(session_service, "session_compact_config", None)
+        from trpc_agent_sdk.sessions.compact import BaseSessionCompactConfig
+        if isinstance(compact_config, BaseSessionCompactConfig):
+            compact_config.setup(agent, session_service)
         self.app_name = app_name
         self.agent = agent
         self.artifact_service = artifact_service

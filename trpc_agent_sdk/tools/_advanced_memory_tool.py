@@ -11,12 +11,12 @@ import asyncio
 import re
 from typing import Any
 
-from trpc_agent_sdk.advanced_memory._formats import MemoryDocument
-from trpc_agent_sdk.advanced_memory._formats import MemoryIndexEntry
-from trpc_agent_sdk.advanced_memory._formats import MemoryType
-from trpc_agent_sdk.advanced_memory._formats import memory_freshness
-from trpc_agent_sdk.advanced_memory._formats import parse_memory_updated_at
-from trpc_agent_sdk.advanced_memory._runtime import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact._formats import MemoryDocument
+from trpc_agent_sdk.sessions.compact._formats import MemoryIndexEntry
+from trpc_agent_sdk.sessions.compact._formats import MemoryType
+from trpc_agent_sdk.sessions.compact._formats import memory_freshness
+from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
+from trpc_agent_sdk.sessions.compact._runtime import AdvancedMemoryRuntime
 
 from ._function_tool import FunctionTool
 

@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._config import AdvancedMemoryConfig
+from ._config import AdvancedCompactConfig
 
 _SAFE_COMPONENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -60,7 +60,7 @@ class MemoryScope:
 class AdvancedMemoryPaths:
     """Build all disk paths for long-term and session memory."""
 
-    config: AdvancedMemoryConfig
+    config: AdvancedCompactConfig
     scope: MemoryScope | None = None
 
     def for_scope(self, app_name: str, user_id: str) -> "AdvancedMemoryPaths":
@@ -162,6 +162,10 @@ class AdvancedMemoryPaths:
             return str(local_path)
         if self.scope is None:
             raise ValueError("A scoped path is required for non-local memory storage")
+        if resource == "session_memory":
+            return ("session-state://"
+                    f"{self.scope.app_name}/{self.scope.user_id}/{session_id}/"
+                    "_trpc_agent:summary")
 
         app_component = self.tenant_root_dir.parent.name
         user_component = self.tenant_root_dir.name
@@ -176,8 +180,6 @@ class AdvancedMemoryPaths:
                 session_base = f"{self.config.redis_key_prefix}:{{{app_component}:{user_component}:{safe_session_id}}}"
                 if resource == "transcript":
                     key = f"{session_base}:transcript"
-                elif resource == "session_memory":
-                    key = f"{session_base}:summary"
                 else:
                     key = f"{session_base}:tool:{result_id}"
             return f"advanced-memory://redis/{key}"
@@ -190,8 +192,6 @@ class AdvancedMemoryPaths:
             suffix = f"memory/topic/{local_path.name}"
         elif resource == "transcript":
             suffix = f"{session_id}/transcript"
-        elif resource == "session_memory":
-            suffix = f"{session_id}/summary"
         else:
             suffix = f"{session_id}/tool/{self.tool_result_path(session_id or '', result_id or '').stem}"
         return f"advanced-memory://sql/{app_name}/{user_id}/{suffix}"

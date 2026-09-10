@@ -218,6 +218,10 @@ class TokenContextTracker:
         """Reuse the same estimator for non-request inputs such as session memory."""
         return self._estimator.estimate_payload_tokens(payload)
 
+    def estimate_request_tokens(self, request: "LlmRequest") -> int:
+        """Estimate a complete request without applying a usage baseline."""
+        return self._estimate_request(request)
+
     def token_mode_enabled(self, ctx: "InvocationContext | None" = None) -> bool:
         """Return whether the configuration resolves a model context window."""
         return self._resolve_window_tokens(ctx) is not None

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ._paths import MemoryScope
-from ._runtime import ScopedAdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact._paths import MemoryScope
+from trpc_agent_sdk.sessions.compact._runtime import ScopedAdvancedMemoryRuntime
 
 
 class AdvancedMemoryStorageBackend(Protocol):

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryPaths
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
 from trpc_agent_sdk.tools import AdvancedMemoryTools
@@ -17,7 +17,7 @@ from trpc_agent_sdk.tools import create_advanced_memory_tools
 
 def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     """Create a test runtime with long-term memory enabled."""
-    return AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
+    return AdvancedMemoryRuntime.create(AdvancedCompactConfig(
         enabled=True,
         root_dir=tmp_path,
     )).for_scope("demo-app", "demo-user")
@@ -80,7 +80,7 @@ async def test_list_memory_index_reports_backend_storage_reference(
     expected_prefix: str,
 ) -> None:
     """Avoid exposing a local filesystem path for external memory stores."""
-    config = AdvancedMemoryConfig(
+    config = AdvancedCompactConfig(
         storage_backend=storage_backend,
         redis_url="redis://localhost:6379/0" if storage_backend == "redis" else None,
         sql_url="sqlite:///advanced-memory.db" if storage_backend == "sql" else None,

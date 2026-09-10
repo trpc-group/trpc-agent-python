@@ -2,14 +2,14 @@
 
 本示例使用 SQL 保存 Advanced Memory，并验证同一用户的长期 memory 可以跨 Python 进程和不同 session 读取。
 
-- SQL：`SqlSessionService` + `AdvancedMemoryService`
+- SQL：`AdvancedMemoryService(storage_backend="sql")`
 
 ```text
-SqlSessionService
-└── Session、app state、user state
+AdvancedMemoryService
+└── SQL 保存长期 memory index 和 topic
 
-AdvancedMemoryService(storage_backend="sql")
-└── 长期 memory、session memory、transcript、tool result
+Runner
+└── InMemorySessionService（仅用于运行示例）
 ```
 
 ## 配置
@@ -37,8 +37,7 @@ TRPC_AGENT_BASE_URL=your-base-url
 TRPC_AGENT_MODEL_NAME=your-model-name
 ```
 
-`M_TTL` 默认控制长期 memory 的过期时间，`SESSION_TTL` 控制 session 相关内容的过期时间，
-单位都是秒。
+`M_TTL` 控制长期 memory 的过期时间，单位为秒。
 
 更多 Advanced Memory 配置请参考[Advanced Memory README](../memory_service_with_advanced_memory/README.md)。
 
@@ -88,42 +87,28 @@ SQL 版本最核心的构建过程可以简化为三步：
 sql_url = "mysql+aiomysql://user:password@localhost:3306/trpc_agent_advanced_memory"
 
 memory_service = AdvancedMemoryService(
-    AdvancedMemoryConfig(
+    AdvancedCompactConfig(
         storage_backend="sql",
         sql_url=sql_url,
         sql_is_async=True,
         memory_ttl_seconds=120,  # from M_TTL; omit to disable expiration
-        session_ttl_seconds=60,  # from SESSION_TTL; omit to disable expiration
     )
-)
-
-session_config = SessionServiceConfig(
-    ttl=SessionServiceConfig.create_ttl_config(
-        enable=True,
-        ttl_seconds=60,  # same value as SESSION_TTL
-        cleanup_interval_seconds=60,
-    )
-)
-session_service = SqlSessionService(
-    db_url=sql_url,
-    is_async=True,
-    session_config=session_config,
 )
 
 runner = Runner(
     app_name="advanced-memory-sql-demo",
     agent=create_agent(),
-    session_service=session_service,
+    session_service=InMemorySessionService(),
     memory_service=memory_service,
 )
 ```
 
 其中：
 
-- 用户只需要配置 `M_TTL` 和 `SESSION_TTL` 两个 TTL；
-- `AdvancedMemoryService` 负责长期 memory、session memory、transcript 和 tool result；
-- `SqlSessionService` 负责框架 Session、app state 和 user state；
-- `Runner` 将 Agent、Session Service 和 Memory Service 组合起来；
+- 用户只需要配置长期 Memory 的 `M_TTL`；
+- `AdvancedMemoryService` 只负责长期 memory；
+- Session Service 的 SQL 高级压缩接入请看
+  [`session_service_with_advanced_memory_sql`](../session_service_with_advanced_memory_sql/)；
 - 运行请求时通过 `user_id` 和 `session_id` 指定用户及会话；
 - 多个节点只要使用相同的 SQL 数据库、`app_name` 和 `user_id`，就能访问同一份长期 memory。
 
@@ -183,12 +168,7 @@ Advanced Memory 使用独立的表，不复用原始 `SqlMemoryService` 的 `mem
 ```text
 advanced_memory_indexes
 advanced_memory_topics
-advanced_memory_session_memory
-advanced_memory_transcripts
-advanced_memory_transcript_seen
-advanced_memory_tool_results
 ```
 
-Markdown 内容保存在 `TEXT` 字段；transcript 保存 JSON 字符串；
-`expires_at` 用于 SQL TTL。SQL 后端在读取时过滤过期数据，并在访问或写入时刷新
-同一用户或同一 session 下相关记录的过期时间。
+Markdown 内容保存在 `TEXT` 字段，`expires_at` 用于 Memory TTL。
+SQL 后端在读取时过滤过期数据，并在访问或写入时刷新同一用户的长期 Memory。

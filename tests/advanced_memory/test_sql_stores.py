@@ -4,19 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from trpc_agent_sdk.advanced_memory import (
-    AdvancedMemoryConfig,
+    AdvancedCompactConfig,
     AdvancedMemoryRuntime,
     MemoryDocument,
     MemoryIndexEntry,
     MemoryType,
-    SessionMemoryDocument,
 )
 
 
 def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     return AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             storage_backend="sql",
             sql_url=f"sqlite:///{tmp_path / 'advanced-memory.db'}",
             sql_is_async=False,
@@ -42,27 +43,55 @@ async def test_sql_stores_round_trip_and_deduplicate(tmp_path: Path) -> None:
             content="A user profile",
         ),
     )
-    await scoped.session_memory.write("session", SessionMemoryDocument(session_title="Test"))
     await scoped.tool_results.write("session", "result", '{"ok": true}')
-    await scoped.transcripts.append("session", {"event_id": "one"})
+    await scoped.transcripts.append(
+        "session",
+        {
+            "kind": "autocompact-failure",
+            "attempt_id": "one"
+        },
+    )
     _, first = await scoped.transcripts.append_unique(
         "session",
-        {"event_id": "two"},
-        unique_key="event_id",
+        {
+            "kind": "history-snip",
+            "snip_id": "two"
+        },
+        unique_key="snip_id",
     )
     _, second = await scoped.transcripts.append_unique(
         "session",
-        {"event_id": "two"},
-        unique_key="event_id",
+        {
+            "kind": "history-snip",
+            "snip_id": "two"
+        },
+        unique_key="snip_id",
     )
 
     assert first is True
     assert second is False
     assert "profile.md" in await scoped.long_term_memory.read_index()
     assert await scoped.long_term_memory.read_topic("profile")
-    assert await scoped.session_memory.read("session")
+    assert scoped.session_memory is None
     assert await scoped.tool_results.read("session", "result") == '{"ok": true}'
     assert len(await scoped.transcripts.read_all("session")) == 2
+
+    await root.close()
+
+
+async def test_sql_transcript_rejects_event_copies(tmp_path: Path) -> None:
+    root = _runtime(tmp_path)
+    scoped = root.for_scope("app", "user")
+    await scoped.initialize()
+
+    with pytest.raises(ValueError, match="context-compression"):
+        await scoped.transcripts.append(
+            "session",
+            {
+                "kind": "event",
+                "event_id": "event-1"
+            },
+        )
 
     await root.close()
 

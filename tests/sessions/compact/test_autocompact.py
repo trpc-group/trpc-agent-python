@@ -5,21 +5,22 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from trpc_agent_sdk.advanced_memory import AutoCompact
-from trpc_agent_sdk.advanced_memory import AutoCompactCallback
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import HistorySnipCallback
-from trpc_agent_sdk.advanced_memory import MicrocompactCallback
-from trpc_agent_sdk.advanced_memory import SessionMemoryDocument
-from trpc_agent_sdk.advanced_memory import setup_autocompact
-from trpc_agent_sdk.advanced_memory import setup_history_snip
-from trpc_agent_sdk.advanced_memory import setup_microcompact
-from trpc_agent_sdk.advanced_memory import setup_tool_result_budget
-from trpc_agent_sdk.advanced_memory import ToolResultBudgetCallback
+from trpc_agent_sdk.sessions.compact import AutoCompact
+from trpc_agent_sdk.sessions.compact import AutoCompactCallback
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact import HistorySnipCallback
+from trpc_agent_sdk.sessions.compact import MicrocompactCallback
+from trpc_agent_sdk.sessions.compact import SessionMemoryDocument
+from trpc_agent_sdk.sessions.compact import setup_autocompact
+from trpc_agent_sdk.sessions.compact import setup_history_snip
+from trpc_agent_sdk.sessions.compact import setup_microcompact
+from trpc_agent_sdk.sessions.compact import setup_tool_result_budget
+from trpc_agent_sdk.sessions.compact import ToolResultBudgetCallback
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.sessions import SessionServiceConfig
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
@@ -52,7 +53,7 @@ def _runtime(
 ) -> AdvancedMemoryRuntime:
     """Create an isolated runtime with small automatic-compaction limits."""
     return AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=enabled,
             root_dir=tmp_path,
             autocompact_trigger_chars=trigger,
@@ -114,10 +115,68 @@ async def test_legacy_compact_replaces_old_prefix_and_keeps_recent(tmp_path: Pat
     assert len(generator.histories) == 1
 
 
+async def test_compact_persists_summary_and_archives_replaced_events(tmp_path: Path) -> None:
+    """Ensure AutoCompact writes the compressed window through SessionService."""
+    runtime = _runtime(tmp_path)
+    service = InMemorySessionService(
+        session_config=SessionServiceConfig(store_historical_events=True),
+    )
+    session = await service.create_session(
+        app_name="demo-app",
+        user_id="demo-user",
+        session_id="session-a",
+    )
+    request = _request(5)
+    for index, content in enumerate(request.contents):
+        await service.append_event(
+            session,
+            Event(
+                id=f"event-{index}",
+                invocation_id="invocation-1",
+                author="user" if index % 2 == 0 else "agent",
+                content=content.model_copy(deep=True),
+            ),
+        )
+    ctx = SimpleNamespace(
+        session_id=session.id,
+        app_name=session.app_name,
+        session=session,
+        session_service=service,
+        agent=SimpleNamespace(model="fake-model"),
+    )
+
+    result = await AutoCompact(runtime, FakeSummaryGenerator()).apply(
+        request,
+        session_id=session.id,
+        ctx=ctx,
+        force=True,
+    )
+
+    assert result.compacted
+    restored = await service.get_session(
+        app_name=session.app_name,
+        user_id=session.user_id,
+        session_id=session.id,
+    )
+    assert restored is not None
+    assert restored.events[0].is_summary_event()
+    assert [event.id for event in restored.events[1:]] == ["event-3", "event-4"]
+    assert [event.id for event in restored.historical_events] == [
+        "event-0",
+        "event-1",
+        "event-2",
+    ]
+    assert not restored.compact_events(
+        Event(author="system", content=Content(parts=[Part.from_text(text="duplicate")])),
+        "event-2",
+        compaction_id=restored.events[0].custom_metadata["session_compaction_id"],
+    )
+
+
 async def test_token_budget_triggers_autocompact_and_records_diagnostics(tmp_path: Path) -> None:
     """Ensure token thresholds replace character thresholds and persist diagnostics."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=True,
             root_dir=tmp_path,
             autocompact_trigger_chars=100_000,
@@ -140,6 +199,40 @@ async def test_token_budget_triggers_autocompact_and_records_diagnostics(tmp_pat
     assert result.request_tokens_after < result.request_tokens_before
     records = await runtime.transcripts.read_all("session-a")
     assert records[-1]["request_tokens_before"] == result.request_tokens_before
+
+
+async def test_token_reduction_uses_consistent_full_request_estimates(tmp_path: Path) -> None:
+    """Do not compare a usage-based before value with an estimated after value."""
+    runtime = AdvancedMemoryRuntime.create(
+        AdvancedCompactConfig(
+            enabled=True,
+            root_dir=tmp_path,
+            model_context_window_tokens=20_000,
+            max_output_tokens=100,
+            token_warning_ratio=0.4,
+            token_autocompact_ratio=0.5,
+            autocompact_keep_recent_contents=2,
+        )).for_scope("demo-app", "demo-user")
+    request = _request(5)
+    ctx = _ctx()
+    ctx.session.events = [
+        SimpleNamespace(
+            content=request.contents[0].model_copy(deep=True),
+            usage_metadata=SimpleNamespace(total_token_count=12_000),
+            custom_metadata={},
+        ),
+    ]
+
+    result = await AutoCompact(runtime, FakeSummaryGenerator()).apply(
+        request,
+        session_id="session-a",
+        ctx=ctx,
+    )
+
+    assert result.compacted
+    assert result.request_tokens_after < result.request_tokens_before
+    assert result.request_tokens_before < 12_000
+    assert result.token_source == "estimated"
 
 
 async def test_session_memory_compact_avoids_summary_model_call(tmp_path: Path) -> None:

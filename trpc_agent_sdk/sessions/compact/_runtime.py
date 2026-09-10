@@ -14,7 +14,8 @@ import shutil
 import threading
 from typing import Any
 
-from ._config import AdvancedMemoryConfig
+from ._config import AdvancedCompactConfig
+from ._coordination import CrossLoopLock
 from ._coordination import SessionOperationCoordinator
 from ._paths import AdvancedMemoryPaths
 from ._paths import MemoryScope
@@ -29,11 +30,11 @@ from ._storage import TranscriptStore
 class AdvancedMemoryRuntime:
     """Aggregate configuration, paths, and the three storage objects."""
 
-    config: AdvancedMemoryConfig
+    config: AdvancedCompactConfig
     paths: AdvancedMemoryPaths
     coordination: SessionOperationCoordinator
     long_term_memory: LongTermMemoryStore
-    session_memory: SessionMemoryStore
+    session_memory: SessionMemoryStore | None
     tool_results: ToolResultStore
     transcripts: TranscriptStore
     _scoped_runtimes: dict[MemoryScope, "ScopedAdvancedMemoryRuntime"] = field(
@@ -50,11 +51,17 @@ class AdvancedMemoryRuntime:
     _sql_storage: Any | None = field(default=None, repr=False, compare=False)
     _sql_cleanup: Any | None = field(default=None, repr=False, compare=False)
     _local_cleanup: LocalAdvancedMemoryCleanup | None = field(default=None, repr=False, compare=False)
+    _close_lock: CrossLoopLock = field(
+        default_factory=CrossLoopLock,
+        repr=False,
+        compare=False,
+    )
+    _closed: bool = field(default=False, repr=False, compare=False)
 
     @classmethod
-    def create(cls, config: AdvancedMemoryConfig | None = None) -> "AdvancedMemoryRuntime":
+    def create(cls, config: AdvancedCompactConfig | None = None) -> "AdvancedMemoryRuntime":
         """Create a runtime isolated from the legacy mechanism."""
-        resolved_config = config or AdvancedMemoryConfig()
+        resolved_config = config or AdvancedCompactConfig()
         paths = AdvancedMemoryPaths(resolved_config)
         redis_storage = None
         sql_storage = None
@@ -81,7 +88,8 @@ class AdvancedMemoryRuntime:
             paths=paths,
             coordination=SessionOperationCoordinator(),
             long_term_memory=LongTermMemoryStore(resolved_config, paths),
-            session_memory=SessionMemoryStore(resolved_config, paths),
+            session_memory=(SessionMemoryStore(resolved_config, paths)
+                            if resolved_config.storage_backend == "local" else None),
             tool_results=ToolResultStore(resolved_config, paths),
             transcripts=TranscriptStore(resolved_config, paths),
             _redis_storage=redis_storage,
@@ -100,7 +108,6 @@ class AdvancedMemoryRuntime:
                 if self.config.storage_backend == "redis":
                     from trpc_agent_sdk.storage import RedisStorage
                     from ._redis_stores import RedisLongTermMemoryStore
-                    from ._redis_stores import RedisSessionMemoryStore
                     from ._redis_stores import RedisToolResultStore
                     from ._redis_stores import RedisTranscriptStore
 
@@ -109,19 +116,18 @@ class AdvancedMemoryRuntime:
                         is_async=self.config.redis_is_async,
                     )
                     long_term_memory = RedisLongTermMemoryStore(self.config, paths, storage)
-                    session_memory = RedisSessionMemoryStore(self.config, paths, storage)
+                    session_memory = None
                     tool_results = RedisToolResultStore(self.config, paths, storage)
                     transcripts = RedisTranscriptStore(self.config, paths, storage)
                 elif self.config.storage_backend == "sql":
                     from ._sql_stores import SqlLongTermMemoryStore
-                    from ._sql_stores import SqlSessionMemoryStore
                     from ._sql_stores import SqlToolResultStore
                     from ._sql_stores import SqlTranscriptStore
                     storage = self._sql_storage
                     if storage is None:
                         raise RuntimeError("SQL Advanced Memory storage is not initialized")
                     long_term_memory = SqlLongTermMemoryStore(self.config, paths, storage)
-                    session_memory = SqlSessionMemoryStore(self.config, paths, storage)
+                    session_memory = None
                     tool_results = SqlToolResultStore(self.config, paths, storage)
                     transcripts = SqlTranscriptStore(self.config, paths, storage)
                 else:
@@ -189,14 +195,18 @@ class AdvancedMemoryRuntime:
 
     async def close(self) -> None:
         """Release shared external backend resources."""
-        if self._local_cleanup is not None:
-            await self._local_cleanup.close()
-        if self._redis_storage is not None:
-            await self._redis_storage.close()
-        if self._sql_storage is not None:
-            if self._sql_cleanup is not None:
-                await self._sql_cleanup.close()
-            await self._sql_storage.close()
+        async with self._close_lock:
+            if self._closed:
+                return
+            if self._local_cleanup is not None:
+                await self._local_cleanup.close()
+            if self._redis_storage is not None:
+                await self._redis_storage.close()
+            if self._sql_storage is not None:
+                if self._sql_cleanup is not None:
+                    await self._sql_cleanup.close()
+                await self._sql_storage.close()
+            object.__setattr__(self, "_closed", True)
 
 
 @dataclass(frozen=True)
@@ -207,12 +217,12 @@ class ScopedAdvancedMemoryRuntime:
     scope: MemoryScope
     paths: AdvancedMemoryPaths
     long_term_memory: LongTermMemoryStore
-    session_memory: SessionMemoryStore
+    session_memory: SessionMemoryStore | None
     tool_results: ToolResultStore
     transcripts: TranscriptStore
 
     @property
-    def config(self) -> AdvancedMemoryConfig:
+    def config(self) -> AdvancedCompactConfig:
         """Return the root runtime configuration."""
         return self.root.config
 
@@ -242,7 +252,7 @@ class ScopedAdvancedMemoryRuntime:
             session_dir = self.paths.session_dir(session_id)
             await asyncio.to_thread(shutil.rmtree, session_dir, True)
             return
-        delete_session = getattr(self.session_memory, "delete_session", None)
+        delete_session = getattr(self.tool_results, "delete_session", None)
         if delete_session is None:
             raise RuntimeError("Configured Advanced Memory backend cannot delete sessions")
         await delete_session(session_id)

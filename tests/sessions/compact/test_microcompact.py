@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import Microcompact
-from trpc_agent_sdk.advanced_memory import MicrocompactCallback
-from trpc_agent_sdk.advanced_memory import setup_microcompact
-from trpc_agent_sdk.advanced_memory import setup_tool_result_budget
-from trpc_agent_sdk.advanced_memory import ToolResultBudgetCallback
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact import Microcompact
+from trpc_agent_sdk.sessions.compact import MicrocompactCallback
+from trpc_agent_sdk.sessions.compact import setup_microcompact
+from trpc_agent_sdk.sessions.compact import setup_tool_result_budget
+from trpc_agent_sdk.sessions.compact import ToolResultBudgetCallback
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionResponse
@@ -29,7 +29,7 @@ def _runtime(
 ) -> AdvancedMemoryRuntime:
     """Create an isolated runtime with small mechanical-compaction limits."""
     return AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=enabled,
             root_dir=tmp_path,
             tool_result_max_chars=1_000,
