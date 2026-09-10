@@ -25,7 +25,7 @@ AdvancedMemoryService
 ## 核心组装
 
 ```python
-config = AdvancedCompactConfig(
+config = AdvancedMemoryServiceConfig(
     root_dir=Path(__file__).resolve().parent,
 )
 
@@ -33,14 +33,12 @@ session_service = InMemorySessionService(
     session_config=SessionServiceConfig(
         store_historical_events=True,
     ),
-)
-compact_manager = setup_advanced_session_compact(
-    agent,
-    session_service,
-    config,
+    session_compact_manager=AdvancedSessionCompactManager(
+        config=AdvancedCompactConfig(),
+    ),
 )
 
-memory_service = AdvancedMemoryService(runtime=compact_manager.runtime)
+memory_service = AdvancedMemoryService(config=config)
 runner = Runner(
     app_name="advanced_memory_demo",
     agent=agent,
@@ -49,11 +47,8 @@ runner = Runner(
 )
 ```
 
-Session Compact 与 Advanced Memory 可以共享一个 Runtime；Runtime 的 `close()`
-支持幂等调用，因此两个 Service 的正常关闭流程不会造成重复释放错误。
-
-也可以直接构造实现了 `BaseSessionCompactManager` 的自定义 Manager，并通过
-`session_compact_manager=` 注入标准 SessionService。
+Session Compact 与 Advanced Memory 使用独立配置和 Runtime。Compact 只使用
+SessionService 的 events、historical_events 和 state。
 
 ## 运行
 

@@ -32,7 +32,7 @@ from ._formats import SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
 from ._formats import build_session_memory_state
 from ._formats import parse_session_memory_state
-from ._runtime import AdvancedMemoryRuntime
+from ._runtime import SessionCompactRuntime
 from ._token_budget import TokenContextTracker
 
 if TYPE_CHECKING:
@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.abc import SessionServiceABC
     from trpc_agent_sdk.context import InvocationContext
 
-SESSION_MEMORY_CHECKPOINT_SCHEMA_VERSION = 1
 _SESSION_MEMORY_FIELDS = tuple(field.name for field in fields(SessionMemoryDocument))
 
 _SESSION_MEMORY_SECTION_GUIDANCE = "\n".join(
@@ -150,7 +149,7 @@ class SessionMemoryExtractionInput:
     """Bundle old memory and the visible conversation context.
 
     ``new_events`` is retained only for callers using the older generator
-    interface. The built-in extractor merges any recovered transcript events
+    interface. The built-in extractor merges any recovered Session Events
     into ``context_messages`` and leaves this compatibility field empty.
     """
 
@@ -342,7 +341,7 @@ class SessionMemoryExtractor:
 
     def __init__(
         self,
-        memory_runtime: AdvancedMemoryRuntime,
+        memory_runtime: SessionCompactRuntime,
         generator: SessionMemoryGenerator | None = None,
         *,
         model: Any | None = None,
@@ -359,14 +358,9 @@ class SessionMemoryExtractor:
         self._session_service = session_service
 
     @property
-    def runtime(self) -> AdvancedMemoryRuntime:
+    def runtime(self) -> SessionCompactRuntime:
         """Return the runtime bound to this extractor."""
         return self._runtime
-
-    @property
-    def uses_session_state(self) -> bool:
-        """Return whether this backend stores Session Memory in Session.state."""
-        return self._runtime.config.storage_backend in {"redis", "sql"}
 
     def attach_session_service(self, session_service: "SessionServiceABC") -> None:
         """Attach the service used for atomic state-only writes."""
@@ -412,7 +406,7 @@ class SessionMemoryExtractor:
         checkpoint_event_id: str | None,
         checkpoint_recorded_at: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return Event transcript records after the checkpoint in order."""
+        """Return Session Event records after the checkpoint in order."""
         event_records = [record for record in records if record.get("kind") == "event"]
         if checkpoint_event_id is None:
             return event_records
@@ -432,24 +426,14 @@ class SessionMemoryExtractor:
                 )
                 return recovered
         logger.warning(
-            "Session memory checkpoint %s is missing from transcript; "
+            "Session memory checkpoint %s is missing from active events; "
             "skipping extraction to avoid replaying the full history",
             checkpoint_event_id,
         )
         return []
 
-    def _last_checkpoint(
-        self,
-        records: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
-        """Restore the latest successful session-memory checkpoint."""
-        for record in reversed(records):
-            if record.get("kind") == "session-memory-checkpoint" and isinstance(record.get("last_event_id"), str):
-                return record
-        return None
-
     def _serialized_record(self, record: dict[str, Any]) -> str:
-        """Serialize one transcript record as stable extraction text."""
+        """Serialize one Session Event record as stable extraction text."""
         return json.dumps(
             record,
             ensure_ascii=False,
@@ -538,7 +522,7 @@ class SessionMemoryExtractor:
         return sum(len(self._serialized_record(record)) for record in records)
 
     def _count_tool_calls(self, records: list[dict[str, Any]]) -> int:
-        """Count model-initiated function calls in a transcript increment."""
+        """Count model-initiated function calls in a Session Event increment."""
         count = 0
         for record in records:
             parts = record.get("event", {}).get("content", {}).get("parts", [])
@@ -553,7 +537,7 @@ class SessionMemoryExtractor:
         return self._event_has_tool_call(records[-1])
 
     def _event_has_tool_call(self, record: dict[str, Any]) -> bool:
-        """Return whether one transcript Event contains a function call."""
+        """Return whether one Session Event contains a function call."""
         parts = record.get("event", {}).get("content", {}).get("parts", [])
         return any(isinstance(part, dict) and (part.get("function_call") or part.get("functionCall")) for part in parts)
 
@@ -659,17 +643,9 @@ class SessionMemoryExtractor:
         return [], None
 
     async def _read_current_memory(self, session: "SessionABC") -> str:
-        """Read old session memory or return the complete empty template."""
-        if self.uses_session_state:
-            parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
-            if parsed is not None:
-                return parsed[0].to_markdown()
-            return SessionMemoryDocument().to_markdown()
-        store = self._runtime.for_session(session).session_memory
-        if store is None:
-            raise RuntimeError("Session Memory store is unavailable")
-        current = await store.read(session.id)
-        return current if current is not None else SessionMemoryDocument().to_markdown()
+        """Read Session Memory from the SessionService-owned state."""
+        parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
+        return parsed[0].to_markdown() if parsed is not None else SessionMemoryDocument().to_markdown()
 
     def _state_checkpoint(
         self,
@@ -735,49 +711,31 @@ class SessionMemoryExtractor:
             document.key_results,
             document.worklog,
         )
-        if self.uses_session_state:
-            if self._session_service is None:
-                raise RuntimeError("Redis/SQL Session Memory requires a SessionService")
-            boundary = self._boundary_for_event(session, last_event_id)
-            if boundary is None:
-                raise ValueError(f"Session Memory boundary Event {last_event_id} has no visible content")
-            signature, occurrence = boundary
-            checkpoint = {
-                "first_event_id": first_event_id,
-                "last_event_id": last_event_id,
-                "recorded_at": included_records[-1].get("recorded_at"),
-                "last_event_timestamp": included_records[-1].get("event", {}).get("timestamp"),
-                "boundary_signature": signature,
-                "boundary_occurrence": occurrence,
-                "processed_events": len(included_records),
-                "non_empty_sections": sum(1 for value in values if value.strip()),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-            payload = build_session_memory_state(
-                document,
-                checkpoint=checkpoint,
-                context_tokens=context_tokens,
-            )
-            await self._session_service.patch_session_state(
-                session,
-                {SESSION_MEMORY_STATE_KEY: payload},
-            )
-            return
-        runtime = self._runtime.for_session(session)
-        await runtime.transcripts.append_unique(
-            session.id,
-            {
-                "schema_version": SESSION_MEMORY_CHECKPOINT_SCHEMA_VERSION,
-                "kind": "session-memory-checkpoint",
-                "checkpoint_id": f"session-memory:{last_event_id}",
-                "first_event_id": first_event_id,
-                "last_event_id": last_event_id,
-                "processed_events": len(included_records),
-                "non_empty_sections": sum(1 for value in values if value.strip()),
-                "session_memory_chars": len(document.to_markdown()),
-                "context_tokens": context_tokens,
-            },
-            unique_key="checkpoint_id",
+        if self._session_service is None:
+            raise RuntimeError("Session Memory requires a SessionService")
+        boundary = self._boundary_for_event(session, last_event_id)
+        if boundary is None:
+            raise ValueError(f"Session Memory boundary Event {last_event_id} has no visible content")
+        signature, occurrence = boundary
+        checkpoint = {
+            "first_event_id": first_event_id,
+            "last_event_id": last_event_id,
+            "recorded_at": included_records[-1].get("recorded_at"),
+            "last_event_timestamp": included_records[-1].get("event", {}).get("timestamp"),
+            "boundary_signature": signature,
+            "boundary_occurrence": occurrence,
+            "processed_events": len(included_records),
+            "non_empty_sections": sum(1 for value in values if value.strip()),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        payload = build_session_memory_state(
+            document,
+            checkpoint=checkpoint,
+            context_tokens=context_tokens,
+        )
+        await self._session_service.patch_session_state(
+            session,
+            {SESSION_MEMORY_STATE_KEY: payload},
         )
 
     async def extract_if_needed(
@@ -792,19 +750,12 @@ class SessionMemoryExtractor:
         if not config.enabled or not config.session_memory_enabled:
             return SessionMemoryExtractionResult(False, "disabled")
         runtime = self._runtime.for_session(session)
-        await runtime.initialize()
         session_key = runtime.session_key(session.id)
         async with self._runtime.coordination.guard(session_key) as acquired:
             if not acquired:
                 return SessionMemoryExtractionResult(False, "coordination-timeout")
-            if self.uses_session_state:
-                records = self._session_event_records(session)
-                checkpoint, checkpoint_context_tokens = self._state_checkpoint(session)
-            else:
-                records = await runtime.transcripts.read_all(session.id)
-                checkpoint = self._last_checkpoint(records)
-                checkpoint_context_tokens = (checkpoint.get("context_tokens") if checkpoint is not None
-                                             and isinstance(checkpoint.get("context_tokens"), int) else None)
+            records = self._session_event_records(session)
+            checkpoint, checkpoint_context_tokens = self._state_checkpoint(session)
             checkpoint_event_id = checkpoint["last_event_id"] if checkpoint is not None else None
             checkpoint_recorded_at = checkpoint.get("recorded_at") if checkpoint is not None else None
             pending = self._event_records_after_checkpoint(
@@ -851,10 +802,6 @@ class SessionMemoryExtractor:
                     max_chars=config.session_memory_section_max_chars,
                     total_max_chars=config.session_memory_total_max_chars,
                 )
-                if not self.uses_session_state:
-                    if runtime.session_memory is None:
-                        raise RuntimeError("Session Memory store is unavailable")
-                    await runtime.session_memory.write(session.id, document)
                 await self._persist_checkpoint(
                     session,
                     included,

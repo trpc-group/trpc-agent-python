@@ -15,16 +15,13 @@
 
 ```text
 AdvancedCompactConfig
-        ↓ Runner 自动创建
+        ↓ AdvancedSessionCompactManager
 RedisSessionService
 ├── AdvancedSessionCompactManager
 ├── events: summary + recent Events
 ├── historical_events: 被压缩的原始 Events
 └── state["_trpc_agent:summary"]
 
-AdvancedMemoryRuntime
-├── 精简 compression transcript
-└── 完整 Tool Result 旁路存储
 ```
 
 核心调用：
@@ -34,7 +31,6 @@ session_config = SessionServiceConfig(
     store_historical_events=True,
 )
 compact_config = AdvancedCompactConfig(
-    redis_key_prefix="session-compression-demo:v1",
     model_context_window_tokens=4096,
     token_autocompact_ratio=0.30,
 )
@@ -42,7 +38,7 @@ session_service = RedisSessionService(
     db_url=redis_url,
     is_async=True,
     session_config=session_config,
-    session_compact_config=compact_config,
+    session_compact_manager=AdvancedSessionCompactManager(config=compact_config),
 )
 
 runner = Runner(
@@ -52,9 +48,8 @@ runner = Runner(
 )
 ```
 
-`Runner` 会读取 `session_compact_config`，自动从 `RedisSessionService` 获取 URL 和
-异步模式，创建 `AdvancedSessionCompactManager` 并通过基类接口注入。
-用户不需要手动调用 `setup_advanced_session_compact`，也不需要直接创建 Manager。
+`RedisSessionService` 会接收 `session_compact_manager`。Compact 只使用 SessionService 的
+`events`、`historical_events` 和 `state`，不创建额外的 Redis 存储。
 
 ## 兼容已有 Session
 
@@ -97,13 +92,12 @@ python run_agent.py
 ```
 
 脚本默认使用 `simple-demo`，可通过 `SESSION_ID` 修改。重复运行可以验证
-活跃窗口、历史原始 Events、Session Memory 和完整 Tool Result 都能跨进程恢复。
+活跃窗口、历史原始 Events 和 Session Memory 都能跨进程恢复。
 
 运行结束会输出 `Active Events`、`Historical Events`、活跃窗口是否以 summary
 开头，以及 Session Memory state 是否存在，方便直接确认压缩是否触发。
 
 ## 存储职责
 
-- `RedisSessionService`：Session、活跃 Events、historical Events、state 和 Session Memory。
-- Advanced Memory Redis stores：压缩重放记录和完整 Tool Result。
-- Redis transcript 不保存 `kind=event`，也不保存 `session-memory-checkpoint`。
+- `RedisSessionService`：Session、活跃 Events、historical Events 和 state。
+- Compact 不创建独立的 Redis transcript、Tool Result 或 session-memory 存储。

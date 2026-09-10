@@ -14,7 +14,7 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -60,7 +60,7 @@ def sql_is_async() -> bool:
 def create_advanced_memory_service(sql_url: str) -> AdvancedMemoryService:
     """Create the long-term Advanced Memory service backed by SQL."""
     memory_ttl = os.getenv("M_TTL")
-    config = AdvancedCompactConfig(
+    config = AdvancedMemoryServiceConfig(
         storage_backend="sql",
         sql_url=sql_url,
         sql_is_async=sql_is_async(),

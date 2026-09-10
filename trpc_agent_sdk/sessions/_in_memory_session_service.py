@@ -54,7 +54,6 @@ from ._utils import merge_state
 
 if TYPE_CHECKING:
     from .compact._base_manager import BaseSessionCompactManager
-    from .compact._base_config import BaseSessionCompactConfig
 
 
 class SessionWithTTL(BaseModel):
@@ -114,12 +113,10 @@ class InMemorySessionService(BaseSessionService):
     def __init__(self,
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
                  session_config: Optional[SessionServiceConfig] = None,
-                 session_compact_config: "BaseSessionCompactConfig | None" = None,
                  session_compact_manager: BaseSessionCompactManager | None = None):
         super().__init__(
             summarizer_manager=summarizer_manager,
             session_config=session_config,
-            session_compact_config=session_compact_config,
             session_compact_manager=session_compact_manager,
         )
         # Storage with TTL support
@@ -227,11 +224,6 @@ class InMemorySessionService(BaseSessionService):
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
         if self._is_session_exist(app_name=app_name, user_id=user_id, session_id=session_id):
             del self._sessions[app_name][user_id][session_id]
-        await self._delete_session_compact_data(
-            app_name=app_name,
-            user_id=user_id,
-            session_id=session_id,
-        )
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:

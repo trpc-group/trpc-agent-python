@@ -230,10 +230,9 @@ class Runner:
 
         if isinstance(memory_service, AdvancedMemoryService):
             session_service = memory_service.bind(agent, session_service)
-        compact_config = getattr(session_service, "session_compact_config", None)
-        from trpc_agent_sdk.sessions.compact import BaseSessionCompactConfig
-        if isinstance(compact_config, BaseSessionCompactConfig):
-            compact_config.setup(agent, session_service)
+        compact_manager = getattr(session_service, "session_compact_manager", None)
+        if compact_manager is not None:
+            compact_manager.setup(agent)
         self.app_name = app_name
         self.agent = agent
         self.artifact_service = artifact_service

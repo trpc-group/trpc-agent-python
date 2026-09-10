@@ -12,11 +12,12 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.sessions import SessionServiceConfig
-from trpc_agent_sdk.sessions.compact import setup_advanced_session_compact
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedSessionCompactManager
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
@@ -30,13 +31,15 @@ def create_services(agent) -> tuple[InMemorySessionService, AdvancedMemoryServic
     memory_ttl = os.getenv("M_TTL")
     session_ttl = os.getenv("SESSION_TTL")
     session_ttl_seconds = int(session_ttl) if session_ttl else 0
-    config = AdvancedCompactConfig(
+    config = AdvancedMemoryServiceConfig(
         root_dir=Path(__file__).resolve().parent,
         memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
         session_ttl_seconds=session_ttl_seconds or None,
         memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
                                   "编程语言偏好、开发习惯和测试习惯。"),
     )
+    compact_config = AdvancedCompactConfig()
+    compact_manager = AdvancedSessionCompactManager(config=compact_config)
     session_service = InMemorySessionService(
         session_config=SessionServiceConfig(
             ttl=SessionServiceConfig.create_ttl_config(
@@ -46,13 +49,9 @@ def create_services(agent) -> tuple[InMemorySessionService, AdvancedMemoryServic
             ),
             store_historical_events=True,
         ),
+        session_compact_manager=compact_manager,
     )
-    compact_manager = setup_advanced_session_compact(
-        agent,
-        session_service,
-        config,
-    )
-    return session_service, AdvancedMemoryService(runtime=compact_manager.runtime)
+    return session_service, AdvancedMemoryService(config=config)
 
 
 async def run_turn(runner, *, user_id: str, session_id: str, prompt: str) -> None:

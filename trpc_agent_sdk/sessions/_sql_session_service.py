@@ -80,7 +80,6 @@ from ._utils import merge_state
 
 if TYPE_CHECKING:
     from .compact._base_manager import BaseSessionCompactManager
-    from .compact._base_config import BaseSessionCompactConfig
 
 
 def _event_field_or_default(field_name: str, value: Any) -> Any:
@@ -396,7 +395,6 @@ class SqlSessionService(BaseSessionService):
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
                  is_async: bool = False,
                  session_config: Optional[SessionServiceConfig] = None,
-                 session_compact_config: "BaseSessionCompactConfig | None" = None,
                  session_compact_manager: BaseSessionCompactManager | None = None,
                  **kwargs: Any):
         self._db_url = db_url
@@ -405,7 +403,6 @@ class SqlSessionService(BaseSessionService):
         super().__init__(
             summarizer_manager=summarizer_manager,
             session_config=session_config,
-            session_compact_config=session_compact_config,
             session_compact_manager=session_compact_manager,
         )
         if is_default_config:
@@ -557,11 +554,6 @@ class SqlSessionService(BaseSessionService):
             session_key = SqlKey(key=(app_name, user_id, session_id), storage_cls=StorageSession)
             await self._sql_storage.delete(sql_session, session_key, conditions)
             await self._sql_storage.commit(sql_session)
-        await self._delete_session_compact_data(
-            app_name=app_name,
-            user_id=user_id,
-            session_id=session_id,
-        )
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:

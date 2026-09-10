@@ -177,7 +177,7 @@ Redis 版本最核心的构建过程可以简化为三步：
 redis_url = "redis://:password@localhost:6379/0"
 
 memory_service = AdvancedMemoryService(
-    AdvancedCompactConfig(
+    AdvancedMemoryServiceConfig(
         storage_backend="redis",
         redis_url=redis_url,
         memory_ttl_seconds=120,  # from M_TTL; omit to disable expiration

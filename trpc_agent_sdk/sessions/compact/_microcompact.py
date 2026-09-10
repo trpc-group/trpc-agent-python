@@ -15,7 +15,7 @@ from typing import Any
 from typing import TYPE_CHECKING
 
 from ._callbacks import install_staged_callback
-from ._runtime import AdvancedMemoryRuntime
+from ._runtime import SessionCompactRuntime
 from ._tool_result_budget import is_budget_replacement_response
 from ._tool_result_budget import serialize_tool_response
 from ._tool_result_budget import stable_tool_result_id
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.context import InvocationContext
     from trpc_agent_sdk.models import LlmRequest
 
-MICROCOMPACT_SCHEMA_VERSION = 1
 MICROCOMPACT_CLEARED_MESSAGE = "[Old tool result content cleared]"
 
 
@@ -75,7 +74,7 @@ def find_last_assistant_timestamp(ctx: "InvocationContext") -> float | None:
 class Microcompact:
     """Local compressor that cleans old tool results by time or count."""
 
-    def __init__(self, memory_runtime: AdvancedMemoryRuntime) -> None:
+    def __init__(self, memory_runtime: SessionCompactRuntime) -> None:
         """Initialize mechanical-compaction state and per-session locks."""
         self._runtime = memory_runtime
         self._states: dict[str, MicrocompactState] = {}
@@ -83,7 +82,7 @@ class Microcompact:
         self._scoped_processors: dict[object, "Microcompact"] = {}
 
     @property
-    def runtime(self) -> AdvancedMemoryRuntime:
+    def runtime(self) -> SessionCompactRuntime:
         """Return the runtime bound to this mechanical compressor."""
         return self._runtime
 
@@ -97,25 +96,14 @@ class Microcompact:
         return lock
 
     async def _load_state(self, session_id: str) -> MicrocompactState:
-        """Restore cleaned tool-result identifiers from the transcript."""
+        """Return process-local microcompact state."""
         state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
         state = self._states.get(state_key)
         if state is not None:
             return state
-        records = await self._runtime.transcripts.read_all(session_id)
-        cleared_ids: set[str] = set()
-        result_hashes: dict[str, str] = {}
-        for record in records:
-            result_id = record.get("result_id")
-            if record.get("kind") != "microcompact-clear" or not isinstance(result_id, str):
-                continue
-            cleared_ids.add(result_id)
-            original_sha256 = record.get("original_sha256")
-            if isinstance(original_sha256, str):
-                result_hashes[result_id] = original_sha256
         state = MicrocompactState(
-            cleared_ids=cleared_ids,
-            result_hashes=result_hashes,
+            cleared_ids=set(),
+            result_hashes={},
         )
         self._states[state_key] = state
         return state
@@ -152,29 +140,6 @@ class Microcompact:
         """Return the minimal placeholder shared by cleanups."""
         return {"output": MICROCOMPACT_CLEARED_MESSAGE}
 
-    async def _persist_clear(
-        self,
-        session_id: str,
-        candidate: MicrocompactCandidate,
-        trigger: str,
-    ) -> None:
-        """Persist the cleanup decision for restart recovery."""
-        await self._runtime.transcripts.append_unique(
-            session_id,
-            {
-                "schema_version": MICROCOMPACT_SCHEMA_VERSION,
-                "kind": "microcompact-clear",
-                "clear_id": f"microcompact:{candidate.result_id}",
-                "result_id": candidate.result_id,
-                "tool_name": candidate.tool_name,
-                "original_chars": candidate.original_size,
-                "original_sha256": candidate.original_sha256,
-                "trigger": trigger,
-                "cleared_response": self._cleared_response(),
-            },
-            unique_key="clear_id",
-        )
-
     async def apply(
         self,
         request: "LlmRequest",
@@ -189,7 +154,6 @@ class Microcompact:
         if not config.enabled or not config.microcompact_enabled:
             return MicrocompactResult(None, 0, 0, 0)
         if ctx is None or hasattr(self._runtime, "scope"):
-            await self._runtime.initialize()
             return await self._apply_scoped(
                 request,
                 session_id=session_id,
@@ -259,7 +223,6 @@ class Microcompact:
             cleared_size = len(serialize_tool_response(self._cleared_response()))
             chars_saved = 0
             for candidate in clear_candidates:
-                await self._persist_clear(session_id, candidate, trigger)
                 candidate.part.function_response.response = self._cleared_response()
                 state.cleared_ids.add(candidate.result_id)
                 state.result_hashes[candidate.result_id] = candidate.original_sha256
@@ -300,7 +263,7 @@ class MicrocompactCallback:
 
 def setup_microcompact(
     agent: "LlmAgent",
-    memory_runtime: AdvancedMemoryRuntime,
+    memory_runtime: SessionCompactRuntime,
 ) -> Microcompact:
     """Install the mechanical callback while preserving existing order."""
     microcompact = Microcompact(memory_runtime)

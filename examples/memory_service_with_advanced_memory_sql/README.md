@@ -87,7 +87,7 @@ SQL 版本最核心的构建过程可以简化为三步：
 sql_url = "mysql+aiomysql://user:password@localhost:3306/trpc_agent_advanced_memory"
 
 memory_service = AdvancedMemoryService(
-    AdvancedCompactConfig(
+    AdvancedMemoryServiceConfig(
         storage_backend="sql",
         sql_url=sql_url,
         sql_is_async=True,

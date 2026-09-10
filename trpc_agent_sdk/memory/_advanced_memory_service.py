@@ -19,7 +19,7 @@ from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.sessions import Session
 
 if TYPE_CHECKING:
-    from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+    from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
     from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
     from trpc_agent_sdk.advanced_memory import LongTermMemoryIntegration
 
@@ -28,24 +28,24 @@ class AdvancedMemoryService(BaseMemoryService):
     """Expose user-scoped long-term Memory through the Runner memory API.
 
     ``Runner`` calls :meth:`bind` automatically. Session compression is
-    configured independently with ``setup_context_compression``.
+    configured independently through ``SessionService.session_compact_manager``.
     """
 
     def __init__(
         self,
-        config: AdvancedCompactConfig | None = None,
+        config: AdvancedMemoryServiceConfig | None = None,
         *,
         runtime: AdvancedMemoryRuntime | None = None,
         preload_memory_model: Any | None = None,
         install_long_term_memory_tools: bool = True,
     ) -> None:
         """Create an Advanced Memory service without binding it to an agent."""
-        from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+        from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
         from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
 
         if config is not None and runtime is not None and config != runtime.config:
             raise ValueError("config and runtime must describe the same Advanced Memory configuration")
-        resolved_config = runtime.config if runtime is not None else (config or AdvancedCompactConfig())
+        resolved_config = runtime.config if runtime is not None else (config or AdvancedMemoryServiceConfig())
         super().__init__(MemoryServiceConfig(enabled=resolved_config.enabled))
         self._runtime = runtime or AdvancedMemoryRuntime.create(resolved_config)
         self._preload_memory_model = preload_memory_model
@@ -54,7 +54,7 @@ class AdvancedMemoryService(BaseMemoryService):
         self._bound_agent: Any | None = None
 
     @property
-    def config(self) -> AdvancedCompactConfig:
+    def config(self) -> AdvancedMemoryServiceConfig:
         """Return the Advanced Memory configuration."""
         return self._runtime.config
 

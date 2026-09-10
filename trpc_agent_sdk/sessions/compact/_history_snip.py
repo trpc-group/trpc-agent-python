@@ -15,7 +15,7 @@ from typing import Any
 from typing import TYPE_CHECKING
 
 from ._callbacks import install_staged_callback
-from ._runtime import AdvancedMemoryRuntime
+from ._runtime import SessionCompactRuntime
 from ._tool_result_budget import is_budget_replacement_response
 from ._tool_result_budget import serialize_tool_response
 from ._tool_result_budget import stable_tool_result_id
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.context import InvocationContext
     from trpc_agent_sdk.models import LlmRequest
 
-HISTORY_SNIP_SCHEMA_VERSION = 1
 HISTORY_SNIP_CLEARED_MESSAGE = "[Older tool result removed by history snip]"
 
 
@@ -84,7 +83,7 @@ def estimate_request_chars(request: "LlmRequest") -> int:
 class HistorySnip:
     """Mechanically remove the oldest tool results when the request is too large."""
 
-    def __init__(self, memory_runtime: AdvancedMemoryRuntime) -> None:
+    def __init__(self, memory_runtime: SessionCompactRuntime) -> None:
         """Initialize history-snip state and per-session async locks."""
         self._runtime = memory_runtime
         self._states: dict[str, HistorySnipState] = {}
@@ -92,7 +91,7 @@ class HistorySnip:
         self._scoped_processors: dict[object, "HistorySnip"] = {}
 
     @property
-    def runtime(self) -> AdvancedMemoryRuntime:
+    def runtime(self) -> SessionCompactRuntime:
         """Return the runtime bound to this history snipper."""
         return self._runtime
 
@@ -106,25 +105,14 @@ class HistorySnip:
         return lock
 
     async def _load_state(self, session_id: str) -> HistorySnipState:
-        """Restore prior history-snip decisions from the transcript."""
+        """Return process-local history-snip state."""
         state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
         state = self._states.get(state_key)
         if state is not None:
             return state
-        records = await self._runtime.transcripts.read_all(session_id)
-        snipped_ids: set[str] = set()
-        result_hashes: dict[str, str] = {}
-        for record in records:
-            result_id = record.get("result_id")
-            if record.get("kind") != "history-snip" or not isinstance(result_id, str):
-                continue
-            snipped_ids.add(result_id)
-            original_sha256 = record.get("original_sha256")
-            if isinstance(original_sha256, str):
-                result_hashes[result_id] = original_sha256
         state = HistorySnipState(
-            snipped_ids=snipped_ids,
-            result_hashes=result_hashes,
+            snipped_ids=set(),
+            result_hashes={},
         )
         self._states[state_key] = state
         return state
@@ -162,29 +150,6 @@ class HistorySnip:
         """Return the stable placeholder used by history snip."""
         return {"output": HISTORY_SNIP_CLEARED_MESSAGE}
 
-    async def _persist_snip(
-        self,
-        session_id: str,
-        candidate: HistorySnipCandidate,
-        trigger: str,
-    ) -> None:
-        """Persist the history-snip decision to the transcript."""
-        await self._runtime.transcripts.append_unique(
-            session_id,
-            {
-                "schema_version": HISTORY_SNIP_SCHEMA_VERSION,
-                "kind": "history-snip",
-                "snip_id": f"history-snip:{candidate.result_id}",
-                "result_id": candidate.result_id,
-                "tool_name": candidate.tool_name,
-                "original_chars": candidate.original_size,
-                "original_sha256": candidate.original_sha256,
-                "trigger": trigger,
-                "snipped_response": self._snipped_response(),
-            },
-            unique_key="snip_id",
-        )
-
     async def apply(
         self,
         request: "LlmRequest",
@@ -199,7 +164,6 @@ class HistorySnip:
             request_chars = estimate_request_chars(request)
             return HistorySnipResult(None, 0, 0, 0, request_chars, request_chars)
         if ctx is None or hasattr(self._runtime, "scope"):
-            await self._runtime.initialize()
             return await self._apply_scoped(request, session_id=session_id, ctx=ctx, force=force)
         runtime = self._runtime.for_session(ctx.session)
         processor = self._scoped_processors.get(runtime.scope)
@@ -271,7 +235,6 @@ class HistorySnip:
                 candidate_saving = max(0, candidate.original_size - replacement_size)
                 if candidate_saving == 0:
                     continue
-                await self._persist_snip(session_id, candidate, trigger)
                 candidate.part.function_response.response = self._snipped_response()
                 state.snipped_ids.add(candidate.result_id)
                 state.result_hashes[candidate.result_id] = candidate.original_sha256
@@ -317,7 +280,7 @@ class HistorySnipCallback:
 
 def setup_history_snip(
     agent: "LlmAgent",
-    memory_runtime: AdvancedMemoryRuntime,
+    memory_runtime: SessionCompactRuntime,
 ) -> HistorySnip:
     """Install history snip while preserving context stage order."""
     history_snip = HistorySnip(memory_runtime)

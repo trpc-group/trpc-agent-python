@@ -5,17 +5,17 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Optional long-term memory APIs."""
 
-from trpc_agent_sdk.sessions.compact._config import AdvancedCompactConfig
+from ._config import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.sessions.compact._formats import MemoryDocument
 from trpc_agent_sdk.sessions.compact._formats import MemoryIndexEntry
 from trpc_agent_sdk.sessions.compact._formats import MemoryType
 from trpc_agent_sdk.sessions.compact._formats import memory_freshness
 from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
-from trpc_agent_sdk.sessions.compact._paths import AdvancedMemoryPaths
-from trpc_agent_sdk.sessions.compact._paths import MemoryScope
-from trpc_agent_sdk.sessions.compact._runtime import AdvancedMemoryRuntime
-from trpc_agent_sdk.sessions.compact._runtime import ScopedAdvancedMemoryRuntime
-from trpc_agent_sdk.sessions.compact._storage import LongTermMemoryStore
+from ._paths import AdvancedMemoryPaths
+from ._paths import MemoryScope
+from ._runtime import AdvancedMemoryRuntime
+from ._runtime import ScopedAdvancedMemoryRuntime
+from ._storage import LongTermMemoryStore
 
 from ._integration import LongTermMemoryIntegration
 from ._integration import setup_long_term_memory
@@ -32,7 +32,7 @@ from ._storage_backend import LocalAdvancedMemoryStorageBackend
 
 __all__ = [
     "AdvancedMemoryStorageBackend",
-    "AdvancedCompactConfig",
+    "AdvancedMemoryServiceConfig",
     "LongTermMemoryIntegration",
     "AdvancedMemoryPaths",
     "AdvancedMemoryRuntime",

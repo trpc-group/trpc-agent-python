@@ -54,12 +54,9 @@ __all__ = [
     "State",
     "BaseSessionService",
     "BaseSessionCompactManager",
-    "BaseSessionCompactConfig",
     "AdvancedCompactConfig",
     "AdvancedSessionCompactManager",
     "AutoCompact",
-    "setup_advanced_session_compact",
-    "setup_context_compression",
     "HistoryRecord",
     "InMemorySessionService",
     "SessionWithTTL",
@@ -99,13 +96,10 @@ __all__ = [
 def __getattr__(name: str):
     """Lazily expose Advanced Memory without creating an import cycle."""
     if name in {
-        "AdvancedCompactConfig",
-        "AdvancedSessionCompactManager",
-        "AutoCompact",
-        "BaseSessionCompactManager",
-        "BaseSessionCompactConfig",
-        "setup_advanced_session_compact",
-        "setup_context_compression",
+            "AdvancedCompactConfig",
+            "AdvancedSessionCompactManager",
+            "AutoCompact",
+            "BaseSessionCompactManager",
     }:
         from . import compact
 

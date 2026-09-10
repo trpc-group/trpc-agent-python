@@ -32,7 +32,7 @@ from ._formats import SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
 from ._formats import parse_session_memory_state
 from ._history_snip import estimate_request_chars
-from ._runtime import AdvancedMemoryRuntime
+from ._runtime import SessionCompactRuntime
 from ._token_budget import TokenContextTracker
 
 if TYPE_CHECKING:
@@ -41,14 +41,13 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.models import LlmRequest
     from ._session_memory import SessionMemoryExtractor
 
-AUTOCOMPACT_SCHEMA_VERSION = 1
 AUTOCOMPACT_BLOCKED_MESSAGE = (
     "Automatic context compaction has failed repeatedly and the request is near the hard context limit. "
     "To avoid sending a request that will certainly fail, reduce the input, start a new session, "
     "or manually organize session memory before retrying.")
 AUTOCOMPACT_SUMMARY_PREFIX = """This session is being continued from a compacted context.
 The following summary contains the important information from earlier messages.
-The complete original events remain available in the session transcript.
+The complete original events remain available in the SessionService.
 
 """
 _LEGACY_SESSION_MEMORY_SECTION_LIST = "\n".join(f"- # {section}" for section in SESSION_MEMORY_SECTIONS)
@@ -229,7 +228,7 @@ class AutoCompact:
 
     def __init__(
         self,
-        memory_runtime: AdvancedMemoryRuntime,
+        memory_runtime: SessionCompactRuntime,
         summary_generator: LegacySummaryGenerator | None = None,
         *,
         model: Any | None = None,
@@ -246,7 +245,7 @@ class AutoCompact:
         self._scoped_processors: dict[object, "AutoCompact"] = {}
 
     @property
-    def runtime(self) -> AdvancedMemoryRuntime:
+    def runtime(self) -> SessionCompactRuntime:
         """Return the runtime bound to this compressor."""
         return self._runtime
 
@@ -269,36 +268,12 @@ class AutoCompact:
         return lock
 
     async def _load_state(self, session_id: str) -> AutoCompactState:
-        """Restore the latest compaction and failure count from the transcript."""
+        """Restore process-local compaction state."""
         state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
         state = self._states.get(state_key)
         if state is not None:
             return state
-        records = await self._runtime.transcripts.read_all(session_id)
-        latest: AutoCompactRecord | None = None
-        failures = 0
-        for record in records:
-            if record.get("kind") == "autocompact-success":
-                signature = record.get("boundary_signature")
-                occurrence = record.get("boundary_occurrence")
-                summary = record.get("summary")
-                source = record.get("source")
-                if (all(isinstance(value, str) for value in (signature, summary, source))
-                        and isinstance(occurrence, int) and occurrence > 0):
-                    latest = AutoCompactRecord(
-                        signature,
-                        occurrence,
-                        summary,
-                        source,
-                        record.get("boundary_event_id")
-                        if isinstance(record.get("boundary_event_id"), str) else None,
-                        record.get("compaction_id")
-                        if isinstance(record.get("compaction_id"), str) else None,
-                    )
-                    failures = 0
-            elif record.get("kind") == "autocompact-failure":
-                failures += 1
-        state = AutoCompactState(latest_compaction=latest, consecutive_failures=failures)
+        state = AutoCompactState(latest_compaction=None, consecutive_failures=0)
         self._states[state_key] = state
         return state
 
@@ -310,17 +285,11 @@ class AutoCompact:
         )
 
     def _summary_with_recovery_path(self, summary: str, session_id: str) -> str:
-        """Append recovery paths for the full transcript and session memory."""
-        if self._runtime.config.storage_backend in {"redis", "sql"}:
-            return (f"{summary.rstrip()}\n\n"
-                    "For exact content from before compaction, read the original "
-                    "SessionService Events. Current session memory is stored in "
-                    f"session.state[{SESSION_MEMORY_STATE_KEY!r}].")
+        """Tell the model where the authoritative compacted data lives."""
         return (f"{summary.rstrip()}\n\n"
-                "For exact content from before compaction, read the complete transcript: "
-                f"{self._runtime.paths.storage_reference('transcript', session_id=session_id)}\n"
-                "Current session memory: "
-                f"{self._runtime.paths.storage_reference('session_memory', session_id=session_id)}")
+                "For exact content from before compaction, read the original "
+                "SessionService Events. Current session memory is stored in "
+                f"session.state[{SESSION_MEMORY_STATE_KEY!r}].")
 
     def _find_signature_index(
         self,
@@ -415,65 +384,22 @@ class AutoCompact:
         session_id: str,
         ctx: "InvocationContext",
     ) -> tuple[str, str, int, str] | None:
-        """Read session memory and its checkpoint Event for model-free compaction."""
-        if self._runtime.config.storage_backend in {"redis", "sql"}:
-            parsed = parse_session_memory_state(ctx.session.state.get(SESSION_MEMORY_STATE_KEY))
-            if parsed is None:
-                return None
-            document, checkpoint, _ = parsed
-            signature = checkpoint.get("boundary_signature")
-            occurrence = checkpoint.get("boundary_occurrence")
-            event_id = checkpoint.get("last_event_id")
-            if (not isinstance(signature, str) or not isinstance(occurrence, int) or occurrence <= 0
-                    or not isinstance(event_id, str)):
-                return None
-            memory = document.to_markdown()
-            if memory.strip() == SessionMemoryDocument().to_markdown().strip():
-                return None
-            return memory, signature, occurrence, event_id
-        async with self._runtime.coordination.guard(
-                session_id,
-                timeout=self._runtime.config.session_memory_wait_timeout_seconds,
-        ) as acquired:
-            if not acquired:
-                return None
-            if self._runtime.session_memory is None:
-                return None
-            memory = await self._runtime.session_memory.read(session_id)
-            if memory is None or memory.strip() == SessionMemoryDocument().to_markdown().strip():
-                return None
-            records = await self._runtime.transcripts.read_all(session_id)
-        for record in reversed(records):
-            if record.get("kind") == "session-memory-checkpoint" and isinstance(record.get("last_event_id"), str):
-                boundary = self._event_content_signature(
-                    records,
-                    record["last_event_id"],
-                )
-                if boundary is not None:
-                    return memory, boundary[0], boundary[1], record["last_event_id"]
-        return None
-
-    def _event_content_signature(
-        self,
-        records: list[dict[str, Any]],
-        event_id: str,
-    ) -> tuple[str, int] | None:
-        """Recover a boundary signature and occurrence from transcript Events."""
-        signatures: list[str] = []
-        for record in records:
-            if record.get("kind") != "event":
-                continue
-            raw_content = record.get("event", {}).get("content")
-            if not isinstance(raw_content, dict):
-                continue
-            try:
-                signature = content_signature(Content.model_validate(raw_content))
-            except Exception:  # noqa: BLE001
-                return None
-            signatures.append(signature)
-            if record.get("event_id") == event_id:
-                return signature, signatures.count(signature)
-        return None
+        """Read Session Memory and its checkpoint from Session.state."""
+        state = getattr(ctx.session, "state", {})
+        parsed = parse_session_memory_state(state.get(SESSION_MEMORY_STATE_KEY) if isinstance(state, dict) else None)
+        if parsed is None:
+            return None
+        document, checkpoint, _ = parsed
+        signature = checkpoint.get("boundary_signature")
+        occurrence = checkpoint.get("boundary_occurrence")
+        event_id = checkpoint.get("last_event_id")
+        if (not isinstance(signature, str) or not isinstance(occurrence, int) or occurrence <= 0
+                or not isinstance(event_id, str)):
+            return None
+        memory = document.to_markdown()
+        if memory.strip() == SessionMemoryDocument().to_markdown().strip():
+            return None
+        return memory, signature, occurrence, event_id
 
     def _compact_with_summary(
         self,
@@ -525,9 +451,7 @@ class AutoCompact:
     def _legacy_boundary_event_id(self, ctx: "InvocationContext") -> str | None:
         """Choose a stable active-Event boundary for legacy compaction."""
         content_events = [
-            event
-            for event in (getattr(ctx.session, "events", []) or [])
-            if getattr(event, "content", None) is not None
+            event for event in (getattr(ctx.session, "events", []) or []) if getattr(event, "content", None) is not None
         ]
         if len(content_events) <= 1:
             return None
@@ -552,8 +476,8 @@ class AutoCompact:
         compact_events = getattr(ctx.session, "compact_events", None)
         if not callable(compact_events):
             # AutoCompact remains usable as a request-only primitive in unit
-            # tests and custom integrations. setup_context_compression always
-            # supplies the framework Session and persists the compacted window.
+            # tests and custom integrations. The standard Manager supplies
+            # the framework Session and persists the compacted window.
             return
 
         boundary_event_id = record.boundary_event_id or self._resolve_boundary_event_id(
@@ -626,67 +550,6 @@ class AutoCompact:
                 working = working[drop_count:]
         raise RuntimeError("Legacy autocompact summary failed after retries") from last_error
 
-    async def _persist_success(
-        self,
-        session_id: str,
-        record: AutoCompactRecord,
-        before_chars: int,
-        after_chars: int,
-        before_tokens: int | None = None,
-        after_tokens: int | None = None,
-        token_source: str | None = None,
-    ) -> None:
-        """Persist a successful compaction and reset the circuit-breaker count."""
-        compaction_id = record.compaction_id or f"autocompact:{uuid.uuid4().hex}"
-        await self._runtime.transcripts.append(
-            session_id,
-            {
-                "schema_version": AUTOCOMPACT_SCHEMA_VERSION,
-                "kind": "autocompact-success",
-                "compaction_id": compaction_id,
-                "boundary_signature": record.boundary_signature,
-                "boundary_occurrence": record.boundary_occurrence,
-                "boundary_event_id": record.boundary_event_id,
-                "summary": record.summary,
-                "source": record.source,
-                "request_chars_before": before_chars,
-                "request_chars_after": after_chars,
-                "request_tokens_before": before_tokens,
-                "request_tokens_after": after_tokens,
-                "token_source": token_source,
-            },
-        )
-
-    async def _persist_failure(
-        self,
-        session_id: str,
-        error: Exception,
-        failures: int,
-        token_budget: Any | None = None,
-    ) -> None:
-        """Persist failures so the circuit breaker survives a restart."""
-        await self._runtime.transcripts.append(
-            session_id,
-            {
-                "schema_version":
-                AUTOCOMPACT_SCHEMA_VERSION,
-                "kind":
-                "autocompact-failure",
-                "attempt_id":
-                f"autocompact:{uuid.uuid4().hex}",
-                "consecutive_failures":
-                failures,
-                "error":
-                str(error),
-                "request_tokens": (token_budget.estimate.tokens
-                                   if token_budget is not None and token_budget.token_mode_enabled else None),
-                "context_window_tokens": (token_budget.context_window_tokens
-                                          if token_budget is not None and token_budget.token_mode_enabled else None),
-                "token_source": (token_budget.estimate.source
-                                 if token_budget is not None and token_budget.token_mode_enabled else None),
-            },
-        )
-
     async def apply(
         self,
         request: "LlmRequest",
@@ -722,7 +585,6 @@ class AutoCompact:
         if not config.enabled or not config.autocompact_enabled:
             request_chars = estimate_request_chars(request)
             return AutoCompactResult(False, False, False, None, request_chars, request_chars, 0)
-        await self._runtime.initialize()
         async with self._session_lock(session_id):
             request.contents = [content.model_copy(deep=True) for content in request.contents]
             state = await self._load_state(session_id)
@@ -734,9 +596,7 @@ class AutoCompact:
             token_budget_before = tracker.budget(request, ctx)
             token_mode = token_budget_before.token_mode_enabled
             request_tokens_before = token_budget_before.estimate.tokens
-            comparison_tokens_before = (
-                tracker.estimate_request_tokens(request) if token_mode else None
-            )
+            comparison_tokens_before = (tracker.estimate_request_tokens(request) if token_mode else None)
             blocking_reached = (request_tokens_before >= token_budget_before.blocking_threshold_tokens
                                 if token_mode else request_chars_before >= config.autocompact_blocking_chars)
             if state.consecutive_failures >= config.autocompact_max_failures and blocking_reached:
@@ -775,7 +635,7 @@ class AutoCompact:
             original_contents = [content.model_copy(deep=True) for content in request.contents]
             try:
                 compact_record: AutoCompactRecord | None = None
-                if (self._session_memory_extractor is not None and self._session_memory_extractor.uses_session_state):
+                if self._session_memory_extractor is not None:
                     await self._session_memory_extractor.extract_if_needed(
                         ctx.session,
                         ctx,
@@ -809,9 +669,11 @@ class AutoCompact:
                             strict_boundary=True,
                             boundary_event_id=boundary_event_id,
                         )
-                        target_reached = (tracker.budget(
-                            request, ctx).estimate.tokens <= token_budget_before.warning_threshold_tokens if token_mode
-                                          else estimate_request_chars(request) <= config.autocompact_target_chars)
+                        if token_mode:
+                            target_reached = (tracker.budget(request, ctx).estimate.tokens
+                                              <= token_budget_before.warning_threshold_tokens)
+                        else:
+                            target_reached = estimate_request_chars(request) <= config.autocompact_target_chars
                         if not target_reached:
                             request.contents = [content.model_copy(deep=True) for content in original_contents]
                             compact_record = None
@@ -841,7 +703,6 @@ class AutoCompact:
                     )
 
                 request_chars_after = estimate_request_chars(request)
-                token_budget_after = tracker.budget(request, ctx)
                 if token_mode:
                     comparison_tokens_after = tracker.estimate_request_tokens(request)
                     if (comparison_tokens_after >= comparison_tokens_before
@@ -850,15 +711,6 @@ class AutoCompact:
                 elif request_chars_after >= request_chars_before:
                     raise ValueError("Autocompact did not reduce request size")
                 await self._persist_session_compaction(ctx, compact_record)
-                await self._persist_success(
-                    session_id,
-                    compact_record,
-                    request_chars_before,
-                    request_chars_after,
-                    comparison_tokens_before if token_mode else None,
-                    comparison_tokens_after if token_mode else None,
-                    "estimated" if token_mode else None,
-                )
                 state.latest_compaction = compact_record
                 state.consecutive_failures = 0
                 return AutoCompactResult(
@@ -876,12 +728,6 @@ class AutoCompact:
             except Exception as exc:  # noqa: BLE001
                 request.contents = original_contents
                 state.consecutive_failures += 1
-                await self._persist_failure(
-                    session_id,
-                    exc,
-                    state.consecutive_failures,
-                    token_budget_before,
-                )
                 blocked = state.consecutive_failures >= config.autocompact_max_failures and blocking_reached
                 return AutoCompactResult(
                     False,
@@ -937,7 +783,7 @@ class AutoCompactCallback:
 
 def setup_autocompact(
     agent: "ParentLlmAgent",
-    memory_runtime: AdvancedMemoryRuntime,
+    memory_runtime: SessionCompactRuntime,
     summary_generator: LegacySummaryGenerator | None = None,
     *,
     model: Any | None = None,
