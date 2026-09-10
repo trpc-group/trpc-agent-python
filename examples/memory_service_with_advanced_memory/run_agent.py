@@ -12,9 +12,11 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.memory import AdvancedMemoryConfig
-from trpc_agent_sdk.sessions import AdvancedMemorySessionService
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+from trpc_agent_sdk.memory import AdvancedMemoryService
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.sessions import SessionServiceConfig
+from trpc_agent_sdk.sessions.compact import setup_advanced_session_compact
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
@@ -23,25 +25,34 @@ from agent.agent import create_agent
 load_dotenv(Path(__file__).with_name(".env"))
 
 
-def create_session_service() -> AdvancedMemorySessionService:
-    """Create the persistent Advanced Memory session service."""
+def create_services(agent) -> tuple[InMemorySessionService, AdvancedMemoryService]:
+    """Create standard Session storage with Advanced Compact and Memory."""
     memory_ttl = os.getenv("M_TTL")
     session_ttl = os.getenv("SESSION_TTL")
     session_ttl_seconds = int(session_ttl) if session_ttl else 0
-    return AdvancedMemorySessionService(
-        config=AdvancedMemoryConfig(
-            root_dir=Path(__file__).resolve().parent,
-            memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
-            session_ttl_seconds=session_ttl_seconds or None,
-            memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
-                                      "编程语言偏好、开发习惯和测试习惯。"),
-        ),
-        session_config=SessionServiceConfig(ttl=SessionServiceConfig.create_ttl_config(
-            enable=bool(session_ttl),
-            ttl_seconds=session_ttl_seconds,
-            cleanup_interval_seconds=5,
-        ), ),
+    config = AdvancedCompactConfig(
+        root_dir=Path(__file__).resolve().parent,
+        memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
+        session_ttl_seconds=session_ttl_seconds or None,
+        memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
+                                  "编程语言偏好、开发习惯和测试习惯。"),
     )
+    session_service = InMemorySessionService(
+        session_config=SessionServiceConfig(
+            ttl=SessionServiceConfig.create_ttl_config(
+                enable=bool(session_ttl),
+                ttl_seconds=session_ttl_seconds,
+                cleanup_interval_seconds=5,
+            ),
+            store_historical_events=True,
+        ),
+    )
+    compact_manager = setup_advanced_session_compact(
+        agent,
+        session_service,
+        config,
+    )
+    return session_service, AdvancedMemoryService(runtime=compact_manager.runtime)
 
 
 async def run_turn(runner, *, user_id: str, session_id: str, prompt: str) -> None:
@@ -67,13 +78,14 @@ async def run_turn(runner, *, user_id: str, session_id: str, prompt: str) -> Non
 async def main() -> None:
     """Run two independent sessions sharing Advanced Memory."""
     agent = create_agent()
-    session_service = create_session_service()
+    session_service, memory_service = create_services(agent)
 
     from trpc_agent_sdk.runners import Runner
     runner = Runner(
         app_name="advanced_memory_demo",
         agent=agent,
         session_service=session_service,
+        memory_service=memory_service,
     )
     memory_ttl = os.getenv("M_TTL")
     memory_ttl_seconds = int(memory_ttl) if memory_ttl else 0

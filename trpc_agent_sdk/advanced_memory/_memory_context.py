@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._callbacks import install_staged_callback
-from ._runtime import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
+from trpc_agent_sdk.sessions.compact._runtime import AdvancedMemoryRuntime
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.agents import LlmAgent

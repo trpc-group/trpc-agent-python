@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import re
+from dataclasses import asdict
 from dataclasses import dataclass
+from dataclasses import fields
 from datetime import datetime
 from datetime import timezone
 from enum import Enum
@@ -137,6 +139,8 @@ SESSION_MEMORY_SECTIONS = (
     "Key results",
     "Worklog",
 )
+SESSION_MEMORY_STATE_KEY = "_trpc_agent:summary"
+SESSION_MEMORY_STATE_SCHEMA_VERSION = 1
 
 SESSION_MEMORY_SECTION_DESCRIPTIONS = (
     "A short and distinctive 5-10 word descriptive title for the session",
@@ -189,3 +193,53 @@ class SessionMemoryDocument:
             )
         ]
         return "\n\n".join(sections).rstrip() + "\n"
+
+
+def build_session_memory_state(
+    document: SessionMemoryDocument,
+    *,
+    checkpoint: dict[str, object],
+    context_tokens: int | None,
+) -> dict[str, object]:
+    """Build the versioned Session.state payload used by Redis and SQL."""
+    return {
+        "schema_version": SESSION_MEMORY_STATE_SCHEMA_VERSION,
+        "document": asdict(document),
+        "checkpoint": checkpoint,
+        "metrics": {
+            "session_memory_chars": len(document.to_markdown()),
+            "context_tokens": context_tokens,
+        },
+    }
+
+
+def parse_session_memory_state(
+    value: object, ) -> tuple[SessionMemoryDocument, dict[str, object], dict[str, object]] | None:
+    """Parse a persisted Session Memory state value."""
+    if not isinstance(value, dict):
+        return None
+    if value.get("schema_version") != SESSION_MEMORY_STATE_SCHEMA_VERSION:
+        return None
+    raw_document = value.get("document")
+    raw_checkpoint = value.get("checkpoint")
+    raw_metrics = value.get("metrics", {})
+    if not isinstance(raw_document, dict) or not isinstance(raw_checkpoint, dict):
+        return None
+    if (not isinstance(raw_checkpoint.get("last_event_id"), str)
+            or not isinstance(raw_checkpoint.get("boundary_signature"), str)
+            or not isinstance(raw_checkpoint.get("boundary_occurrence"), int)):
+        return None
+    if not isinstance(raw_metrics, dict):
+        raw_metrics = {}
+    allowed = {field.name for field in fields(SessionMemoryDocument)}
+    if (any(key not in allowed for key in raw_document)
+            or any(not isinstance(item, str) for item in raw_document.values())):
+        return None
+    try:
+        document = SessionMemoryDocument(**{
+            key: item
+            for key, item in raw_document.items() if key in allowed and isinstance(item, str)
+        })
+    except TypeError:
+        return None
+    return document, dict(raw_checkpoint), dict(raw_metrics)

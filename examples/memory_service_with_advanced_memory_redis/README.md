@@ -2,20 +2,20 @@
 
 本示例演示如何将 Advanced Memory 的本地文件存储切换为 Redis，并验证：
 
-- Redis：`RedisSessionService` + `AdvancedMemoryService`
+- Redis：`AdvancedMemoryService(storage_backend="redis")`
 - 长期 memory 可以跨 Python 进程持久化；
 - 同一用户在不同 `session_id` 中可以读取自己的长期 memory；
 - session 相关数据和长期 memory 可以分别设置 TTL；
 - Redis 中的 Markdown、Stream 和索引数据如何组织。
 
-示例使用两个服务：
+本示例只关注长期 Memory 的 Redis 持久化：
 
 ```text
-RedisSessionService
-└── 保存 Session、app state、user state
+AdvancedMemoryService
+└── Redis 保存长期 memory index 和 topic
 
-AdvancedMemoryService(storage_backend="redis")
-└── 保存长期 memory、session memory、transcript、tool result
+Runner
+└── InMemorySessionService（仅用于运行示例）
 ```
 
 ## 环境要求
@@ -115,17 +115,13 @@ REDIS_URL=redis://localhost:6379/0
 # 长期 memory 的 TTL，单位为秒
 M_TTL=120
 
-# 所有 session 相关内容的 TTL，单位为秒
-SESSION_TTL=60
 ```
 
 TTL 规则：
 
 - `M_TTL` 管理用户级长期 memory 的全部 Redis key；
-- `SESSION_TTL` 管理 session memory、transcript、tool result、去重 key；
-- `SESSION_TTL` 也传给 `RedisSessionService`，用于 Session 和 state；
 - TTL 会在访问或写入时刷新，是“最后一次活动后过期”；
-- 两个 TTL 必须设置为大于 0 的整数。
+- `M_TTL` 必须设置为大于 0 的整数。
 
 更多 Advanced Memory 配置请参考[Advanced Memory README](../memory_service_with_advanced_memory/README.md)。
 
@@ -181,41 +177,27 @@ Redis 版本最核心的构建过程可以简化为三步：
 redis_url = "redis://:password@localhost:6379/0"
 
 memory_service = AdvancedMemoryService(
-    AdvancedMemoryConfig(
+    AdvancedCompactConfig(
         storage_backend="redis",
         redis_url=redis_url,
         memory_ttl_seconds=120,  # from M_TTL; omit to disable expiration
-        session_ttl_seconds=60,  # from SESSION_TTL; omit to disable expiration
     )
-)
-
-session_config = SessionServiceConfig(
-    ttl=SessionServiceConfig.create_ttl_config(
-        enable=True,
-        ttl_seconds=60,  # same value as SESSION_TTL
-        cleanup_interval_seconds=60,
-    )
-)
-session_service = RedisSessionService(
-    db_url=redis_url,
-    is_async=True,
-    session_config=session_config,
 )
 
 runner = Runner(
     app_name="advanced-memory-redis-demo",
     agent=create_agent(),
-    session_service=session_service,
+    session_service=InMemorySessionService(),
     memory_service=memory_service,
 )
 ```
 
 其中：
 
-- 用户只需要配置 `M_TTL` 和 `SESSION_TTL` 两个 TTL；
-- `AdvancedMemoryService` 负责长期 memory、session memory、transcript 和 tool result；
-- `RedisSessionService` 负责框架 Session、app state 和 user state；
-- `Runner` 将 Agent、Session Service 和 Memory Service 组合起来；
+- 用户只需要配置长期 Memory 的 `M_TTL`；
+- `AdvancedMemoryService` 只负责长期 memory；
+- Session Service 的 Redis 高级压缩接入请看
+  [`session_service_with_advanced_memory_redis`](../session_service_with_advanced_memory_redis/)；
 - 运行请求时通过 `user_id` 和 `session_id` 指定用户及会话。
 
 ## 运行结果（实测）
@@ -297,30 +279,12 @@ TTL "advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:
 
 预期接近 `120`。
 
-session transcript：
-
-```redis
-TTL "advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user:redis-write-session}:transcript"
-```
-
-预期接近 `60`。
-
 TTL 含义：
 
 ```text
 -1  永不过期
 -2  key 不存在或已经过期
 大于 0  剩余秒数
-```
-
-观察 session key：
-
-```bash
-docker exec advanced-memory-redis redis-cli --scan \
-  --pattern 'advanced-memory-redis-demo:v1:*:summary'
-
-docker exec advanced-memory-redis redis-cli --scan \
-  --pattern 'advanced-memory-redis-demo:v1:*:transcript*'
 ```
 
 ## 清理测试数据
@@ -376,53 +340,3 @@ memory TTL registry：
 ```
 
 它记录该用户的所有长期 memory key，用于统一刷新 `M_TTL`。
-
-### session memory
-
-本地文件概念：
-
-```text
-SESSION/{session_id}/session_memory.md
-```
-
-Redis 映射：
-
-```text
-{prefix}:{app:user:session}:summary
-```
-
-类型是 Redis String，内容是 Markdown。
-
-### transcript
-
-本地文件概念：
-
-```text
-SESSION/{session_id}/transcript.jsonl
-```
-
-Redis 映射：
-
-```text
-{prefix}:{app:user:session}:transcript
-```
-
-类型是 Redis Stream，每条记录保存一份 JSON 数据。
-
-### transcript 去重和 tool result
-
-```text
-{prefix}:{app:user:session}:transcript:seen:{unique_key}
-{prefix}:{app:user:session}:tool:{result_id}
-```
-
-去重 key 使用 Set，tool result 使用 String。
-
-session TTL registry：
-
-```text
-{prefix}:{app:user:session}:keys
-```
-
-它记录该 session 下的 summary、transcript、tool result 等 key，用于统一刷新
-`SESSION_TTL`，避免同一个 session 的不同内容出现 TTL 不一致。

@@ -5,17 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import HistorySnip
-from trpc_agent_sdk.advanced_memory import HistorySnipCallback
-from trpc_agent_sdk.advanced_memory import Microcompact
-from trpc_agent_sdk.advanced_memory import MicrocompactCallback
-from trpc_agent_sdk.advanced_memory import setup_history_snip
-from trpc_agent_sdk.advanced_memory import setup_microcompact
-from trpc_agent_sdk.advanced_memory import setup_tool_result_budget
-from trpc_agent_sdk.advanced_memory import ToolResultBudgetCallback
-from trpc_agent_sdk.advanced_memory import ToolResultBudget
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact import HistorySnip
+from trpc_agent_sdk.sessions.compact import HistorySnipCallback
+from trpc_agent_sdk.sessions.compact import Microcompact
+from trpc_agent_sdk.sessions.compact import MicrocompactCallback
+from trpc_agent_sdk.sessions.compact import setup_history_snip
+from trpc_agent_sdk.sessions.compact import setup_microcompact
+from trpc_agent_sdk.sessions.compact import setup_tool_result_budget
+from trpc_agent_sdk.sessions.compact import ToolResultBudgetCallback
+from trpc_agent_sdk.sessions.compact import ToolResultBudget
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionResponse
@@ -33,7 +33,7 @@ def _runtime(
 ) -> AdvancedMemoryRuntime:
     """Create an isolated runtime with small history-snip limits."""
     return AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=enabled,
             root_dir=tmp_path,
             tool_result_max_chars=5_000,
@@ -85,7 +85,7 @@ async def test_token_budget_triggers_snip_without_character_pressure(tmp_path: P
     """Ensure a configured model window triggers cleanup by token warning."""
     request, _ = _request(4, output_size=1_000)
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=True,
             root_dir=tmp_path,
             tool_result_max_chars=10_000,
@@ -159,7 +159,7 @@ async def test_snipped_results_are_reapplied_after_restart(tmp_path: Path) -> No
 async def test_budget_recovery_pointer_survives_later_shrink_stages(tmp_path: Path, ) -> None:
     """Ensure snip and Microcompact preserve budget-generated result paths."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=True,
             root_dir=tmp_path,
             tool_result_max_chars=200,

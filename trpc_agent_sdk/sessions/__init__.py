@@ -53,7 +53,13 @@ __all__ = [
     "ListSessionsResponse",
     "State",
     "BaseSessionService",
-    "AdvancedMemorySessionService",
+    "BaseSessionCompactManager",
+    "BaseSessionCompactConfig",
+    "AdvancedCompactConfig",
+    "AdvancedSessionCompactManager",
+    "AutoCompact",
+    "setup_advanced_session_compact",
+    "setup_context_compression",
     "HistoryRecord",
     "InMemorySessionService",
     "SessionWithTTL",
@@ -92,8 +98,16 @@ __all__ = [
 
 def __getattr__(name: str):
     """Lazily expose Advanced Memory without creating an import cycle."""
-    if name == "AdvancedMemorySessionService":
-        from ._advanced_memory_session_service import AdvancedMemorySessionService
+    if name in {
+        "AdvancedCompactConfig",
+        "AdvancedSessionCompactManager",
+        "AutoCompact",
+        "BaseSessionCompactManager",
+        "BaseSessionCompactConfig",
+        "setup_advanced_session_compact",
+        "setup_context_compression",
+    }:
+        from . import compact
 
-        return AdvancedMemorySessionService
+        return getattr(compact, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

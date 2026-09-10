@@ -14,10 +14,10 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import SessionServiceConfig, SqlSessionService
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
 load_dotenv(Path(__file__).with_name(".env"))
@@ -58,32 +58,15 @@ def sql_is_async() -> bool:
 
 
 def create_advanced_memory_service(sql_url: str) -> AdvancedMemoryService:
-    """Create Advanced Memory backed by SQL."""
+    """Create the long-term Advanced Memory service backed by SQL."""
     memory_ttl = os.getenv("M_TTL")
-    session_ttl = os.getenv("SESSION_TTL")
-    config = AdvancedMemoryConfig(
+    config = AdvancedCompactConfig(
         storage_backend="sql",
         sql_url=sql_url,
         sql_is_async=sql_is_async(),
         memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
-        session_ttl_seconds=int(session_ttl) if session_ttl else None,
     )
     return AdvancedMemoryService(config)
-
-
-def create_sql_session_service(sql_url: str) -> SqlSessionService:
-    """Create the SQL-backed framework session service."""
-    session_ttl = os.getenv("SESSION_TTL")
-    ttl_seconds = int(session_ttl) if session_ttl else 0
-    return SqlSessionService(
-        db_url=sql_url,
-        is_async=sql_is_async(),
-        session_config=SessionServiceConfig(ttl=SessionServiceConfig.create_ttl_config(
-            enable=bool(session_ttl),
-            ttl_seconds=ttl_seconds,
-            cleanup_interval_seconds=ttl_seconds,
-        ), ),
-    )
 
 
 async def run_phase(phase: str) -> None:
@@ -92,7 +75,7 @@ async def run_phase(phase: str) -> None:
     runner = Runner(
         app_name="advanced-memory-sql-demo",
         agent=create_agent(),
-        session_service=create_sql_session_service(sql_url),
+        session_service=InMemorySessionService(),
         memory_service=create_advanced_memory_service(sql_url),
     )
     try:

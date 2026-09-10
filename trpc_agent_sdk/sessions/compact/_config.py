@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 from typing import Literal
 
+from ._base_config import BaseSessionCompactConfig
+
 DEFAULT_COMPACTABLE_TOOL_NAMES = (
     "Read",
     "Bash",
@@ -97,8 +99,8 @@ def _validate_path_components(values: tuple[str, ...]) -> None:
 
 
 @dataclass(frozen=True)
-class AdvancedMemoryConfig:
-    """Configure the independent memory directory and storage limits."""
+class AdvancedCompactConfig(BaseSessionCompactConfig):
+    """Configure Advanced Session Compact and its shared memory runtime."""
 
     enabled: bool = True
     root_dir: Path = field(default_factory=Path.cwd)
@@ -177,8 +179,22 @@ class AdvancedMemoryConfig:
     preload_memory_candidate_limit: int = 200
     session_ttl_delete_transcripts: bool = False
 
+    def setup(self, agent: Any, session_service: Any) -> Any:
+        """Create and attach the Advanced Session Compact manager."""
+        from ._integration import setup_advanced_session_compact
+
+        return setup_advanced_session_compact(
+            agent,
+            session_service,
+            self,
+        )
+
     def __post_init__(self) -> None:
         """Validate the configuration and normalize the root directory."""
+        if self.storage_backend not in {"local", "redis", "sql"}:
+            raise ValueError(
+                "storage_backend must be one of: local, redis, sql"
+            )
         if self.storage_backend == "redis" and not self.redis_url:
             raise ValueError("redis_url is required when storage_backend='redis'")
         if self.storage_backend == "sql" and not self.sql_url:

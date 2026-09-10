@@ -12,21 +12,21 @@ from pathlib import Path
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryPaths
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
 from trpc_agent_sdk.advanced_memory import MemoryDocument
 from trpc_agent_sdk.advanced_memory import MemoryIndexEntry
 from trpc_agent_sdk.advanced_memory import MemoryType
-from trpc_agent_sdk.advanced_memory import SESSION_MEMORY_SECTIONS
-from trpc_agent_sdk.advanced_memory import SessionMemoryDocument
 from trpc_agent_sdk.advanced_memory import memory_freshness
 from trpc_agent_sdk.advanced_memory import parse_memory_updated_at
+from trpc_agent_sdk.sessions.compact import SESSION_MEMORY_SECTIONS
+from trpc_agent_sdk.sessions.compact import SessionMemoryDocument
 
 
-def _enabled_config(tmp_path: Path, **overrides: object) -> AdvancedMemoryConfig:
+def _enabled_config(tmp_path: Path, **overrides: object) -> AdvancedCompactConfig:
     """Create an enabled configuration rooted at the test directory."""
-    return AdvancedMemoryConfig(enabled=True, root_dir=tmp_path, **overrides)
+    return AdvancedCompactConfig(enabled=True, root_dir=tmp_path, **overrides)
 
 
 def test_config_reads_context_window_from_environment(monkeypatch: pytest.MonkeyPatch, ) -> None:
@@ -34,7 +34,7 @@ def test_config_reads_context_window_from_environment(monkeypatch: pytest.Monkey
     monkeypatch.setenv("TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS", "128000")
     monkeypatch.setenv("TRPC_AGENT_MAX_OUTPUT_TOKENS", "8192")
 
-    config = AdvancedMemoryConfig()
+    config = AdvancedCompactConfig()
 
     assert config.model_context_window_tokens == 128_000
     assert config.max_output_tokens == 8_192
@@ -45,7 +45,7 @@ def test_config_rejects_invalid_context_window_environment(monkeypatch: pytest.M
     monkeypatch.setenv("TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS", "not-a-number")
 
     with pytest.raises(ValueError, match="TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS"):
-        AdvancedMemoryConfig()
+        AdvancedCompactConfig()
 
 
 def test_config_rejects_invalid_max_output_tokens_environment(monkeypatch: pytest.MonkeyPatch, ) -> None:
@@ -53,18 +53,36 @@ def test_config_rejects_invalid_max_output_tokens_environment(monkeypatch: pytes
     monkeypatch.setenv("TRPC_AGENT_MAX_OUTPUT_TOKENS", "-1")
 
     with pytest.raises(ValueError, match="TRPC_AGENT_MAX_OUTPUT_TOKENS"):
-        AdvancedMemoryConfig()
+        AdvancedCompactConfig()
+
+
+def test_config_rejects_unknown_storage_backend(tmp_path: Path) -> None:
+    """Prevent misspelled external backends from silently using local files."""
+    with pytest.raises(ValueError, match="storage_backend must be one of"):
+        AdvancedCompactConfig(
+            root_dir=tmp_path,
+            storage_backend="redisx",  # type: ignore[arg-type]
+        )
 
 
 async def test_disabled_runtime_does_not_create_directories(tmp_path: Path) -> None:
     """Ensure disabled runtime initialization creates no directories."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=False, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=False, root_dir=tmp_path))
 
     initialized = await runtime.initialize()
 
     assert initialized is False
     assert not (tmp_path / "MEMORY").exists()
     assert not (tmp_path / "SESSION").exists()
+
+
+async def test_runtime_close_is_idempotent(tmp_path: Path) -> None:
+    """Allow a shared Runtime to be closed by more than one service owner."""
+    runtime = AdvancedMemoryRuntime.create(_enabled_config(tmp_path))
+    await runtime.initialize()
+
+    await runtime.close()
+    await runtime.close()
 
 
 async def test_enabled_runtime_creates_expected_layout(tmp_path: Path) -> None:
@@ -310,7 +328,7 @@ async def test_transcript_read_waits_for_in_progress_append(
 
 async def test_memory_index_is_truncated_when_read_over_byte_budget(tmp_path: Path) -> None:
     """Ensure prompt reads respect the configured byte limit without rejecting writes."""
-    config = AdvancedMemoryConfig(
+    config = AdvancedCompactConfig(
         enabled=True,
         root_dir=tmp_path,
         memory_index_max_bytes=80,
@@ -400,7 +418,7 @@ def test_paths_sanitize_external_identifiers(tmp_path: Path) -> None:
 def test_config_rejects_nested_path_components(tmp_path: Path) -> None:
     """Ensure directory and file settings accept only safe path components."""
     with pytest.raises(ValueError, match="Invalid memory path component"):
-        AdvancedMemoryConfig(root_dir=tmp_path, memory_dir_name="../MEMORY")
+        AdvancedCompactConfig(root_dir=tmp_path, memory_dir_name="../MEMORY")
 
 
 def test_memory_freshness_uses_expected_buckets() -> None:

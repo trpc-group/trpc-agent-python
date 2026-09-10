@@ -14,10 +14,10 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import RedisSessionService, SessionServiceConfig
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
 load_dotenv(Path(__file__).with_name(".env"))
@@ -61,32 +61,15 @@ def build_redis_url_from_environment() -> str:
 
 
 def create_advanced_memory_service(redis_url: str) -> AdvancedMemoryService:
-    """Create Advanced Memory backed by the configured Redis instance."""
+    """Create the long-term Advanced Memory service backed by Redis."""
     memory_ttl = os.getenv("M_TTL")
-    session_ttl = os.getenv("SESSION_TTL")
-    config = AdvancedMemoryConfig(
+    config = AdvancedCompactConfig(
         storage_backend="redis",
         redis_url=redis_url,
         redis_key_prefix="advanced-memory-redis-demo:v1",
         memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
-        session_ttl_seconds=int(session_ttl) if session_ttl else None,
     )
     return AdvancedMemoryService(config)
-
-
-def create_redis_session_service(redis_url: str) -> RedisSessionService:
-    """Create session storage with the Advanced Memory session TTL."""
-    session_ttl = os.getenv("SESSION_TTL")
-    ttl_seconds = int(session_ttl) if session_ttl else 0
-    return RedisSessionService(
-        db_url=redis_url,
-        is_async=True,
-        session_config=SessionServiceConfig(ttl=SessionServiceConfig.create_ttl_config(
-            enable=bool(session_ttl),
-            ttl_seconds=ttl_seconds,
-            cleanup_interval_seconds=ttl_seconds,
-        ), ),
-    )
 
 
 async def ask(runner: Runner, session_id: str, prompt: str) -> None:
@@ -112,13 +95,11 @@ async def run_phase(phase: str) -> None:
     """Run Runner A or Runner B against the same Redis user."""
     app_name = "advanced-memory-redis-demo"
     redis_url = build_redis_url_from_environment()
-    memory_service = create_advanced_memory_service(redis_url)
-    session_service = create_redis_session_service(redis_url)
     runner = Runner(
         app_name=app_name,
         agent=create_agent(),
-        session_service=session_service,
-        memory_service=memory_service,
+        session_service=InMemorySessionService(),
+        memory_service=create_advanced_memory_service(redis_url),
     )
     try:
         queries = RUNNER_A_QUERIES if phase == "write" else RUNNER_B_QUERIES

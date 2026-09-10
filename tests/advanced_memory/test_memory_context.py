@@ -7,21 +7,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AutoCompactCallback
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import HistorySnipCallback
 from trpc_agent_sdk.advanced_memory import LongTermMemoryContext
 from trpc_agent_sdk.advanced_memory import LongTermMemoryContextCallback
 from trpc_agent_sdk.advanced_memory import MemoryIndexEntry
-from trpc_agent_sdk.advanced_memory import MicrocompactCallback
-from trpc_agent_sdk.advanced_memory import setup_advanced_memory
-from trpc_agent_sdk.advanced_memory import setup_context_management
-from trpc_agent_sdk.advanced_memory import ToolResultBudgetCallback
-from trpc_agent_sdk.advanced_memory import TranscriptSessionService
-from trpc_agent_sdk.advanced_memory._callbacks import install_staged_callback
+from trpc_agent_sdk.advanced_memory import setup_long_term_memory
+from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.sessions.compact import AutoCompactCallback
+from trpc_agent_sdk.sessions.compact import HistorySnipCallback
+from trpc_agent_sdk.sessions.compact import MicrocompactCallback
+from trpc_agent_sdk.sessions.compact import setup_context_compression
+from trpc_agent_sdk.sessions.compact import ToolResultBudgetCallback
+from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.sessions import SessionServiceConfig
 
 
 class FakeSummaryGenerator:
@@ -35,7 +36,7 @@ class FakeSummaryGenerator:
 
 def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     """Create a test runtime with long-term memory injection enabled."""
-    return AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
+    return AdvancedMemoryRuntime.create(AdvancedCompactConfig(
         enabled=True,
         root_dir=tmp_path,
     ))
@@ -107,7 +108,7 @@ async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
 async def test_custom_memory_focus_is_injected_into_system_instruction(tmp_path: Path) -> None:
     """Ensure applications can prioritize a custom long-term memory focus."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=True,
             root_dir=tmp_path,
             memory_focus_instruction="重点记住用户长期稳定的兴趣爱好。",
@@ -122,49 +123,47 @@ async def test_custom_memory_focus_is_injected_into_system_instruction(tmp_path:
     assert "重点记住用户长期稳定的兴趣爱好。" in instruction
 
 
-async def test_unified_setup_installs_complete_pipeline_in_order(tmp_path: Path) -> None:
-    """Ensure unified setup installs the five components in order."""
+async def test_context_setup_installs_four_compaction_stages(tmp_path: Path) -> None:
+    """Ensure Session compact setup installs only the four compact stages."""
     runtime = _runtime(tmp_path)
     agent = SimpleNamespace(before_model_callback=None)
+    session_service = InMemorySessionService(
+        session_config=SessionServiceConfig(store_historical_events=True),
+    )
 
-    components = setup_context_management(
+    setup_context_compression(
         agent,
+        session_service,
         runtime,
         FakeSummaryGenerator(),
     )
 
-    assert components.long_term_memory.runtime is runtime
-    assert isinstance(agent.before_model_callback[0], LongTermMemoryContextCallback)
-    assert isinstance(agent.before_model_callback[1], ToolResultBudgetCallback)
-    assert isinstance(agent.before_model_callback[2], HistorySnipCallback)
-    assert isinstance(agent.before_model_callback[3], MicrocompactCallback)
-    assert isinstance(agent.before_model_callback[4], AutoCompactCallback)
+    assert session_service.session_compact_manager.runtime is runtime
+    assert isinstance(agent.before_model_callback[0], ToolResultBudgetCallback)
+    assert isinstance(agent.before_model_callback[1], HistorySnipCallback)
+    assert isinstance(agent.before_model_callback[2], MicrocompactCallback)
+    assert isinstance(agent.before_model_callback[3], AutoCompactCallback)
+    await session_service.close()
 
 
-async def test_full_setup_wraps_session_service_and_is_idempotent(tmp_path: Path, ) -> None:
-    """Ensure unified setup assembles transcript, session memory, and callbacks."""
+async def test_explicit_memory_and_compact_setup_compose(tmp_path: Path, ) -> None:
+    """Ensure long-term memory and Session compact are composed explicitly."""
     runtime = _runtime(tmp_path)
     agent = SimpleNamespace(before_model_callback=None, tools=[])
-
-    first = setup_advanced_memory(
-        agent,
-        InMemorySessionService(),
-        runtime,
-        FakeSummaryGenerator(),
+    session_service = InMemorySessionService(
+        session_config=SessionServiceConfig(store_historical_events=True),
     )
-    second = setup_advanced_memory(
+    long_term = setup_long_term_memory(agent, runtime)
+    compact = setup_context_compression(
         agent,
-        first.session_service,
+        session_service,
         runtime,
         FakeSummaryGenerator(),
     )
 
-    assert isinstance(first.session_service, TranscriptSessionService)
-    assert first.session_memory_extractor.runtime is runtime
-    assert first.session_service.session_memory_extractor is first.session_memory_extractor
-    assert second.session_service is first.session_service
-    assert second.session_memory_extractor is first.session_memory_extractor
-    assert second.long_term_memory_tools is first.long_term_memory_tools
+    assert compact is session_service
+    assert session_service.session_compact_manager is not None
+    assert long_term.tools is not None
     assert len(agent.before_model_callback) == 5
     tool_names = {tool.name for tool in agent.tools}
     assert tool_names == {
@@ -174,9 +173,34 @@ async def test_full_setup_wraps_session_service_and_is_idempotent(tmp_path: Path
     }
 
 
+async def test_memory_service_does_not_install_session_compression(tmp_path: Path, ) -> None:
+    """Ensure the MemoryService leaves the supplied SessionService unchanged."""
+    runtime = _runtime(tmp_path)
+    memory_service = AdvancedMemoryService(runtime=runtime)
+    session_service = InMemorySessionService()
+    agent = SimpleNamespace(before_model_callback=None, tools=[])
+
+    bound = memory_service.bind(agent, session_service)
+
+    assert bound is session_service
+    assert len(agent.before_model_callback) == 1
+    assert isinstance(
+        agent.before_model_callback[0],
+        LongTermMemoryContextCallback,
+    )
+    assert {tool.name
+            for tool in agent.tools} == {
+                "save_memory",
+                "read_memory",
+                "list_memory_index",
+            }
+    await session_service.close()
+    await memory_service.close()
+
+
 async def test_disabled_runtime_does_not_modify_system_instruction(tmp_path: Path) -> None:
     """Ensure disabled runtime does not inject long-term memory."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=False, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedCompactConfig(enabled=False, root_dir=tmp_path))
     request = LlmRequest(model="test-model")
 
     applied = await LongTermMemoryContext(runtime).apply(request)

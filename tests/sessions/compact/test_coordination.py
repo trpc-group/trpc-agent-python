@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory._coordination import CrossLoopLock
+from trpc_agent_sdk.sessions.compact._coordination import CrossLoopLock
 
 
 @pytest.mark.asyncio

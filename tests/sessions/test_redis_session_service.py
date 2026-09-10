@@ -92,6 +92,20 @@ class _MockRedisStorage:
         elif method == 'hgetall':
             key = args[0]
             return self._hash_store.get(key, {})
+        elif method == 'eval':
+            key = args[2]
+            raw = self._store.get(key)
+            if raw is None:
+                return None
+            value = json.loads(raw)
+            value.setdefault("state", {}).update(json.loads(args[3]))
+            if "last_update_time" in value:
+                value["last_update_time"] = args[4]
+            if "lastUpdateTime" in value:
+                value["lastUpdateTime"] = args[4]
+            encoded = json.dumps(value)
+            self._store[key] = encoded
+            return encoded
         return None
 
     async def delete(self, session, key):
@@ -327,6 +341,76 @@ class TestRedisUpdateSession:
         await svc.update_session(session)
         stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
         assert stored.state.get("new_key") == "new_val"
+        await svc.close()
+
+    async def test_update_persists_compacted_active_and_historical_events(self):
+        config = _make_config(store_historical_events=True)
+        svc = _create_service(config=config)
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        original = [_make_event(text=f"msg{i}") for i in range(4)]
+        for event in original:
+            await svc.append_event(session, event)
+        summary = _make_event(author="system", text="summary")
+
+        assert session.compact_events(
+            summary,
+            original[1].id,
+            compaction_id="compact-1",
+        )
+        await svc.update_session(session)
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert stored is not None
+        assert stored.events[0].is_summary_event()
+        assert [event.id for event in stored.events[1:]] == [event.id for event in original[2:]]
+        assert [event.id for event in stored.historical_events] == [event.id for event in original[:2]]
+        await svc.close()
+
+    async def test_patch_state_preserves_stored_events(self):
+        svc = _create_service()
+        session = await svc.create_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+        )
+        await svc.append_event(session, _make_event(text="keep me"))
+
+        stale = session.model_copy(deep=True)
+        stale.events = []
+        await svc.patch_session_state(stale, {"_trpc_agent:summary": {"v": 1}})
+
+        stored = await svc.get_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+        )
+        assert [event.content.parts[0].text for event in stored.events] == ["keep me"]
+        assert stored.state["_trpc_agent:summary"] == {"v": 1}
+        await svc.close()
+
+    async def test_patch_state_repairs_lua_empty_array_encoding(self):
+        config = _make_config(store_historical_events=True)
+        svc = _create_service(config=config)
+        session = await svc.create_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+        )
+        key = "session:app:user:s1"
+        payload = json.loads(svc._redis_storage._store[key])
+        payload["historical_events"] = {}
+        svc._redis_storage._store[key] = json.dumps(payload)
+
+        loaded = await svc.get_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+        )
+        assert loaded is not None
+        assert loaded.historical_events == []
+
+        await svc.patch_session_state(loaded, {"_trpc_agent:summary": {"v": 1}})
+        assert loaded.state["_trpc_agent:summary"] == {"v": 1}
         await svc.close()
 
     async def test_update_nonexistent(self):

@@ -136,3 +136,53 @@ class Session(SessionABC):
         if idx is None:
             idx = 0
         self.events[idx:idx] = events
+
+    def compact_events(
+        self,
+        summary_event: Event,
+        boundary_event_id: str,
+        *,
+        compaction_id: str,
+    ) -> bool:
+        """Replace the active prefix through ``boundary_event_id`` with a summary.
+
+        The replaced active Events remain recoverable in ``historical_events``.
+        ``compaction_id`` makes retries idempotent when a persistence operation
+        succeeds but its caller does not observe the result.
+        """
+        for event in self.events:
+            metadata = event.custom_metadata or {}
+            if metadata.get("session_compaction_id") == compaction_id:
+                return False
+
+        boundary_index = next(
+            (index for index, event in enumerate(self.events) if event.id == boundary_event_id),
+            None,
+        )
+        if boundary_index is None:
+            raise ValueError(
+                f"Session compaction boundary Event {boundary_event_id!r} "
+                "is not in the active event window"
+            )
+
+        replaced = self.events[:boundary_index + 1]
+        if not replaced:
+            return False
+
+        metadata = dict(summary_event.custom_metadata or {})
+        metadata.update({
+            "session_compaction_id": compaction_id,
+            "session_compaction_boundary_event_id": boundary_event_id,
+        })
+        summary_event.custom_metadata = metadata
+        summary_event.set_summary_event(True)
+        # SQL backends restore active Events in timestamp order. Give the
+        # replacement summary the prefix's timestamp so it remains the anchor
+        # before every retained Event after persistence.
+        summary_event.timestamp = replaced[0].timestamp
+
+        historical_ids = {event.id for event in self.historical_events}
+        self.historical_events.extend(event for event in replaced if event.id not in historical_ids)
+        self.events = [summary_event, *self.events[boundary_index + 1:]]
+        self.last_update_time = max(self.last_update_time, summary_event.timestamp)
+        return True

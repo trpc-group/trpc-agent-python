@@ -8,11 +8,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import setup_tool_result_budget
-from trpc_agent_sdk.advanced_memory import ToolResultBudget
-from trpc_agent_sdk.advanced_memory import ToolResultBudgetCallback
+from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedMemoryRuntime
+from trpc_agent_sdk.sessions.compact import setup_tool_result_budget
+from trpc_agent_sdk.sessions.compact import ToolResultBudget
+from trpc_agent_sdk.sessions.compact import ToolResultBudgetCallback
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionResponse
@@ -29,7 +29,7 @@ def _runtime(
 ) -> AdvancedMemoryRuntime:
     """Create an isolated runtime with small test limits."""
     return AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedCompactConfig(
             enabled=enabled,
             root_dir=tmp_path,
             tool_result_max_chars=per_result,
@@ -72,7 +72,7 @@ async def test_single_large_result_is_persisted_and_replaced(tmp_path: Path) -> 
 
 async def test_sql_replacement_reports_sql_storage_path(tmp_path: Path) -> None:
     """Expose the path returned by the SQL tool-result store."""
-    root = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
+    root = AdvancedMemoryRuntime.create(AdvancedCompactConfig(
         enabled=True,
         storage_backend="sql",
         sql_url=f"sqlite:///{tmp_path / 'memory.db'}",

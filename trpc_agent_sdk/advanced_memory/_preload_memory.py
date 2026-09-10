@@ -21,12 +21,11 @@ from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.sessions.compact._formats import memory_freshness
+from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
+from trpc_agent_sdk.sessions.compact._runtime import AdvancedMemoryRuntime
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
-
-from ._formats import memory_freshness
-from ._formats import parse_memory_updated_at
-from ._runtime import AdvancedMemoryRuntime
 
 if TYPE_CHECKING:
     from trpc_agent_sdk.context import InvocationContext

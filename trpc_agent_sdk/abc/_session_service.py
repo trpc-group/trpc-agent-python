@@ -125,6 +125,19 @@ class SessionServiceABC(ABC):
             session: The session to update
         """
 
+    async def patch_session_state(
+        self,
+        session: SessionABC,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Atomically merge session-scoped state without replacing Events.
+
+        Session services that support Advanced Memory session summaries must
+        override this method. It is intentionally non-abstract so existing
+        third-party implementations remain source compatible.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support atomic session state patches")
+
     @abstractmethod
     async def create_session_summary(self, session: SessionABC, ctx: "InvocationContext" = None) -> None:
         """Summarize a session."""

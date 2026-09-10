@@ -394,6 +394,52 @@ class TestInMemoryUpdateSession:
         await svc.update_session(session)
         await svc.close()
 
+    async def test_update_persists_compacted_active_and_historical_events(self):
+        svc = InMemorySessionService(
+            session_config=_make_session_config(store_historical_events=True),
+        )
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        original = [_make_event(text=f"msg{i}") for i in range(4)]
+        for event in original:
+            await svc.append_event(session, event)
+        summary = _make_event(author="system", text="summary")
+
+        assert session.compact_events(
+            summary,
+            original[1].id,
+            compaction_id="compact-1",
+        )
+        await svc.update_session(session)
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert stored is not None
+        assert stored.events[0].is_summary_event()
+        assert [event.id for event in stored.events[1:]] == [event.id for event in original[2:]]
+        assert [event.id for event in stored.historical_events] == [event.id for event in original[:2]]
+        await svc.close()
+
+    async def test_patch_state_preserves_stored_events(self):
+        svc = InMemorySessionService(session_config=_make_session_config())
+        session = await svc.create_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+        )
+        await svc.append_event(session, _make_event(text="keep me"))
+        stale = session.model_copy(deep=True)
+        stale.events = []
+
+        await svc.patch_session_state(stale, {"_trpc_agent:summary": {"v": 1}})
+
+        stored = await svc.get_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+        )
+        assert [event.content.parts[0].text for event in stored.events] == ["keep me"]
+        assert stored.state["_trpc_agent:summary"] == {"v": 1}
+        await svc.close()
+
     async def test_update_nonexistent_app(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         session = Session(id="s1", app_name="nonexistent", user_id="user", save_key="k")

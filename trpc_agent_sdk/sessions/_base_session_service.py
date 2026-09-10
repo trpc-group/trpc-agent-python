@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from trpc_agent_sdk.abc import SessionServiceABC
@@ -36,6 +37,10 @@ from ._session import Session
 from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
 
+if TYPE_CHECKING:
+    from .compact import BaseSessionCompactManager
+    from .compact import BaseSessionCompactConfig
+
 
 class BaseSessionService(SessionServiceABC):
     """Abstract base class for session management services.
@@ -45,14 +50,25 @@ class BaseSessionService(SessionServiceABC):
 
     def __init__(self,
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
-                 session_config: Optional[SessionServiceConfig] = None):
+                 session_config: Optional[SessionServiceConfig] = None,
+                 session_compact_config: Optional["BaseSessionCompactConfig"] = None,
+                 session_compact_manager: Optional["BaseSessionCompactManager"] = None):
         """Initialize the base session service.
 
         Args:
             summarizer_manager: Optional summarizer manager for session summarization
             session_config: Optional session configuration
+            session_compact_config: Optional Advanced Compact configuration
+            session_compact_manager: Optional pluggable Session Compact manager
         """
+        if session_compact_config is not None and session_compact_manager is not None:
+            raise ValueError(
+                "Provide either session_compact_config or "
+                "session_compact_manager, not both"
+            )
         self._summarizer_manager = summarizer_manager
+        self._session_compact_config = session_compact_config
+        self._session_compact_manager: Optional[BaseSessionCompactManager] = None
         if session_config is None:
             session_config = SessionServiceConfig()
             # Clean up the TTL configuration if not set
@@ -60,6 +76,8 @@ class BaseSessionService(SessionServiceABC):
         self._session_config = session_config
         if self._summarizer_manager:
             self._summarizer_manager.set_session_service(self)
+        if session_compact_manager is not None:
+            self.set_session_compact_manager(session_compact_manager)
 
     @property
     def summarizer_manager(self) -> Optional[SummarizerSessionManager]:
@@ -71,6 +89,16 @@ class BaseSessionService(SessionServiceABC):
         """Get the session service configuration."""
         return self._session_config
 
+    @property
+    def session_compact_config(self) -> Optional["BaseSessionCompactConfig"]:
+        """Return deferred Session Compact configuration, if configured."""
+        return self._session_compact_config
+
+    @property
+    def session_compact_manager(self) -> Optional["BaseSessionCompactManager"]:
+        """Get the Session Compact lifecycle manager."""
+        return self._session_compact_manager
+
     def set_summarizer_manager(self, summarizer_manager: SummarizerSessionManager, force: bool = False) -> None:
         """Set the summarizer manager to use.
 
@@ -78,9 +106,30 @@ class BaseSessionService(SessionServiceABC):
             summarizer_manager: The summarizer manager to use
             force: Whether to force update even if already set
         """
+        if self._session_compact_manager is not None:
+            raise ValueError(
+                "SummarizerSessionManager and BaseSessionCompactManager are mutually exclusive"
+            )
         if not self._summarizer_manager or force:
             self._summarizer_manager = summarizer_manager
             self._summarizer_manager.set_session_service(self)
+
+    def set_session_compact_manager(
+        self,
+        compact_manager: "BaseSessionCompactManager",
+        force: bool = False,
+    ) -> None:
+        """Attach Session Compact through the native manager lifecycle."""
+        if self._summarizer_manager is not None:
+            raise ValueError(
+                "SummarizerSessionManager and BaseSessionCompactManager are mutually exclusive"
+            )
+        if self._session_compact_manager is not None and not force:
+            if self._session_compact_manager is compact_manager:
+                return
+            raise ValueError("A Session Compact manager is already configured")
+        self._session_compact_manager = compact_manager
+        compact_manager.set_session_service(self, force=force)
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
@@ -174,6 +223,8 @@ class BaseSessionService(SessionServiceABC):
         """
         if self._summarizer_manager:
             await self._summarizer_manager.create_session_summary(session, ctx=ctx)
+        elif self._session_compact_manager:
+            await self._session_compact_manager.create_session_summary(session, ctx=ctx)
 
     @override
     async def get_session_summary(self, session: Session) -> Optional[str]:
@@ -189,7 +240,24 @@ class BaseSessionService(SessionServiceABC):
             summary = await self._summarizer_manager.get_session_summary(session)
             if summary:
                 return summary.summary_text
+        if self._session_compact_manager:
+            return await self._session_compact_manager.get_session_summary(session)
         return None
+
+    async def _delete_session_compact_data(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+    ) -> None:
+        """Delete side data owned by the configured compact manager."""
+        if self._session_compact_manager:
+            await self._session_compact_manager.delete_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+            )
 
     def filter_events(self, session: Session, need_copy: bool = False) -> Session:
         """Filter events based on the session config.
@@ -211,4 +279,5 @@ class BaseSessionService(SessionServiceABC):
     @override
     async def close(self) -> None:
         """Closes the session service and releases any resources."""
-        pass
+        if self._session_compact_manager:
+            await self._session_compact_manager.close()

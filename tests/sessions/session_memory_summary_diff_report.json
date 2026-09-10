@@ -203,7 +203,8 @@
                       "tool_call": null,
                       "tool_response": null,
                       "part_metadata": null,
-                      "audio_transcription": null
+                      "audio_transcription": null,
+                      "media_processing": null
                     }
                   ],
                   "role": "model"
@@ -269,7 +270,8 @@
                       "tool_call": null,
                       "tool_response": null,
                       "part_metadata": null,
-                      "audio_transcription": null
+                      "audio_transcription": null,
+                      "media_processing": null
                     }
                   ],
                   "role": "model"
@@ -409,7 +411,8 @@
                       "tool_call": null,
                       "tool_response": null,
                       "part_metadata": null,
-                      "audio_transcription": null
+                      "audio_transcription": null,
+                      "media_processing": null
                     }
                   ],
                   "role": "model"
@@ -475,7 +478,8 @@
                       "tool_call": null,
                       "tool_response": null,
                       "part_metadata": null,
-                      "audio_transcription": null
+                      "audio_transcription": null,
+                      "media_processing": null
                     }
                   ],
                   "role": "model"
