@@ -39,7 +39,6 @@ def test_usage_baseline_adds_only_contents_after_matching_event(tmp_path) -> Non
     tracker = TokenContextTracker(
         AdvancedCompactConfig(
             enabled=True,
-            root_dir=tmp_path,
             model_context_window_tokens=1_000,
             max_output_tokens=100,
         ))
@@ -63,7 +62,7 @@ def test_usage_boundary_mismatch_falls_back_to_full_request_estimate(tmp_path) -
         session=SimpleNamespace(events=[event]),
         agent=SimpleNamespace(model="test-model"),
     )
-    tracker = TokenContextTracker(AdvancedCompactConfig(enabled=True, root_dir=tmp_path))
+    tracker = TokenContextTracker(AdvancedCompactConfig(enabled=True))
 
     estimate = tracker.estimate(request, ctx)
 
@@ -85,7 +84,7 @@ def test_changed_recorded_system_or_tool_fingerprint_falls_back(tmp_path) -> Non
         agent=SimpleNamespace(model="test-model"),
     )
 
-    estimate = TokenContextTracker(AdvancedCompactConfig(enabled=True, root_dir=tmp_path)).estimate(request, ctx)
+    estimate = TokenContextTracker(AdvancedCompactConfig(enabled=True)).estimate(request, ctx)
 
     assert estimate.source == "estimated"
     assert estimate.tokens < 999_999
@@ -96,7 +95,6 @@ def test_budget_reserves_max_output_and_calculates_three_thresholds(tmp_path) ->
     tracker = TokenContextTracker(
         AdvancedCompactConfig(
             enabled=True,
-            root_dir=tmp_path,
             model_context_window_tokens=10_000,
             max_output_tokens=2_000,
         ))
@@ -111,8 +109,7 @@ def test_budget_reserves_max_output_and_calculates_three_thresholds(tmp_path) ->
 
 def test_no_window_keeps_compatibility_mode(tmp_path) -> None:
     """Ensure token decisions remain disabled without a model window."""
-    budget = TokenContextTracker(AdvancedCompactConfig(enabled=True,
-                                                      root_dir=tmp_path)).budget(_request("compatibility request"))
+    budget = TokenContextTracker(AdvancedCompactConfig(enabled=True)).budget(_request("compatibility request"))
 
     assert not budget.token_mode_enabled
     assert budget.estimate.source == "estimated"

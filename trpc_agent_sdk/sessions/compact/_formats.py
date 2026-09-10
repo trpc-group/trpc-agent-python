@@ -5,6 +5,8 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Define shared formats for long-term and session memory."""
 
+# flake8: noqa: E125
+
 from __future__ import annotations
 
 import re

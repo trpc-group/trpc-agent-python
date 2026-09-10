@@ -16,17 +16,13 @@
 
 ```text
 AdvancedCompactConfig
-        ↓ Runner 自动创建
+        ↓ AdvancedSessionCompactManager
 SqlSessionService
 ├── AdvancedSessionCompactManager
 ├── events: summary + recent Events
 ├── sessions.historical_events: 被压缩的原始 Events
 └── sessions.state["_trpc_agent:summary"]
 
-AdvancedMemoryRuntime
-├── advanced_memory_transcripts
-├── advanced_memory_transcript_seen
-└── advanced_memory_tool_results
 ```
 
 核心调用：
@@ -43,7 +39,7 @@ session_service = SqlSessionService(
     db_url=sql_url,
     is_async=False,
     session_config=session_config,
-    session_compact_config=compact_config,
+    session_compact_manager=AdvancedSessionCompactManager(config=compact_config),
 )
 
 runner = Runner(
@@ -53,9 +49,8 @@ runner = Runner(
 )
 ```
 
-`Runner` 会读取 `session_compact_config`，自动从 `SqlSessionService` 获取 URL 和异步
-模式，创建 `AdvancedSessionCompactManager` 并通过基类接口注入。
-用户不需要手动调用 `setup_advanced_session_compact`，也不需要直接创建 Manager。
+`SqlSessionService` 会接收 `session_compact_manager`。Compact 只使用 SessionService 的
+`events`、`historical_events` 和 `state`，不创建额外的 SQL 表。
 
 ## 兼容已有 Session
 
@@ -101,8 +96,5 @@ python run_agent.py
 
 ## 存储职责
 
-- `SqlSessionService`：Session、活跃 Events、historical Events、state 和 Session Memory。
-- Advanced Memory SQL stores：压缩重放记录和完整 Tool Result。
-- 不再创建 `advanced_memory_session_memory` 表。
-- Advanced Memory transcript 不保存 `kind=event` 或
-  `session-memory-checkpoint`。
+- `SqlSessionService`：Session、活跃 Events、historical Events 和 state。
+- Compact 不创建独立的 SQL transcript、Tool Result 或 session-memory 表。

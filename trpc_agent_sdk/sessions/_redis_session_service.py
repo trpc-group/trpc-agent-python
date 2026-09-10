@@ -39,7 +39,6 @@ from ._utils import user_state_key
 
 if TYPE_CHECKING:
     from .compact._base_manager import BaseSessionCompactManager
-    from .compact._base_config import BaseSessionCompactConfig
 
 
 def _session_key_prefix(app_name: str, user_id: Optional[str] = None) -> str:
@@ -94,7 +93,6 @@ class RedisSessionService(BaseSessionService):
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
                  session_config: Optional[SessionServiceConfig] = None,
                  is_async: bool = False,
-                 session_compact_config: "BaseSessionCompactConfig | None" = None,
                  session_compact_manager: BaseSessionCompactManager | None = None,
                  **kwargs: Any):
         self._db_url = db_url
@@ -103,7 +101,6 @@ class RedisSessionService(BaseSessionService):
         super().__init__(
             summarizer_manager=summarizer_manager,
             session_config=session_config,
-            session_compact_config=session_compact_config,
             session_compact_manager=session_compact_manager,
         )
         if is_default_config:
@@ -220,11 +217,6 @@ class RedisSessionService(BaseSessionService):
         async with self._redis_storage.create_db_session() as redis_session:
             key = session_key(app_name, user_id, session_id)
             await self._redis_storage.delete(redis_session, key)
-        await self._delete_session_compact_data(
-            app_name=app_name,
-            user_id=user_id,
-            session_id=session_id,
-        )
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:

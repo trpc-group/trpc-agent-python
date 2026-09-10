@@ -39,7 +39,6 @@ from ._types import SessionServiceConfig
 
 if TYPE_CHECKING:
     from .compact import BaseSessionCompactManager
-    from .compact import BaseSessionCompactConfig
 
 
 class BaseSessionService(SessionServiceABC):
@@ -51,23 +50,15 @@ class BaseSessionService(SessionServiceABC):
     def __init__(self,
                  summarizer_manager: Optional[SummarizerSessionManager] = None,
                  session_config: Optional[SessionServiceConfig] = None,
-                 session_compact_config: Optional["BaseSessionCompactConfig"] = None,
                  session_compact_manager: Optional["BaseSessionCompactManager"] = None):
         """Initialize the base session service.
 
         Args:
             summarizer_manager: Optional summarizer manager for session summarization
             session_config: Optional session configuration
-            session_compact_config: Optional Advanced Compact configuration
             session_compact_manager: Optional pluggable Session Compact manager
         """
-        if session_compact_config is not None and session_compact_manager is not None:
-            raise ValueError(
-                "Provide either session_compact_config or "
-                "session_compact_manager, not both"
-            )
         self._summarizer_manager = summarizer_manager
-        self._session_compact_config = session_compact_config
         self._session_compact_manager: Optional[BaseSessionCompactManager] = None
         if session_config is None:
             session_config = SessionServiceConfig()
@@ -90,11 +81,6 @@ class BaseSessionService(SessionServiceABC):
         return self._session_config
 
     @property
-    def session_compact_config(self) -> Optional["BaseSessionCompactConfig"]:
-        """Return deferred Session Compact configuration, if configured."""
-        return self._session_compact_config
-
-    @property
     def session_compact_manager(self) -> Optional["BaseSessionCompactManager"]:
         """Get the Session Compact lifecycle manager."""
         return self._session_compact_manager
@@ -107,9 +93,7 @@ class BaseSessionService(SessionServiceABC):
             force: Whether to force update even if already set
         """
         if self._session_compact_manager is not None:
-            raise ValueError(
-                "SummarizerSessionManager and BaseSessionCompactManager are mutually exclusive"
-            )
+            raise ValueError("SummarizerSessionManager and BaseSessionCompactManager are mutually exclusive")
         if not self._summarizer_manager or force:
             self._summarizer_manager = summarizer_manager
             self._summarizer_manager.set_session_service(self)
@@ -121,9 +105,7 @@ class BaseSessionService(SessionServiceABC):
     ) -> None:
         """Attach Session Compact through the native manager lifecycle."""
         if self._summarizer_manager is not None:
-            raise ValueError(
-                "SummarizerSessionManager and BaseSessionCompactManager are mutually exclusive"
-            )
+            raise ValueError("SummarizerSessionManager and BaseSessionCompactManager are mutually exclusive")
         if self._session_compact_manager is not None and not force:
             if self._session_compact_manager is compact_manager:
                 return
@@ -243,21 +225,6 @@ class BaseSessionService(SessionServiceABC):
         if self._session_compact_manager:
             return await self._session_compact_manager.get_session_summary(session)
         return None
-
-    async def _delete_session_compact_data(
-        self,
-        *,
-        app_name: str,
-        user_id: str,
-        session_id: str,
-    ) -> None:
-        """Delete side data owned by the configured compact manager."""
-        if self._session_compact_manager:
-            await self._session_compact_manager.delete_session(
-                app_name=app_name,
-                user_id=user_id,
-                session_id=session_id,
-            )
 
     def filter_events(self, session: Session, need_copy: bool = False) -> Session:
         """Filter events based on the session config.

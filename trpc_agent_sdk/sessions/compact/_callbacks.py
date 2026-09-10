@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._runtime import AdvancedMemoryRuntime
+from ._runtime import SessionCompactRuntime
 
 
 def install_staged_callback(
@@ -18,7 +18,7 @@ def install_staged_callback(
     *,
     callback_type: type,
     component_attribute: str,
-    memory_runtime: AdvancedMemoryRuntime,
+    memory_runtime: SessionCompactRuntime,
     conflict_message: str,
 ) -> Any | None:
     """Install a staged callback idempotently and validate runtime ownership."""

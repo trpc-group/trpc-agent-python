@@ -1,129 +1,47 @@
-# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+# Tencent is pleased to support the open source ecosystem.
 #
 # Copyright (C) 2026 Tencent. All rights reserved.
-#
-# tRPC-Agent-Python is licensed under Apache-2.0.
-"""Configuration for the independent Advanced Memory mechanism."""
+# Licensed under Apache-2.0.
+"""Configuration for Session Compact."""
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from dataclasses import field
-from pathlib import Path
 from typing import Any
-from typing import Literal
-
-from ._base_config import BaseSessionCompactConfig
 
 DEFAULT_COMPACTABLE_TOOL_NAMES = (
     "Read",
     "Bash",
     "Grep",
     "Glob",
-    "WebSearch",
-    "WebFetch",
-    "Edit",
-    "Write",
+    "Search",
+    "CodeSearch",
 )
 
 
-def _integer_from_environment(
-    name: str,
-    *,
-    default: int | None,
-    minimum: int,
-) -> int | None:
-    """Read and validate an optional integer setting from the environment."""
-    raw_value = os.environ.get(name, "").strip()
-    if not raw_value:
-        return default
-    try:
-        value = int(raw_value)
-    except ValueError as exc:
-        description = "positive integer" if minimum > 0 else "non-negative integer"
-        raise ValueError(f"{name} must be a {description}") from exc
-    if value < minimum:
-        description = "positive integer" if minimum > 0 else "non-negative integer"
-        raise ValueError(f"{name} must be a {description}")
-    return value
-
-
 def _require_positive(**values: int | float) -> None:
-    """Require each named numeric setting to be greater than zero."""
     for name, value in values.items():
         if value <= 0:
             raise ValueError(f"{name} must be greater than zero")
 
 
 def _require_non_negative(**values: int | float) -> None:
-    """Require each named numeric setting to be non-negative."""
     for name, value in values.items():
         if value < 0:
-            raise ValueError(f"{name} must not be negative")
-
-
-def _require_less_than(
-    name: str,
-    value: int | float,
-    upper_name: str,
-    upper_value: int | float,
-) -> None:
-    """Require one named numeric setting to be smaller than another."""
-    if value >= upper_value:
-        raise ValueError(f"{name} must be smaller than {upper_name}")
-
-
-def _require_greater_than(
-    name: str,
-    value: int | float,
-    lower_name: str,
-    lower_value: int | float,
-) -> None:
-    """Require one named numeric setting to be greater than another."""
-    if value <= lower_value:
-        raise ValueError(f"{name} must be greater than {lower_name}")
+            raise ValueError(f"{name} must be non-negative")
 
 
 def _require_non_empty_names(name: str, values: tuple[str, ...]) -> None:
-    """Require a non-empty sequence containing only non-empty names."""
     if not values or any(not value.strip() for value in values):
         raise ValueError(f"{name} must contain non-empty names")
 
 
-def _validate_path_components(values: tuple[str, ...]) -> None:
-    """Require safe, single-component names for memory storage paths."""
-    for value in values:
-        if not value or Path(value).name != value:
-            raise ValueError(f"Invalid memory path component: {value!r}")
-
-
 @dataclass(frozen=True)
-class AdvancedCompactConfig(BaseSessionCompactConfig):
-    """Configure Advanced Session Compact and its shared memory runtime."""
+class AdvancedCompactConfig:
+    """Configure compression that is persisted by the SessionService."""
 
     enabled: bool = True
-    root_dir: Path = field(default_factory=Path.cwd)
-    storage_backend: Literal["local", "redis", "sql"] = "local"
-    redis_url: str | None = None
-    redis_key_prefix: str = "advanced-memory:v1"
-    redis_is_async: bool = True
-    sql_url: str | None = None
-    sql_is_async: bool = True
-    sql_cleanup_interval_seconds: float = 60.0
-    session_ttl_seconds: int | None = None
-    memory_ttl_seconds: int | None = None
-    memory_lock_ttl_seconds: int = 30
-    memory_lock_acquire_timeout_seconds: float = 10.0
-    memory_dir_name: str = "MEMORY"
-    session_dir_name: str = "SESSION"
-    memory_index_name: str = "MEMORY.md"
-    transcript_name: str = "transcript.jsonl"
-    session_memory_name: str = "session_memory.md"
-    memory_index_max_lines: int = 200
-    memory_index_max_bytes: int = 25_000
-    long_term_memory_injection_enabled: bool = True
-    memory_focus_instruction: str | None = None
     tool_result_max_chars: int = 50_000
     tool_results_per_message_max_chars: int = 200_000
     tool_result_preview_chars: int = 2_000
@@ -132,16 +50,8 @@ class AdvancedCompactConfig(BaseSessionCompactConfig):
     history_snip_target_chars: int = 400_000
     history_snip_keep_recent: int = 5
     history_snip_tool_names: tuple[str, ...] = DEFAULT_COMPACTABLE_TOOL_NAMES
-    model_context_window_tokens: int | None = field(default_factory=lambda: _integer_from_environment(
-        "TRPC_AGENT_MODEL_CONTEXT_WINDOW_TOKENS",
-        default=None,
-        minimum=1,
-    ))
-    max_output_tokens: int = field(default_factory=lambda: _integer_from_environment(
-        "TRPC_AGENT_MAX_OUTPUT_TOKENS",
-        default=0,
-        minimum=0,
-    ))
+    model_context_window_tokens: int | None = field(default=None)
+    max_output_tokens: int = 0
     token_warning_ratio: float = 0.85
     token_autocompact_ratio: float = 0.90
     token_blocking_ratio: float = 0.95
@@ -171,133 +81,50 @@ class AdvancedCompactConfig(BaseSessionCompactConfig):
     microcompact_trigger_count: int = 20
     microcompact_keep_recent: int = 5
     microcompact_tool_names: tuple[str, ...] = DEFAULT_COMPACTABLE_TOOL_NAMES
-    encoding: str = "utf-8"
-    transcript_fsync: bool = False
-    preload_memory_enabled: bool = False
-    preload_memory_max_topics: int = 5
-    preload_memory_max_chars: int = 50_000
-    preload_memory_candidate_limit: int = 200
-    session_ttl_delete_transcripts: bool = False
-
-    def setup(self, agent: Any, session_service: Any) -> Any:
-        """Create and attach the Advanced Session Compact manager."""
-        from ._integration import setup_advanced_session_compact
-
-        return setup_advanced_session_compact(
-            agent,
-            session_service,
-            self,
-        )
 
     def __post_init__(self) -> None:
-        """Validate the configuration and normalize the root directory."""
-        if self.storage_backend not in {"local", "redis", "sql"}:
-            raise ValueError(
-                "storage_backend must be one of: local, redis, sql"
-            )
-        if self.storage_backend == "redis" and not self.redis_url:
-            raise ValueError("redis_url is required when storage_backend='redis'")
-        if self.storage_backend == "sql" and not self.sql_url:
-            raise ValueError("sql_url is required when storage_backend='sql'")
-        if not self.redis_key_prefix.strip() or self.redis_key_prefix != self.redis_key_prefix.strip():
-            raise ValueError("redis_key_prefix must be a non-empty Redis key prefix")
-        if self.session_ttl_seconds is not None and self.session_ttl_seconds <= 0:
-            raise ValueError("session_ttl_seconds must be greater than zero when provided")
-        if self.memory_ttl_seconds is not None and self.memory_ttl_seconds <= 0:
-            raise ValueError("memory_ttl_seconds must be greater than zero when provided")
-        if self.memory_lock_ttl_seconds <= 0:
-            raise ValueError("memory_lock_ttl_seconds must be greater than zero")
-        if self.memory_lock_acquire_timeout_seconds <= 0:
-            raise ValueError("memory_lock_acquire_timeout_seconds must be greater than zero")
-        if self.sql_cleanup_interval_seconds <= 0:
-            raise ValueError("sql_cleanup_interval_seconds must be greater than zero")
-        _require_positive(
-            memory_index_max_lines=self.memory_index_max_lines,
-            memory_index_max_bytes=self.memory_index_max_bytes,
-            preload_memory_max_topics=self.preload_memory_max_topics,
-            preload_memory_max_chars=self.preload_memory_max_chars,
-            preload_memory_candidate_limit=self.preload_memory_candidate_limit,
-        )
-        _validate_path_components((
-            self.memory_dir_name,
-            self.session_dir_name,
-            self.memory_index_name,
-            self.transcript_name,
-            self.session_memory_name,
-        ))
+        """Validate compression limits and token thresholds."""
         _require_positive(
             tool_result_max_chars=self.tool_result_max_chars,
             tool_results_per_message_max_chars=self.tool_results_per_message_max_chars,
             tool_result_preview_chars=self.tool_result_preview_chars,
-        )
-        _require_less_than(
-            "tool_result_preview_chars",
-            self.tool_result_preview_chars,
-            "tool_result_max_chars",
-            self.tool_result_max_chars,
-        )
-        _require_positive(
             history_snip_trigger_chars=self.history_snip_trigger_chars,
             history_snip_target_chars=self.history_snip_target_chars,
-        )
-        _require_less_than(
-            "history_snip_target_chars",
-            self.history_snip_target_chars,
-            "history_snip_trigger_chars",
-            self.history_snip_trigger_chars,
-        )
-        _require_positive(history_snip_keep_recent=self.history_snip_keep_recent)
-        _require_non_empty_names("history_snip_tool_names", self.history_snip_tool_names)
-        if self.model_context_window_tokens is not None and self.model_context_window_tokens <= 0:
-            raise ValueError("model_context_window_tokens must be greater than zero when provided")
-        _require_non_negative(max_output_tokens=self.max_output_tokens)
-        if self.model_context_window_tokens is not None and self.max_output_tokens >= self.model_context_window_tokens:
-            raise ValueError("max_output_tokens must be smaller than model_context_window_tokens")
-        if not (0 < self.token_warning_ratio < self.token_autocompact_ratio < self.token_blocking_ratio < 1):
-            raise ValueError("token ratios must satisfy 0 < warning < autocompact < blocking < 1")
-        _require_positive(
+            history_snip_keep_recent=self.history_snip_keep_recent,
             session_memory_initial_chars=self.session_memory_initial_chars,
             session_memory_update_chars=self.session_memory_update_chars,
             session_memory_initial_tokens=self.session_memory_initial_tokens,
             session_memory_update_tokens=self.session_memory_update_tokens,
             session_memory_tool_calls_between_updates=self.session_memory_tool_calls_between_updates,
             session_memory_prompt_max_chars=self.session_memory_prompt_max_chars,
-        )
-        _require_non_negative(session_memory_request_overhead_tokens=self.session_memory_request_overhead_tokens)
-        _require_positive(
             session_memory_section_max_chars=self.session_memory_section_max_chars,
             session_memory_total_max_chars=self.session_memory_total_max_chars,
             session_memory_wait_timeout_seconds=self.session_memory_wait_timeout_seconds,
-        )
-        _require_positive(autocompact_target_chars=self.autocompact_target_chars)
-        _require_greater_than(
-            "autocompact_trigger_chars",
-            self.autocompact_trigger_chars,
-            "autocompact_target_chars",
-            self.autocompact_target_chars,
-        )
-        _require_greater_than(
-            "autocompact_blocking_chars",
-            self.autocompact_blocking_chars,
-            "autocompact_trigger_chars",
-            self.autocompact_trigger_chars,
-        )
-        _require_positive(
-            autocompact_keep_recent_contents=self.autocompact_keep_recent_contents,
+            autocompact_target_chars=self.autocompact_target_chars,
             autocompact_max_failures=self.autocompact_max_failures,
             autocompact_summary_input_max_chars=self.autocompact_summary_input_max_chars,
             autocompact_summary_retries=self.autocompact_summary_retries,
-        )
-        _require_positive(
             microcompact_gap_seconds=self.microcompact_gap_seconds,
             microcompact_trigger_count=self.microcompact_trigger_count,
             microcompact_keep_recent=self.microcompact_keep_recent,
         )
-        _require_less_than(
-            "microcompact_keep_recent",
-            self.microcompact_keep_recent,
-            "microcompact_trigger_count",
-            self.microcompact_trigger_count,
+        _require_non_negative(
+            max_output_tokens=self.max_output_tokens,
+            session_memory_request_overhead_tokens=self.session_memory_request_overhead_tokens,
         )
+        if self.model_context_window_tokens is not None:
+            _require_positive(model_context_window_tokens=self.model_context_window_tokens)
+            if self.max_output_tokens >= self.model_context_window_tokens:
+                raise ValueError("max_output_tokens must be smaller than model_context_window_tokens")
+        if not (0 < self.token_warning_ratio < self.token_autocompact_ratio < self.token_blocking_ratio < 1):
+            raise ValueError("token ratios must satisfy 0 < warning < autocompact < blocking < 1")
+        if self.tool_result_preview_chars >= self.tool_result_max_chars:
+            raise ValueError("tool_result_preview_chars must be smaller than tool_result_max_chars")
+        if self.history_snip_target_chars >= self.history_snip_trigger_chars:
+            raise ValueError("history_snip_target_chars must be smaller than history_snip_trigger_chars")
+        if self.autocompact_trigger_chars <= self.autocompact_target_chars:
+            raise ValueError("autocompact_trigger_chars must be greater than autocompact_target_chars")
+        if self.autocompact_blocking_chars <= self.autocompact_trigger_chars:
+            raise ValueError("autocompact_blocking_chars must be greater than autocompact_trigger_chars")
+        _require_non_empty_names("history_snip_tool_names", self.history_snip_tool_names)
         _require_non_empty_names("microcompact_tool_names", self.microcompact_tool_names)
-        object.__setattr__(self, "root_dir", self.root_dir.expanduser().resolve())

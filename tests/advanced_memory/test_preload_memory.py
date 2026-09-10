@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
 from trpc_agent_sdk.advanced_memory import MemoryDocument
 from trpc_agent_sdk.advanced_memory import MemoryPreloader
@@ -32,7 +32,7 @@ class _FailingSelector:
 async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> None:
     """Ensure selected topic content is rendered and bounded."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedCompactConfig(
+        AdvancedMemoryServiceConfig(
             enabled=True,
             root_dir=tmp_path,
             preload_memory_enabled=True,
@@ -68,7 +68,7 @@ async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> N
 async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
     """Tell the main model when the configured content budget truncated a topic."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedCompactConfig(
+        AdvancedMemoryServiceConfig(
             enabled=True,
             root_dir=tmp_path,
             preload_memory_enabled=True,
@@ -103,7 +103,7 @@ async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
 async def test_preloader_failure_is_best_effort(tmp_path: Path) -> None:
     """Return no prompt content when relevance screening fails."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedCompactConfig(
+        AdvancedMemoryServiceConfig(
             enabled=True,
             root_dir=tmp_path,
             preload_memory_enabled=True,

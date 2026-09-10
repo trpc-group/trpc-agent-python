@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from typing import TYPE_CHECKING
 
 from ._base_manager import BaseSessionCompactManager
@@ -19,8 +20,11 @@ if TYPE_CHECKING:
     from trpc_agent_sdk.context import InvocationContext
     from trpc_agent_sdk.sessions import Session
 
-    from ._runtime import AdvancedMemoryRuntime
-    from ._session_memory import SessionMemoryExtractor
+from ._autocompact import LegacySummaryGenerator
+from ._config import AdvancedCompactConfig
+from ._runtime import SessionCompactRuntime
+from ._session_memory import SessionMemoryExtractor
+from ._session_memory import SessionMemoryGenerator
 
 
 class AdvancedSessionCompactManager(BaseSessionCompactManager):
@@ -28,22 +32,66 @@ class AdvancedSessionCompactManager(BaseSessionCompactManager):
 
     def __init__(
         self,
-        runtime: "AdvancedMemoryRuntime",
-        session_memory_extractor: "SessionMemoryExtractor",
+        config: AdvancedCompactConfig,
+        *,
+        summary_generator: "LegacySummaryGenerator | None" = None,
+        compact_model: Any | None = None,
+        session_memory_generator: "SessionMemoryGenerator | None" = None,
+        session_memory_model: Any | None = None,
     ) -> None:
-        """Store the compact runtime and post-turn memory extractor."""
-        self._runtime = runtime
-        self._session_memory_extractor = session_memory_extractor
+        """Store configuration until Runner supplies the Agent."""
+        self._config = config
+        self._summary_generator = summary_generator
+        self._compact_model = compact_model
+        self._session_memory_generator = session_memory_generator
+        self._session_memory_model = session_memory_model
+        self._runtime: SessionCompactRuntime | None = None
+        self._session_memory_extractor: SessionMemoryExtractor | None = None
         self._session_service: SessionServiceABC | None = None
 
+    def setup(self, agent: Any) -> None:
+        """Initialize the runtime and install all compression callbacks."""
+        if self._session_service is None:
+            raise RuntimeError("Session Compact manager must be bound to a SessionService first")
+        if self._runtime is not None:
+            return
+        from ._autocompact import setup_autocompact
+        from ._history_snip import setup_history_snip
+        from ._microcompact import setup_microcompact
+        from ._tool_result_budget import setup_tool_result_budget
+
+        runtime = SessionCompactRuntime.create(self._config)
+        extractor = SessionMemoryExtractor(
+            runtime,
+            self._session_memory_generator,
+            model=self._session_memory_model,
+        )
+        setup_tool_result_budget(agent, runtime)
+        setup_history_snip(agent, runtime)
+        setup_microcompact(agent, runtime)
+        autocompact = setup_autocompact(
+            agent,
+            runtime,
+            self._summary_generator,
+            model=self._compact_model,
+        )
+        autocompact.attach_session_memory_extractor(extractor)
+        extractor.attach_session_service(self._session_service)
+        self._runtime = runtime
+        self._session_memory_extractor = extractor
+
     @property
-    def runtime(self) -> "AdvancedMemoryRuntime":
+    def runtime(self) -> "SessionCompactRuntime":
         """Return the runtime shared by all compact stages."""
+        if self._runtime is None:
+            raise RuntimeError("Session Compact manager has not been initialized by Runner")
         return self._runtime
 
     @property
     def session_memory_extractor(self) -> "SessionMemoryExtractor":
         """Return the post-turn Session Memory extractor."""
+        if self._session_memory_extractor is None:
+            raise RuntimeError("Session Compact manager has not been initialized by Runner")
         return self._session_memory_extractor
 
     def set_session_service(
@@ -56,12 +104,11 @@ class AdvancedSessionCompactManager(BaseSessionCompactManager):
             raise ValueError("AdvancedSessionCompactManager is already bound to another SessionService")
         session_config = getattr(session_service, "session_config", None)
         if session_config is None or not getattr(session_config, "store_historical_events", False):
-            raise ValueError(
-                "Advanced Session Compact requires "
-                "SessionServiceConfig(store_historical_events=True)"
-            )
+            raise ValueError("Advanced Session Compact requires "
+                             "SessionServiceConfig(store_historical_events=True)")
         self._session_service = session_service
-        self._session_memory_extractor.attach_session_service(session_service)
+        if self._session_memory_extractor is not None:
+            self._session_memory_extractor.attach_session_service(session_service)
 
     async def create_session_summary(
         self,
@@ -70,7 +117,7 @@ class AdvancedSessionCompactManager(BaseSessionCompactManager):
         ctx: "InvocationContext | None" = None,
     ) -> None:
         """Use the native post-turn hook to update persistent Session Memory."""
-        if ctx is not None:
+        if ctx is not None and self._session_memory_extractor is not None:
             await self._session_memory_extractor.extract_if_needed(
                 session,
                 ctx,
@@ -82,21 +129,7 @@ class AdvancedSessionCompactManager(BaseSessionCompactManager):
         parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
         if parsed is not None:
             return parsed[0].to_markdown()
-        runtime = self._runtime.for_session(session)
-        if runtime.session_memory is None:
-            return None
-        return await runtime.session_memory.read(session.id)
-
-    async def delete_session(
-        self,
-        *,
-        app_name: str,
-        user_id: str,
-        session_id: str,
-    ) -> None:
-        """Delete compact side data after the framework Session is deleted."""
-        await self._runtime.for_scope(app_name, user_id).delete_session(session_id)
+        return None
 
     async def close(self) -> None:
-        """Release Compact backend resources owned by this manager."""
-        await self._runtime.close()
+        """Release Compact resources owned by the manager."""

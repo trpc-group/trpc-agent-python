@@ -14,7 +14,7 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -63,7 +63,7 @@ def build_redis_url_from_environment() -> str:
 def create_advanced_memory_service(redis_url: str) -> AdvancedMemoryService:
     """Create the long-term Advanced Memory service backed by Redis."""
     memory_ttl = os.getenv("M_TTL")
-    config = AdvancedCompactConfig(
+    config = AdvancedMemoryServiceConfig(
         storage_backend="redis",
         redis_url=redis_url,
         redis_key_prefix="advanced-memory-redis-demo:v1",

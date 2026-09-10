@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from typing import Any
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,6 +21,10 @@ if TYPE_CHECKING:
 
 class BaseSessionCompactManager(ABC):
     """Coordinate one Session Compact implementation with a SessionService."""
+
+    @abstractmethod
+    def setup(self, agent: Any) -> None:
+        """Initialize this manager and install its Agent callbacks."""
 
     @abstractmethod
     def set_session_service(
@@ -41,16 +46,6 @@ class BaseSessionCompactManager(ABC):
     @abstractmethod
     async def get_session_summary(self, session: "Session") -> str | None:
         """Return the compact representation exposed as a session summary."""
-
-    @abstractmethod
-    async def delete_session(
-        self,
-        *,
-        app_name: str,
-        user_id: str,
-        session_id: str,
-    ) -> None:
-        """Delete side data owned by this manager for one session."""
 
     @abstractmethod
     async def close(self) -> None:

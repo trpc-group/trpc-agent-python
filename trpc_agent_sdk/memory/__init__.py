@@ -27,7 +27,7 @@ from ._utils import format_timestamp
 __all__ = [
     "BaseMemoryService",
     "MemoryServiceConfig",
-    "AdvancedCompactConfig",
+    "AdvancedMemoryServiceConfig",
     "AdvancedMemoryService",
     "EventTtl",
     "InMemoryMemoryService",
@@ -43,8 +43,8 @@ __all__ = [
 
 def __getattr__(name: str):
     """Lazily expose Advanced Memory configuration without import cycles."""
-    if name == "AdvancedCompactConfig":
-        from trpc_agent_sdk.advanced_memory import AdvancedCompactConfig
+    if name == "AdvancedMemoryServiceConfig":
+        from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
 
-        return AdvancedCompactConfig
+        return AdvancedMemoryServiceConfig
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

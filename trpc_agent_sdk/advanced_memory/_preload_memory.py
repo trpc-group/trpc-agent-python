@@ -23,7 +23,7 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.sessions.compact._formats import memory_freshness
 from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
-from trpc_agent_sdk.sessions.compact._runtime import AdvancedMemoryRuntime
+from ._runtime import AdvancedMemoryRuntime
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 

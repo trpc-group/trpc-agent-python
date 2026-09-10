@@ -5,7 +5,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Run native Session compaction over the standard RedisSessionService."""
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ import os
 from dotenv import load_dotenv
 
 from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
+from trpc_agent_sdk.sessions.compact import AdvancedSessionCompactManager
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import RedisSessionService
 from trpc_agent_sdk.sessions import SessionServiceConfig
@@ -43,7 +43,6 @@ def redis_url() -> str:
 def create_compact_config() -> AdvancedCompactConfig:
     """Configure only the settings needed to demonstrate one compaction."""
     return AdvancedCompactConfig(
-        redis_key_prefix="session-compression-demo:v1",
         model_context_window_tokens=4096,
         max_output_tokens=256,
         token_warning_ratio=0.25,
@@ -64,12 +63,13 @@ async def main() -> None:
 
     agent = create_agent()
     compact_config = create_compact_config()
+    compact_manager = AdvancedSessionCompactManager(config=compact_config)
     session_config = SessionServiceConfig(store_historical_events=True)
     session_service = RedisSessionService(
         db_url=redis_url(),
         is_async=True,
         session_config=session_config,
-        session_compact_config=compact_config,
+        session_compact_manager=compact_manager,
     )
     runner = Runner(
         app_name=app_name,
@@ -78,10 +78,10 @@ async def main() -> None:
     )
     try:
         for prompt in (
-            "Generate a large report about Redis session persistence.",
-            "What are the key points and persistence options?",
-            "List the main operational risks and mitigations.",
-            "Summarize our work so far and preserve the important state.",
+                "Generate a large report about Redis session persistence.",
+                "What are the key points and persistence options?",
+                "List the main operational risks and mitigations.",
+                "Summarize our work so far and preserve the important state.",
         ):
             print(f"\nUser: {prompt}")
             async for event in runner.run_async(
