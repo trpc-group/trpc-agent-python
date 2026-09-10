@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trpc-agent-im-config
+data:
+  tenants.json: |
+    {"tenants":[{"tenant_id":"demo-acme","display_name":"Acme","agent_app_id":"customer-service","agent_name":"customer_service_agent","model_name":"gpt-4o-mini","model_api_key_env":"ACME_MODEL_API_KEY","session_backend":"redis","session_dsn_env":"REDIS_URL","tool_allowlist":[],"bindings":[{"channel":"telegram","account_id":"acme-support-bot","webhook_secret_env":"ACME_TELEGRAM_WEBHOOK_SECRET","bot_token_env":"ACME_TELEGRAM_BOT_TOKEN"},{"channel":"wecom","account_id":"acme-wecom-app","webhook_secret_env":"ACME_WECOM_CALLBACK_TOKEN","outbound_webhook_env":"ACME_WECOM_OUTBOUND_WEBHOOK"}]}]}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trpc-agent-im-migrate-v1
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app: trpc-agent-im-migrate}
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: migrate
+          image: registry.example.com/trpc-agent-im:1.0.0
+          command:
+            - alembic
+            - -c
+            - examples/multi_tenant_im_agent/alembic.ini
+            - upgrade
+            - head
+          env:
+            - {name: CONTROL_PLANE_DB_URL, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: control-plane-db-url}}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trpc-agent-im-gateway
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels: {app: trpc-agent-im-gateway}
+  template:
+    metadata:
+      labels: {app: trpc-agent-im-gateway}
+    spec:
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: gateway
+          image: registry.example.com/trpc-agent-im:1.0.0
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - {name: TENANT_CONFIG_FILE, value: /app/config/tenants.json}
+            - {name: OFFLINE_ECHO_MODE, value: "false"}
+            - {name: AUTO_CREATE_SCHEMA, value: "false"}
+            - {name: CONTROL_PLANE_DB_URL, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: control-plane-db-url}}}
+            - {name: REDIS_URL, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: redis-url}}}
+            - {name: TENANT_NAMESPACE_SECRET, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: namespace-secret}}}
+            - {name: ADMIN_API_TOKEN, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: admin-token}}}
+            - {name: ACME_MODEL_API_KEY, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: acme-model-api-key}}}
+            - {name: ACME_TELEGRAM_WEBHOOK_SECRET, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: telegram-webhook-secret}}}
+            - {name: ACME_TELEGRAM_BOT_TOKEN, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: telegram-bot-token}}}
+            - {name: ACME_WECOM_CALLBACK_TOKEN, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: wecom-callback-token}}}
+            - {name: ACME_WECOM_OUTBOUND_WEBHOOK, valueFrom: {secretKeyRef: {name: trpc-agent-im-secrets, key: wecom-outbound-webhook}}}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: http://otel-collector.observability:4318}
+          volumeMounts:
+            - {name: config, mountPath: /app/config, readOnly: true}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "2", memory: 2Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+      volumes:
+        - name: config
+          configMap: {name: trpc-agent-im-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trpc-agent-im-gateway
+spec:
+  selector: {app: trpc-agent-im-gateway}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: trpc-agent-im-gateway
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: trpc-agent-im-gateway}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: trpc-agent-im-gateway
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: trpc-agent-im-gateway}
+  minReplicas: 3
+  maxReplicas: 20
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 65}

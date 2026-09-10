@@ -119,6 +119,10 @@ optimize = [
     "rich>=13.0.0",
 ]
 
+multi-tenant-im = [
+    "alembic>=1.13.0",
+]
+
 mem0 = [
     "mem0ai>=1.0.3",
     "sentence-transformers>=3.0.0",
