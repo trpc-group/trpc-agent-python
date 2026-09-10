@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import tempfile
 import time
 from dataclasses import replace
@@ -15,11 +16,35 @@ from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 
-from trpc_agent_sdk.sessions.compact._formats import MemoryDocument
-from trpc_agent_sdk.sessions.compact._formats import MemoryIndexEntry
+from ._formats import MemoryDocument
+from ._formats import MemoryIndexEntry
+from ._formats import limit_memory_index
 
 from ._config import AdvancedMemoryServiceConfig
 from ._paths import AdvancedMemoryPaths
+
+_MEMORY_INDEX_PATTERN = re.compile(r"^- \[(?P<name>.+?)\]（(?P<filename>.+?)）:(?P<summary>.+)$")
+
+
+def parse_memory_index(index: str) -> list[MemoryIndexEntry]:
+    """Parse standard entries from a MEMORY.md index."""
+    entries: list[MemoryIndexEntry] = []
+    for line in index.splitlines():
+        match = _MEMORY_INDEX_PATTERN.match(line.strip())
+        if match is not None:
+            entries.append(MemoryIndexEntry(**match.groupdict()))
+    return entries
+
+
+def prune_memory_index(index: str, valid_filenames: set[str]) -> str:
+    """Remove index entries whose topic files no longer exist."""
+    lines = [
+        line for line in index.splitlines()
+        if (match := _MEMORY_INDEX_PATTERN.match(line.strip())) is None or match.group("filename") in valid_filenames
+    ]
+    if lines == index.splitlines():
+        return index
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def _atomic_write_text(path: Path, content: str, *, encoding: str) -> None:
@@ -76,19 +101,26 @@ class LongTermMemoryStore:
             return ""
         if not self.index_path.exists():
             return ""
-        lines: list[str] = []
-        used_bytes = 0
         with self.index_path.open(encoding=self._config.encoding) as source:
-            for _ in range(self._config.memory_index_max_lines):
-                line = source.readline()
-                if not line:
-                    break
-                size = len(line.encode(self._config.encoding))
-                if used_bytes + size > self._config.memory_index_max_bytes:
-                    break
-                lines.append(line)
-                used_bytes += size
-        return "".join(lines)
+            index = source.read()
+        valid_filenames = {
+            path.name
+            for path in self._paths.memory_dir.glob("*.md")
+            if path.name != self._config.memory_index_name and not _is_expired(path, self._config.memory_ttl_seconds)
+        }
+        pruned_index = prune_memory_index(index, valid_filenames)
+        if pruned_index != index:
+            _atomic_write_text(
+                self.index_path,
+                pruned_index,
+                encoding=self._config.encoding,
+            )
+        return limit_memory_index(
+            pruned_index,
+            max_lines=self._config.memory_index_max_lines,
+            max_bytes=self._config.memory_index_max_bytes,
+            encoding=self._config.encoding,
+        )
 
     async def write_index(self, entries: list[MemoryIndexEntry]) -> None:
         content = "\n".join(entry.to_markdown() for entry in entries)

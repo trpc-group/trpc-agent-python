@@ -8,11 +8,10 @@
 """Run the two-session Advanced Memory demonstration."""
 
 import asyncio
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.sessions import SessionServiceConfig
@@ -23,35 +22,36 @@ from trpc_agent_sdk.types import Part
 
 from agent.agent import create_agent
 
-load_dotenv(Path(__file__).with_name(".env"))
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 
-def create_services(agent) -> tuple[InMemorySessionService, AdvancedMemoryService]:
-    """Create standard Session storage with Advanced Compact and Memory."""
-    memory_ttl = os.getenv("M_TTL")
-    session_ttl = os.getenv("SESSION_TTL")
-    session_ttl_seconds = int(session_ttl) if session_ttl else 0
-    config = AdvancedMemoryServiceConfig(
-        root_dir=Path(__file__).resolve().parent,
-        memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
-        session_ttl_seconds=session_ttl_seconds or None,
-        memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
-                                  "编程语言偏好、开发习惯和测试习惯。"),
+def create_session_service() -> InMemorySessionService:
+    """Create the session service with the independent Compact manager."""
+    compact_manager = AdvancedSessionCompactManager(
+        config=AdvancedCompactConfig(),
     )
-    compact_config = AdvancedCompactConfig()
-    compact_manager = AdvancedSessionCompactManager(config=compact_config)
-    session_service = InMemorySessionService(
+    return InMemorySessionService(
         session_config=SessionServiceConfig(
             ttl=SessionServiceConfig.create_ttl_config(
-                enable=bool(session_ttl),
-                ttl_seconds=session_ttl_seconds,
+                enable=True,
+                ttl_seconds=60,
                 cleanup_interval_seconds=5,
             ),
             store_historical_events=True,
         ),
         session_compact_manager=compact_manager,
     )
-    return session_service, AdvancedMemoryService(config=config)
+
+
+def create_memory_service() -> AdvancedMemoryService:
+    """Create the independent long-term Advanced Memory service."""
+    memory_config = AdvancedMemoryServiceConfig(
+        root_dir=Path(__file__).resolve().parent,
+        memory_ttl_seconds=120,
+        memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
+                                  "编程语言偏好、开发习惯和测试习惯。"),
+    )
+    return AdvancedMemoryService(config=memory_config)
 
 
 async def run_turn(runner, *, user_id: str, session_id: str, prompt: str) -> None:
@@ -77,7 +77,8 @@ async def run_turn(runner, *, user_id: str, session_id: str, prompt: str) -> Non
 async def main() -> None:
     """Run two independent sessions sharing Advanced Memory."""
     agent = create_agent()
-    session_service, memory_service = create_services(agent)
+    session_service = create_session_service()
+    memory_service = create_memory_service()
 
     from trpc_agent_sdk.runners import Runner
     runner = Runner(
@@ -86,10 +87,6 @@ async def main() -> None:
         session_service=session_service,
         memory_service=memory_service,
     )
-    memory_ttl = os.getenv("M_TTL")
-    memory_ttl_seconds = int(memory_ttl) if memory_ttl else 0
-    session_ttl = os.getenv("SESSION_TTL")
-    session_ttl_seconds = int(session_ttl) if session_ttl else 0
     try:
         session_one_prompts = [
             ("Please remember that my favorite programming language is Python. "
@@ -121,11 +118,6 @@ async def main() -> None:
             prompt="What do you remember about my favorite programming language?",
         )
 
-        wait_seconds = max(memory_ttl_seconds, session_ttl_seconds)
-        if wait_seconds:
-            print(f"\n⏳ Waiting for TTL cleanup ({wait_seconds + 5}s)...")
-            await asyncio.sleep(wait_seconds + 5)
-            print("🧹 Expired Advanced Memory data should now be removed.")
     finally:
         await runner.close()
 

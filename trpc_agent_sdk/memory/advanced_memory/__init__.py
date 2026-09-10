@@ -6,11 +6,11 @@
 """Optional long-term memory APIs."""
 
 from ._config import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.sessions.compact._formats import MemoryDocument
-from trpc_agent_sdk.sessions.compact._formats import MemoryIndexEntry
-from trpc_agent_sdk.sessions.compact._formats import MemoryType
-from trpc_agent_sdk.sessions.compact._formats import memory_freshness
-from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
+from ._formats import MemoryDocument
+from ._formats import MemoryIndexEntry
+from ._formats import MemoryType
+from ._formats import memory_freshness
+from ._formats import parse_memory_updated_at
 from ._paths import AdvancedMemoryPaths
 from ._paths import MemoryScope
 from ._runtime import AdvancedMemoryRuntime
@@ -27,18 +27,14 @@ from ._preload_memory import MemoryPreloader
 from ._preload_memory import MemoryRelevanceSelector
 from ._preload_memory import ModelMemoryRelevanceSelector
 from ._preload_memory import select_relevant_memory_filenames
-from ._storage_backend import AdvancedMemoryStorageBackend
-from ._storage_backend import LocalAdvancedMemoryStorageBackend
 
 __all__ = [
-    "AdvancedMemoryStorageBackend",
     "AdvancedMemoryServiceConfig",
     "LongTermMemoryIntegration",
     "AdvancedMemoryPaths",
     "AdvancedMemoryRuntime",
     "ScopedAdvancedMemoryRuntime",
     "LongTermMemoryStore",
-    "LocalAdvancedMemoryStorageBackend",
     "LongTermMemoryContext",
     "LongTermMemoryContextCallback",
     "MemoryDocument",

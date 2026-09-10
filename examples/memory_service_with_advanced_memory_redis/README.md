@@ -1,30 +1,40 @@
-# Advanced Memory Redis 示例
+# Advanced Memory Redis 持久化示例
 
-本示例演示如何将 Advanced Memory 的本地文件存储切换为 Redis，并验证：
+本示例演示如何使用 `AdvancedMemoryService` 将长期记忆保存到 Redis，实现跨会话、跨 Python 进程的持久化记忆。
 
-- Redis：`AdvancedMemoryService(storage_backend="redis")`
-- 长期 memory 可以跨 Python 进程持久化；
-- 同一用户在不同 `session_id` 中可以读取自己的长期 memory；
-- session 相关数据和长期 memory 可以分别设置 TTL；
-- Redis 中的 Markdown、Stream 和索引数据如何组织。
+## 关键特性
 
-本示例只关注长期 Memory 的 Redis 持久化：
+- **主动式记忆**：Agent 根据对话内容主动调用工具保存长期有效的信息。
+- **记忆分类**：每条记忆包含名称、描述、类型、摘要和详细内容。
+- **基于记忆索引的记忆召回**：先读取 Redis 中的 `MEMORY.md` 索引，
+  再读取与问题相关的记忆内容。
+- **Redis 持久化**：多个进程或实例使用相同的 Redis、应用名和用户 ID时，可以访问同一份长期记忆。
 
-```text
-AdvancedMemoryService
-└── Redis 保存长期 memory index 和 topic
+## Agent 层级结构说明
 
-Runner
-└── InMemorySessionService（仅用于运行示例）
-```
+`AdvancedMemoryService` 通过 `Runner` 绑定到 Agent，并根据配置使用 Redis 保存记忆索引和记忆主题。Agent 通过三个工具主动管理长期记忆。
+
+## 关键代码解释
+
+### `save_memory`
+
+保存或更新一条长期记忆，同时更新 Redis 中的记忆索引。
+
+### `list_memory_index`
+
+读取当前用户的记忆索引，帮助 Agent 找到与当前问题相关的记忆文件。
+
+### `read_memory`
+
+根据索引中的文件名读取完整记忆内容。
 
 ## 环境要求
 
-- Python 3.10+，推荐 Python 3.12；
-- 可访问的 Redis 服务；
-- 可正常调用的模型服务。
+- Python 3.10 或更高版本
+- 可访问的 Redis 服务
+- 一个可访问的 OpenAI 兼容模型服务
 
-如果还没有 Redis，可以使用 Docker：
+**启动本地 Redis：**
 
 ```bash
 docker run --name advanced-memory-redis \
@@ -32,7 +42,13 @@ docker run --name advanced-memory-redis \
   -d redis:7-alpine
 ```
 
-容器已创建过时不要重复执行 `docker run`，直接启动：
+然后在当前目录的 `.env` 中配置：
+
+```dotenv
+REDIS_URL=redis://localhost:6379/0
+```
+
+如果容器已经存在，执行：
 
 ```bash
 docker start advanced-memory-redis
@@ -45,87 +61,65 @@ docker exec advanced-memory-redis redis-cli PING
 # PONG
 ```
 
-## Redis 配置方式
-
-### 方式一：使用完整连接串
-
-在当前目录的 `.env` 中配置：
-
-```dotenv
-REDIS_URL=redis://localhost:6379/0
-```
-
-带密码：
+如果使用已有的**远程 Redis 服务**，不需要执行 Docker 命令，只需要在当前目录的`.env` 中配置 Redis 连接信息：
 
 ```dotenv
 REDIS_URL=redis://:password@redis.example.com:6379/0
 ```
 
-Redis ACL 用户名和密码：
+如果 Redis 使用 ACL 用户名和密码：
 
 ```dotenv
 REDIS_URL=redis://username:password@redis.example.com:6379/0
 ```
 
-启用 TLS：
+启用 TLS 时使用 `rediss` 协议：
 
 ```dotenv
-REDIS_URL=rediss://:password@redis.example.com:6380/0
+REDIS_URL=rediss://username:password@redis.example.com:6380/0
 ```
 
-密码包含 `@`、`:`、`/`、`#` 等特殊字符时，需要进行 URL 编码。
-
-### 方式二：分别配置连接参数
-
-也可以不设置 `REDIS_URL`，改为：
+也可以拆分配置：
 
 ```dotenv
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_DB=0
-REDIS_USER=
-REDIS_PASSWORD=
-REDIS_TLS=false
-```
-
-云 Redis 使用示例：
-
-```dotenv
-REDIS_HOST=your-redis.example.com
+REDIS_HOST=redis.example.com
 REDIS_PORT=6379
 REDIS_DB=0
 REDIS_USER=your-user
 REDIS_PASSWORD=your-password
-REDIS_TLS=true
+REDIS_TLS=false
 ```
 
-代码会优先使用 `REDIS_URL`；未设置时才根据上述字段构造连接串。
+代码会优先使用 `REDIS_URL`；未设置时，才会根据这些字段构造连接串。密码包含 `@`、`:`、`/`、`#` 等特殊字符时，需要进行 URL 编码。
 
-## 模型和 TTL 配置
+## 模型配置
 
-`.env` 示例：
+在当前目录的 `.env` 中配置：
 
 ```dotenv
 TRPC_AGENT_API_KEY=your-api-key
-TRPC_AGENT_BASE_URL=your-model-base-url
+TRPC_AGENT_BASE_URL=https://your-llm-endpoint/v1
 TRPC_AGENT_MODEL_NAME=your-model-name
-
-REDIS_URL=redis://localhost:6379/0
-
-# 长期 memory 的 TTL，单位为秒
-M_TTL=120
-
 ```
 
-TTL 规则：
+Redis 配置请参考上面的本地 Redis 或远程 Redis 配置方式。
 
-- `M_TTL` 管理用户级长期 memory 的全部 Redis key；
-- TTL 会在访问或写入时刷新，是“最后一次活动后过期”；
-- `M_TTL` 必须设置为大于 0 的整数。
+## 代码构建
 
-更多 Advanced Memory 配置请参考[Advanced Memory README](../memory_service_with_advanced_memory/README.md)。
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+./build.sh
+source .venv/bin/activate
+```
 
-## 运行示例
+如果已经在当前项目中创建了 Python 3.10+ 虚拟环境，也可以直接安装：
+
+```bash
+python -m pip install -e .
+```
+
+## 运行
 
 ```bash
 cd examples/memory_service_with_advanced_memory_redis
@@ -133,98 +127,46 @@ source ../../.venv/bin/activate
 python run_agent.py
 ```
 
-脚本会自动启动两个独立的 Python 子进程：
-
-```text
-RUNNER A PROCESS
-├── 使用 7 条对话模拟记忆建立过程
-└── Alice 的姓名和 favorite color 会被保存到长期 memory
-
-RUNNER B PROCESS
-├── 使用新的 session
-├── 询问 Alice 的 name
-└── 询问 Alice 的 favorite color
-```
-
-两个进程使用相同的：
-
-```text
-app_name = advanced-memory-redis-demo
-user_id  = redis-demo-user
-```
-
-但使用不同的 `session_id`。第二个进程应该能够回答：
-
-```text
-name: Alice
-favorite color: blue
-```
-
-这证明了 Redis 数据可以跨进程、跨 session 持久化。
-
-也可以单独运行某个阶段：
+脚本会依次启动写入和读取两个独立进程，验证 Redis 中的记忆可以跨进程和不同会话读取。也可以单独运行某个阶段：
 
 ```bash
-python run_agent.py --phase write  # Runner A
-python run_agent.py --phase read   # Runner B
+python run_agent.py --phase write
+python run_agent.py --phase read
 ```
 
-## 最基本的构建方式
+## Redis 中的存储
 
-Redis 版本最核心的构建过程可以简化为三步：
+记忆索引和主题内容会以 Redis key 保存，key 前缀为：
 
-```python
-redis_url = "redis://:password@localhost:6379/0"
-
-memory_service = AdvancedMemoryService(
-    AdvancedMemoryServiceConfig(
-        storage_backend="redis",
-        redis_url=redis_url,
-        memory_ttl_seconds=120,  # from M_TTL; omit to disable expiration
-    )
-)
-
-runner = Runner(
-    app_name="advanced-memory-redis-demo",
-    agent=create_agent(),
-    session_service=InMemorySessionService(),
-    memory_service=memory_service,
-)
+```text
+advanced-memory-redis-demo:v1:*
 ```
 
-其中：
+查看本示例写入的 key：
 
-- 用户只需要配置长期 Memory 的 `M_TTL`；
-- `AdvancedMemoryService` 只负责长期 memory；
-- Session Service 的 Redis 高级压缩接入请看
-  [`session_service_with_advanced_memory_redis`](../session_service_with_advanced_memory_redis/)；
-- 运行请求时通过 `user_id` 和 `session_id` 指定用户及会话。
+```bash
+docker exec advanced-memory-redis redis-cli --scan \
+  --pattern 'advanced-memory-redis-demo:v1:*'
+```
+
+示例中的记忆 TTL 在代码的 `AdvancedMemoryServiceConfig` 中配置为 `memory_ttl_seconds=120`。
 
 ## 运行结果（实测）
 
-```text
- user: Do you remember my name?
+```txt
+==================== WRITE PROCESS ====================
+
+----- Runner A, query 1 -----
+
+📝 user: Do you remember my name?
+🤖 Assistant: 
+
+
 🔧 tool call: list_memory_index({})
-📊 Tool Result: {'index_path': 'advanced-memory://redis/advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:index', 'index': ''}
-🤖 Assistant: I checked my long-term memory, but I'm afraid I don't have anything saved yet — the memory index is currently empty, so I don't know your name. 
+📊 Tool Result: {'index_path': 'advanced-memory://redis/advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:MEMORY.md', 'index': ''}
+🤖 Assistant: I checked my long-term memory, but it looks like I don't have any record of your name yet — my memory index is currently empty.
 
-If you'd like, just tell me your name (and anything else you'd like me to remember about you), and I'll save it so I can recall it in future conversations!
-
------ Runner A, query 2 -----
-
-📝 user: Do you remember my favorite color?
-🔧 tool call: list_memory_index({})
-📊 Tool Result: {'index_path': 'advanced-memory://redis/advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:index', 'index': ''}
-🤖 Assistant: I checked my long-term memory, but I don't have anything saved about your favorite color yet — my memory index is currently empty.
-
-If you'd like, tell me your favorite color and I'll remember it for future conversations. 💬
-
------ Runner A, query 3 -----
-
-📝 user: what is the weather like in paris?
-🔧 tool call: get_weather_report({'city': 'Paris'})
-📊 Tool Result: {'status': 'success', 'report': 'The weather in Paris is sunny with a temperature of 25 degrees Celsius.'}
-🤖 Assistant: The weather in Paris is **sunny** with a temperature of **25°C**. ☀️
+If you'd like, tell me your name (or anything else you'd like me to remember about you), and I'll save it for future conversations. 😊
 
 ......
 
@@ -233,110 +175,16 @@ If you'd like, tell me your favorite color and I'll remember it for future conve
 ----- Runner B, query 1 -----
 
 📝 user: Do you remember my name?
-🔧 tool call: read_memory({'filename': 'alice-identity.md'})
-📊 Tool Result: {'found': True, 'filename': 'alice-identity.md', 'content': "---\nname: Alice's identity\ndescription: User's name and personal preferences.\ntype: user\nupdated_at: 2026-09-08T07:17:40.559641+00:00\n---\n- Name: Alice\n- Favorite color: blue\n", 'updated_at': '2026-09-08T07:17:40.559641+00:00', 'freshness': 'today', 'freshness_notice': 'This memory was last updated today. It is a point-in-time observation and may no longer reflect the current state. Verify it when necessary, and update this memory if it is outdated or incorrect.'}
-🤖 Assistant: Yes, I do — your name is Alice! 😊 And I also remember that your favorite color is blue.
+🔧 tool call: read_memory({'filename': 'user-identity.md'})
+📊 Tool Result: {'found': True, 'filename': 'user-identity.md', 'content': "---\nname: User identity\ndescription: Alice's name and basic identity for personalization.\ntype: user\nupdated_at: 2026-09-11T05:54:20.441889+00:00\n---\nThe user's name is Alice. She introduced herself on first contact. Use this name for personalized responses.\n", 'updated_at': '2026-09-11T05:54:20.441889+00:00', 'freshness': 'today', 'freshness_notice': 'This memory was last updated today. It is a point-in-time observation and may no longer reflect the current state. Verify it when necessary, and update this memory if it is outdated or incorrect.'}
+🤖 Assistant: Yes, I remember! Your name is **Alice**. 😊
+
+I've stored that in my long-term memory so I can personalize my responses for you. Is there anything else I can help you with?
 
 ----- Runner B, query 2 -----
 
 📝 user: Do you remember my favorite color?
-🔧 tool call: read_memory({'filename': 'alice-identity.md'})
-📊 Tool Result: {'found': True, 'filename': 'alice-identity.md', 'content': "---\nname: Alice's identity\ndescription: User's name and personal preferences.\ntype: user\nupdated_at: 2026-09-08T07:17:40.559641+00:00\n---\n- Name: Alice\n- Favorite color: blue\n", 'updated_at': '2026-09-08T07:17:40.559641+00:00', 'freshness': 'today', 'freshness_notice': 'This memory was last updated today. It is a point-in-time observation and may no longer reflect the current state. Verify it when necessary, and update this memory if it is outdated or incorrect.'}
-🤖 Assistant: Yes! According to your memory profile, your favorite color is **blue**. 💙
+🔧 tool call: read_memory({'filename': 'favorite-color.md'})
+📊 Tool Result: {'found': True, 'filename': 'favorite-color.md', 'content': "---\nname: Favorite color\ndescription: Alice's favorite color.\ntype: user\nupdated_at: 2026-09-11T05:54:24.620584+00:00\n---\nAlice's favorite color is blue.\n", 'updated_at': '2026-09-11T05:54:24.620584+00:00', 'freshness': 'today', 'freshness_notice': 'This memory was last updated today. It is a point-in-time observation and may no longer reflect the current state. Verify it when necessary, and update this memory if it is outdated or incorrect.'}
+🤖 Assistant: Yes, I remember! Your favorite color is **blue**. 💙
 ```
-
-## 查看 Redis 中的数据
-
-进入 Redis CLI：
-
-```bash
-docker exec -it advanced-memory-redis redis-cli
-```
-
-查看本示例写入的全部 Redis key：
-
-```redis
-SCAN 0 MATCH advanced-memory-redis-demo:v1:* COUNT 100
-```
-
-也可以在命令行中直接查看全部 key：
-
-```bash
-docker exec advanced-memory-redis redis-cli --scan \
-  --pattern 'advanced-memory-redis-demo:v1:*'
-```
-
-`SCAN` 不会像 `KEYS *` 一样阻塞 Redis，适合共享或云 Redis 环境。
-
-## 查看 TTL
-
-长期 memory：
-
-```redis
-TTL "advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:index"
-TTL "advanced-memory-redis-demo:v1:{advanced-memory-redis-demo:redis-demo-user}:memory:topic:user_favorite_project_code.md"
-```
-
-预期接近 `120`。
-
-TTL 含义：
-
-```text
--1  永不过期
--2  key 不存在或已经过期
-大于 0  剩余秒数
-```
-
-## 清理测试数据
-
-只删除本示例的 Advanced Memory key：
-
-```bash
-docker exec advanced-memory-redis redis-cli --scan \
-  --pattern 'advanced-memory-redis-demo:v1:*' \
-  | xargs -r docker exec -i advanced-memory-redis redis-cli DEL
-```
-
-测试 Redis 独占一个数据库时，也可以清空当前数据库：
-
-```bash
-docker exec -it advanced-memory-redis redis-cli FLUSHDB
-```
-
-`FLUSHDB` 会删除当前 Redis DB 中的所有数据，不要在共享或生产数据库执行。
-
-## Redis 中的存储形式
-
-### 长期 memory
-
-本地文件概念：
-
-```text
-MEMORY/MEMORY.md
-MEMORY/user_favorite_project_code.md
-```
-
-Redis 映射：
-
-```text
-{prefix}:{app:user}:memory:index
-{prefix}:{app:user}:memory:topic:user_favorite_project_code.md
-```
-
-类型都是 Redis String，内容是 Markdown。
-
-topic 列表的辅助索引：
-
-```text
-{prefix}:{app:user}:memory:topics
-```
-
-类型是 ZSet，member 是 topic 文件名，score 是更新时间。
-
-memory TTL registry：
-
-```text
-{prefix}:{app:user}:memory:keys
-```
-
-它记录该用户的所有长期 memory key，用于统一刷新 `M_TTL`。

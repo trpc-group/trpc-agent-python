@@ -9,7 +9,7 @@
 - AutoCompact 触发时生成的 Session Memory
 
 压缩能力来自 `trpc_agent_sdk.sessions.compact`，长期记忆仍属于独立的
-`trpc_agent_sdk.advanced_memory`。
+`trpc_agent_sdk.memory.advanced_memory`。
 
 ## 组装关系
 

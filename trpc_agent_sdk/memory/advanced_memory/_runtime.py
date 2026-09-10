@@ -15,7 +15,6 @@ from typing import Any
 
 from ._config import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.sessions.compact._coordination import CrossLoopLock
-from trpc_agent_sdk.sessions.compact._coordination import SessionOperationCoordinator
 from ._paths import AdvancedMemoryPaths
 from ._paths import MemoryScope
 from ._storage import LocalAdvancedMemoryCleanup
@@ -28,7 +27,6 @@ class AdvancedMemoryRuntime:
 
     config: AdvancedMemoryServiceConfig
     paths: AdvancedMemoryPaths
-    coordination: SessionOperationCoordinator
     long_term_memory: LongTermMemoryStore
     _scoped_runtimes: dict[MemoryScope, "ScopedAdvancedMemoryRuntime"] = field(
         default_factory=dict,
@@ -42,6 +40,7 @@ class AdvancedMemoryRuntime:
     )
     _redis_storage: Any | None = field(default=None, repr=False, compare=False)
     _sql_storage: Any | None = field(default=None, repr=False, compare=False)
+    _sql_cleanup: Any | None = field(default=None, repr=False, compare=False)
     _local_cleanup: LocalAdvancedMemoryCleanup | None = field(default=None, repr=False, compare=False)
     _close_lock: CrossLoopLock = field(
         default_factory=CrossLoopLock,
@@ -57,28 +56,30 @@ class AdvancedMemoryRuntime:
         paths = AdvancedMemoryPaths(resolved_config)
         redis_storage = None
         sql_storage = None
+        sql_cleanup = None
         local_cleanup = None
         if resolved_config.storage_backend == "redis":
             from trpc_agent_sdk.storage import RedisStorage
             redis_storage = RedisStorage(redis_url=resolved_config.redis_url, is_async=resolved_config.redis_is_async)
         elif resolved_config.storage_backend == "sql":
             from trpc_agent_sdk.storage import SqlStorage
-            from ._sql_stores import AdvancedMemorySqlBase
+            from ._sql_stores import AdvancedMemorySqlBase, SqlAdvancedMemoryCleanup
             sql_storage = SqlStorage(
                 is_async=resolved_config.sql_is_async,
                 db_url=resolved_config.sql_url,
                 metadata=AdvancedMemorySqlBase.metadata,
                 expire_on_commit=False,
             )
+            sql_cleanup = SqlAdvancedMemoryCleanup(resolved_config, sql_storage)
         else:
             local_cleanup = LocalAdvancedMemoryCleanup(resolved_config)
         return cls(
             config=resolved_config,
             paths=paths,
-            coordination=SessionOperationCoordinator(),
             long_term_memory=LongTermMemoryStore(resolved_config, paths),
             _redis_storage=redis_storage,
             _sql_storage=sql_storage,
+            _sql_cleanup=sql_cleanup,
             _local_cleanup=local_cleanup,
         )
 
@@ -147,6 +148,8 @@ class AdvancedMemoryRuntime:
         if self.config.storage_backend == "sql":
             if self._sql_storage is None:
                 raise RuntimeError("SQL Advanced Memory storage is not initialized")
+            if self._sql_cleanup is not None:
+                await self._sql_cleanup.start()
             async with self._sql_storage.create_db_session():
                 pass
             return True
@@ -166,6 +169,8 @@ class AdvancedMemoryRuntime:
                 await self._local_cleanup.close()
             if self._redis_storage is not None:
                 await self._redis_storage.close()
+            if self._sql_cleanup is not None:
+                await self._sql_cleanup.close()
             if self._sql_storage is not None:
                 await self._sql_storage.close()
             object.__setattr__(self, "_closed", True)
@@ -185,22 +190,13 @@ class ScopedAdvancedMemoryRuntime:
         """Return the root runtime configuration."""
         return self.root.config
 
-    @property
-    def coordination(self) -> SessionOperationCoordinator:
-        """Return the shared coordinator."""
-        return self.root.coordination
-
-    def session_key(self, session_id: str) -> str:
-        """Return a lock/cache key unique across all tenants."""
-        return f"{self.scope.storage_key}\0{session_id}"
-
     async def initialize(self) -> bool:
         """Initialize only this tenant's local directories."""
         if not self.config.enabled:
             return False
-        if self.config.storage_backend == "sql" and self.root._sql_cleanup is not None:
-            await self.root._sql_cleanup.start()
         if self.config.storage_backend == "local" and self.root._local_cleanup is not None:
             await self.root._local_cleanup.start()
+        if self.config.storage_backend == "sql" and self.root._sql_cleanup is not None:
+            await self.root._sql_cleanup.start()
         await self.long_term_memory.initialize()
         return True

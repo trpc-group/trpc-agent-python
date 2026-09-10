@@ -9,7 +9,7 @@
 - AutoCompact 触发时生成的 Session Memory
 
 压缩能力来自 `trpc_agent_sdk.sessions.compact`，长期记忆仍属于独立的
-`trpc_agent_sdk.advanced_memory`。SQL 表结构不变，但活跃/历史 Event
+`trpc_agent_sdk.memory.advanced_memory`。SQL 表结构不变，但活跃/历史 Event
 会按原 Session 语义重新分区。
 
 ## 组装关系

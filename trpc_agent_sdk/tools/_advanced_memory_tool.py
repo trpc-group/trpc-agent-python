@@ -8,15 +8,15 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from typing import Any
 
-from trpc_agent_sdk.sessions.compact._formats import MemoryDocument
-from trpc_agent_sdk.sessions.compact._formats import MemoryIndexEntry
-from trpc_agent_sdk.sessions.compact._formats import MemoryType
-from trpc_agent_sdk.sessions.compact._formats import memory_freshness
-from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
-from trpc_agent_sdk.advanced_memory._runtime import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory._formats import MemoryDocument
+from trpc_agent_sdk.memory.advanced_memory._formats import MemoryIndexEntry
+from trpc_agent_sdk.memory.advanced_memory._formats import MemoryType
+from trpc_agent_sdk.memory.advanced_memory._formats import memory_freshness
+from trpc_agent_sdk.memory.advanced_memory._formats import parse_memory_updated_at
+from trpc_agent_sdk.memory.advanced_memory._storage import parse_memory_index
+from trpc_agent_sdk.memory.advanced_memory._runtime import AdvancedMemoryRuntime
 
 from ._function_tool import FunctionTool
 
@@ -25,7 +25,6 @@ ADVANCED_MEMORY_TOOL_NAMES = frozenset({
     "read_memory",
     "list_memory_index",
 })
-_INDEX_PATTERN = re.compile(r"^- \[(?P<name>.+?)\]（(?P<filename>.+?)）:(?P<summary>.+)$")
 
 
 def _memory_index_reference(runtime: Any) -> str:
@@ -35,13 +34,7 @@ def _memory_index_reference(runtime: Any) -> str:
 
 def _parse_index(index: str) -> list[MemoryIndexEntry]:
     """Parse standard Advanced Memory index entries from MEMORY.md."""
-    entries: list[MemoryIndexEntry] = []
-    for line in index.splitlines():
-        match = _INDEX_PATTERN.match(line.strip())
-        if match is None:
-            continue
-        entries.append(MemoryIndexEntry(**match.groupdict()))
-    return entries
+    return parse_memory_index(index)
 
 
 class AdvancedMemoryTools:
@@ -65,11 +58,6 @@ class AdvancedMemoryTools:
     def as_tools(self) -> list[FunctionTool]:
         """Return tools that can be appended directly to LlmAgent.tools."""
         return list(self._tools)
-
-    def owns_tool(self, tool: Any) -> bool:
-        """Return whether this container created the given FunctionTool."""
-        function = getattr(tool, "func", None)
-        return getattr(function, "__self__", None) is self
 
     def _runtime_for_context(self, tool_context: Any | None) -> Any:
         """Resolve storage from the authenticated session, never tool arguments."""
@@ -166,6 +154,6 @@ class AdvancedMemoryTools:
         }
 
 
-def create_advanced_memory_tools(runtime: AdvancedMemoryRuntime, ) -> list[FunctionTool]:
+def create_advanced_memory_tools(runtime: AdvancedMemoryRuntime) -> list[FunctionTool]:
     """Create the official Advanced Memory tools bound to the given runtime."""
     return AdvancedMemoryTools(runtime).as_tools()

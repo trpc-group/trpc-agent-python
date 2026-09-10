@@ -16,13 +16,10 @@ from html import escape
 from typing import Protocol
 from typing import TYPE_CHECKING
 
-from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.log import logger
-from trpc_agent_sdk.memory import InMemoryMemoryService
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.sessions.compact._formats import memory_freshness
-from trpc_agent_sdk.sessions.compact._formats import parse_memory_updated_at
+from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.memory.advanced_memory._formats import memory_freshness
+from trpc_agent_sdk.memory.advanced_memory._formats import parse_memory_updated_at
 from ._runtime import AdvancedMemoryRuntime
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
@@ -91,15 +88,20 @@ def _candidate_from_content(filename: str, content: str) -> MemoryCandidate:
 
 
 class ModelMemoryRelevanceSelector:
-    """Use an isolated lightweight Agent to select relevant topic files."""
+    """Use one direct LLM call to select relevant topic files."""
 
     def __init__(self, model: object | None = None) -> None:
         """Store an optional dedicated selector model."""
         self._model = model
 
-    def _resolve_model(self, ctx: "InvocationContext") -> object:
-        """Prefer a dedicated selector model and fall back to the main model."""
-        model = self._model if self._model is not None else getattr(ctx.agent, "model", None)
+    async def _resolve_model(self, ctx: "InvocationContext") -> object:
+        """Prefer a dedicated selector model and resolve the main Agent model."""
+        if self._model is not None:
+            return self._model
+        resolver = getattr(ctx.agent, "_resolve_model", None)
+        if callable(resolver):
+            return await resolver(ctx)
+        model = getattr(ctx.agent, "model", None)
         if model is None:
             raise ValueError("Memory relevance selector cannot resolve an LLM model")
         return model
@@ -157,48 +159,32 @@ class ModelMemoryRelevanceSelector:
         *,
         limit: int,
     ) -> list[str]:
-        """Run the isolated selector Agent and validate its result."""
-        app_name = f"{ctx.app_name}_advanced_memory_selector"
-        agent = LlmAgent(
-            name="advanced_memory_relevance_selector",
-            description="Select relevant long-term memories.",
-            instruction=("You are a strict long-term memory relevance selector. "
-                         "Follow the user's query and output format exactly."),
-            model=self._resolve_model(ctx),
-            tools=[],
-            add_name_to_instruction=False,
+        """Run one direct LLM call and validate its result."""
+        model = await self._resolve_model(ctx)
+        generate_async = getattr(model, "generate_async", None)
+        if not callable(generate_async):
+            raise TypeError("Memory relevance selector requires an LLMModel instance")
+        model_name = getattr(model, "name", None)
+        if not isinstance(model_name, str) or not model_name:
+            raise ValueError("Memory relevance selector model has no valid name")
+        request = LlmRequest(
+            model=model_name,
+            contents=[
+                Content(
+                    role="user",
+                    parts=[Part.from_text(text=self._build_prompt(query, candidates, limit))],
+                )
+            ],
         )
-        runner = Runner(
-            app_name=app_name,
-            agent=agent,
-            session_service=InMemorySessionService(),
-            memory_service=InMemoryMemoryService(),
-            enable_post_turn_processing=False,
-        )
-        try:
-            session = await runner.session_service.create_session(
-                app_name=app_name,
-                user_id="advanced-memory-selector",
-                state={},
-            )
-            content = Content(
-                role="user",
-                parts=[Part.from_text(text=self._build_prompt(query, candidates, limit))],
-            )
-            last_event = None
-            async for event in runner.run_async(
-                    user_id=session.user_id,
-                    session_id=session.id,
-                    new_message=content,
-            ):
-                if not event.partial:
-                    last_event = event
-            if not last_event or not last_event.content or not last_event.content.parts:
-                raise ValueError("Memory relevance selector returned no final content")
-            text = "\n".join(part.text for part in last_event.content.parts if part.text)
-            return self._parse_selection(text, candidates, limit)
-        finally:
-            await runner.close()
+        response_text: list[str] = []
+        async for response in generate_async(request, stream=False, ctx=None):
+            if response.error_code:
+                raise ValueError(response.error_message or "Memory relevance selector failed")
+            if response.content and response.content.parts:
+                response_text.extend(part.text for part in response.content.parts if part.text)
+        if not response_text:
+            raise ValueError("Memory relevance selector returned no final content")
+        return self._parse_selection("\n".join(response_text), candidates, limit)
 
 
 async def select_relevant_memory_filenames(

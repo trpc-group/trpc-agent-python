@@ -11,23 +11,28 @@ from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from trpc_agent_sdk.abc import MemoryServiceABC as BaseMemoryService
+from typing_extensions import override
+
+from trpc_agent_sdk.abc import MemoryServiceABC
 from trpc_agent_sdk.abc import MemoryServiceConfig
 from trpc_agent_sdk.abc import SearchMemoryResponse
+from trpc_agent_sdk.abc import SessionABC
 from trpc_agent_sdk.abc import SessionServiceABC
 from trpc_agent_sdk.context import AgentContext
-from trpc_agent_sdk.sessions import Session
 
 if TYPE_CHECKING:
-    from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-    from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-    from trpc_agent_sdk.advanced_memory import LongTermMemoryIntegration
+    from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+    from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
+    from trpc_agent_sdk.memory.advanced_memory import LongTermMemoryIntegration
 
 
-class AdvancedMemoryService(BaseMemoryService):
-    """Expose user-scoped long-term Memory through the Runner memory API.
+class AdvancedMemoryService(MemoryServiceABC):
+    """Expose tool-driven long-term Memory through the Runner memory API.
 
-    ``Runner`` calls :meth:`bind` automatically. Session compression is
+    ``Runner`` calls :meth:`bind` automatically. The standard
+    :class:`MemoryServiceABC` methods are implemented for lifecycle
+    compatibility; long-term memory is intentionally still written and read
+    by the Agent through the Advanced Memory tools. Session compression is
     configured independently through ``SessionService.session_compact_manager``.
     """
 
@@ -40,8 +45,8 @@ class AdvancedMemoryService(BaseMemoryService):
         install_long_term_memory_tools: bool = True,
     ) -> None:
         """Create an Advanced Memory service without binding it to an agent."""
-        from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-        from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
+        from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+        from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
 
         if config is not None and runtime is not None and config != runtime.config:
             raise ValueError("config and runtime must describe the same Advanced Memory configuration")
@@ -70,7 +75,7 @@ class AdvancedMemoryService(BaseMemoryService):
 
     def bind(self, agent: Any, session_service: SessionServiceABC) -> SessionServiceABC:
         """Bind long-term Memory and return the unchanged SessionService."""
-        from trpc_agent_sdk.advanced_memory import setup_long_term_memory
+        from trpc_agent_sdk.memory.advanced_memory import setup_long_term_memory
 
         if self._integration is not None:
             if agent is not self._bound_agent:
@@ -86,14 +91,21 @@ class AdvancedMemoryService(BaseMemoryService):
         self._bound_agent = agent
         return session_service
 
+    @override
     async def store_session(
         self,
-        session: Session,
+        session: SessionABC,
         agent_context: Optional[AgentContext] = None,
     ) -> None:
-        """Long-term Memory is updated explicitly through its tools."""
+        """Keep the standard hook side-effect free.
+
+        Advanced Memory is model-directed: the Agent decides what is durable
+        and calls ``save_memory``. Automatically storing every Session here
+        would mix transient conversation history with long-term memory.
+        """
         return None
 
+    @override
     async def search_memory(
         self,
         key: str,
@@ -101,13 +113,14 @@ class AdvancedMemoryService(BaseMemoryService):
         limit: int = 10,
         agent_context: Optional[AgentContext] = None,
     ) -> SearchMemoryResponse:
-        """Return an empty legacy-style response.
+        """Return the standard empty response for compatibility.
 
         Advanced long-term memory is intentionally accessed through its
         ``save_memory``, ``read_memory``, and ``list_memory_index`` tools.
         """
         return SearchMemoryResponse()
 
+    @override
     async def close(self) -> None:
         """Release service-owned local or external storage resources."""
         await self._runtime.close()

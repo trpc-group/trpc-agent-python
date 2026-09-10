@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryPaths
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryPaths
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
 from trpc_agent_sdk.tools import AdvancedMemoryTools
 from trpc_agent_sdk.tools import create_advanced_memory_tools
 

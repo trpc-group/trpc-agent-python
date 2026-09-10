@@ -19,6 +19,7 @@ def _require_positive(**values: int | float) -> None:
         if value <= 0:
             raise ValueError(f"{name} must be greater than zero")
 
+
 def _validate_path_components(values: tuple[str, ...]) -> None:
     """Require safe, single-component names for memory storage paths."""
     for value in values:
