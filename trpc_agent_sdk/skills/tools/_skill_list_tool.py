@@ -20,12 +20,17 @@ from .._repository import BaseSkillRepository
 
 
 def skill_list_tools(tool_context: InvocationContext, skill_name: str) -> dict[str, Any]:
-    """List callable tools declared for a skill.
+    """List tool names declared by a specific skill.
+
+    This only reports tools referenced by the selected skill. It does not list
+    every tool available to the agent. An empty result means that this skill
+    declares no tools; it does not mean that the agent has no tools available.
 
     Args:
-        skill_name: The name of the skill to load.
+        skill_name: The name of the skill to inspect.
+
     Returns:
-        Object containing available tools.
+        Object containing the tool names declared by this skill.
     """
     repository: Optional[BaseSkillRepository] = tool_context.agent_context.get_metadata(SKILL_REPOSITORY_KEY)
     if repository is None:
@@ -33,5 +38,17 @@ def skill_list_tools(tool_context: InvocationContext, skill_name: str) -> dict[s
     skill = repository.get(skill_name)
     if skill is None:
         logger.error("Skill %s not found", repr(skill_name))
-        return {"available_tools": []}
-    return {"available_tools": list(skill.tools or [])}
+        available_tools = []
+    else:
+        available_tools = list(skill.tools or [])
+    return {
+        "skill_name":
+        skill_name,
+        "available_tools":
+        available_tools,
+        "scope":
+        "skill_declared_tools_only",
+        "note":
+        "Only tools declared by this skill are listed. "
+        "This does not represent all tools available to the agent.",
+    }
