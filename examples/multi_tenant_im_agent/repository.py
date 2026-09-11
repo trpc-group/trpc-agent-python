@@ -13,12 +13,12 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     String,
     Text,
     UniqueConstraint,
     create_engine,
-    func,
     select,
 )
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +26,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from .domain import AgentReply, DeliveryRequest, InboundMessage, TenantConfig
+
+OUTBOX_MAX_ATTEMPTS = 8
+OUTBOX_RETRY_BASE_SECONDS = 5
+OUTBOX_RETRY_CAP_SECONDS = 300
 
 
 def utcnow() -> datetime:
@@ -42,6 +46,8 @@ class TenantRecord(Base):
     display_name: Mapped[str] = mapped_column(String(128))
     status: Mapped[str] = mapped_column(String(16), default="active")
     config_version: Mapped[int] = mapped_column(Integer, default=1)
+    token_budget_period: Mapped[str] = mapped_column(String(7), default="")
+    token_usage: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
@@ -49,10 +55,10 @@ class TenantRecord(Base):
 
 class AgentAppRecord(Base):
     __tablename__ = "mt_agent_apps"
-    agent_app_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(
-        ForeignKey("mt_tenants.tenant_id"), index=True
+        ForeignKey("mt_tenants.tenant_id"), primary_key=True, index=True
     )
+    agent_app_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     agent_name: Mapped[str] = mapped_column(String(128))
     model_name: Mapped[str] = mapped_column(String(128))
     tool_allowlist_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -79,12 +85,8 @@ class ChannelBindingRecord(Base):
 class SessionRecord(Base):
     __tablename__ = "mt_sessions"
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        ForeignKey("mt_tenants.tenant_id"), index=True
-    )
-    agent_app_id: Mapped[str] = mapped_column(
-        ForeignKey("mt_agent_apps.agent_app_id"), index=True
-    )
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    agent_app_id: Mapped[str] = mapped_column(String(64), index=True)
     channel: Mapped[str] = mapped_column(String(32))
     conversation_hash: Mapped[str] = mapped_column(String(64))
     user_hash: Mapped[str] = mapped_column(String(64))
@@ -92,6 +94,13 @@ class SessionRecord(Base):
     state_json: Mapped[str] = mapped_column(Text, default="{}")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_app_id"],
+            ["mt_agent_apps.tenant_id", "mt_agent_apps.agent_app_id"],
+            name="fk_mt_session_agent_app",
+        ),
     )
 
 
@@ -102,6 +111,7 @@ class MessageEventRecord(Base):
         ForeignKey("mt_tenants.tenant_id"), index=True
     )
     channel: Mapped[str] = mapped_column(String(32))
+    account_id: Mapped[str] = mapped_column(String(128))
     external_message_id: Mapped[str] = mapped_column(String(192))
     session_id: Mapped[str] = mapped_column(
         ForeignKey("mt_sessions.session_id"), index=True
@@ -123,6 +133,7 @@ class MessageEventRecord(Base):
         UniqueConstraint(
             "tenant_id",
             "channel",
+            "account_id",
             "external_message_id",
             name="uq_mt_inbound_idempotency",
         ),
@@ -299,7 +310,7 @@ class ControlPlaneRepository:
                     db.add(record)
                 else:
                     record.display_name = tenant.display_name
-                app = db.get(AgentAppRecord, tenant.agent_app_id)
+                app = db.get(AgentAppRecord, (tenant.tenant_id, tenant.agent_app_id))
                 if app is None:
                     db.add(
                         AgentAppRecord(
@@ -398,6 +409,46 @@ class ControlPlaneRepository:
             if lease is not None and lease.owner_id == owner_id:
                 db.delete(lease)
 
+    def reserve_token_budget(
+        self,
+        tenant_id: str,
+        period: str,
+        estimated_tokens: int,
+        limit: int,
+    ) -> bool:
+        """Atomically reserve tenant budget before invoking a model."""
+
+        with self.Session.begin() as db:
+            tenant = db.scalar(
+                select(TenantRecord)
+                .where(TenantRecord.tenant_id == tenant_id)
+                .with_for_update()
+            )
+            if tenant is None:
+                return False
+            if tenant.token_budget_period != period:
+                tenant.token_budget_period = period
+                tenant.token_usage = 0
+            if tenant.token_usage + estimated_tokens > limit:
+                return False
+            tenant.token_usage += estimated_tokens
+            return True
+
+    def settle_token_budget(
+        self, tenant_id: str, period: str, reserved: int, actual: int
+    ) -> None:
+        """Replace a reservation with actual usage, or release it on failure."""
+
+        with self.Session.begin() as db:
+            tenant = db.scalar(
+                select(TenantRecord)
+                .where(TenantRecord.tenant_id == tenant_id)
+                .with_for_update()
+            )
+            if tenant is None or tenant.token_budget_period != period:
+                return
+            tenant.token_usage = max(0, tenant.token_usage - reserved + max(0, actual))
+
     def claim_message(self, message: InboundMessage, session_id: str) -> ClaimResult:
         """Atomically allocate session order and reject provider redelivery."""
 
@@ -407,6 +458,7 @@ class ControlPlaneRepository:
                     select(MessageEventRecord).where(
                         MessageEventRecord.tenant_id == message.tenant_id,
                         MessageEventRecord.channel == message.channel,
+                        MessageEventRecord.account_id == message.account_id,
                         MessageEventRecord.external_message_id
                         == message.external_message_id,
                     )
@@ -435,6 +487,7 @@ class ControlPlaneRepository:
                 event = MessageEventRecord(
                     tenant_id=message.tenant_id,
                     channel=message.channel,
+                    account_id=message.account_id,
                     external_message_id=message.external_message_id,
                     session_id=session_id,
                     sequence=session.last_event_seq,
@@ -452,6 +505,7 @@ class ControlPlaneRepository:
                     select(MessageEventRecord).where(
                         MessageEventRecord.tenant_id == message.tenant_id,
                         MessageEventRecord.channel == message.channel,
+                        MessageEventRecord.account_id == message.account_id,
                         MessageEventRecord.external_message_id
                         == message.external_message_id,
                     )
@@ -567,12 +621,29 @@ class ControlPlaneRepository:
             if item is not None:
                 item.status = "sent"
 
-    def mark_outbox_retry(self, outbox_id: str, delay_seconds: int = 30) -> None:
+    def mark_outbox_retry(
+        self, outbox_id: str, delay_seconds: int | None = None
+    ) -> str:
+        """Schedule bounded exponential retry or move an exhausted item to DLQ."""
+
         with self.Session.begin() as db:
             item = db.get(OutboxRecord, outbox_id)
-            if item is not None:
-                item.status = "retry"
-                item.next_attempt_at = utcnow() + timedelta(seconds=delay_seconds)
+            if item is None:
+                return "missing"
+            if item.attempts >= OUTBOX_MAX_ATTEMPTS:
+                item.status = "dead_letter"
+                return item.status
+            if delay_seconds is None:
+                exponential = min(
+                    OUTBOX_RETRY_CAP_SECONDS,
+                    OUTBOX_RETRY_BASE_SECONDS * (2 ** max(item.attempts - 1, 0)),
+                )
+                # Stable jitter prevents synchronized retries and stays reproducible.
+                jitter = sum(outbox_id.encode("utf-8")) % OUTBOX_RETRY_BASE_SECONDS
+                delay_seconds = exponential + jitter
+            item.status = "retry"
+            item.next_attempt_at = utcnow() + timedelta(seconds=delay_seconds)
+            return item.status
 
     def healthcheck(self) -> bool:
         with self.Session() as db:
@@ -599,13 +670,3 @@ class ControlPlaneRepository:
         with self.Session.begin() as db:
             db.add(AuditLogRecord(audit_id=audit_id, **clean))
         return audit_id
-
-    def tenant_token_usage(self, tenant_id: str, since: datetime) -> int:
-        with self.Session() as db:
-            value = db.scalar(
-                select(func.coalesce(func.sum(AuditLogRecord.token_count), 0)).where(
-                    AuditLogRecord.tenant_id == tenant_id,
-                    AuditLogRecord.created_at >= since,
-                )
-            )
-        return int(value or 0)

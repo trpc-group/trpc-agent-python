@@ -4,6 +4,7 @@ import hashlib
 import json
 import time
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,12 +28,15 @@ from examples.multi_tenant_im_agent.domain import (
     derive_session_user_id,
 )
 from examples.multi_tenant_im_agent.repository import (
+    OUTBOX_MAX_ATTEMPTS,
+    AgentAppRecord,
     AuditLogRecord,
     ControlPlaneRepository,
     MessageEventRecord,
     OutboxRecord,
+    TenantRecord,
 )
-from examples.multi_tenant_im_agent.runtime import TrpcAgentRuntime
+from examples.multi_tenant_im_agent.runtime import TrpcAgentRuntime, event_token_count
 from examples.multi_tenant_im_agent.service import MultiTenantAgentService
 from examples.multi_tenant_im_agent.telemetry import request_span
 
@@ -298,6 +302,43 @@ async def test_same_external_id_is_isolated_across_tenants(monkeypatch, reposito
     assert runtime.calls[0][3] != runtime.calls[1][3]
 
 
+def test_same_agent_app_id_is_isolated_across_tenants(monkeypatch, repository):
+    configs = [
+        replace(tenant("tenant-a", "bot-a"), agent_app_id="shared-app"),
+        replace(tenant("tenant-b", "bot-b"), agent_app_id="shared-app"),
+    ]
+    build_service(monkeypatch, repository, tenants=configs)
+    with repository.Session() as db:
+        apps = list(db.scalars(select(AgentAppRecord)))
+        assert {(item.tenant_id, item.agent_app_id) for item in apps} == {
+            ("tenant-a", "shared-app"),
+            ("tenant-b", "shared-app"),
+        }
+
+
+@pytest.mark.asyncio
+async def test_same_external_id_is_isolated_across_accounts(monkeypatch, repository):
+    first = tenant().bindings[0]
+    second = replace(
+        first,
+        account_id="bot-b",
+        webhook_secret_env="TENANT_A_TG_SECRET_B",
+        bot_token_env="TENANT_A_TG_TOKEN_B",
+    )
+    config = replace(tenant(), bindings=(first, second))
+    service, runtime, _ = build_service(monkeypatch, repository, tenants=[config])
+    for binding in config.bindings:
+        response = await service.handle_webhook(
+            channel="telegram",
+            account_id=binding.account_id,
+            headers={"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+            query={},
+            raw_body=telegram_body(),
+        )
+        assert response.status_code == 200
+    assert len(runtime.calls) == 2
+
+
 @pytest.mark.asyncio
 async def test_failed_message_can_be_retried_without_duplicate_row(
     monkeypatch, repository
@@ -349,6 +390,33 @@ async def test_monthly_token_budget_denies_before_runtime(monkeypatch, repositor
     assert not runtime.calls
 
 
+@pytest.mark.asyncio
+async def test_monthly_budget_uses_atomic_reserved_and_actual_usage(
+    monkeypatch, repository
+):
+    limited = replace(tenant(), monthly_token_budget=5)
+    service, runtime, _ = build_service(monkeypatch, repository, tenants=[limited])
+    common = {
+        "channel": "telegram",
+        "account_id": "bot-a",
+        "headers": {"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        "query": {},
+    }
+    assert (
+        await service.handle_webhook(
+            **common, raw_body=telegram_body(update_id=1, text="a")
+        )
+    ).status_code == 200
+    denied = await service.handle_webhook(
+        **common, raw_body=telegram_body(update_id=2, text="b")
+    )
+    assert denied.status_code == 403
+    assert denied.body["error"] == "monthly_token_budget_exceeded"
+    assert len(runtime.calls) == 1
+    with repository.Session() as db:
+        assert db.get(TenantRecord, "tenant-a").token_usage == 7
+
+
 def test_session_lease_excludes_other_worker(repository):
     assert repository.acquire_session_lease("session-a", "worker-1", 30)
     assert not repository.acquire_session_lease("session-a", "worker-2", 30)
@@ -376,6 +444,52 @@ async def test_delivery_failure_is_queued_and_recoverable(monkeypatch, repositor
     assert await service.dispatch_outbox_once() == 1
     with repository.Session() as db:
         assert db.scalar(select(OutboxRecord.status)) == "sent"
+
+
+@pytest.mark.asyncio
+async def test_outbox_moves_to_dead_letter_after_bounded_retries(
+    monkeypatch, repository
+):
+    sender = RecordingSender(fail=True)
+    service, _, _ = build_service(monkeypatch, repository, sender=sender)
+    await service.handle_webhook(
+        channel="telegram",
+        account_id="bot-a",
+        headers={"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        query={},
+        raw_body=telegram_body(),
+    )
+    with repository.Session.begin() as db:
+        item = db.scalar(select(OutboxRecord))
+        item.attempts = OUTBOX_MAX_ATTEMPTS
+        outbox_id = item.outbox_id
+    assert repository.mark_outbox_retry(outbox_id) == "dead_letter"
+    with repository.Session() as db:
+        assert db.get(OutboxRecord, outbox_id).status == "dead_letter"
+
+
+@pytest.mark.asyncio
+async def test_audit_outage_does_not_replay_completed_turn(monkeypatch, repository):
+    service, runtime, sender = build_service(monkeypatch, repository)
+
+    def fail_audit(_values):
+        raise RuntimeError("audit database unavailable")
+
+    monkeypatch.setattr(repository, "add_audit", fail_audit)
+    kwargs = {
+        "channel": "telegram",
+        "account_id": "bot-a",
+        "headers": {"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        "query": {},
+        "raw_body": telegram_body(),
+    }
+    assert (await service.handle_webhook(**kwargs)).status_code == 200
+    assert (await service.handle_webhook(**kwargs)).body["duplicate"] is True
+    assert len(runtime.calls) == 1
+    assert len(sender.requests) == 1
+    assert (
+        'trpc_im_audit_total{status="failed"} 2' in service.metrics.render_prometheus()
+    )
 
 
 @pytest.mark.asyncio
@@ -480,3 +594,24 @@ async def test_trpc_runtime_awaits_runner_shutdown():
     await runtime.close()
     assert runner.closed
     assert runtime._runners == {}
+
+
+def test_runtime_extracts_provider_usage_metadata():
+    assert (
+        event_token_count(
+            SimpleNamespace(usage_metadata=SimpleNamespace(total_token_count=37))
+        )
+        == 37
+    )
+    assert (
+        event_token_count(
+            SimpleNamespace(
+                usage_metadata=SimpleNamespace(
+                    total_token_count=None,
+                    prompt_token_count=11,
+                    candidates_token_count=7,
+                )
+            )
+        )
+        == 18
+    )

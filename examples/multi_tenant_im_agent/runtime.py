@@ -12,6 +12,20 @@ from .domain import AgentReply, InboundMessage, StorageBackend, TenantConfig
 TENANT_FILTER_NAME = "multi_tenant_im_governance"
 
 
+def event_token_count(event: object) -> int:
+    """Read provider-neutral token usage emitted by a tRPC-Agent Event."""
+
+    usage = getattr(event, "usage_metadata", None)
+    if usage is None:
+        return 0
+    total = getattr(usage, "total_token_count", None)
+    if total is not None:
+        return max(0, int(total))
+    prompt = getattr(usage, "prompt_token_count", 0) or 0
+    completion = getattr(usage, "candidates_token_count", 0) or 0
+    return max(0, int(prompt) + int(completion))
+
+
 def _ensure_tenant_filter_registered() -> None:
     """Register one real tRPC-Agent Filter without import-time side effects."""
 
@@ -150,6 +164,7 @@ class TrpcAgentRuntime:
             chunks: list[str] = []
             final_parts: list[str] = []
             tools: set[str] = set()
+            token_count = 0
             async for event in runner.run_async(
                 user_id=user_id,
                 session_id=session_id,
@@ -163,6 +178,7 @@ class TrpcAgentRuntime:
                     },
                 ),
             ):
+                token_count += event_token_count(event)
                 if not event.content:
                     continue
                 for part in event.content.parts or []:
@@ -173,7 +189,11 @@ class TrpcAgentRuntime:
                     elif part.text:
                         (chunks if event.partial else final_parts).append(part.text)
             text = "".join(chunks) if chunks else "".join(final_parts)
-            return AgentReply(text=text, tool_names=tuple(sorted(tools)))
+            return AgentReply(
+                text=text,
+                token_count=token_count,
+                tool_names=tuple(sorted(tools)),
+            )
 
         return await asyncio.wait_for(collect(), timeout=tenant.model_timeout_seconds)
 

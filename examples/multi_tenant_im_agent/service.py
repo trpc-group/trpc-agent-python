@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from time import perf_counter
 
 from .adapters import (
     ChannelAdapter,
@@ -25,6 +27,8 @@ from .governance import TenantPolicy
 from .repository import ControlPlaneRepository
 from .runtime import AgentRuntime
 from .telemetry import GatewayMetrics, request_span
+
+logger = logging.getLogger(__name__)
 
 
 class MultiTenantAgentService:
@@ -89,13 +93,8 @@ class MultiTenantAgentService:
         actor_user_id = derive_user_id(message, self.namespace_secret)
         session_user_id = derive_session_user_id(message, self.namespace_secret)
         now = datetime.now(timezone.utc)
-        month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-        monthly_tokens = await asyncio.to_thread(
-            self.repository.tenant_token_usage, tenant.tenant_id, month_start
-        )
-        decision = self.policy.evaluate(
-            tenant, message, monthly_tokens_used=monthly_tokens
-        )
+        budget_period = f"{now.year:04d}-{now.month:02d}"
+        decision = self.policy.evaluate(tenant, message)
         if not decision.allowed:
             await asyncio.to_thread(
                 self._audit,
@@ -155,7 +154,34 @@ class MultiTenantAgentService:
 
         event_id = 0
         trace_result = None
+        budget_reserved = False
+        budget_settled = False
         try:
+            budget_reserved = await asyncio.to_thread(
+                self.repository.reserve_token_budget,
+                tenant.tenant_id,
+                budget_period,
+                decision.estimated_tokens,
+                tenant.monthly_token_budget,
+            )
+            if not budget_reserved:
+                await asyncio.to_thread(
+                    self._audit,
+                    tenant_id=tenant.tenant_id,
+                    channel=message.channel,
+                    user_id=actor_user_id,
+                    session_id=session_id,
+                    agent_name=tenant.agent_name,
+                    decision="denied",
+                    error_type="monthly_token_budget_exceeded",
+                )
+                self.metrics.observe_request(
+                    tenant.tenant_id, message.channel, "denied", 0
+                )
+                return ChannelResponse(
+                    status_code=403,
+                    body={"ok": False, "error": "monthly_token_budget_exceeded"},
+                )
             claim = await asyncio.to_thread(
                 self.repository.claim_message, message, session_id
             )
@@ -200,24 +226,49 @@ class MultiTenantAgentService:
             with request_span(
                 tenant.tenant_id, message.channel, session_id
             ) as trace_result:
-                reply = await self.runtime.reply(
-                    tenant=tenant,
-                    message=message,
-                    user_id=session_user_id,
-                    session_id=session_id,
+                model_started = perf_counter()
+                try:
+                    reply = await self.runtime.reply(
+                        tenant=tenant,
+                        message=message,
+                        user_id=session_user_id,
+                        session_id=session_id,
+                    )
+                finally:
+                    self.metrics.observe_stage(
+                        tenant.tenant_id,
+                        "model",
+                        (perf_counter() - model_started) * 1000,
+                    )
+                charged_tokens = reply.token_count or decision.estimated_tokens
+                await asyncio.to_thread(
+                    self.repository.settle_token_budget,
+                    tenant.tenant_id,
+                    budget_period,
+                    decision.estimated_tokens,
+                    charged_tokens,
                 )
+                budget_settled = True
                 delivery = adapter.delivery(
                     binding=binding, message=message, reply=reply
                 )
-                outbox_id = await asyncio.to_thread(
-                    self.repository.complete_message,
-                    event_id=event_id,
-                    tenant_id=tenant.tenant_id,
-                    session_id=session_id,
-                    channel=message.channel,
-                    reply=reply,
-                    delivery=delivery,
-                )
+                storage_started = perf_counter()
+                try:
+                    outbox_id = await asyncio.to_thread(
+                        self.repository.complete_message,
+                        event_id=event_id,
+                        tenant_id=tenant.tenant_id,
+                        session_id=session_id,
+                        channel=message.channel,
+                        reply=reply,
+                        delivery=delivery,
+                    )
+                finally:
+                    self.metrics.observe_stage(
+                        tenant.tenant_id,
+                        "storage",
+                        (perf_counter() - storage_started) * 1000,
+                    )
                 delivery_queued = False
                 try:
                     claimed = await asyncio.to_thread(
@@ -225,15 +276,23 @@ class MultiTenantAgentService:
                     )
                     if not claimed:
                         raise RuntimeError("outbox claim failed")
-                    await self.sender.send(delivery)
+                    delivery_started = perf_counter()
+                    try:
+                        await self.sender.send(delivery)
+                    finally:
+                        self.metrics.observe_stage(
+                            tenant.tenant_id,
+                            "im_delivery",
+                            (perf_counter() - delivery_started) * 1000,
+                        )
                     await asyncio.to_thread(self.repository.mark_outbox_sent, outbox_id)
                     self.metrics.observe_delivery(message.channel, "sent")
                 except Exception:  # noqa: BLE001 - provider failures are persisted for retry
                     delivery_queued = True
-                    await asyncio.to_thread(
+                    retry_status = await asyncio.to_thread(
                         self.repository.mark_outbox_retry, outbox_id
                     )
-                    self.metrics.observe_delivery(message.channel, "retry")
+                    self.metrics.observe_delivery(message.channel, retry_status)
 
             await asyncio.to_thread(
                 self._audit,
@@ -255,6 +314,7 @@ class MultiTenantAgentService:
                 "completed",
                 trace_result.latency_ms,
                 reply.token_count or decision.estimated_tokens,
+                reply.cost,
             )
             return ChannelResponse(
                 status_code=202 if delivery_queued else 200,
@@ -284,6 +344,14 @@ class MultiTenantAgentService:
             await asyncio.to_thread(
                 self.repository.release_session_lease, session_id, lease_owner
             )
+            if budget_reserved and not budget_settled:
+                await asyncio.to_thread(
+                    self.repository.settle_token_budget,
+                    tenant.tenant_id,
+                    budget_period,
+                    decision.estimated_tokens,
+                    0,
+                )
 
     async def _handle_failure(
         self,
@@ -325,10 +393,10 @@ class MultiTenantAgentService:
                 )
                 self.metrics.observe_delivery(item.request.channel, "sent")
             except Exception:  # noqa: BLE001 - each outbox item must fail independently
-                await asyncio.to_thread(
+                retry_status = await asyncio.to_thread(
                     self.repository.mark_outbox_retry, item.outbox_id
                 )
-                self.metrics.observe_delivery(item.request.channel, "retry")
+                self.metrics.observe_delivery(item.request.channel, retry_status)
         return len(items)
 
     def _audit(self, **values) -> None:
@@ -341,4 +409,11 @@ class MultiTenantAgentService:
             "trace_id": "",
         }
         defaults.update(values)
-        self.repository.add_audit(defaults)
+        try:
+            self.repository.add_audit(defaults)
+        except Exception:  # noqa: BLE001 - audit is deliberately fail-open
+            self.metrics.observe_audit("failed")
+            # Driver exceptions can contain DSNs, so never interpolate them here.
+            logger.error("audit persistence failed")
+        else:
+            self.metrics.observe_audit("written")

@@ -79,22 +79,42 @@ class GatewayMetrics:
         self._lock = threading.Lock()
         self._requests: Counter[tuple[str, str, str]] = Counter()
         self._delivery: Counter[tuple[str, str]] = Counter()
+        self._audit: Counter[str] = Counter()
         self._latency_sum: dict[tuple[str, str], float] = defaultdict(float)
         self._latency_count: Counter[tuple[str, str]] = Counter()
         self._tokens: Counter[str] = Counter()
+        self._cost: dict[str, float] = defaultdict(float)
+        self._stage_latency_sum: dict[tuple[str, str], float] = defaultdict(float)
+        self._stage_latency_count: Counter[tuple[str, str]] = Counter()
 
     def observe_request(
-        self, tenant: str, channel: str, status: str, latency_ms: int, tokens: int = 0
+        self,
+        tenant: str,
+        channel: str,
+        status: str,
+        latency_ms: int,
+        tokens: int = 0,
+        cost: float = 0.0,
     ) -> None:
         with self._lock:
             self._requests[(tenant, channel, status)] += 1
             self._latency_sum[(tenant, channel)] += latency_ms
             self._latency_count[(tenant, channel)] += 1
             self._tokens[tenant] += tokens
+            self._cost[tenant] += cost
 
     def observe_delivery(self, channel: str, status: str) -> None:
         with self._lock:
             self._delivery[(channel, status)] += 1
+
+    def observe_audit(self, status: str) -> None:
+        with self._lock:
+            self._audit[status] += 1
+
+    def observe_stage(self, tenant: str, stage: str, latency_ms: float) -> None:
+        with self._lock:
+            self._stage_latency_sum[(tenant, stage)] += latency_ms
+            self._stage_latency_count[(tenant, stage)] += 1
 
     def render_prometheus(self) -> str:
         lines = [
@@ -122,6 +142,21 @@ class GatewayMetrics:
                 lines.append(
                     f'trpc_im_delivery_total{{channel="{channel}",status="{status}"}} {value}'
                 )
+            lines.append("# TYPE trpc_im_audit_total counter")
+            for status, value in sorted(self._audit.items()):
+                lines.append(f'trpc_im_audit_total{{status="{status}"}} {value}')
+            lines.append("# TYPE trpc_im_tokens_total counter")
             for tenant, value in sorted(self._tokens.items()):
                 lines.append(f'trpc_im_tokens_total{{tenant="{tenant}"}} {value}')
+            lines.append("# TYPE trpc_im_model_cost_total counter")
+            for tenant, value in sorted(self._cost.items()):
+                lines.append(f'trpc_im_model_cost_total{{tenant="{tenant}"}} {value}')
+            lines.append("# TYPE trpc_im_stage_latency_ms summary")
+            for (tenant, stage), value in sorted(self._stage_latency_sum.items()):
+                labels = f'tenant="{tenant}",stage="{stage}"'
+                lines.append(f"trpc_im_stage_latency_ms_sum{{{labels}}} {value}")
+                lines.append(
+                    f"trpc_im_stage_latency_ms_count{{{labels}}} "
+                    f"{self._stage_latency_count[(tenant, stage)]}"
+                )
         return "\n".join(lines) + "\n"

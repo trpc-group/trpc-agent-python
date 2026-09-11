@@ -26,4 +26,4 @@ For managed deployments, apply `alembic -c examples/multi_tenant_im_agent/alembi
 pytest examples/multi_tenant_im_agent/tests -q
 ```
 
-The test suite covers account routing, tenant/session isolation, Telegram and WeCom callback verification, governance, duplicate delivery, payload conflicts, retry after failures, session leases, transactional outbox recovery, safe audit identifiers, and HTTP operations endpoints.
+The test suite covers account routing, tenant/session isolation (including tenant-scoped app IDs), account-scoped idempotency, Telegram and WeCom callback verification, atomic token budgets, governance, duplicate delivery, payload conflicts, bounded retry/dead-letter behavior, transactional outbox recovery, audit-outage safety, provider token accounting, and HTTP operations endpoints.

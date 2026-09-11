@@ -22,17 +22,20 @@ def upgrade() -> None:
         sa.Column("display_name", sa.String(128), nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column("config_version", sa.Integer(), nullable=False),
+        sa.Column("token_budget_period", sa.String(7), nullable=False),
+        sa.Column("token_usage", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_table(
         "mt_agent_apps",
-        sa.Column("agent_app_id", sa.String(64), primary_key=True),
         sa.Column(
             "tenant_id",
             sa.String(64),
             sa.ForeignKey("mt_tenants.tenant_id"),
+            primary_key=True,
             nullable=False,
         ),
+        sa.Column("agent_app_id", sa.String(64), primary_key=True),
         sa.Column("agent_name", sa.String(128), nullable=False),
         sa.Column("model_name", sa.String(128), nullable=False),
         sa.Column("tool_allowlist_json", sa.Text(), nullable=False),
@@ -63,13 +66,11 @@ def upgrade() -> None:
         sa.Column(
             "tenant_id",
             sa.String(64),
-            sa.ForeignKey("mt_tenants.tenant_id"),
             nullable=False,
         ),
         sa.Column(
             "agent_app_id",
             sa.String(64),
-            sa.ForeignKey("mt_agent_apps.agent_app_id"),
             nullable=False,
         ),
         sa.Column("channel", sa.String(32), nullable=False),
@@ -78,6 +79,11 @@ def upgrade() -> None:
         sa.Column("last_event_seq", sa.Integer(), nullable=False),
         sa.Column("state_json", sa.Text(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["tenant_id", "agent_app_id"],
+            ["mt_agent_apps.tenant_id", "mt_agent_apps.agent_app_id"],
+            name="fk_mt_session_agent_app",
+        ),
     )
     op.create_index("ix_mt_sessions_tenant_id", "mt_sessions", ["tenant_id"])
     op.create_index("ix_mt_sessions_agent_app_id", "mt_sessions", ["agent_app_id"])
@@ -91,6 +97,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("channel", sa.String(32), nullable=False),
+        sa.Column("account_id", sa.String(128), nullable=False),
         sa.Column("external_message_id", sa.String(192), nullable=False),
         sa.Column(
             "session_id",
@@ -110,6 +117,7 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "tenant_id",
             "channel",
+            "account_id",
             "external_message_id",
             name="uq_mt_inbound_idempotency",
         ),

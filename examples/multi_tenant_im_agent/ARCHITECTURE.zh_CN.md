@@ -68,7 +68,7 @@ Worker 不保存必须持久化的状态，因此**不需要 sticky session**。
 4. 执行用户权限、长度和 Token 预算策略。
 5. 计算稳定且不可逆的 `user_id/session_id`。
 6. 获取 SQL Session 租约。获取失败返回 `429 + Retry-After`，让平台稍后重投。
-7. 用唯一键 `(tenant_id, channel, external_message_id)` 声明消息；重复消息不再次执行模型或工具。
+7. 用唯一键 `(tenant_id, channel, account_id, external_message_id)` 声明消息；同一租户的不同机器人互不误判，重复消息不再次执行模型或工具。
 8. 锁定 Session 行并递增 `last_event_seq`，形成确定的事件顺序。
 9. tRPC-Agent Runner 从共享 Redis/SQL 后端读取 Session，执行 Agent 并写回事件/state/summary。
 10. 模型结果和 Outbox 在同一事务提交。
@@ -91,8 +91,8 @@ SQLAlchemy Schema 已实现以下表：
 
 | 表 | 关键字段和作用 |
 |---|---|
-| `mt_tenants` | tenant_id、状态、配置版本 |
-| `mt_agent_apps` | tenant_id、agent、model、tool_allowlist |
+| `mt_tenants` | tenant_id、状态、配置版本、原子月度 Token 用量 |
+| `mt_agent_apps` | `(tenant_id, agent_app_id)` 复合主键、agent、model、tool_allowlist |
 | `mt_channel_bindings` | channel、account_id 唯一键、secret_ref |
 | `mt_sessions` | tenant/app/channel、HMAC 用户与会话、last_event_seq、state |
 | `mt_message_events` | 外部消息幂等键、session sequence、方向、状态、payload hash |
@@ -119,7 +119,7 @@ Session event → state → summary 的更新规则：原始事件先获得不�
 
 推荐生产组合：SQL 保存控制面和不可丢事件，Redis 保存热 Session，向量库保存 Knowledge/Memory，对象存储保存 Artifact。Redis 更新使用 Lua 或 CAS 版本，SQL 使用 `SELECT FOR UPDATE`/乐观版本，禁止“读整个 Session 后无条件覆盖”的丢更新模式。
 
-跨节点可见性：Memory 写入成功后发布 `tenant/session/memory_version` 失效通知；其他节点收到通知清理本地只读缓存。通知丢失时由短 TTL 和读取版本号兜底。
+跨节点可见性由共享 Redis/SQL Session 后端直接保证。若生产部署另加 Worker 本地只读缓存，建议在 Memory 写入成功后发布 `tenant/session/memory_version` 失效通知，并用短 TTL 与读取版本号兜底；该本地缓存层不属于本示例的已实现范围。
 
 ## 7. 数据迁移
 
@@ -150,11 +150,11 @@ Redis → SQL：按 Session 扫描，不使用生产 `KEYS *`；以版本 CAS �
 - `MsgId` 是幂等 ID；`FromUserName/ChatId` 分别映射用户和会话。
 - 外发采用配置的企业微信 Webhook，文本按 2048 字符限制。
 
-图片和文件应先存入租户对象存储，正文只传带过期时间的内部引用。平台限频由 Outbox Worker 的 token bucket 控制；429 使用 `Retry-After`，5xx 指数退避加随机抖动。撤回事件作为新事件追加，不物理删除审计记录。
+图片和文件应先存入租户对象存储，正文只传带过期时间的内部引用。当前 Outbox 对投递失败执行有上限的指数退避、稳定抖动和死信状态；若需主动贴合各平台 QPS，生产部署可在 Sender 前增加按账号隔离的 token bucket，并解析平台 `Retry-After`。撤回事件作为新事件追加，不物理删除审计记录。
 
 ## 9. 治理与安全
 
-已实现的前置策略：通道账号许可、回调验签、用户白名单、1 MiB 请求体、输入长度、单请求/月度 Token 预算、模型超时、工具默认禁用。通过网关后，Runner 仍会执行注册的 `multi_tenant_im_governance` tRPC-Agent Filter；缺少可信租户上下文的直接 Runner 调用会 fail-closed。
+已实现的前置策略：通道账号许可、回调验签、用户白名单、1 MiB 请求体、输入长度、单请求预算、原子预留并按实际用量结算的月度 Token 预算、模型超时、工具默认禁用。通过网关后，Runner 仍会执行注册的 `multi_tenant_im_governance` tRPC-Agent Filter；缺少可信租户上下文的直接 Runner 调用会 fail-closed。
 
 生产 Filter 链建议按以下顺序：
 
@@ -184,7 +184,7 @@ im.callback → tenant.resolve → signature.verify → session.lease
 
 `request_span` 已建立根 Span，tRPC-Agent 内部 Runner/模型/工具 Span 会继承当前上下文。配置 `OTEL_EXPORTER_OTLP_ENDPOINT` 后输出到 Collector。
 
-指标至少包括：
+示例直接导出的低基数指标包括请求量/总延迟、模型/存储/IM 投递阶段延迟、投递状态、审计写入状态、Token 和模型成本。tRPC-Agent 内部 Span 继续提供模型与工具明细。完整生产监控还应包括：
 
 - 按租户/通道/状态的请求量与延迟；
 - IM 投递成功、重试和死信；
@@ -208,7 +208,7 @@ im.callback → tenant.resolve → signature.verify → session.lease
 | IM 回复失败 | Agent 结果和 Outbox 已提交，后台重试，不再次运行 Agent |
 | 配置错误 | 原子热更新拒绝整批错误配置，继续使用上一版本 |
 
-超过最大重试次数进入死信表/队列并告警，人工重放必须保留原 outbox_id。
+Outbox 第 8 次投递仍失败后转为 `dead_letter` 状态，指标可直接告警；人工重放必须保留原 outbox_id。
 
 ## 12. 部署、灰度和回滚
 
