@@ -1,0 +1,72 @@
+services:
+  migrate:
+    build:
+      context: ../..
+      dockerfile: examples/multi_tenant_im_agent/Dockerfile
+    env_file: .env
+    environment:
+      CONTROL_PLANE_DB_URL: mysql+pymysql://agent:${MYSQL_PASSWORD}@mysql:3306/trpc_agent
+    command:
+      - alembic
+      - -c
+      - examples/multi_tenant_im_agent/alembic.ini
+      - upgrade
+      - head
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: examples/multi_tenant_im_agent/Dockerfile
+    env_file: .env
+    environment:
+      TENANT_CONFIG_FILE: /app/config/tenants.json
+      CONTROL_PLANE_DB_URL: mysql+pymysql://agent:${MYSQL_PASSWORD}@mysql:3306/trpc_agent
+      REDIS_URL: redis://redis:6379/0
+      AUTO_CREATE_SCHEMA: "false"
+    volumes:
+      - ./config.example.json:/app/config/tenants.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: trpc_agent
+      MYSQL_USER: agent
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command: ["--transaction-isolation=READ-COMMITTED"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uagent -p$$MYSQL_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  mysql-data:
+  redis-data:

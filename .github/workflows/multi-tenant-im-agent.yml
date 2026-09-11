@@ -1,0 +1,49 @@
+name: Multi-Tenant IM Agent
+
+on:
+  push:
+    branches:
+      - "feature/**"
+    paths:
+      - "examples/multi_tenant_im_agent/**"
+      - ".github/workflows/multi-tenant-im-agent.yml"
+      - "pyproject.toml"
+  pull_request:
+    paths:
+      - "examples/multi_tenant_im_agent/**"
+      - ".github/workflows/multi-tenant-im-agent.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project and verification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[multi-tenant-im]" pytest pytest-asyncio ruff fastapi httpx
+
+      - name: Lint and format check
+        run: |
+          ruff check examples/multi_tenant_im_agent
+          ruff format --check examples/multi_tenant_im_agent
+
+      - name: Unit and migration contract tests
+        run: python -m pytest examples/multi_tenant_im_agent/tests -q
+
+      - name: Black-box HTTP acceptance
+        run: python examples/multi_tenant_im_agent/scripts/judge_demo.py

@@ -1,0 +1,32 @@
+@baseUrl = http://127.0.0.1:8080
+@telegramSecret = local-telegram-secret
+@adminToken = local-demo-admin-token
+
+### Liveness
+GET {{baseUrl}}/healthz
+
+### Tenant-safe Admin API
+GET {{baseUrl}}/admin/tenants
+X-Admin-Token: {{adminToken}}
+
+### Tenant-labelled metrics require the same operations token
+GET {{baseUrl}}/metrics
+X-Metrics-Token: {{adminToken}}
+
+### Telegram callback (change update_id before replaying a new turn)
+POST {{baseUrl}}/webhooks/telegram/acme-support-bot
+Content-Type: application/json
+X-Telegram-Bot-Api-Secret-Token: {{telegramSecret}}
+
+{
+  "update_id": 2026091001,
+  "message": {
+    "message_id": 1,
+    "from": {"id": 10001},
+    "chat": {"id": 10001, "type": "private"},
+    "text": "你好，请验证多租户 IM Agent"
+  }
+}
+
+### WeCom signatures contain the current timestamp and must be generated dynamically.
+### Run scripts/acceptance.py for a complete signed WeCom example.

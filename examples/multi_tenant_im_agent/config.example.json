@@ -1,0 +1,32 @@
+{
+  "tenants": [
+    {
+      "tenant_id": "demo-acme",
+      "display_name": "Acme Demo",
+      "agent_app_id": "customer-service",
+      "agent_name": "customer_service_agent",
+      "model_name": "gpt-4o-mini",
+      "model_api_key_env": "ACME_MODEL_API_KEY",
+      "session_backend": "redis",
+      "session_dsn_env": "REDIS_URL",
+      "tool_allowlist": [],
+      "max_input_chars": 8000,
+      "request_token_budget": 4096,
+      "monthly_token_budget": 1000000,
+      "bindings": [
+        {
+          "channel": "telegram",
+          "account_id": "acme-support-bot",
+          "webhook_secret_env": "ACME_TELEGRAM_WEBHOOK_SECRET",
+          "bot_token_env": "ACME_TELEGRAM_BOT_TOKEN"
+        },
+        {
+          "channel": "wecom",
+          "account_id": "acme-wecom-app",
+          "webhook_secret_env": "ACME_WECOM_CALLBACK_TOKEN",
+          "outbound_webhook_env": "ACME_WECOM_OUTBOUND_WEBHOOK"
+        }
+      ]
+    }
+  ]
+}
