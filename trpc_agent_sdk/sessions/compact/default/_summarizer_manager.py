@@ -113,7 +113,7 @@ class DefaultSessionSummarizerManager(CompactSummarizerManagerABC):
                     original_event_count=original_event_count,
                     compressed_event_count=len(session.events),
                     summary_timestamp=time.time(),
-                    model_name=self._summarizer.model.name,
+                    model_name=getattr(self._summarizer.model, "name", ""),
                 )
                 session.conversation_count = 0
             # Update the stored session

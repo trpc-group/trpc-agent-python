@@ -14,9 +14,10 @@ if TYPE_CHECKING:
     # Lazy re-export — see ``_LAZY_REEXPORTS`` below.
     from trpc_agent_sdk.agents.sub_agent import DynamicSubAgentTool as DynamicSubAgentTool  # noqa: F401
     from trpc_agent_sdk.agents.sub_agent import SpawnSubAgentTool as SpawnSubAgentTool  # noqa: F401
-    # from trpc_agent_sdk.tools._advanced_memory_tool import AdvancedMemoryTools as AdvancedMemoryTools  # noqa: F401
-    # from trpc_agent_sdk.tools._advanced_memory_tool import (  # noqa: F401
-    #     create_advanced_memory_tools as create_advanced_memory_tools, )
+    from trpc_agent_sdk.tools.advanced_memory import AdvancedMemory as AdvancedMemory  # noqa: F401
+    from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryToolSet as AdvancedMemoryToolSet  # noqa: F401
+    from trpc_agent_sdk.tools.advanced_memory import (  # noqa: F401
+        create_advanced_memory_toolset as create_advanced_memory_toolset, )
 
 from ._agent_tool import AGENT_TOOL_APP_NAME_SUFFIX
 from ._agent_tool import AgentTool
@@ -202,14 +203,18 @@ __all__ = [
 # the tools package free of optional file/web tool dependencies) but exposed
 # here for discoverability. Not in ``__all__`` so ``import *`` stays lazy.
 _LAZY_REEXPORTS = {
-    # "AdvancedMemoryTools": (
-    #     "trpc_agent_sdk.tools._advanced_memory_tool",
-    #     "AdvancedMemoryTools",
-    # ),
-    # "create_advanced_memory_tools": (
-    #     "trpc_agent_sdk.tools._advanced_memory_tool",
-    #     "create_advanced_memory_tools",
-    # ),
+    "AdvancedMemory": (
+        "trpc_agent_sdk.tools.advanced_memory",
+        "AdvancedMemory",
+    ),
+    "AdvancedMemoryToolSet": (
+        "trpc_agent_sdk.tools.advanced_memory",
+        "AdvancedMemoryToolSet",
+    ),
+    "create_advanced_memory_toolset": (
+        "trpc_agent_sdk.tools.advanced_memory",
+        "create_advanced_memory_toolset",
+    ),
     "DynamicSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "DynamicSubAgentTool"),
     "SpawnSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "SpawnSubAgentTool"),
 }
