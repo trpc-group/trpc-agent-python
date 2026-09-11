@@ -8,16 +8,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryPaths
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.tools import AdvancedMemoryTools
-from trpc_agent_sdk.tools import create_advanced_memory_tools
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryPaths
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryToolSet
+from trpc_agent_sdk.tools.advanced_memory import create_advanced_memory_toolset
 
 
 def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     """Create a test runtime with long-term memory enabled."""
-    return AdvancedMemoryRuntime.create(AdvancedMemoryServiceConfig(
+    return AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
         enabled=True,
         root_dir=tmp_path,
     )).for_scope("demo-app", "demo-user")
@@ -26,9 +26,12 @@ def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
 async def test_save_read_and_update_memory_index(tmp_path: Path) -> None:
     """Ensure the tools save, read, and update one index entry."""
     runtime = _runtime(tmp_path)
-    tools = AdvancedMemoryTools(runtime)
+    tools = await AdvancedMemoryToolSet(runtime).get_tools()
+    save_memory = tools[0].func
+    read_memory = tools[1].func
+    list_memory_index = tools[2].func
 
-    await tools.save_memory(
+    await save_memory(
         filename="preferences.md",
         name="编码偏好",
         description="保存用户编码偏好",
@@ -36,7 +39,7 @@ async def test_save_read_and_update_memory_index(tmp_path: Path) -> None:
         summary="用户使用 Python 3.12",
         content="用户使用 Python 3.12。",
     )
-    await tools.save_memory(
+    await save_memory(
         filename="preferences.md",
         name="编码偏好",
         description="保存用户编码偏好",
@@ -45,8 +48,8 @@ async def test_save_read_and_update_memory_index(tmp_path: Path) -> None:
         content="公共函数需要中文 docstring。",
     )
 
-    result = await tools.read_memory("preferences.md")
-    index = await tools.list_memory_index()
+    result = await read_memory("preferences.md")
+    index = await list_memory_index()
     assert result["found"] is True
     assert "公共函数需要中文 docstring" in result["content"]
     assert result["freshness"] == "today"
@@ -58,10 +61,10 @@ async def test_save_read_and_update_memory_index(tmp_path: Path) -> None:
 
 async def test_save_memory_rejects_unknown_type(tmp_path: Path) -> None:
     """Ensure the tools reject unsupported memory types."""
-    tools = AdvancedMemoryTools(_runtime(tmp_path))
+    tools = await AdvancedMemoryToolSet(_runtime(tmp_path)).get_tools()
 
     with pytest.raises(ValueError, match="memory_type"):
-        await tools.save_memory(
+        await tools[0].func(
             filename="invalid.md",
             name="无效类型",
             description="测试无效类型",
@@ -80,7 +83,7 @@ async def test_list_memory_index_reports_backend_storage_reference(
     expected_prefix: str,
 ) -> None:
     """Avoid exposing a local filesystem path for external memory stores."""
-    config = AdvancedMemoryServiceConfig(
+    config = AdvancedMemoryConfig(
         storage_backend=storage_backend,
         redis_url="redis://localhost:6379/0" if storage_backend == "redis" else None,
         sql_url="sqlite:///advanced-memory.db" if storage_backend == "sql" else None,
@@ -93,15 +96,17 @@ async def test_list_memory_index_reports_backend_storage_reference(
         long_term_memory=SimpleNamespace(read_index=AsyncMock(return_value="")),
     )
 
-    result = await AdvancedMemoryTools(runtime).list_memory_index()
+    tools = await AdvancedMemoryToolSet(runtime).get_tools()
+    result = await tools[2].func()
 
     assert result["index_path"].startswith(expected_prefix)
     assert str(paths.memory_index_path) not in result["index_path"]
 
 
-def test_factory_returns_three_named_tools(tmp_path: Path) -> None:
-    """Ensure the factory returns the three installable tools."""
-    tools = create_advanced_memory_tools(_runtime(tmp_path))
+async def test_factory_returns_three_named_tools(tmp_path: Path) -> None:
+    """Ensure the factory returns a toolset with three installable tools."""
+    toolset = create_advanced_memory_toolset(_runtime(tmp_path))
+    tools = await toolset.get_tools()
 
     tool_names = {tool.name for tool in tools}
     assert tool_names == {

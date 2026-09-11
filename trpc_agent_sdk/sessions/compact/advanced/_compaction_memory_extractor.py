@@ -473,6 +473,13 @@ class SessionMemoryExtractor:
         parts = record.get("event", {}).get("content", {}).get("parts", [])
         return any(isinstance(part, dict) and (part.get("function_call") or part.get("functionCall")) for part in parts)
 
+    def _event_has_tool_response(self, record: dict[str, Any]) -> bool:
+        """Return whether one Session Event contains a function response."""
+        parts = record.get("event", {}).get("content", {}).get("parts", [])
+        return any(
+            isinstance(part, dict) and (part.get("function_response") or part.get("functionResponse"))
+            for part in parts)
+
     def _fits_prompt_budget(
         self,
         extraction_input: SessionMemoryExtractionInput,
@@ -716,9 +723,9 @@ class SessionMemoryExtractor:
                          (config.initial_tokens if token_mode else
                           (config.update_chars if checkpoint_event_id is not None else config.initial_chars)))
             tool_calls = self._count_tool_calls(pending)
-            natural_break = not self._last_event_has_tool_call(pending)
-            if not natural_break:
-                return SessionMemoryExtractionResult(reason="unsafe-boundary")
+            if self._last_event_has_tool_call(pending):
+                return SessionMemoryExtractionResult(False, "unsafe-boundary")
+            natural_break = not self._event_has_tool_response(pending[-1])
             threshold_met = ((context_tokens >= threshold if checkpoint_context_tokens is None else
                               (context_tokens < checkpoint_context_tokens or context_tokens -
                                checkpoint_context_tokens >= threshold)) if token_mode else pending_chars >= threshold)

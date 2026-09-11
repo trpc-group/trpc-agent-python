@@ -28,3 +28,7 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+# Local-only examples
+examples/session_service_with_advanced_memory_sql/
+examples/session_service_with_advanced_memory_redis/
