@@ -11,13 +11,17 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
-from typing import Protocol
-from typing import TYPE_CHECKING
+from typing import Optional
+from typing_extensions import override
 
-if TYPE_CHECKING:
-    from trpc_agent_sdk.context import InvocationContext
-    from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.types import Content
+
+from ._config import TokenContextTrackerConfig
+from ._base import BaseTokenEstimator
 
 _CJK_CHARACTER = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 
@@ -28,7 +32,7 @@ class ContextTokenEstimate:
 
     tokens: int
     source: str
-    usage_event_id: str | None = None
+    usage_event_id: Optional[str] = field(default=None)
 
 
 @dataclass(frozen=True)
@@ -36,11 +40,11 @@ class ContextBudget:
     """Describe the model window and the request's position within it."""
 
     estimate: ContextTokenEstimate
-    context_window_tokens: int | None
-    effective_window_tokens: int | None
-    warning_threshold_tokens: int | None
-    autocompact_threshold_tokens: int | None
-    blocking_threshold_tokens: int | None
+    context_window_tokens: Optional[int] = field(default=None)
+    effective_window_tokens: Optional[int] = field(default=None)
+    warning_threshold_tokens: Optional[int] = field(default=None)
+    auto_compact_threshold_tokens: Optional[int] = field(default=None)
+    blocking_threshold_tokens: Optional[int] = field(default=None)
 
     @property
     def token_mode_enabled(self) -> bool:
@@ -48,23 +52,10 @@ class ContextBudget:
         return self.effective_window_tokens is not None
 
 
-class TokenEstimator(Protocol):
-    """Define the replaceable token estimator interface."""
-
-    def estimate_payload_tokens(self, payload: Any) -> int:
-        """Estimate tokens for any JSON-compatible payload."""
-
-
-class ModelContextWindowResolver(Protocol):
-    """Define the model-identifier context-window resolver interface."""
-
-    def resolve_context_window_tokens(self, model: Any) -> int | None:
-        """Return the model context window, or None when unknown."""
-
-
-class HeuristicTokenEstimator:
+class HeuristicTokenEstimator(BaseTokenEstimator):
     """Estimate JSON request tokens with a mixed-language heuristic."""
 
+    @override
     def estimate_payload_tokens(self, payload: Any) -> int:
         """Estimate CJK at one token per character and other text at four characters per token."""
         rendered = json.dumps(
@@ -111,17 +102,17 @@ def _usage_context_tokens(usage: Any) -> int | None:
     return sum(value for value in values if isinstance(value, int))
 
 
-def _request_static_fingerprint(request: "LlmRequest") -> str:
+def _request_static_fingerprint(request: LlmRequest) -> str:
     """Extract fingerprints for model, instructions, and tool configuration."""
-    config = getattr(request, "config", None)
-    if hasattr(config, "model_dump"):
+    config = request.config
+    if config is not None:
         config_payload = config.model_dump(
             mode="python",
             by_alias=True,
             exclude_none=True,
         )
     else:
-        config_payload = config
+        config_payload = {}
     return json.dumps(
         {
             "model": request.model,
@@ -134,45 +125,46 @@ def _request_static_fingerprint(request: "LlmRequest") -> str:
     )
 
 
-class TokenContextTracker:
+class TokenContextTracker(BaseTokenEstimator):
     """Estimate request context tokens from usage and new content."""
 
-    def __init__(self, config: Any) -> None:
+    def __init__(self, config: TokenContextTrackerConfig):
         """Store configuration and choose the default or injected estimator."""
         self._config = config
-        estimator = getattr(config, "token_estimator", None)
-        self._estimator: TokenEstimator = estimator or HeuristicTokenEstimator()
+        self._estimator = config.estimator or HeuristicTokenEstimator()
 
-    def _resolve_window_tokens(self, ctx: "InvocationContext | None") -> int | None:
+    def _resolve_window_tokens(self, ctx: InvocationContext) -> Optional[int]:
         """Resolve the model context window from config or an application resolver."""
-        explicit = getattr(self._config, "model_context_window_tokens", None)
-        if isinstance(explicit, int) and explicit > 0:
+        if not self._config.enabled:
+            return None
+        explicit = self._config.model_context_window_tokens
+        if explicit is not None and explicit > 0:
             return explicit
-        resolver = getattr(self._config, "context_window_resolver", None)
+        resolver = self._config.context_window_resolver
         if resolver is None or ctx is None:
             return None
-        model = getattr(getattr(ctx, "agent", None), "model", None)
+        model = ctx.agent.model if ctx.agent else None
         resolved = resolver.resolve_context_window_tokens(model)
-        return resolved if isinstance(resolved, int) and resolved > 0 else None
+        return resolved if resolved is not None and resolved > 0 else None
 
-    def _estimate_request(self, request: "LlmRequest") -> int:
+    def _estimate_request(self, request: LlmRequest) -> int:
         """Estimate tokens for a complete LlmRequest."""
         payload = request.model_dump(mode="python", by_alias=True, exclude_none=True)
         return self._estimator.estimate_payload_tokens(payload)
 
-    def _estimate_new_contents(self, contents: list[Any]) -> int:
+    def _estimate_new_contents(self, contents: list[Content]) -> int:
         """Estimate content tokens added after a usage baseline."""
         payload = [content.model_dump(mode="python", by_alias=True, exclude_none=True) for content in contents]
         return self._estimator.estimate_payload_tokens(payload) if payload else 0
 
     def _latest_usage_baseline(
         self,
-        request: "LlmRequest",
-        ctx: "InvocationContext | None",
+        request: LlmRequest,
+        ctx: InvocationContext,
     ) -> ContextTokenEstimate | None:
         """Match the latest usage event and estimate subsequent context."""
-        session = getattr(ctx, "session", None) if ctx is not None else None
-        events = getattr(session, "events", None)
+        session = ctx.session
+        events = session.events
         if not isinstance(events, list):
             return None
         fingerprints = [_content_fingerprint(content) for content in request.contents]
@@ -200,10 +192,10 @@ class TokenContextTracker:
             )
         return None
 
-    def estimate(
+    def _estimate(
         self,
-        request: "LlmRequest",
-        ctx: "InvocationContext | None" = None,
+        request: LlmRequest,
+        ctx: InvocationContext,
     ) -> ContextTokenEstimate:
         """Prefer recent model usage, falling back to a full request estimate."""
         baseline = self._latest_usage_baseline(request, ctx)
@@ -214,21 +206,30 @@ class TokenContextTracker:
             source="estimated",
         )
 
+    def estimate(
+        self,
+        request: LlmRequest,
+        ctx: InvocationContext,
+    ) -> ContextTokenEstimate:
+        """Return the best available token estimate for a request."""
+        return self._estimate(request, ctx)
+
+    @override
     def estimate_payload_tokens(self, payload: Any) -> int:
         """Reuse the same estimator for non-request inputs such as session memory."""
         return self._estimator.estimate_payload_tokens(payload)
 
-    def estimate_request_tokens(self, request: "LlmRequest") -> int:
+    def estimate_request_tokens(self, request: LlmRequest) -> int:
         """Estimate a complete request without applying a usage baseline."""
         return self._estimate_request(request)
 
-    def token_mode_enabled(self, ctx: "InvocationContext | None" = None) -> bool:
+    def token_mode_enabled(self, ctx: InvocationContext) -> bool:
         """Return whether the configuration resolves a model context window."""
         return self._resolve_window_tokens(ctx) is not None
 
     def effective_context_window_tokens(
         self,
-        ctx: "InvocationContext | None" = None,
+        ctx: InvocationContext,
     ) -> int | None:
         """Return the input window after max output, or None when unknown."""
         context_window = self._resolve_window_tokens(ctx)
@@ -237,39 +238,40 @@ class TokenContextTracker:
         effective = context_window - getattr(self._config, "max_output_tokens", 0)
         return effective if effective > 0 else None
 
+    @classmethod
     def record_request_context(
-        self,
-        request: "LlmRequest",
-        ctx: "InvocationContext | None",
+        cls,
+        request: LlmRequest,
+        ctx: InvocationContext,
     ) -> None:
         """Stage the final request fingerprint for persistence on the response Event."""
-        session = getattr(ctx, "session", None) if ctx is not None else None
-        state = getattr(session, "state", None)
+        session = ctx.session
+        state = session.state
         if isinstance(state, dict):
             state["advanced_memory_pending_request_context_fingerprint"] = _request_static_fingerprint(request)
 
     def budget(
         self,
-        request: "LlmRequest",
-        ctx: "InvocationContext | None" = None,
+        request: LlmRequest,
+        ctx: InvocationContext,
     ) -> ContextBudget:
         """Calculate the effective window, thresholds, and token estimate."""
-        estimate = self.estimate(request, ctx)
+        estimate = self._estimate(request, ctx)
         context_window = self._resolve_window_tokens(ctx)
         if context_window is None:
-            return ContextBudget(estimate, None, None, None, None, None)
-        max_output_tokens = getattr(self._config, "max_output_tokens", 0)
+            return ContextBudget(estimate=estimate)
+        max_output_tokens = self._config.max_output_tokens
         effective = context_window - max_output_tokens
         if effective <= 0:
-            return ContextBudget(estimate, context_window, None, None, None, None)
-        warning = math.floor(effective * getattr(self._config, "token_warning_ratio", 0.85))
-        autocompact = math.floor(effective * getattr(self._config, "token_autocompact_ratio", 0.90))
-        blocking = math.floor(effective * getattr(self._config, "token_blocking_ratio", 0.95))
+            return ContextBudget(estimate=estimate, context_window_tokens=context_window)
+        warning = math.floor(effective * self._config.warning_ratio)
+        auto_compact = math.floor(effective * self._config.auto_compact_ratio)
+        blocking = math.floor(effective * self._config.blocking_ratio)
         return ContextBudget(
-            estimate,
-            context_window,
-            effective,
-            warning,
-            autocompact,
-            blocking,
+            estimate=estimate,
+            context_window_tokens=context_window,
+            effective_window_tokens=effective,
+            warning_threshold_tokens=warning,
+            auto_compact_threshold_tokens=auto_compact,
+            blocking_threshold_tokens=blocking,
         )

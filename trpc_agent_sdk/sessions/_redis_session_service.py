@@ -13,10 +13,10 @@ import time
 import uuid
 from typing import Any
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from trpc_agent_sdk.abc import ListSessionsResponse
+from trpc_agent_sdk.abc import CompactSummarizerManagerABC
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
@@ -28,7 +28,6 @@ from trpc_agent_sdk.utils import user_key
 
 from ._base_session_service import BaseSessionService
 from ._session import Session
-from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import app_state_key
@@ -36,9 +35,6 @@ from ._utils import extract_state_delta
 from ._utils import merge_state
 from ._utils import session_key
 from ._utils import user_state_key
-
-if TYPE_CHECKING:
-    from .compact._base_manager import BaseSessionCompactManager
 
 
 def _session_key_prefix(app_name: str, user_id: Optional[str] = None) -> str:
@@ -90,10 +86,9 @@ class RedisSessionService(BaseSessionService):
 
     def __init__(self,
                  db_url: str,
-                 summarizer_manager: Optional[SummarizerSessionManager] = None,
+                 summarizer_manager: Optional[CompactSummarizerManagerABC] = None,
                  session_config: Optional[SessionServiceConfig] = None,
                  is_async: bool = False,
-                 session_compact_manager: BaseSessionCompactManager | None = None,
                  **kwargs: Any):
         self._db_url = db_url
         self._is_async = is_async
@@ -101,7 +96,6 @@ class RedisSessionService(BaseSessionService):
         super().__init__(
             summarizer_manager=summarizer_manager,
             session_config=session_config,
-            session_compact_manager=session_compact_manager,
         )
         if is_default_config:
             # Default to store historical events for persistent backends.
@@ -267,6 +261,29 @@ class RedisSessionService(BaseSessionService):
         return event
 
     @override
+    async def update_session_state(
+        self,
+        session: Session,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Persist session-scoped state without replacing the caller's Event window."""
+        if not state_delta:
+            return
+        session.state.update(state_delta)
+
+        async with self._redis_storage.create_db_session() as redis_session:
+            key = session_key(session.app_name, session.user_id, session.id)
+            storage_session = await self._get_session(redis_session, key)
+            if not storage_session:
+                logger.warning(
+                    "Session %s not found in Redis while updating state",
+                    session.id,
+                )
+                return
+            storage_session.state.update(state_delta)
+            await self._set_session(redis_session, storage_session)
+
+    @override
     async def update_session(self, session: Session) -> None:
         """Update a session in storage.
 
@@ -281,75 +298,6 @@ class RedisSessionService(BaseSessionService):
                                session.app_name, session.user_id)
                 return
             await self._set_session(redis_session, session)
-
-    @override
-    async def patch_session_state(
-        self,
-        session: Session,
-        state_delta: dict[str, Any],
-    ) -> None:
-        """Atomically merge state while preserving concurrently written Events."""
-        script = """
-local raw = redis.call('GET', KEYS[1])
-if not raw then
-  return false
-end
-local value = cjson.decode(raw)
-local delta = cjson.decode(ARGV[1])
-if not value.state then
-  value.state = {}
-end
-for key, item in pairs(delta) do
-  value.state[key] = item
-end
-if type(value.events) == 'table' and next(value.events) == nil then
-  value.events = cjson.empty_array
-end
-if type(value.historical_events) == 'table' and next(value.historical_events) == nil then
-  value.historical_events = cjson.empty_array
-end
-if type(value.historicalEvents) == 'table' and next(value.historicalEvents) == nil then
-  value.historicalEvents = cjson.empty_array
-end
-local timestamp = tonumber(ARGV[2])
-if value.last_update_time ~= nil then
-  value.last_update_time = timestamp
-end
-if value.lastUpdateTime ~= nil then
-  value.lastUpdateTime = timestamp
-end
-local encoded = cjson.encode(value)
-local ttl = tonumber(ARGV[3])
-if ttl > 0 then
-  redis.call('SET', KEYS[1], encoded, 'EX', ttl)
-else
-  redis.call('SET', KEYS[1], encoded)
-end
-return encoded
-"""
-        timestamp = time.time()
-        ttl = (int(self._session_config.ttl.ttl_seconds) if self._session_config.ttl.need_ttl_expire() else 0)
-        key = session_key(session.app_name, session.user_id, session.id)
-        async with self._redis_storage.create_db_session() as redis_session:
-            result = await self._redis_storage.execute_command(
-                redis_session,
-                RedisCommand(
-                    method="eval",
-                    args=(
-                        script,
-                        1,
-                        key,
-                        json.dumps(state_delta, default=str),
-                        timestamp,
-                        ttl,
-                    ),
-                ),
-            )
-        if not result:
-            raise ValueError(f"Session {session.id} was not found")
-        stored_session = _session_from_storage_json(result)
-        session.state.update(state_delta)
-        session.last_update_time = stored_session.last_update_time
 
     @override
     async def close(self) -> None:

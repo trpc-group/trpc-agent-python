@@ -24,7 +24,7 @@ import pytest
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._session import Session
-from trpc_agent_sdk.sessions._summarizer_checker import (
+from trpc_agent_sdk.sessions.compact.default._checker import (
     set_summarizer_check_functions_by_and,
     set_summarizer_check_functions_by_or,
     set_summarizer_conversation_threshold,
@@ -284,7 +284,7 @@ class TestConversationThreshold:
         checker = set_summarizer_conversation_threshold(10)
         session = _make_session(conversation_count=15)
         assert checker(session) is True
-        assert session.conversation_count == 0
+        assert session.conversation_count == 15
 
     def test_below_threshold(self):
         checker = set_summarizer_conversation_threshold(10)
@@ -301,12 +301,12 @@ class TestConversationThreshold:
         session = _make_session(conversation_count=101)
         assert checker(session) is True
 
-    def test_resets_count_on_true(self):
+    def test_does_not_mutate_count(self):
         checker = set_summarizer_conversation_threshold(5)
         session = _make_session(conversation_count=10)
         result = checker(session)
         assert result is True
-        assert session.conversation_count == 0
+        assert session.conversation_count == 10
 
 
 class TestCheckFunctionsByAnd:

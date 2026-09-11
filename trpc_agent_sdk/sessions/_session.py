@@ -160,10 +160,8 @@ class Session(SessionABC):
             None,
         )
         if boundary_index is None:
-            raise ValueError(
-                f"Session compaction boundary Event {boundary_event_id!r} "
-                "is not in the active event window"
-            )
+            raise ValueError(f"Session compaction boundary Event {boundary_event_id!r} "
+                             "is not in the active event window")
 
         replaced = self.events[:boundary_index + 1]
         if not replaced:

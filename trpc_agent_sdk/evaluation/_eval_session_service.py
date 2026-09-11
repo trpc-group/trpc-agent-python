@@ -9,15 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import Session
-
-if TYPE_CHECKING:
-    from trpc_agent_sdk.sessions.compact import BaseSessionCompactManager
 
 
 class EvalSessionService(BaseSessionService):
@@ -33,19 +29,6 @@ class EvalSessionService(BaseSessionService):
     def session_config(self):
         """Expose the storage service's Session configuration."""
         return self._inner.session_config
-
-    @property
-    def session_compact_manager(self) -> Optional["BaseSessionCompactManager"]:
-        """Expose Session Compact installed on the storage service."""
-        return self._inner.session_compact_manager
-
-    def set_session_compact_manager(
-        self,
-        compact_manager: "BaseSessionCompactManager",
-        force: bool = False,
-    ) -> None:
-        """Install Session Compact on the service that owns persistence."""
-        self._inner.set_session_compact_manager(compact_manager, force=force)
 
     @override
     async def create_session(
@@ -107,17 +90,6 @@ class EvalSessionService(BaseSessionService):
     @override
     async def update_session(self, session: Session) -> None:
         return await self._inner.update_session(session=session)
-
-    @override
-    async def patch_session_state(
-        self,
-        session: Session,
-        state_delta: dict[str, Any],
-    ) -> None:
-        return await self._inner.patch_session_state(
-            session=session,
-            state_delta=state_delta,
-        )
 
     @override
     async def create_session_summary(self, session: Session, ctx: Any = None) -> None:

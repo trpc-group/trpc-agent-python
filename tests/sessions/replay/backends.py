@@ -25,7 +25,9 @@ from trpc_agent_sdk.sessions import RedisSessionService
 from trpc_agent_sdk.sessions import SessionServiceConfig
 from trpc_agent_sdk.sessions import SessionSummarizer
 from trpc_agent_sdk.sessions import SqlSessionService
-from trpc_agent_sdk.sessions._summarizer_manager import SummarizerSessionManager
+from trpc_agent_sdk.sessions.compact.default._summarizer_manager import (
+    DefaultSessionSummarizerManager as SummarizerSessionManager,
+)
 
 from .harness import ReplayBackend
 from .report import BackendStatus

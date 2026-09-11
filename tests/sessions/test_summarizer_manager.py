@@ -20,8 +20,11 @@ import pytest
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._session import Session
-from trpc_agent_sdk.sessions._session_summarizer import SessionSummarizer, SessionSummary
-from trpc_agent_sdk.sessions._summarizer_manager import SummarizerSessionManager
+from trpc_agent_sdk.sessions.compact.default._summarizer import DefaultSessionSummarizer as SessionSummarizer
+from trpc_agent_sdk.sessions.compact.default._summarizer import DefaultSessionSummary as SessionSummary
+from trpc_agent_sdk.sessions.compact.default._summarizer_manager import (
+    DefaultSessionSummarizerManager as SummarizerSessionManager,
+)
 from trpc_agent_sdk.types import Content, Part
 
 
@@ -139,11 +142,12 @@ class TestCreateSessionSummary:
         mock_service = AsyncMock()
         manager.set_session_service(mock_service)
 
-        session = _make_session(events=[_make_event()])
+        session = _make_session(events=[_make_event()], conversation_count=15)
         await manager.create_session_summary(session)
 
         manager._summarizer.create_session_summary.assert_called_once()
         mock_service.update_session.assert_called_once()
+        assert session.conversation_count == 0
 
     async def test_no_summary_when_should_not_summarize(self):
         model = _make_model()

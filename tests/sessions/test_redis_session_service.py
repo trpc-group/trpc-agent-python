@@ -377,7 +377,7 @@ class TestRedisUpdateSession:
 
         stale = session.model_copy(deep=True)
         stale.events = []
-        await svc.patch_session_state(stale, {"_trpc_agent:summary": {"v": 1}})
+        await svc.update_session_state(stale, {"_trpc_agent:summary": {"v": 1}})
 
         stored = await svc.get_session(
             app_name="app",
@@ -409,7 +409,7 @@ class TestRedisUpdateSession:
         assert loaded is not None
         assert loaded.historical_events == []
 
-        await svc.patch_session_state(loaded, {"_trpc_agent:summary": {"v": 1}})
+        await svc.update_session_state(loaded, {"_trpc_agent:summary": {"v": 1}})
         assert loaded.state["_trpc_agent:summary"] == {"v": 1}
         await svc.close()
 

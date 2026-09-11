@@ -14,11 +14,15 @@ import os
 
 from dotenv import load_dotenv
 
-from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
-from trpc_agent_sdk.sessions.compact import AdvancedSessionCompactManager
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import SessionServiceConfig
 from trpc_agent_sdk.sessions import SqlSessionService
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizer
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizerConfig
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizerManager
+from trpc_agent_sdk.sessions.compact import AutoCompactSummarizerConfig
+from trpc_agent_sdk.sessions.compact import SessionMemoryExtractorConfig
+from trpc_agent_sdk.sessions.compact import TokenContextTrackerConfig
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
@@ -36,17 +40,21 @@ def sql_url() -> str:
             f"{db_host}:{db_port}/{db_name}?charset=utf8mb4")
 
 
-def create_compact_config() -> AdvancedCompactConfig:
+def create_compact_config() -> AdvancedAutoCompactSummarizerConfig:
     """Configure only the settings needed to demonstrate one compaction."""
-    return AdvancedCompactConfig(
-        model_context_window_tokens=4096,
-        max_output_tokens=256,
-        token_warning_ratio=0.25,
-        token_autocompact_ratio=0.30,
-        token_blocking_ratio=0.95,
-        session_memory_initial_tokens=500,
-        session_memory_update_tokens=500,
-        autocompact_keep_recent_contents=2,
+    return AdvancedAutoCompactSummarizerConfig(
+        token_context_tracker=TokenContextTrackerConfig(
+            model_context_window_tokens=4096,
+            max_output_tokens=256,
+            warning_ratio=0.25,
+            auto_compact_ratio=0.30,
+            blocking_ratio=0.95,
+        ),
+        session_memory=SessionMemoryExtractorConfig(
+            initial_tokens=500,
+            update_tokens=500,
+        ),
+        auto_compact=AutoCompactSummarizerConfig(keep_recent_contents=2),
     )
 
 
@@ -59,13 +67,15 @@ async def main() -> None:
 
     agent = create_agent()
     compact_config = create_compact_config()
-    compact_manager = AdvancedSessionCompactManager(config=compact_config)
+    compact_manager = AdvancedAutoCompactSummarizerManager(
+        AdvancedAutoCompactSummarizer(compact_config),
+    )
     session_config = SessionServiceConfig(store_historical_events=True)
     session_service = SqlSessionService(
         db_url=sql_url(),
         is_async=False,
         session_config=session_config,
-        session_compact_manager=compact_manager,
+        summarizer_manager=compact_manager,
     )
     runner = Runner(
         app_name=app_name,

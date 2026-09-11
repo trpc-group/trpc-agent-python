@@ -11,17 +11,16 @@ import asyncio
 import copy
 import hashlib
 import json
-from dataclasses import dataclass
-from typing import Any
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import Any, Optional
+from typing_extensions import override
 
-from ._callbacks import install_staged_callback
-from ._runtime import SessionCompactRuntime
+from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.models import LlmRequest
 
-if TYPE_CHECKING:
-    from trpc_agent_sdk.agents import LlmAgent
-    from trpc_agent_sdk.context import InvocationContext
-    from trpc_agent_sdk.models import LlmRequest
+from ..._session import Session
+from ._runtime import AdvancedAutoCompactSummarizerRuntime
+from ._base import BaseCompactSummarizerHandler
 
 TOOL_RESULT_REPLACEMENT_SCHEMA_VERSION = 1
 
@@ -40,11 +39,11 @@ class ToolResultCandidate:
     """Describe a function response candidate in a model request."""
 
     result_id: str
-    event_id: str | None
     tool_name: str
     serialized_result: str
     original_size: int
     part: Any
+    event_id: Optional[str] = field(default=None)
 
 
 @dataclass(frozen=True)
@@ -60,9 +59,9 @@ class ToolResultReplacement:
 class ToolResultBudgetResult:
     """Summarize replacements and character savings from budget processing."""
 
-    replaced_count: int
-    original_chars: int
-    replacement_chars: int
+    replaced_count: int = field(default=0)
+    original_chars: int = field(default=0)
+    replacement_chars: int = field(default=0)
 
 
 def serialize_tool_response(response: Any) -> str:
@@ -112,21 +111,17 @@ def _preview_text(serialized_result: str, limit: int) -> tuple[str, bool]:
 class ToolResultBudget:
     """Apply stable, recoverable tool-result budgeting to each request."""
 
-    def __init__(self, memory_runtime: SessionCompactRuntime) -> None:
+    def __init__(self, runtime: AdvancedAutoCompactSummarizerRuntime) -> None:
         """Initialize the budget processor and per-session state locks."""
-        self._runtime = memory_runtime
+        self._runtime: AdvancedAutoCompactSummarizerRuntime = runtime
+        self._tool_result_budget_config = runtime.config.tool_result_budget
         self._states: dict[str, ToolResultBudgetState] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
-        self._scoped_processors: dict[object, "ToolResultBudget"] = {}
-
-    @property
-    def runtime(self) -> SessionCompactRuntime:
-        """Return the runtime bound to this budget processor."""
-        return self._runtime
+        self._scoped_processors: dict[object, ToolResultBudget] = {}
 
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """Return the unique async budget lock for a session."""
-        key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        key = self._runtime.session_key(session_id)
         lock = self._session_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
@@ -135,7 +130,7 @@ class ToolResultBudget:
 
     async def _load_state(self, session_id: str) -> ToolResultBudgetState:
         """Return process-local state for the current Session."""
-        state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        state_key = self._runtime.session_key(session_id)
         state = self._states.get(state_key)
         if state is not None:
             return state
@@ -149,20 +144,22 @@ class ToolResultBudget:
 
     def _collect_candidates(
         self,
-        request: "LlmRequest",
-        session: Any | None = None,
+        request: LlmRequest,
+        session: Session,
     ) -> list[list[ToolResultCandidate]]:
         """Group function responses from consecutive user contents."""
         event_ids: dict[str, str] = {}
-        for event in getattr(session, "events", []) or []:
+        for event in session.events:
             event_id = getattr(event, "id", None)
-            if not isinstance(event_id, str):
+            if event_id is None:
                 continue
-            event_content = getattr(event, "content", None)
-            for event_part in getattr(event_content, "parts", []) or []:
+            event_content = event.content
+            if event_content is None:
+                continue
+            for event_part in event_content.parts:
                 response = getattr(event_part, "function_response", None)
-                response_id = getattr(response, "id", None)
-                if isinstance(response_id, str):
+                response_id = response.id if response is not None else None
+                if response_id is not None:
                     event_ids[response_id] = event_id
         candidate_groups: list[list[ToolResultCandidate]] = []
         serialized_by_result_id: dict[str, str] = {}
@@ -204,7 +201,7 @@ class ToolResultBudget:
         """Build an event reference and model-visible preview."""
         preview, truncated = _preview_text(
             candidate.serialized_result,
-            self._runtime.config.tool_result_preview_chars,
+            self._tool_result_budget_config.preview_chars,
         )
         replacement_response = {
             "_advanced_memory": {
@@ -231,7 +228,6 @@ class ToolResultBudget:
     ) -> list[ToolResultReplacement]:
         """Apply per-result limits, then select results under the aggregate limit."""
         selected: dict[str, ToolResultReplacement] = {}
-        config = self._runtime.config
         for group in groups:
             fresh = [
                 candidate for candidate in group
@@ -239,7 +235,7 @@ class ToolResultBudget:
             ]
             fresh_ids = {candidate.result_id for candidate in fresh}
             for candidate in fresh:
-                if candidate.original_size > config.tool_result_max_chars:
+                if candidate.original_size > self._tool_result_budget_config.max_chars:
                     selected[candidate.result_id] = self._build_replacement(candidate)
 
             visible_size = 0
@@ -257,7 +253,7 @@ class ToolResultBudget:
                         remaining_fresh.append(candidate)
 
             for candidate in sorted(remaining_fresh, key=lambda item: item.original_size, reverse=True):
-                if visible_size <= config.tool_results_per_message_max_chars:
+                if visible_size <= self._tool_result_budget_config.per_message_max_chars:
                     break
                 replacement = self._build_replacement(candidate)
                 if replacement.replacement_size >= candidate.original_size:
@@ -266,18 +262,12 @@ class ToolResultBudget:
                 visible_size -= candidate.original_size - replacement.replacement_size
         return list(selected.values())
 
-    async def apply(
-        self,
-        request: "LlmRequest",
-        *,
-        session_id: str,
-        ctx: "InvocationContext | None" = None,
-    ) -> ToolResultBudgetResult:
+    async def apply(self, request: LlmRequest, ctx: InvocationContext) -> ToolResultBudgetResult:
         """Process a model request without mutating session Events."""
-        if not self._runtime.config.enabled:
-            return ToolResultBudgetResult(0, 0, 0)
-        if ctx is None or hasattr(self._runtime, "scope"):
-            return await self._apply_scoped(request, session_id, getattr(ctx, "session", None))
+        if not self._tool_result_budget_config.enabled:
+            return ToolResultBudgetResult()
+        if self._runtime.scope:
+            return await self._apply_scoped(request, ctx.session)
         runtime = self._runtime.for_session(ctx.session)
         processor = self._scoped_processors.get(runtime.scope)
         if processor is None:
@@ -286,18 +276,13 @@ class ToolResultBudget:
             processor._states = {}
             processor._session_locks = {}
             self._scoped_processors[runtime.scope] = processor
-        return await processor.apply(request, session_id=session_id, ctx=ctx)
+        return await processor.apply(request, ctx=ctx)
 
-    async def _apply_scoped(
-        self,
-        request: "LlmRequest",
-        session_id: str,
-        session: Any | None,
-    ) -> ToolResultBudgetResult:
+    async def _apply_scoped(self, request: LlmRequest, session: Session) -> ToolResultBudgetResult:
         """Apply budgeting while ``_runtime`` is bound to the current tenant."""
-        async with self._session_lock(session_id):
+        async with self._session_lock(session.id):
             request.contents = [content.model_copy(deep=True) for content in request.contents]
-            state = await self._load_state(session_id)
+            state = await self._load_state(session.id)
             groups = self._collect_candidates(request, session)
             for group in groups:
                 for candidate in group:
@@ -340,39 +325,21 @@ class ToolResultBudget:
             )
 
 
-class ToolResultBudgetCallback:
+class ToolResultBudgetHandler(BaseCompactSummarizerHandler):
     """Adapt the tool-result budget processor to before_model_callback."""
 
-    advanced_memory_stage = 10
-
-    def __init__(self, budget: ToolResultBudget) -> None:
+    def __init__(self) -> None:
         """Store the budget processor run before model requests."""
-        self._budget = budget
+        self._budget: ToolResultBudget | None = None
 
-    @property
-    def budget(self) -> ToolResultBudget:
-        """Return the budget processor used by this callback."""
-        return self._budget
-
-    async def __call__(self, ctx: "InvocationContext", request: "LlmRequest") -> None:
+    @override
+    async def handle(self, ctx: InvocationContext, request: LlmRequest) -> None:
         """Apply tool-result budgeting without truncating model calls."""
-        await self._budget.apply(request, session_id=ctx.session_id, ctx=ctx)
+        summarizer = self.get_summarizer(ctx)
+        from ._auto_compact import AdvancedAutoCompactSummarizer
+        if not isinstance(summarizer, AdvancedAutoCompactSummarizer):
+            raise ValueError("Summarizer is not an AdvancedAutoCompactSummarizer")
+        if self._budget is None:
+            self._budget = ToolResultBudget(summarizer.runtime)
+        await self._budget.apply(request, ctx=ctx)
         return None
-
-
-def setup_tool_result_budget(
-    agent: "LlmAgent",
-    memory_runtime: SessionCompactRuntime,
-) -> ToolResultBudget:
-    """Install the budget callback while preserving existing callbacks."""
-    budget = ToolResultBudget(memory_runtime)
-    callback = ToolResultBudgetCallback(budget)
-    existing_budget = install_staged_callback(
-        agent,
-        callback,
-        callback_type=ToolResultBudgetCallback,
-        component_attribute="budget",
-        memory_runtime=memory_runtime,
-        conflict_message="Tool result budget is already configured with another runtime",
-    )
-    return existing_budget or budget

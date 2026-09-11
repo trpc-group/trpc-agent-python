@@ -9,43 +9,42 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import hashlib
 import json
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Any
-from typing import Protocol
-from typing import TYPE_CHECKING
+from typing_extensions import override
 
-from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.abc import CompactSummarizerABC
+from trpc_agent_sdk.abc import RequestABC
+from trpc_agent_sdk.abc import ResponseABC
+from trpc_agent_sdk.abc import SessionABC
+from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import LlmResponse
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
-from ._callbacks import install_staged_callback
+from ._base import BaseCompactSummarizerHandler
+from ._config import AdvancedAutoCompactSummarizerConfig
 from ._formats import SESSION_MEMORY_SECTIONS
 from ._formats import SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
 from ._formats import parse_session_memory_state
 from ._history_snip import estimate_request_chars
-from ._runtime import SessionCompactRuntime
+from ._runtime import AdvancedAutoCompactSummarizerRuntime
 from ._token_budget import TokenContextTracker
+from ._compaction_memory_extractor import SessionMemoryExtractor
+from ._utils import content_signature
+from ._utils import internal_compaction_call
 
-if TYPE_CHECKING:
-    from trpc_agent_sdk.agents import LlmAgent as ParentLlmAgent
-    from trpc_agent_sdk.context import InvocationContext
-    from trpc_agent_sdk.models import LlmRequest
-    from ._session_memory import SessionMemoryExtractor
-
-AUTOCOMPACT_BLOCKED_MESSAGE = (
+ADVANCED_AUTOCOMPACT_BLOCKED_MESSAGE = (
     "Automatic context compaction has failed repeatedly and the request is near the hard context limit. "
     "To avoid sending a request that will certainly fail, reduce the input, start a new session, "
     "or manually organize session memory before retrying.")
-AUTOCOMPACT_SUMMARY_PREFIX = """This session is being continued from a compacted context.
+ADVANCED_AUTOCOMPACT_SUMMARY_PREFIX = """This session is being continued from a compacted context.
 The following summary contains the important information from earlier messages.
 The complete original events remain available in the SessionService.
 
@@ -65,7 +64,7 @@ The analysis is only for organization; keep only the summary."""
 
 
 @dataclass(frozen=True)
-class AutoCompactRecord:
+class AdvancedAutoCompactRecord:
     """Store stable replay information for the latest successful compaction."""
 
     boundary_signature: str
@@ -77,15 +76,15 @@ class AutoCompactRecord:
 
 
 @dataclass
-class AutoCompactState:
+class AdvancedAutoCompactState:
     """Store the latest compaction record and consecutive failure count."""
 
-    latest_compaction: AutoCompactRecord | None
+    latest_compaction: AdvancedAutoCompactRecord | None
     consecutive_failures: int
 
 
 @dataclass(frozen=True)
-class AutoCompactResult:
+class AdvancedAutoCompactResult:
     """Summarize one compaction, replay, or hard-block result."""
 
     compacted: bool
@@ -99,52 +98,7 @@ class AutoCompactResult:
     request_tokens_before: int | None = None
     request_tokens_after: int | None = None
     token_source: str | None = None
-
-
-class LegacySummaryGenerator(Protocol):
-    """Define the replaceable legacy compaction summary interface."""
-
-    async def generate(self, history: str, ctx: "InvocationContext") -> str:
-        """Return a workable Markdown summary for bounded old history."""
-
-
-def content_signature(content: Content) -> str:
-    """Generate a stable signature that preserves message identity."""
-    parts: list[dict[str, Any]] = []
-    for part in content.parts or []:
-        if part.text is not None:
-            parts.append({
-                "type": "text",
-                "sha256": hashlib.sha256(part.text.encode("utf-8")).hexdigest(),
-            })
-        elif part.function_call is not None:
-            parts.append({
-                "type": "function_call",
-                "id": getattr(part.function_call, "id", None),
-                "name": part.function_call.name,
-            })
-        elif part.function_response is not None:
-            parts.append({
-                "type": "function_response",
-                "id": getattr(part.function_response, "id", None),
-                "name": part.function_response.name,
-            })
-        elif part.executable_code is not None:
-            parts.append({"type": "executable_code"})
-        elif part.code_execution_result is not None:
-            parts.append({"type": "code_execution_result"})
-        else:
-            parts.append({"type": "other"})
-    serialized = json.dumps(
-        {
-            "role": content.role,
-            "parts": parts
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    summary: str | None = None
 
 
 def _content_text(content: Content) -> str:
@@ -158,122 +112,108 @@ def _content_text(content: Content) -> str:
     )
 
 
-class ForkedLegacySummaryGenerator:
-    """Call a tool-free legacy summary Agent through an isolated Runner."""
+class AdvancedAutoCompactSummarizer(CompactSummarizerABC):
+    """Compact with session memory first, then fall back to a legacy summary."""
 
-    def __init__(self, model: Any | None = None) -> None:
-        """Store an optional dedicated model, falling back to the parent model."""
+    def __init__(
+        self,
+        config: AdvancedAutoCompactSummarizerConfig | None = None,
+        *,
+        model: LLMModel | None = None,
+        session_memory_extractor: SessionMemoryExtractor | None = None,
+    ) -> None:
+        """Initialize the compressor, summary generator, and session locks."""
         self._model = model
+        self._runtime = AdvancedAutoCompactSummarizerRuntime(config=config or AdvancedAutoCompactSummarizerConfig())
+        self._auto_compact_config = config.auto_compact
+        self._session_memory_extractor = self._create_extractor(session_memory_extractor)
+        self._states: dict[str, AdvancedAutoCompactState] = {}
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        self._scoped_processors: dict[object, "AdvancedAutoCompactSummarizer"] = {}
 
-    def _resolve_model(self, ctx: "InvocationContext") -> Any:
+    def _resolve_model(self, ctx: InvocationContext) -> LLMModel:
         """Resolve the model used for legacy compaction."""
-        model = self._model or getattr(ctx.agent, "model", None)
-        if not model:
+        if self._model is not None:
+            return self._model
+        if ctx.agent is None:
             raise ValueError("Autocompact summary generator cannot resolve an LLM model")
-        return model
+        return ctx.agent.model
 
-    async def generate(self, history: str, ctx: "InvocationContext") -> str:
-        """Generate a summary in a temporary session without parent callbacks."""
-        config = ctx.agent.generate_content_config if isinstance(ctx.agent, LlmAgent) else None
-        agent = LlmAgent(
-            name="advanced_autocompact_summarizer",
-            description="Generate an isolated context-compaction summary.",
-            instruction=LEGACY_SUMMARY_INSTRUCTION,
-            model=self._resolve_model(ctx),
-            tools=[],
-            generate_content_config=config,
-            add_name_to_instruction=False,
-        )
-        app_name = f"{ctx.app_name}_advanced_autocompact"
-        runner = Runner(
-            app_name=app_name,
-            agent=agent,
-            session_service=InMemorySessionService(),
-            enable_post_turn_processing=False,
-        )
-        last_event = None
-        try:
-            session = await runner.session_service.create_session(
-                app_name=app_name,
-                user_id="advanced-autocompact",
-                state={},
-            )
-            prompt = ("Compress the following old conversation. The input may contain JSON representations "
-                      "of tool calls and results:\n\n"
-                      f"<history>\n{history}\n</history>")
-            async for event in runner.run_async(
-                    user_id=session.user_id,
-                    session_id=session.id,
-                    new_message=Content(role="user", parts=[Part.from_text(text=prompt)]),
+    async def _generate_summary(self, history: str, ctx: InvocationContext | None = None) -> str:
+        """Generate a summary using the LLM model.
+
+        Args:
+            history: The conversation text to summarize
+
+        Returns:
+            Generated summary text
+        """
+        request = LlmRequest()
+        request.append_instructions([LEGACY_SUMMARY_INSTRUCTION])
+        prompt = ("Compress the following old conversation. The input may contain JSON representations "
+                  "of tool calls and results:\n\n"
+                  f"<history>\n{history}\n</history>")
+        request.contents.append(Content(role="user", parts=[Part.from_text(text=prompt)]))
+
+        output = ""
+        with internal_compaction_call(getattr(ctx, "agent_context", None)):
+            async for llm_response in self._resolve_model(ctx).generate_async(
+                    request,
+                    stream=False,
+                    ctx=ctx,
             ):
-                if not event.partial:
-                    last_event = event
-        finally:
-            await runner.close()
-        if not last_event or not last_event.content or not last_event.content.parts:
-            raise ValueError("Autocompact summary generator returned no final content")
-        output = "\n".join(part.text for part in last_event.content.parts if part.text).strip()
+                if llm_response.content and llm_response.content.parts:
+                    for part in llm_response.content.parts:
+                        if part.text:
+                            output += part.text
+        output = output.strip()
+        if not output:
+            raise ValueError("AdvancedAutoCompactSummarizer returned no final content")
         summary_match = re.search(
             r"<summary>\s*(.*?)\s*</summary>",
             output,
             flags=re.DOTALL | re.IGNORECASE,
         )
         if summary_match is None or not summary_match.group(1).strip():
-            raise ValueError("Autocompact summary generator returned no <summary> block")
+            raise ValueError("AdvancedAutoCompactSummarizer returned no <summary> block")
         return summary_match.group(1).strip()
 
-
-class AutoCompact:
-    """Compact with session memory first, then fall back to a legacy summary."""
-
-    def __init__(
-        self,
-        memory_runtime: SessionCompactRuntime,
-        summary_generator: LegacySummaryGenerator | None = None,
-        *,
-        model: Any | None = None,
-        session_memory_extractor: "SessionMemoryExtractor | None" = None,
-    ) -> None:
-        """Initialize the compressor, summary generator, and session locks."""
-        if summary_generator is not None and model is not None:
-            raise ValueError("Provide either summary_generator or model, not both")
-        self._runtime = memory_runtime
-        self._summary_generator = summary_generator or ForkedLegacySummaryGenerator(model)
-        self._session_memory_extractor = session_memory_extractor
-        self._states: dict[str, AutoCompactState] = {}
-        self._session_locks: dict[str, asyncio.Lock] = {}
-        self._scoped_processors: dict[object, "AutoCompact"] = {}
+    def _create_extractor(self,
+                          session_memory_extractor: SessionMemoryExtractor | None = None) -> SessionMemoryExtractor:
+        """Create the session memory extractor."""
+        if session_memory_extractor is not None:
+            return session_memory_extractor
+        return SessionMemoryExtractor(
+            runtime=self._runtime,
+            model=self._model,
+        )
 
     @property
-    def runtime(self) -> SessionCompactRuntime:
+    def session_memory_extractor(self) -> SessionMemoryExtractor:
+        """Return the session memory extractor."""
+        return self._session_memory_extractor
+
+    @property
+    def runtime(self) -> AdvancedAutoCompactSummarizerRuntime:
         """Return the runtime bound to this compressor."""
         return self._runtime
 
-    def attach_session_memory_extractor(
-        self,
-        extractor: "SessionMemoryExtractor",
-    ) -> None:
-        """Attach the extractor invoked only when AutoCompact is reached."""
-        if (self._session_memory_extractor is not None and self._session_memory_extractor is not extractor):
-            raise ValueError("Autocompact session memory extractor is already configured")
-        self._session_memory_extractor = extractor
-
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """Return the unique compaction lock for a session."""
-        key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        key = self._runtime.session_key(session_id)
         lock = self._session_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
             self._session_locks[key] = lock
         return lock
 
-    async def _load_state(self, session_id: str) -> AutoCompactState:
+    async def _load_state(self, session_id: str) -> AdvancedAutoCompactState:
         """Restore process-local compaction state."""
-        state_key = self._runtime.session_key(session_id) if hasattr(self._runtime, "session_key") else session_id
+        state_key = self._runtime.session_key(session_id)
         state = self._states.get(state_key)
         if state is not None:
             return state
-        state = AutoCompactState(latest_compaction=None, consecutive_failures=0)
+        state = AdvancedAutoCompactState(latest_compaction=None, consecutive_failures=0)
         self._states[state_key] = state
         return state
 
@@ -281,10 +221,10 @@ class AutoCompact:
         """Wrap a compaction summary in stable model-visible user content."""
         return Content(
             role="user",
-            parts=[Part.from_text(text=AUTOCOMPACT_SUMMARY_PREFIX + summary)],
+            parts=[Part.from_text(text=ADVANCED_AUTOCOMPACT_SUMMARY_PREFIX + summary)],
         )
 
-    def _summary_with_recovery_path(self, summary: str, session_id: str) -> str:
+    def _summary_with_recovery_path(self, summary: str) -> str:
         """Tell the model where the authoritative compacted data lives."""
         return (f"{summary.rstrip()}\n\n"
                 "For exact content from before compaction, read the original "
@@ -354,7 +294,7 @@ class AutoCompact:
         """Return the retained-content start for a legacy compaction."""
         start = min(
             boundary_index + 1,
-            len(contents) - self._runtime.config.autocompact_keep_recent_contents,
+            len(contents) - self._auto_compact_config.keep_recent_contents,
         )
         return self._adjust_start_for_tool_pairing(contents, start)
 
@@ -362,7 +302,7 @@ class AutoCompact:
         """Drop everything through the session-memory checkpoint boundary."""
         return boundary_index + 1
 
-    def _apply_record(self, request: "LlmRequest", record: AutoCompactRecord) -> bool:
+    def _apply_record(self, request: LlmRequest, record: AdvancedAutoCompactRecord) -> bool:
         """Replay a persisted compaction record into a rebuilt request."""
         boundary_index = self._find_signature_index(
             request.contents,
@@ -381,12 +321,11 @@ class AutoCompact:
 
     async def _latest_session_memory_record(
         self,
-        session_id: str,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
     ) -> tuple[str, str, int, str] | None:
         """Read Session Memory and its checkpoint from Session.state."""
-        state = getattr(ctx.session, "state", {})
-        parsed = parse_session_memory_state(state.get(SESSION_MEMORY_STATE_KEY) if isinstance(state, dict) else None)
+        state = ctx.session.state
+        parsed = parse_session_memory_state(state.get(SESSION_MEMORY_STATE_KEY))
         if parsed is None:
             return None
         document, checkpoint, _ = parsed
@@ -403,14 +342,14 @@ class AutoCompact:
 
     def _compact_with_summary(
         self,
-        request: "LlmRequest",
+        request: LlmRequest,
         *,
         summary: str,
         boundary_index: int,
         source: str,
         strict_boundary: bool = False,
         boundary_event_id: str | None = None,
-    ) -> AutoCompactRecord:
+    ) -> AdvancedAutoCompactRecord:
         """Replace the old prefix with a summary and return a replay record."""
         boundary_signature = content_signature(request.contents[boundary_index])
         boundary_occurrence = self._signature_occurrence(
@@ -421,24 +360,24 @@ class AutoCompact:
         start = (self._session_memory_compaction_start(boundary_index) if strict_boundary else self._compaction_start(
             request.contents, boundary_index))
         request.contents = [self._summary_content(summary), *request.contents[start:]]
-        return AutoCompactRecord(
+        return AdvancedAutoCompactRecord(
             boundary_signature,
             boundary_occurrence,
             summary,
             source,
             boundary_event_id,
-            f"autocompact:{uuid.uuid4().hex}",
+            f"advanced_autocompact:{uuid.uuid4().hex}",
         )
 
     def _resolve_boundary_event_id(
         self,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         signature: str,
         occurrence: int,
     ) -> str | None:
         """Map one request-content boundary back to an active Session Event."""
         seen = 0
-        for event in getattr(ctx.session, "events", []) or []:
+        for event in ctx.session.events:
             content = getattr(event, "content", None)
             if content is None or content_signature(content) != signature:
                 continue
@@ -448,15 +387,13 @@ class AutoCompact:
                 return event_id if isinstance(event_id, str) and event_id else None
         return None
 
-    def _legacy_boundary_event_id(self, ctx: "InvocationContext") -> str | None:
+    def _legacy_boundary_event_id(self, ctx: InvocationContext) -> str | None:
         """Choose a stable active-Event boundary for legacy compaction."""
-        content_events = [
-            event for event in (getattr(ctx.session, "events", []) or []) if getattr(event, "content", None) is not None
-        ]
+        content_events = [event for event in ctx.session.events if event.content is not None]
         if len(content_events) <= 1:
             return None
         keep_count = min(
-            self._runtime.config.autocompact_keep_recent_contents,
+            self._auto_compact_config.keep_recent_contents,
             len(content_events) - 1,
         )
         boundary_index = len(content_events) - keep_count - 1
@@ -469,13 +406,13 @@ class AutoCompact:
 
     async def _persist_session_compaction(
         self,
-        ctx: "InvocationContext",
-        record: AutoCompactRecord,
+        ctx: InvocationContext,
+        record: AdvancedAutoCompactRecord,
     ) -> None:
         """Persist the compacted active window through the original SessionService."""
-        compact_events = getattr(ctx.session, "compact_events", None)
+        compact_events = ctx.session.compact_events
         if not callable(compact_events):
-            # AutoCompact remains usable as a request-only primitive in unit
+            # AdvancedAutoCompactSummarizer remains usable as a request-only primitive in unit
             # tests and custom integrations. The standard Manager supplies
             # the framework Session and persists the compacted window.
             return
@@ -486,9 +423,9 @@ class AutoCompact:
             record.boundary_occurrence,
         )
         if boundary_event_id is None:
-            raise ValueError("Cannot map the AutoCompact boundary to an active Session Event")
+            raise ValueError("Cannot map the AdvancedAutoCompactSummarizer boundary to an active Session Event")
 
-        compaction_id = record.compaction_id or f"autocompact:{uuid.uuid4().hex}"
+        compaction_id = record.compaction_id or f"advanced_autocompact:{uuid.uuid4().hex}"
         summary_event = Event(
             invocation_id="summary",
             author="system",
@@ -519,7 +456,7 @@ class AutoCompact:
     def _bounded_history(self, contents: list[Content]) -> str:
         """Bound old history to the configured summary-input character limit."""
         rendered = "\n".join(f"<content>\n{_content_text(content)}\n</content>" for content in contents)
-        limit = self._runtime.config.autocompact_summary_input_max_chars
+        limit = self._auto_compact_config.summary_input_max_chars
         if len(rendered) <= limit:
             return rendered
         marker = "\n...[middle of old history omitted due to the summary input limit]...\n"
@@ -530,15 +467,15 @@ class AutoCompact:
     async def _legacy_summary(
         self,
         contents: list[Content],
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
     ) -> str:
         """Shrink old history across retries and generate a legacy summary."""
-        retries = self._runtime.config.autocompact_summary_retries
+        retries = self._auto_compact_config.summary_retries_count
         working = list(contents)
         last_error: Exception | None = None
         for attempt in range(retries):
             try:
-                return await self._summary_generator.generate(
+                return await self._generate_summary(
                     self._bounded_history(working),
                     ctx,
                 )
@@ -550,16 +487,124 @@ class AutoCompact:
                 working = working[drop_count:]
         raise RuntimeError("Legacy autocompact summary failed after retries") from last_error
 
+    def _request_from_events(self, events: list[ResponseABC]) -> LlmRequest:
+        """Build the model-visible request view used by end-of-turn compaction."""
+        contents: list[Content] = []
+        for event in events:
+            is_model_visible = getattr(event, "is_model_visible", None)
+            if callable(is_model_visible) and not is_model_visible():
+                continue
+            content = getattr(event, "content", None)
+            if content is not None:
+                contents.append(content.model_copy(deep=True))
+        return LlmRequest(contents=contents)
+
+    @override
+    async def should_summarize(self, session: SessionABC) -> bool:
+        """Check the character threshold without mutating the Session."""
+        if not self._auto_compact_config.enabled:
+            return False
+        request = self._request_from_events(list(getattr(session, "events", []) or []))
+        if len(request.contents) <= self._auto_compact_config.keep_recent_contents:
+            return False
+
+        token_config = self._runtime.config.token_context_tracker
+        if token_config.enabled and token_config.model_context_window_tokens is not None:
+            effective_window = token_config.model_context_window_tokens - token_config.max_output_tokens
+            threshold = int(effective_window * token_config.auto_compact_ratio)
+            return TokenContextTracker(token_config).estimate_request_tokens(request) >= threshold
+        return estimate_request_chars(request) >= self._auto_compact_config.trigger_chars
+
+    @override
+    async def create_session_summary_by_events(
+        self,
+        events: list[ResponseABC],
+        session_id: str,
+        keep_recent_count: int = 10,
+        ctx: InvocationContext | None = None,
+        historical_events: list[ResponseABC] | None = None,
+        store_historical_events: bool = False,
+    ) -> tuple[str | None, list[ResponseABC]]:
+        """Compact Events through the existing request-compaction algorithm."""
+        del keep_recent_count
+        if ctx is None:
+            raise ValueError("Invocation context is required for advanced compaction")
+        if session_id != ctx.session_id:
+            raise ValueError("Session ID does not match the invocation context")
+
+        request = self._request_from_events(events)
+        result = await self.apply(request, ctx=ctx, force=True)
+        if result.summary is not None:
+            events[:] = list(ctx.session.events)
+            if store_historical_events and historical_events is not None:
+                historical_events[:] = list(ctx.session.historical_events)
+        return result.summary, events
+
+    @override
+    async def create_session_summary(
+        self,
+        session: SessionABC,
+        ctx: InvocationContext | None = None,
+        store_historical_events: bool = False,
+    ) -> str | None:
+        """Compact one Session and persist its active and historical Events."""
+        if ctx is None:
+            raise ValueError("Invocation context is required for advanced compaction")
+        events = getattr(session, "events", None)
+        historical_events = getattr(session, "historical_events", None)
+        if not isinstance(events, list) or not isinstance(historical_events, list):
+            raise TypeError("Advanced compaction requires a Session with Event history")
+        summary, _ = await self.create_session_summary_by_events(
+            events,
+            session.id,
+            ctx=ctx,
+            historical_events=historical_events,
+            store_historical_events=store_historical_events,
+        )
+        return summary
+
+    @override
+    async def create_session_summary_by_request(
+        self,
+        request: RequestABC,
+        ctx: InvocationContext | None = None,
+        force: bool = False,
+    ) -> LlmResponse | None:
+        """Compact a built model request immediately before generation."""
+        if ctx is None:
+            raise ValueError("Invocation context is required for advanced compaction")
+        if not isinstance(request, LlmRequest):
+            raise TypeError("Advanced compaction requires an LlmRequest")
+
+        result = await self.apply(request, ctx=ctx, force=force)
+        if not result.blocked:
+            TokenContextTracker.record_request_context(request, ctx)
+            return None
+        return LlmResponse(content=Content(
+            role="model",
+            parts=[Part.from_text(text=ADVANCED_AUTOCOMPACT_BLOCKED_MESSAGE)],
+        ))
+
+    @override
+    def get_summary_metadata(self) -> dict[str, object]:
+        """Return advanced compaction configuration metadata."""
+        return {
+            "strategy": "advanced",
+            "auto_compact_enabled": self._auto_compact_config.enabled,
+            "trigger_chars": self._auto_compact_config.trigger_chars,
+            "keep_recent_contents": self._auto_compact_config.keep_recent_contents,
+        }
+
     async def apply(
         self,
-        request: "LlmRequest",
+        request: LlmRequest,
         *,
-        session_id: str,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         force: bool = False,
-    ) -> AutoCompactResult:
+    ) -> AdvancedAutoCompactResult:
         """Run compaction against the current session's tenant namespace."""
-        if hasattr(self._runtime, "scope"):
+        session_id = ctx.session_id
+        if self._runtime.scope:
             return await self._apply_scoped(request, session_id=session_id, ctx=ctx, force=force)
         runtime = self._runtime.for_session(ctx.session)
         processor = self._scoped_processors.get(runtime.scope)
@@ -569,22 +614,32 @@ class AutoCompact:
             processor._states = {}
             processor._session_locks = {}
             self._scoped_processors[runtime.scope] = processor
-        return await processor.apply(request, session_id=session_id, ctx=ctx, force=force)
+        return await processor.apply(request, ctx=ctx, force=force)
 
     async def _apply_scoped(
         self,
-        request: "LlmRequest",
+        request: LlmRequest,
         *,
         session_id: str,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         force: bool = False,
-    ) -> AutoCompactResult:
+    ) -> AdvancedAutoCompactResult:
         """Replay old compaction and compact again when pressure is high."""
         config = self._runtime.config
-        tracker = TokenContextTracker(config)
-        if not config.enabled or not config.autocompact_enabled:
+        auto_compact_config = config.auto_compact
+        tracker = TokenContextTracker(config.token_context_tracker)
+        if not auto_compact_config.enabled:
             request_chars = estimate_request_chars(request)
-            return AutoCompactResult(False, False, False, None, request_chars, request_chars, 0)
+            return AdvancedAutoCompactResult(compacted=False,
+                                             reapplied=False,
+                                             blocked=False,
+                                             source=None,
+                                             request_chars_before=request_chars,
+                                             request_chars_after=request_chars,
+                                             consecutive_failures=0,
+                                             request_tokens_before=None,
+                                             request_tokens_after=None,
+                                             token_source=None)
         async with self._session_lock(session_id):
             request.contents = [content.model_copy(deep=True) for content in request.contents]
             state = await self._load_state(session_id)
@@ -598,53 +653,49 @@ class AutoCompact:
             request_tokens_before = token_budget_before.estimate.tokens
             comparison_tokens_before = (tracker.estimate_request_tokens(request) if token_mode else None)
             blocking_reached = (request_tokens_before >= token_budget_before.blocking_threshold_tokens
-                                if token_mode else request_chars_before >= config.autocompact_blocking_chars)
-            if state.consecutive_failures >= config.autocompact_max_failures and blocking_reached:
-                return AutoCompactResult(
-                    False,
-                    reapplied,
-                    True,
-                    None,
-                    request_chars_before,
-                    request_chars_before,
-                    state.consecutive_failures,
+                                if token_mode else request_chars_before >= self._auto_compact_config.blocking_chars)
+            if state.consecutive_failures >= auto_compact_config.max_failures and blocking_reached:
+                return AdvancedAutoCompactResult(
+                    compacted=False,
+                    reapplied=reapplied,
+                    blocked=True,
+                    source=None,
+                    request_chars_before=request_chars_before,
+                    request_chars_after=request_chars_before,
+                    consecutive_failures=state.consecutive_failures,
                 )
-            if state.consecutive_failures >= config.autocompact_max_failures:
-                return AutoCompactResult(
-                    False,
-                    reapplied,
-                    False,
-                    None,
-                    request_chars_before,
-                    request_chars_before,
-                    state.consecutive_failures,
+            if state.consecutive_failures >= auto_compact_config.max_failures:
+                return AdvancedAutoCompactResult(
+                    compacted=False,
+                    reapplied=reapplied,
+                    blocked=False,
+                    source=None,
+                    request_chars_before=request_chars_before,
+                    request_chars_after=request_chars_before,
+                    consecutive_failures=state.consecutive_failures,
                 )
-            autocompact_reached = (request_tokens_before >= token_budget_before.autocompact_threshold_tokens
-                                   if token_mode else request_chars_before >= config.autocompact_trigger_chars)
-            if not force and not autocompact_reached:
-                return AutoCompactResult(
-                    False,
-                    reapplied,
-                    False,
-                    state.latest_compaction.source if reapplied and state.latest_compaction else None,
-                    request_chars_before,
-                    request_chars_before,
-                    state.consecutive_failures,
+            auto_compact_reached = (request_tokens_before >= token_budget_before.auto_compact_threshold_tokens
+                                    if token_mode else request_chars_before >= auto_compact_config.trigger_chars)
+            if not force and not auto_compact_reached:
+                return AdvancedAutoCompactResult(
+                    compacted=False,
+                    reapplied=reapplied,
+                    blocked=False,
+                    source=state.latest_compaction.source if reapplied and state.latest_compaction else None,
+                    request_chars_before=request_chars_before,
+                    request_chars_after=request_chars_before,
+                    consecutive_failures=state.consecutive_failures,
                 )
 
             original_contents = [content.model_copy(deep=True) for content in request.contents]
             try:
-                compact_record: AutoCompactRecord | None = None
+                compact_record: AdvancedAutoCompactRecord | None = None
                 if self._session_memory_extractor is not None:
                     await self._session_memory_extractor.extract_if_needed(
-                        ctx.session,
                         ctx,
                         force=True,
                     )
-                session_memory = await self._latest_session_memory_record(
-                    session_id,
-                    ctx,
-                )
+                session_memory = await self._latest_session_memory_record(ctx, )
                 if session_memory is not None:
                     memory, boundary_signature, boundary_occurrence, boundary_event_id = session_memory
                     boundary_index = self._find_signature_index(
@@ -660,10 +711,7 @@ class AutoCompact:
                     if boundary_index is not None:
                         compact_record = self._compact_with_summary(
                             request,
-                            summary=self._summary_with_recovery_path(
-                                memory,
-                                session_id,
-                            ),
+                            summary=self._summary_with_recovery_path(memory),
                             boundary_index=boundary_index,
                             source="session-memory",
                             strict_boundary=True,
@@ -673,14 +721,14 @@ class AutoCompact:
                             target_reached = (tracker.budget(request, ctx).estimate.tokens
                                               <= token_budget_before.warning_threshold_tokens)
                         else:
-                            target_reached = estimate_request_chars(request) <= config.autocompact_target_chars
+                            target_reached = estimate_request_chars(request) <= auto_compact_config.target_chars
                         if not target_reached:
                             request.contents = [content.model_copy(deep=True) for content in original_contents]
                             compact_record = None
 
                 if compact_record is None:
                     keep_count = min(
-                        config.autocompact_keep_recent_contents,
+                        auto_compact_config.keep_recent_contents,
                         max(1,
                             len(request.contents) - 1),
                     )
@@ -693,10 +741,7 @@ class AutoCompact:
                     )
                     compact_record = self._compact_with_summary(
                         request,
-                        summary=self._summary_with_recovery_path(
-                            summary,
-                            session_id,
-                        ),
+                        summary=self._summary_with_recovery_path(summary),
                         boundary_index=boundary_index,
                         source="legacy",
                         boundary_event_id=self._legacy_boundary_event_id(ctx),
@@ -707,100 +752,60 @@ class AutoCompact:
                     comparison_tokens_after = tracker.estimate_request_tokens(request)
                     if (comparison_tokens_after >= comparison_tokens_before
                             and request_chars_after >= request_chars_before):
-                        raise ValueError("Autocompact did not reduce request token estimate")
+                        raise ValueError("Advanced Auto Compact did not reduce request token estimate")
                 elif request_chars_after >= request_chars_before:
-                    raise ValueError("Autocompact did not reduce request size")
+                    raise ValueError("Advanced Auto Compact did not reduce request size")
                 await self._persist_session_compaction(ctx, compact_record)
                 state.latest_compaction = compact_record
                 state.consecutive_failures = 0
-                return AutoCompactResult(
-                    True,
-                    reapplied,
-                    False,
-                    compact_record.source,
-                    request_chars_before,
-                    request_chars_after,
-                    0,
+                return AdvancedAutoCompactResult(
+                    compacted=True,
+                    reapplied=reapplied,
+                    blocked=False,
+                    source=compact_record.source,
+                    request_chars_before=request_chars_before,
+                    request_chars_after=request_chars_after,
+                    consecutive_failures=0,
                     request_tokens_before=comparison_tokens_before if token_mode else None,
                     request_tokens_after=comparison_tokens_after if token_mode else None,
                     token_source="estimated" if token_mode else None,
+                    summary=compact_record.summary,
                 )
             except Exception as exc:  # noqa: BLE001
                 request.contents = original_contents
                 state.consecutive_failures += 1
-                blocked = state.consecutive_failures >= config.autocompact_max_failures and blocking_reached
-                return AutoCompactResult(
-                    False,
-                    reapplied,
-                    blocked,
-                    None,
-                    request_chars_before,
-                    request_chars_before,
-                    state.consecutive_failures,
-                    error=str(exc),
+                blocked = state.consecutive_failures >= auto_compact_config.max_failures and blocking_reached
+                return AdvancedAutoCompactResult(
+                    compacted=False,
+                    reapplied=reapplied,
+                    blocked=blocked,
+                    source=None,
+                    request_chars_before=request_chars_before,
+                    request_chars_after=request_chars_before,
+                    consecutive_failures=state.consecutive_failures,
+                    error=str(exc) if exc else None if blocked else None,
                     request_tokens_before=request_tokens_before if token_mode else None,
-                    request_tokens_after=request_tokens_before if token_mode else None,
+                    request_tokens_after=comparison_tokens_before if token_mode else None,
                     token_source=token_budget_before.estimate.source if token_mode else None,
                 )
 
 
-class AutoCompactCallback:
-    """Adapt the automatic compressor to before_model_callback."""
+class AdvancedAutoCompactSummarizerHandler(BaseCompactSummarizerHandler):
+    """Advanced auto compact summarizer handler."""
 
-    advanced_memory_stage = 40
-
-    def __init__(self, autocompact: AutoCompact) -> None:
-        """Store the compressor executed before model requests."""
-        self._autocompact = autocompact
-
-    @property
-    def autocompact(self) -> AutoCompact:
-        """Return the compressor used by this callback."""
-        return self._autocompact
-
-    async def __call__(
+    @override
+    async def handle(
         self,
-        ctx: "InvocationContext",
-        request: "LlmRequest",
+        ctx: InvocationContext,
+        request: LlmRequest,
+        force: bool = False,
     ) -> LlmResponse | None:
         """Compact before each request and return a local block after failures."""
-        result = await self._autocompact.apply(
+        summarizer = self.get_summarizer(ctx)
+        if not isinstance(summarizer, AdvancedAutoCompactSummarizer):
+            raise ValueError("Summarizer is not an AdvancedAutoCompactSummarizer")
+        return await summarizer.create_session_summary_by_request(
             request,
-            session_id=ctx.session_id,
             ctx=ctx,
+            force=force,
         )
-        if not result.blocked:
-            TokenContextTracker(self._autocompact.runtime.config).record_request_context(
-                request,
-                ctx,
-            )
-            return None
-        return LlmResponse(content=Content(
-            role="model",
-            parts=[Part.from_text(text=AUTOCOMPACT_BLOCKED_MESSAGE)],
-        ))
-
-
-def setup_autocompact(
-    agent: "ParentLlmAgent",
-    memory_runtime: SessionCompactRuntime,
-    summary_generator: LegacySummaryGenerator | None = None,
-    *,
-    model: Any | None = None,
-) -> AutoCompact:
-    """Install the automatic compaction callback in pipeline stage order."""
-    autocompact = AutoCompact(
-        memory_runtime,
-        summary_generator,
-        model=model,
-    )
-    callback = AutoCompactCallback(autocompact)
-    existing_autocompact = install_staged_callback(
-        agent,
-        callback,
-        callback_type=AutoCompactCallback,
-        component_attribute="autocompact",
-        memory_runtime=memory_runtime,
-        conflict_message="Autocompact is already configured with another runtime",
-    )
-    return existing_autocompact or autocompact

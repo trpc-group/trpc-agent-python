@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from trpc_agent_sdk.sessions.compact import AdvancedCompactConfig
-from trpc_agent_sdk.sessions.compact import TokenContextTracker
 from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.sessions.compact.advanced import TokenContextTrackerConfig
+from trpc_agent_sdk.sessions.compact.advanced._token_budget import TokenContextTracker
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
@@ -37,7 +37,7 @@ def test_usage_baseline_adds_only_contents_after_matching_event(tmp_path) -> Non
         agent=SimpleNamespace(model="test-model"),
     )
     tracker = TokenContextTracker(
-        AdvancedCompactConfig(
+        TokenContextTrackerConfig(
             enabled=True,
             model_context_window_tokens=1_000,
             max_output_tokens=100,
@@ -62,7 +62,7 @@ def test_usage_boundary_mismatch_falls_back_to_full_request_estimate(tmp_path) -
         session=SimpleNamespace(events=[event]),
         agent=SimpleNamespace(model="test-model"),
     )
-    tracker = TokenContextTracker(AdvancedCompactConfig(enabled=True))
+    tracker = TokenContextTracker(TokenContextTrackerConfig(enabled=True))
 
     estimate = tracker.estimate(request, ctx)
 
@@ -84,7 +84,7 @@ def test_changed_recorded_system_or_tool_fingerprint_falls_back(tmp_path) -> Non
         agent=SimpleNamespace(model="test-model"),
     )
 
-    estimate = TokenContextTracker(AdvancedCompactConfig(enabled=True)).estimate(request, ctx)
+    estimate = TokenContextTracker(TokenContextTrackerConfig(enabled=True)).estimate(request, ctx)
 
     assert estimate.source == "estimated"
     assert estimate.tokens < 999_999
@@ -93,23 +93,34 @@ def test_changed_recorded_system_or_tool_fingerprint_falls_back(tmp_path) -> Non
 def test_budget_reserves_max_output_and_calculates_three_thresholds(tmp_path) -> None:
     """Ensure thresholds use the window after reserving max output."""
     tracker = TokenContextTracker(
-        AdvancedCompactConfig(
+        TokenContextTrackerConfig(
             enabled=True,
             model_context_window_tokens=10_000,
             max_output_tokens=2_000,
         ))
 
-    budget = tracker.budget(_request("测试请求"))
+    ctx = SimpleNamespace(
+        session=SimpleNamespace(events=[]),
+        agent=SimpleNamespace(model="test-model"),
+    )
+    budget = tracker.budget(_request("测试请求"), ctx)
 
     assert budget.effective_window_tokens == 8_000
     assert budget.warning_threshold_tokens == 6_800
-    assert budget.autocompact_threshold_tokens == 7_200
+    assert budget.auto_compact_threshold_tokens == 7_200
     assert budget.blocking_threshold_tokens == 7_600
 
 
 def test_no_window_keeps_compatibility_mode(tmp_path) -> None:
     """Ensure token decisions remain disabled without a model window."""
-    budget = TokenContextTracker(AdvancedCompactConfig(enabled=True)).budget(_request("compatibility request"))
+    ctx = SimpleNamespace(
+        session=SimpleNamespace(events=[]),
+        agent=SimpleNamespace(model="test-model"),
+    )
+    budget = TokenContextTracker(TokenContextTrackerConfig(enabled=True)).budget(
+        _request("compatibility request"),
+        ctx,
+    )
 
     assert not budget.token_mode_enabled
     assert budget.estimate.source == "estimated"
