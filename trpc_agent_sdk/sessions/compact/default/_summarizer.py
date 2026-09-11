@@ -34,11 +34,13 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing_extensions import override
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+from trpc_agent_sdk.abc import CompactSummarizerABC
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
@@ -47,10 +49,10 @@ from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
-from ._session import Session
-from ._summarizer_checker import CheckSummarizerFunction
-from ._summarizer_checker import set_summarizer_conversation_threshold
-from ._utils import find_events_for_summary
+from ..._session import Session
+from ..._utils import find_events_for_summary
+from ._checker import CheckSummarizerFunction
+from ._checker import set_summarizer_conversation_threshold
 
 DEFAULT_SUMMARIZER_PROMPT = dedent("""\
 Please summarize the following conversation, focusing on:
@@ -68,7 +70,7 @@ Conversation:
 Summary:""")
 
 
-class SessionSummary(BaseModel):
+class DefaultSessionSummary(BaseModel):
     """Represents a summary of a session's conversation history.
 
     This class encapsulates the summary information including the summary text,
@@ -88,6 +90,8 @@ class SessionSummary(BaseModel):
     """The timestamp when the summary was created."""
     metadata: Dict[str, Any] = Field(default_factory=dict)
     """Additional metadata about the summarization."""
+    model_name: str = ""
+    """The name of the model used for summarization."""
 
     def get_compression_ratio(self) -> float:
         """Get the compression ratio achieved by summarization.
@@ -111,13 +115,13 @@ class SessionSummary(BaseModel):
             "original_event_count": self.original_event_count,
             "compressed_event_count": self.compressed_event_count,
             "summary_timestamp": self.summary_timestamp,
-            "model_name": self.model.name,
+            "model_name": self.model_name,
             "compression_ratio": self.get_compression_ratio(),
             "metadata": self.metadata,
         }
 
 
-class SessionSummarizer:
+class DefaultSessionSummarizer(CompactSummarizerABC):
     """Summarizes conversation history to reduce memory usage.
 
     This class provides functionality to compress long conversation histories
@@ -155,6 +159,7 @@ class SessionSummarizer:
         """Get the LLM model for summarization."""
         return self._model
 
+    @override
     async def should_summarize(self, session: Session) -> bool:
         """Check if the session should be summarized.
 
@@ -291,6 +296,7 @@ class SessionSummarizer:
                 current_author = author
                 current_branch = branch
                 current_text = ""
+                continue
             if is_partial and current_author == author and current_text and current_branch == branch:
                 # Merge with current accumulated text
                 current_text += event_text
@@ -355,6 +361,7 @@ class SessionSummarizer:
         """
         return self._summarizer_prompt.format(conversation_text=conversation_text)
 
+    @override
     async def create_session_summary_by_events(
             self,
             events: List[Event],
@@ -413,6 +420,7 @@ class SessionSummarizer:
             logger.error("Failed to compress session %s: %s", session_id, ex, exc_info=True)
             return None, events
 
+    @override
     async def create_session_summary(self,
                                      session: Session,
                                      ctx: InvocationContext | None = None,
@@ -436,6 +444,7 @@ class SessionSummarizer:
                                                                       store_historical_events=store_historical_events)
         return summary_text
 
+    @override
     def get_summary_metadata(self) -> Dict[str, Any]:
         """Get metadata about the summarizer configuration.
 

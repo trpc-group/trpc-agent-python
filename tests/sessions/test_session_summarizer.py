@@ -21,10 +21,10 @@ import pytest
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._session import Session
-from trpc_agent_sdk.sessions._session_summarizer import (
+from trpc_agent_sdk.sessions.compact.default._summarizer import (
     DEFAULT_SUMMARIZER_PROMPT,
-    SessionSummarizer,
-    SessionSummary,
+    DefaultSessionSummarizer as SessionSummarizer,
+    DefaultSessionSummary as SessionSummary,
 )
 from trpc_agent_sdk.types import Content, EventActions, FunctionCall, FunctionResponse, Part
 

@@ -14,7 +14,7 @@ from typing import List
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
 
-from ._session import Session
+from ..._session import Session
 
 CheckSummarizerFunction = Callable[[Session], bool]
 
@@ -137,10 +137,7 @@ def set_summarizer_conversation_threshold(conversation_count: int = 100) -> Chec
     """
 
     def _decorator(session: Session) -> bool:
-        if session.conversation_count > conversation_count:
-            session.conversation_count = 0
-            return True
-        return False
+        return session.conversation_count > conversation_count
 
     return _decorator
 

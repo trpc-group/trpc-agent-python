@@ -31,18 +31,20 @@ import time
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing_extensions import override
 
-from trpc_agent_sdk.abc import SessionServiceABC
+from trpc_agent_sdk.abc import CompactSummarizerManagerABC
+from trpc_agent_sdk.abc import CompactTrigger
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LLMModel
 
-from ._session import Session
-from ._session_summarizer import SessionSummarizer
-from ._session_summarizer import SessionSummary
+from ..._session import Session
+from ._summarizer import DefaultSessionSummarizer
+from ._summarizer import DefaultSessionSummary
 
 
-class SummarizerSessionManager:
+class DefaultSessionSummarizerManager(CompactSummarizerManagerABC):
     """Session service with automatic summarization capabilities.
 
     This service extends the basic session service with automatic
@@ -53,8 +55,9 @@ class SummarizerSessionManager:
     def __init__(
         self,
         model: LLMModel,
-        summarizer: Optional[SessionSummarizer] = None,
+        summarizer: Optional[DefaultSessionSummarizer] = None,
         auto_summarize: bool = True,
+        compact_trigger: CompactTrigger = CompactTrigger.AFTER_TURN,
     ):
         """Initialize the summarizer session service.
 
@@ -64,33 +67,13 @@ class SummarizerSessionManager:
             summarizer: The session summarizer to use
             auto_summarize: Whether to automatically summarize sessions
         """
-        self._base_service = None
         if not summarizer and model:
-            summarizer = SessionSummarizer(model=model)
-        self._summarizer: SessionSummarizer = summarizer
+            summarizer = DefaultSessionSummarizer(model=model)
+        super().__init__(summarizer, compact_trigger=compact_trigger)
         self._auto_summarize = auto_summarize
-        self._summarizer_cache: Dict[str, Dict[str, Dict[str, SessionSummary]]] = {}
+        self._summarizer_cache: Dict[str, Dict[str, Dict[str, DefaultSessionSummary]]] = {}
 
-    def set_session_service(self, session_service: SessionServiceABC, force: bool = False) -> None:
-        """Set the session service to use.
-
-        Args:
-            session_service: The session service to use
-            force: Whether to force update even if already set
-        """
-        if not self._base_service or force:
-            self._base_service = session_service
-
-    def set_summarizer(self, summarizer: SessionSummarizer, force: bool = False) -> None:
-        """Set the summarizer to use.
-
-        Args:
-            summarizer: The summarizer to use
-            force: Whether to force update even if already set
-        """
-        if not self._summarizer or force:
-            self._summarizer = summarizer
-
+    @override
     async def create_session_summary(self,
                                      session: Session,
                                      force: bool = False,
@@ -100,6 +83,8 @@ class SummarizerSessionManager:
         Args:
             session: The session to summarize
         """
+        if self.compact_trigger != CompactTrigger.AFTER_TURN:
+            return
         is_should_summarize = await self.should_summarize_session(session) or force
         # Check if session should be summarized
         if is_should_summarize:
@@ -122,25 +107,28 @@ class SummarizerSessionManager:
                     self._summarizer_cache[app_name] = {}
                 if user_id not in self._summarizer_cache[app_name]:
                     self._summarizer_cache[app_name][user_id] = {}
-                self._summarizer_cache[app_name][user_id][session.id] = SessionSummary(
+                self._summarizer_cache[app_name][user_id][session.id] = DefaultSessionSummary(
                     session_id=session.id,
                     summary_text=summary_text,
                     original_event_count=original_event_count,
                     compressed_event_count=len(session.events),
                     summary_timestamp=time.time(),
+                    model_name=self._summarizer.model.name,
                 )
+                session.conversation_count = 0
             # Update the stored session
             if self._base_service:
                 await self._base_service.update_session(session)
 
-    async def get_session_summary(self, session: Session) -> Optional[SessionSummary]:
+    @override
+    async def get_session_summary(self, session: Session) -> Optional[DefaultSessionSummary]:
         """Get a summary of a session.
 
         Args:
             session: The session to summarize
 
         Returns:
-            SessionSummary if successful, None otherwise
+            DefaultSessionSummary if successful, None otherwise
         """
         if not self._summarizer or not self._summarizer_cache:
             return None

@@ -3,28 +3,29 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Maintain structured session memory with an isolated sub-agent."""
+"""Maintain structured session memory with direct model generation."""
 
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass
 from dataclasses import fields
+from dataclasses import field
 from datetime import datetime
 from datetime import timezone
-import re
 from typing import Any
-from typing import Protocol
-from typing import TYPE_CHECKING
+from typing import Optional
 
-from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
-from trpc_agent_sdk.memory import InMemoryMemoryService
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
+
+from ..._session import Session
 
 from ._formats import SESSION_MEMORY_SECTION_DESCRIPTIONS
 from ._formats import SESSION_MEMORY_SECTIONS
@@ -32,13 +33,10 @@ from ._formats import SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
 from ._formats import build_session_memory_state
 from ._formats import parse_session_memory_state
-from ._runtime import SessionCompactRuntime
+from ._runtime import AdvancedAutoCompactSummarizerRuntime
 from ._token_budget import TokenContextTracker
-
-if TYPE_CHECKING:
-    from trpc_agent_sdk.abc import SessionABC
-    from trpc_agent_sdk.abc import SessionServiceABC
-    from trpc_agent_sdk.context import InvocationContext
+from ._utils import content_signature
+from ._utils import internal_compaction_call
 
 _SESSION_MEMORY_FIELDS = tuple(field.name for field in fields(SessionMemoryDocument))
 
@@ -164,23 +162,12 @@ class SessionMemoryExtractionInput:
 class SessionMemoryExtractionResult:
     """Describe one incremental session-memory extraction."""
 
-    extracted: bool
-    reason: str
-    processed_events: int = 0
-    first_event_id: str | None = None
-    last_event_id: str | None = None
-    error: str | None = None
-
-
-class SessionMemoryGenerator(Protocol):
-    """Define the replaceable session-memory generator interface."""
-
-    async def generate(
-        self,
-        extraction_input: SessionMemoryExtractionInput,
-        ctx: "InvocationContext",
-    ) -> SessionMemoryDocument:
-        """Generate a complete document from old memory and new context."""
+    extracted: bool = field(default=False)
+    reason: str = field(default="")
+    processed_events: int = field(default=0)
+    first_event_id: Optional[str] = field(default=None)
+    last_event_id: Optional[str] = field(default=None)
+    error: Optional[str] = field(default=None)
 
 
 def has_session_memory_content(document: SessionMemoryDocument) -> bool:
@@ -247,152 +234,99 @@ def limit_session_memory_document(
     return limited_document
 
 
-class ForkedSessionMemoryGenerator:
-    """Call the isolated extraction Agent through a temporary Runner."""
+class SessionMemoryExtractor:
+    """Check thresholds and coordinate extraction, writes, and checkpoints."""
 
     def __init__(
         self,
-        model: Any | None = None,
-        *,
-        section_max_chars: int = 8_000,
-        max_retries: int = 1,
+        runtime: AdvancedAutoCompactSummarizerRuntime,
+        model: LLMModel | None = None,
     ) -> None:
-        """Store an optional dedicated model, falling back to the parent model."""
-        if max_retries < 0:
-            raise ValueError("max_retries must not be negative")
+        """Initialize extraction and per-session serialization locks."""
         self._model = model
-        self._section_max_chars = section_max_chars
-        self._max_retries = max_retries
+        self._runtime = runtime
+        self._config = runtime.config.session_memory
 
-    def _resolve_model(self, ctx: "InvocationContext") -> Any:
+    def _resolve_model(self, ctx: InvocationContext) -> LLMModel:
         """Prefer the dedicated model, falling back to the parent Agent model."""
         model = self._model or getattr(ctx.agent, "model", None)
         if not model:
             raise ValueError("Session memory extractor cannot resolve an LLM model")
         return model
 
-    async def generate(
+    async def _call_llm_model(
         self,
         extraction_input: SessionMemoryExtractionInput,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
     ) -> SessionMemoryDocument:
-        """Run extraction in a Runner isolated from the parent session and services."""
-        config = ctx.agent.generate_content_config if isinstance(ctx.agent, LlmAgent) else None
-        agent = LlmAgent(
-            name="advanced_session_memory_extractor",
-            description="Update Markdown session memory in isolation.",
-            instruction=SESSION_MEMORY_INSTRUCTION,
-            model=self._resolve_model(ctx),
-            tools=[],
-            generate_content_config=config,
-            add_name_to_instruction=False,
+        """Generate session memory directly through the configured LLM model."""
+        model = self._resolve_model(ctx)
+        prompt = build_session_memory_prompt(
+            extraction_input,
+            section_max_chars=self._config.section_max_chars,
         )
-        app_name = f"{ctx.app_name}_advanced_session_memory"
-        runner = Runner(
-            app_name=app_name,
-            agent=agent,
-            session_service=InMemorySessionService(),
-            memory_service=InMemoryMemoryService(),
-            enable_post_turn_processing=False,
-        )
-        try:
-            prompt = build_session_memory_prompt(
-                extraction_input,
-                section_max_chars=self._section_max_chars,
-            )
-            parse_error: Exception | None = None
-            for attempt in range(self._max_retries + 1):
-                session = await runner.session_service.create_session(
-                    app_name=app_name,
-                    user_id="advanced-session-memory",
-                    state={},
-                )
-                retry_instruction = ""
-                if parse_error is not None:
-                    retry_instruction = ("\n\nThe previous response could not be parsed. "
-                                         f"Parser error: {parse_error}. Return the required short analysis "
-                                         "followed by all ten Markdown headings and their body text. "
-                                         "Do not return JSON, XML, or code fences.")
-                content = Content(role="user", parts=[Part.from_text(text=prompt + retry_instruction)])
-                last_event = None
-                async for event in runner.run_async(
-                        user_id=session.user_id,
-                        session_id=session.id,
-                        new_message=content,
+        parse_error: Exception | None = None
+        for attempt in range(self._config.max_retries + 1):
+            retry_instruction = ""
+            if parse_error is not None:
+                retry_instruction = ("\n\nThe previous response could not be parsed. "
+                                     f"Parser error: {parse_error}. Return the required short analysis "
+                                     "followed by all ten Markdown headings and their body text. "
+                                     "Do not return JSON, XML, or code fences.")
+
+            request = LlmRequest(
+                contents=[Content(
+                    role="user",
+                    parts=[Part.from_text(text=prompt + retry_instruction)],
+                )], )
+            request.append_instructions([SESSION_MEMORY_INSTRUCTION])
+
+            output = ""
+            with internal_compaction_call(getattr(ctx, "agent_context", None)):
+                async for response in model.generate_async(
+                        request,
+                        stream=False,
+                        ctx=ctx,
                 ):
-                    if not event.partial:
-                        last_event = event
+                    if response.content and response.content.parts:
+                        output += "\n".join(part.text for part in response.content.parts if part.text)
 
-                try:
-                    if not last_event or not last_event.content or not last_event.content.parts:
-                        raise ValueError("Session memory extractor returned no final content")
-                    merged_text = "\n".join(part.text for part in last_event.content.parts if part.text)
-                    return parse_session_memory_markdown(merged_text)
-                except Exception as exc:  # noqa: BLE001
-                    parse_error = exc
-                    if attempt >= self._max_retries:
-                        raise
-        finally:
-            await runner.close()
+            try:
+                if not output.strip():
+                    raise ValueError("Session memory extractor returned no final content")
+                return parse_session_memory_markdown(output)
+            except Exception as exc:  # noqa: BLE001
+                parse_error = exc
+                if attempt >= self._config.max_retries:
+                    raise
 
-
-class SessionMemoryExtractor:
-    """Check thresholds and coordinate extraction, writes, and checkpoints."""
-
-    def __init__(
-        self,
-        memory_runtime: SessionCompactRuntime,
-        generator: SessionMemoryGenerator | None = None,
-        *,
-        model: Any | None = None,
-        session_service: "SessionServiceABC | None" = None,
-    ) -> None:
-        """Initialize extraction and per-session serialization locks."""
-        if generator is not None and model is not None:
-            raise ValueError("Provide either generator or model, not both")
-        self._runtime = memory_runtime
-        self._generator = generator or ForkedSessionMemoryGenerator(
-            model,
-            section_max_chars=memory_runtime.config.session_memory_section_max_chars,
-        )
-        self._session_service = session_service
-
-    @property
-    def runtime(self) -> SessionCompactRuntime:
-        """Return the runtime bound to this extractor."""
-        return self._runtime
-
-    def attach_session_service(self, session_service: "SessionServiceABC") -> None:
-        """Attach the service used for atomic state-only writes."""
-        if self._session_service is not None and self._session_service is not session_service:
-            raise ValueError("Session memory extractor is already bound to another service")
-        self._session_service = session_service
-
-    def _session_event_records(self, session: "SessionABC") -> list[dict[str, Any]]:
+    def _session_event_records(self, session: Session) -> list[dict[str, Any]]:
         """Convert the authoritative Session Events into extraction records."""
         records: list[dict[str, Any]] = []
         seen: set[str] = set()
         # Archived Events are no longer addressable in the active model
         # request. Their information is already represented by the active
         # summary Event included in the extraction context.
-        events = list(getattr(session, "events", None) or [])
+        events = list(session.events or [])
         for event in events:
-            is_summary_event = getattr(event, "is_summary_event", None)
-            if callable(is_summary_event) and is_summary_event():
+            if event.is_summary_event and event.is_summary_event():
                 continue
-            event_id = getattr(event, "id", None)
-            if not isinstance(event_id, str) or event_id in seen:
+            if event.id in seen:
                 continue
-            seen.add(event_id)
-            timestamp = float(getattr(event, "timestamp", 0.0) or 0.0)
+            seen.add(event.id)
+            timestamp = float(event.timestamp or 0.0)
             records.append({
-                "kind": "event",
-                "event_id": event_id,
-                "recorded_at": datetime.fromtimestamp(
+                "kind":
+                "event",
+                "event_id":
+                event.id,
+                "recorded_at":
+                datetime.fromtimestamp(
                     timestamp,
                     tz=timezone.utc,
                 ).isoformat(),
-                "event": event.model_dump(
+                "event":
+                event.model_copy(deep=True).model_dump(
                     mode="json",
                     by_alias=True,
                     exclude_none=True,
@@ -442,27 +376,25 @@ class SessionMemoryExtractor:
             default=str,
         )
 
-    def _context_contents(self, ctx: "InvocationContext") -> list[Any]:
+    def _context_contents(self, ctx: InvocationContext) -> list[Content]:
         """Extract model-context Content without Event metadata."""
-        override_messages = getattr(ctx, "override_messages", None)
+        override_messages = ctx.override_messages
         if isinstance(override_messages, list):
             return [content for content in override_messages if content is not None]
 
-        contents: list[Any] = []
-        session = getattr(ctx, "session", None)
-        for event in getattr(session, "events", []) or []:
-            is_model_visible = getattr(event, "is_model_visible", None)
+        contents: list[Content] = []
+        session = ctx.session
+        for event in session.events or []:
+            is_model_visible = event.is_model_visible
             if callable(is_model_visible) and not is_model_visible():
                 continue
-            content = getattr(event, "content", None)
+            content = event.content
             if content is not None:
                 contents.append(content)
         return contents
 
-    def _serialized_context_content(self, content: Any) -> str | None:
+    def _serialized_context_content(self, content: Content) -> str | None:
         """Serialize visible message content while excluding hidden thoughts."""
-        if not hasattr(content, "model_dump"):
-            return None
         payload = content.model_dump(
             mode="json",
             by_alias=True,
@@ -493,7 +425,7 @@ class SessionMemoryExtractor:
         side = max(1, (limit - len(marker)) // 2)
         return serialized[:side] + marker + serialized[-(limit - len(marker) - side):]
 
-    def _context_messages(self, ctx: "InvocationContext") -> list[str]:
+    def _context_messages(self, ctx: InvocationContext) -> list[str]:
         """Render the complete visible conversation context in order."""
         messages: list[str] = []
         for content in self._context_contents(ctx):
@@ -545,24 +477,24 @@ class SessionMemoryExtractor:
         self,
         extraction_input: SessionMemoryExtractionInput,
         tracker: TokenContextTracker,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
     ) -> bool:
         """Return whether the complete sub-agent prompt fits the input budget."""
         prompt = build_session_memory_prompt(
             extraction_input,
-            section_max_chars=self._runtime.config.session_memory_section_max_chars,
+            section_max_chars=self._config.section_max_chars,
         )
         effective_window = tracker.effective_context_window_tokens(ctx)
         if effective_window is not None:
-            limit = effective_window - self._runtime.config.session_memory_request_overhead_tokens
+            limit = effective_window - self._config.request_overhead_tokens
             return limit > 0 and tracker.estimate_payload_tokens(prompt) <= limit
-        return len(prompt) <= self._runtime.config.session_memory_prompt_max_chars
+        return len(prompt) <= self._config.prompt_max_chars
 
     def _build_extraction_input(
         self,
         current_memory: str,
         pending: list[dict[str, Any]],
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         tracker: TokenContextTracker,
     ) -> tuple[list[dict[str, Any]], SessionMemoryExtractionInput | None]:
         """Build the largest safe input that fits the extraction budget.
@@ -642,14 +574,14 @@ class SessionMemoryExtractor:
 
         return [], None
 
-    async def _read_current_memory(self, session: "SessionABC") -> str:
+    async def _read_current_memory(self, session: Session) -> str:
         """Read Session Memory from the SessionService-owned state."""
         parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
         return parsed[0].to_markdown() if parsed is not None else SessionMemoryDocument().to_markdown()
 
     def _state_checkpoint(
         self,
-        session: "SessionABC",
+        session: Session,
     ) -> tuple[dict[str, Any] | None, int | None]:
         """Read the checkpoint and token metric from Session.state."""
         parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
@@ -664,39 +596,38 @@ class SessionMemoryExtractor:
 
     def _boundary_for_event(
         self,
-        session: "SessionABC",
+        session: Session,
         event_id: str,
     ) -> tuple[str, int] | None:
         """Return a model-content signature and occurrence for one Event."""
-        from ._autocompact import content_signature
 
         signatures: list[str] = []
         # AutoCompact matches against the active model request, so occurrence
         # counts must not include archived Events.
-        events = list(getattr(session, "events", None) or [])
+        events = list(session.events or [])
         seen_ids: set[str] = set()
         for event in events:
-            current_id = getattr(event, "id", None)
-            if not isinstance(current_id, str) or current_id in seen_ids:
+            if event.id in seen_ids:
                 continue
-            seen_ids.add(current_id)
-            content = getattr(event, "content", None)
+            seen_ids.add(event.id)
+            content = event.content
             if content is None:
                 continue
             signature = content_signature(content)
             signatures.append(signature)
-            if current_id == event_id:
+            if event.id == event_id:
                 return signature, signatures.count(signature)
         return None
 
     async def _persist_checkpoint(
         self,
-        session: "SessionABC",
+        ctx: InvocationContext,
         included_records: list[dict[str, Any]],
         document: SessionMemoryDocument,
         context_tokens: int | None,
     ) -> None:
         """Persist the processed increment boundary after a successful write."""
+        session = ctx.session
         first_event_id = included_records[0]["event_id"]
         last_event_id = included_records[-1]["event_id"]
         values = (
@@ -711,8 +642,6 @@ class SessionMemoryExtractor:
             document.key_results,
             document.worklog,
         )
-        if self._session_service is None:
-            raise RuntimeError("Session Memory requires a SessionService")
         boundary = self._boundary_for_event(session, last_event_id)
         if boundary is None:
             raise ValueError(f"Session Memory boundary Event {last_event_id} has no visible content")
@@ -733,27 +662,40 @@ class SessionMemoryExtractor:
             checkpoint=checkpoint,
             context_tokens=context_tokens,
         )
-        await self._session_service.patch_session_state(
-            session,
-            {SESSION_MEMORY_STATE_KEY: payload},
-        )
+        state_delta = {SESSION_MEMORY_STATE_KEY: payload}
+        session_service = getattr(ctx, "session_service", None)
+        if session_service is None:
+            session.state.update(state_delta)
+            return
+
+        update_state = getattr(session_service, "update_session_state", None)
+        if callable(update_state):
+            await update_state(session, state_delta)
+            return
+
+        # Compatibility fallback for duck-typed SessionService implementations
+        # that do not inherit the latest SessionServiceABC.
+        session.state.update(state_delta)
+        await session_service.update_session(session)
 
     async def extract_if_needed(
         self,
-        session: "SessionABC",
-        ctx: "InvocationContext",
-        *,
+        ctx: InvocationContext,
         force: bool = False,
     ) -> SessionMemoryExtractionResult:
         """Update memory when the threshold or force flag is reached."""
-        config = self._runtime.config
-        if not config.enabled or not config.session_memory_enabled:
-            return SessionMemoryExtractionResult(False, "disabled")
+        config = self._config
+        session = ctx.session
+        if not config.enabled:
+            return SessionMemoryExtractionResult(reason="disabled")
         runtime = self._runtime.for_session(session)
         session_key = runtime.session_key(session.id)
-        async with self._runtime.coordination.guard(session_key) as acquired:
+        async with self._runtime.coordination.guard(
+                session_key,
+                timeout=config.wait_timeout_seconds,
+        ) as acquired:
             if not acquired:
-                return SessionMemoryExtractionResult(False, "coordination-timeout")
+                return SessionMemoryExtractionResult(reason="coordination-timeout")
             records = self._session_event_records(session)
             checkpoint, checkpoint_context_tokens = self._state_checkpoint(session)
             checkpoint_event_id = checkpoint["last_event_id"] if checkpoint is not None else None
@@ -764,26 +706,25 @@ class SessionMemoryExtractor:
                 checkpoint_recorded_at if isinstance(checkpoint_recorded_at, str) else None,
             )
             if not pending:
-                return SessionMemoryExtractionResult(False, "no-new-events")
+                return SessionMemoryExtractionResult(reason="no-new-events")
 
             pending_chars = self._record_chars(pending)
-            tracker = TokenContextTracker(config)
+            tracker = TokenContextTracker(self._runtime.config.token_context_tracker)
             token_mode = tracker.token_mode_enabled(ctx)
             context_tokens = tracker.estimate_payload_tokens(self._context_contents(ctx))
-            threshold = (config.session_memory_update_tokens if checkpoint_event_id is not None and token_mode else
-                         (config.session_memory_initial_tokens if token_mode else
-                          (config.session_memory_update_chars
-                           if checkpoint_event_id is not None else config.session_memory_initial_chars)))
+            threshold = (config.update_tokens if checkpoint_event_id is not None and token_mode else
+                         (config.initial_tokens if token_mode else
+                          (config.update_chars if checkpoint_event_id is not None else config.initial_chars)))
             tool_calls = self._count_tool_calls(pending)
             natural_break = not self._last_event_has_tool_call(pending)
             if not natural_break:
-                return SessionMemoryExtractionResult(False, "unsafe-boundary")
+                return SessionMemoryExtractionResult(reason="unsafe-boundary")
             threshold_met = ((context_tokens >= threshold if checkpoint_context_tokens is None else
                               (context_tokens < checkpoint_context_tokens or context_tokens -
                                checkpoint_context_tokens >= threshold)) if token_mode else pending_chars >= threshold)
-            tool_condition_met = tool_calls >= config.session_memory_tool_calls_between_updates or natural_break
+            tool_condition_met = tool_calls >= config.tool_calls_between_updates or natural_break
             if not force and (not threshold_met or not tool_condition_met):
-                return SessionMemoryExtractionResult(False, "threshold-not-met")
+                return SessionMemoryExtractionResult(reason="threshold-not-met")
 
             included, extraction_input = self._build_extraction_input(
                 await self._read_current_memory(session),
@@ -792,18 +733,18 @@ class SessionMemoryExtractor:
                 tracker,
             )
             if extraction_input is None:
-                return SessionMemoryExtractionResult(False, "context-unavailable")
+                return SessionMemoryExtractionResult(reason="context-unavailable")
             try:
-                document = await self._generator.generate(extraction_input, ctx)
+                document = await self._call_llm_model(extraction_input, ctx)
                 if not has_session_memory_content(document):
                     raise ValueError("Session memory generator returned an all-empty document")
                 document = limit_session_memory_document(
                     document,
-                    max_chars=config.session_memory_section_max_chars,
-                    total_max_chars=config.session_memory_total_max_chars,
+                    max_chars=config.section_max_chars,
+                    total_max_chars=config.total_max_chars,
                 )
                 await self._persist_checkpoint(
-                    session,
+                    ctx,
                     included,
                     document,
                     context_tokens,
@@ -816,8 +757,7 @@ class SessionMemoryExtractor:
                     exc_info=True,
                 )
                 return SessionMemoryExtractionResult(
-                    False,
-                    "extraction-failed",
+                    reason="extraction-failed",
                     processed_events=0,
                     first_event_id=included[0]["event_id"],
                     last_event_id=included[-1]["event_id"],
@@ -825,8 +765,8 @@ class SessionMemoryExtractor:
                 )
 
             return SessionMemoryExtractionResult(
-                True,
-                "forced" if force else "threshold-met",
+                extracted=True,
+                reason="forced" if force else "threshold-met",
                 processed_events=len(included),
                 first_event_id=included[0]["event_id"],
                 last_event_id=included[-1]["event_id"],

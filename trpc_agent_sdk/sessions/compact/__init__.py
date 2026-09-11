@@ -5,92 +5,73 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Canonical context-compression package for session management."""
 
-from ._autocompact import AutoCompact
-from ._autocompact import AutoCompactCallback
-from ._autocompact import AutoCompactResult
-from ._autocompact import content_signature
-from ._autocompact import ForkedLegacySummaryGenerator
-from ._autocompact import setup_autocompact
-from ._base_manager import BaseSessionCompactManager
-from ._config import AdvancedCompactConfig
-from ._formats import build_session_memory_state
-from ._formats import parse_session_memory_state
-from ._formats import SESSION_MEMORY_SECTION_DESCRIPTIONS
-from ._formats import SESSION_MEMORY_SECTIONS
-from ._formats import SESSION_MEMORY_STATE_KEY
-from ._formats import SessionMemoryDocument
-from ._history_snip import estimate_request_chars
-from ._history_snip import HistorySnip
-from ._history_snip import HistorySnipCallback
-from ._history_snip import HistorySnipResult
-from ._history_snip import setup_history_snip
-from ._manager import AdvancedSessionCompactManager
-from ._microcompact import Microcompact
-from ._microcompact import MicrocompactCallback
-from ._microcompact import MicrocompactResult
-from ._microcompact import setup_microcompact
-from ._session_memory import build_session_memory_prompt
-from ._session_memory import ForkedSessionMemoryGenerator
-from ._session_memory import has_session_memory_content
-from ._session_memory import limit_session_memory_document
-from ._session_memory import SessionMemoryExtractionInput
-from ._session_memory import SessionMemoryExtractionResult
-from ._session_memory import SessionMemoryExtractor
-from ._token_budget import ContextBudget
-from ._token_budget import ContextTokenEstimate
-from ._token_budget import HeuristicTokenEstimator
-from ._token_budget import ModelContextWindowResolver
-from ._token_budget import TokenContextTracker
-from ._token_budget import TokenEstimator
-from ._tool_result_budget import setup_tool_result_budget
-from ._tool_result_budget import ToolResultBudget
-from ._tool_result_budget import ToolResultBudgetCallback
-from ._tool_result_budget import ToolResultBudgetResult
-from ._runtime import ScopedSessionCompactRuntime
-from ._runtime import SessionCompactRuntime
+from trpc_agent_sdk.abc import CompactTrigger
+
+from .advanced import AdvancedAutoCompactSummarizer
+from .advanced import AdvancedAutoCompactSummarizerManager
+from .advanced import BaseCompactSummarizerHandler
+from .advanced import BaseTokenEstimator
+from .advanced import BaseModelContextWindowResolver
+from .advanced import AutoCompactSummarizerConfig
+from .advanced import HistorySnipConfig
+from .advanced import TokenContextTrackerConfig
+from .advanced import MicroCompactConfig
+from .advanced import ToolResultBudgetConfig
+from .advanced import SessionMemoryExtractorConfig
+from .advanced import AdvancedAutoCompactSummarizerConfig
+from .advanced import AdvancedAutoCompactSummarizerFilter
+from .advanced import HistorySnip
+from .advanced import MicroCompact
+from .advanced import SessionMemoryDocument
+from .advanced import SessionMemoryExtractor
+from .advanced import AdvancedAutoCompactSummarizerRuntime
+from .advanced import TokenContextTracker
+from .advanced import ToolResultBudget
+from .default import DEFAULT_SUMMARIZER_PROMPT
+from .default import DefaultSessionSummarizer
+from .default import DefaultSessionSummarizerManager
+from .default import DefaultSessionSummary
+from .default import CheckSummarizerFunction
+from .default import set_summarizer_token_threshold
+from .default import set_summarizer_events_count_threshold
+from .default import set_summarizer_time_interval_threshold
+from .default import set_summarizer_important_content_threshold
+from .default import set_summarizer_conversation_threshold
+from .default import set_summarizer_check_functions_by_and
+from .default import set_summarizer_check_functions_by_or
 
 __all__ = [
-    "AdvancedCompactConfig",
-    "AutoCompact",
-    "AutoCompactCallback",
-    "AutoCompactResult",
-    "ContextBudget",
-    "ContextTokenEstimate",
-    "ForkedLegacySummaryGenerator",
-    "ForkedSessionMemoryGenerator",
-    "HeuristicTokenEstimator",
+    "CompactTrigger",
+    "AdvancedAutoCompactSummarizer",
+    "AdvancedAutoCompactSummarizerManager",
+    "BaseCompactSummarizerHandler",
+    "BaseTokenEstimator",
+    "BaseModelContextWindowResolver",
+    "AutoCompactSummarizerConfig",
+    "HistorySnipConfig",
+    "TokenContextTrackerConfig",
+    "MicroCompactConfig",
+    "ToolResultBudgetConfig",
+    "SessionMemoryExtractorConfig",
+    "AdvancedAutoCompactSummarizerConfig",
+    "AdvancedAutoCompactSummarizerFilter",
     "HistorySnip",
-    "HistorySnipCallback",
-    "HistorySnipResult",
-    "Microcompact",
-    "MicrocompactCallback",
-    "MicrocompactResult",
-    "ModelContextWindowResolver",
-    "SESSION_MEMORY_SECTION_DESCRIPTIONS",
-    "SESSION_MEMORY_SECTIONS",
-    "SESSION_MEMORY_STATE_KEY",
+    "MicroCompact",
     "SessionMemoryDocument",
-    "SessionMemoryExtractionInput",
-    "SessionMemoryExtractionResult",
     "SessionMemoryExtractor",
-    "BaseSessionCompactManager",
-    "AdvancedSessionCompactManager",
+    "AdvancedAutoCompactSummarizerRuntime",
     "TokenContextTracker",
-    "TokenEstimator",
     "ToolResultBudget",
-    "ToolResultBudgetCallback",
-    "ToolResultBudgetResult",
-    "SessionCompactRuntime",
-    "ScopedSessionCompactRuntime",
-    "build_session_memory_prompt",
-    "build_session_memory_state",
-    "content_signature",
-    "estimate_request_chars",
-    "has_session_memory_content",
-    "limit_session_memory_document",
-    "parse_session_memory_state",
-    "setup_autocompact",
-    "setup_history_snip",
-    "setup_microcompact",
-    "setup_tool_result_budget",
+    "DEFAULT_SUMMARIZER_PROMPT",
+    "DefaultSessionSummarizer",
+    "DefaultSessionSummarizerManager",
+    "DefaultSessionSummary",
+    "CheckSummarizerFunction",
+    "set_summarizer_token_threshold",
+    "set_summarizer_events_count_threshold",
+    "set_summarizer_time_interval_threshold",
+    "set_summarizer_important_content_threshold",
+    "set_summarizer_conversation_threshold",
+    "set_summarizer_check_functions_by_and",
+    "set_summarizer_check_functions_by_or",
 ]

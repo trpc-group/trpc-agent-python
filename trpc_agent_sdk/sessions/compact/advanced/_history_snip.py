@@ -12,20 +12,18 @@ import copy
 import json
 from dataclasses import dataclass
 from typing import Any
-from typing import TYPE_CHECKING
+from typing_extensions import override
 
-from ._callbacks import install_staged_callback
-from ._runtime import SessionCompactRuntime
+from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.models import LlmRequest
+
+from ._base import BaseCompactSummarizerHandler
+from ._runtime import AdvancedAutoCompactSummarizerRuntime
 from ._tool_result_budget import is_budget_replacement_response
 from ._tool_result_budget import serialize_tool_response
 from ._tool_result_budget import stable_tool_result_id
 from ._tool_result_budget import tool_result_sha256
 from ._token_budget import TokenContextTracker
-
-if TYPE_CHECKING:
-    from trpc_agent_sdk.agents import LlmAgent
-    from trpc_agent_sdk.context import InvocationContext
-    from trpc_agent_sdk.models import LlmRequest
 
 HISTORY_SNIP_CLEARED_MESSAGE = "[Older tool result removed by history snip]"
 
@@ -64,7 +62,7 @@ class HistorySnipResult:
     token_source: str | None = None
 
 
-def estimate_request_chars(request: "LlmRequest") -> int:
+def estimate_request_chars(request: LlmRequest) -> int:
     """Estimate the full model request using stable JSON serialization."""
     payload = request.model_dump(
         mode="python",
@@ -83,15 +81,16 @@ def estimate_request_chars(request: "LlmRequest") -> int:
 class HistorySnip:
     """Mechanically remove the oldest tool results when the request is too large."""
 
-    def __init__(self, memory_runtime: SessionCompactRuntime) -> None:
+    def __init__(self, runtime: AdvancedAutoCompactSummarizerRuntime) -> None:
         """Initialize history-snip state and per-session async locks."""
-        self._runtime = memory_runtime
+        self._runtime = runtime
+        self._config = runtime.config.history_snip
         self._states: dict[str, HistorySnipState] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._scoped_processors: dict[object, "HistorySnip"] = {}
 
     @property
-    def runtime(self) -> SessionCompactRuntime:
+    def runtime(self) -> AdvancedAutoCompactSummarizerRuntime:
         """Return the runtime bound to this history snipper."""
         return self._runtime
 
@@ -119,7 +118,7 @@ class HistorySnip:
 
     def _collect_candidates(self, request: "LlmRequest") -> list[HistorySnipCandidate]:
         """Collect eligible function results in request order."""
-        allowed_tools = set(self._runtime.config.history_snip_tool_names)
+        allowed_tools = set(self._config.tool_names)
         candidates: list[HistorySnipCandidate] = []
         serialized_by_result_id: dict[str, str] = {}
         for content in request.contents:
@@ -152,18 +151,17 @@ class HistorySnip:
 
     async def apply(
         self,
-        request: "LlmRequest",
+        request: LlmRequest,
         *,
-        session_id: str,
-        ctx: "InvocationContext | None" = None,
+        ctx: InvocationContext,
         force: bool = False,
     ) -> HistorySnipResult:
         """Clean old tool results when over budget or explicitly forced."""
-        config = self._runtime.config
-        if not config.enabled or not config.history_snip_enabled:
+        if not self._config.enabled:
             request_chars = estimate_request_chars(request)
             return HistorySnipResult(None, 0, 0, 0, request_chars, request_chars)
-        if ctx is None or hasattr(self._runtime, "scope"):
+        session_id = ctx.session_id
+        if self._runtime.scope:
             return await self._apply_scoped(request, session_id=session_id, ctx=ctx, force=force)
         runtime = self._runtime.for_session(ctx.session)
         processor = self._scoped_processors.get(runtime.scope)
@@ -173,19 +171,20 @@ class HistorySnip:
             processor._states = {}
             processor._session_locks = {}
             self._scoped_processors[runtime.scope] = processor
-        return await processor.apply(request, session_id=session_id, ctx=ctx, force=force)
+        return await processor.apply(request, ctx=ctx, force=force)
 
     async def _apply_scoped(
         self,
-        request: "LlmRequest",
+        request: LlmRequest,
         *,
         session_id: str,
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         force: bool,
     ) -> HistorySnipResult:
         """Apply one tenant-bound history-snipping operation."""
-        config = self._runtime.config
-        tracker = TokenContextTracker(config)
+        token_context_tracker_config = self._runtime.config.token_context_tracker
+        history_snip_config = self._config
+        tracker = TokenContextTracker(token_context_tracker_config)
         async with self._session_lock(session_id):
             request.contents = [content.model_copy(deep=True) for content in request.contents]
             state = await self._load_state(session_id)
@@ -206,7 +205,7 @@ class HistorySnip:
             token_mode = token_budget_before.token_mode_enabled
             current_tokens = token_budget_before.estimate.tokens
             if not force and (current_tokens <= token_budget_before.warning_threshold_tokens
-                              if token_mode else request_chars_before <= config.history_snip_trigger_chars):
+                              if token_mode else request_chars_before <= history_snip_config.trigger_chars):
                 return HistorySnipResult(
                     None,
                     0,
@@ -220,7 +219,7 @@ class HistorySnip:
                 )
 
             trigger = "force" if force else "pressure"
-            protected_ids = {candidate.result_id for candidate in candidates[-config.history_snip_keep_recent:]}
+            protected_ids = {candidate.result_id for candidate in candidates[-history_snip_config.keep_recent:]}
             eligible = [
                 candidate for candidate in candidates
                 if candidate.result_id not in state.snipped_ids and candidate.result_id not in protected_ids
@@ -230,7 +229,7 @@ class HistorySnip:
             snipped_count = 0
             for candidate in eligible:
                 if not force and (current_tokens <= token_budget_before.warning_threshold_tokens
-                                  if token_mode else current_chars <= config.history_snip_target_chars):
+                                  if token_mode else current_chars <= history_snip_config.target_chars):
                     break
                 candidate_saving = max(0, candidate.original_size - replacement_size)
                 if candidate_saving == 0:
@@ -258,39 +257,20 @@ class HistorySnip:
             )
 
 
-class HistorySnipCallback:
+class HistorySnipHandler(BaseCompactSummarizerHandler):
     """Adapt history snip to before_model_callback."""
 
-    advanced_memory_stage = 20
-
-    def __init__(self, history_snip: HistorySnip) -> None:
+    def __init__(self) -> None:
         """Store the history-snip processor run before model requests."""
-        self._history_snip = history_snip
+        self._history_snip: HistorySnip | None = None
 
-    @property
-    def history_snip(self) -> HistorySnip:
-        """Return the history-snip processor used by this callback."""
-        return self._history_snip
-
-    async def __call__(self, ctx: "InvocationContext", request: "LlmRequest") -> None:
+    @override
+    async def handle(self, ctx: InvocationContext, request: LlmRequest) -> None:
         """Run history snip before a request based on request size."""
-        await self._history_snip.apply(request, session_id=ctx.session_id, ctx=ctx)
-        return None
-
-
-def setup_history_snip(
-    agent: "LlmAgent",
-    memory_runtime: SessionCompactRuntime,
-) -> HistorySnip:
-    """Install history snip while preserving context stage order."""
-    history_snip = HistorySnip(memory_runtime)
-    callback = HistorySnipCallback(history_snip)
-    existing_snip = install_staged_callback(
-        agent,
-        callback,
-        callback_type=HistorySnipCallback,
-        component_attribute="history_snip",
-        memory_runtime=memory_runtime,
-        conflict_message="History snip is already configured with another runtime",
-    )
-    return existing_snip or history_snip
+        summarizer = self.get_summarizer(ctx)
+        from ._auto_compact import AdvancedAutoCompactSummarizer
+        if not isinstance(summarizer, AdvancedAutoCompactSummarizer):
+            raise ValueError("Summarizer is not an AdvancedAutoCompactSummarizer")
+        if self._history_snip is None:
+            self._history_snip = HistorySnip(summarizer.runtime)
+        await self._history_snip.apply(request, ctx=ctx)

@@ -34,7 +34,6 @@ from datetime import timezone
 from typing import Any
 from typing import List
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from sqlalchemy import Boolean
@@ -51,6 +50,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.types import Integer
 
 from trpc_agent_sdk.abc import ListSessionsResponse
+from trpc_agent_sdk.abc import CompactSummarizerManagerABC
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
@@ -72,14 +72,10 @@ from trpc_agent_sdk.utils import user_key
 
 from ._base_session_service import BaseSessionService
 from ._session import Session
-from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import extract_state_delta
 from ._utils import merge_state
-
-if TYPE_CHECKING:
-    from .compact._base_manager import BaseSessionCompactManager
 
 
 def _event_field_or_default(field_name: str, value: Any) -> Any:
@@ -392,10 +388,9 @@ class SqlSessionService(BaseSessionService):
 
     def __init__(self,
                  db_url: str,
-                 summarizer_manager: Optional[SummarizerSessionManager] = None,
+                 summarizer_manager: Optional[CompactSummarizerManagerABC] = None,
                  is_async: bool = False,
                  session_config: Optional[SessionServiceConfig] = None,
-                 session_compact_manager: BaseSessionCompactManager | None = None,
                  **kwargs: Any):
         self._db_url = db_url
         self._is_async = is_async
@@ -403,7 +398,6 @@ class SqlSessionService(BaseSessionService):
         super().__init__(
             summarizer_manager=summarizer_manager,
             session_config=session_config,
-            session_compact_manager=session_compact_manager,
         )
         if is_default_config:
             # Default to store historical events for persistent backends.
@@ -645,6 +639,40 @@ class SqlSessionService(BaseSessionService):
         return event
 
     @override
+    async def update_session_state(
+        self,
+        session: Session,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Persist session-scoped state without rewriting Event rows."""
+        if not state_delta:
+            return
+        session.state.update(state_delta)
+
+        async with self._sql_storage.create_db_session() as sql_session:
+            session_key = SqlKey(
+                key=(session.app_name, session.user_id, session.id),
+                storage_cls=StorageSession,
+            )
+            storage_session: Optional[StorageSession] = await self._sql_storage.get_for_update(
+                sql_session,
+                session_key,
+            )
+            if storage_session is None:
+                logger.warning(
+                    "Session %s not found in storage while updating state",
+                    session.id,
+                )
+                return
+
+            persisted_state = dict(storage_session.state or {})
+            persisted_state.update(state_delta)
+            storage_session.state = persisted_state  # type: ignore
+            await self._sql_storage.commit(sql_session)
+            await self._sql_storage.refresh(sql_session, storage_session)
+            session.last_update_time = storage_session.update_timestamp_tz
+
+    @override
     async def update_session(self, session: Session) -> None:
         app_name = session.app_name
         user_id = session.user_id
@@ -677,29 +705,6 @@ class SqlSessionService(BaseSessionService):
             await self._sql_storage.commit(sql_session)
             await self._sql_storage.refresh(sql_session, storage_session)
 
-            session.last_update_time = storage_session.update_timestamp_tz
-
-    @override
-    async def patch_session_state(
-        self,
-        session: Session,
-        state_delta: dict[str, Any],
-    ) -> None:
-        """Merge state under a row lock without touching persisted Events."""
-        key = SqlKey(
-            key=(session.app_name, session.user_id, session.id),
-            storage_cls=StorageSession,
-        )
-        async with self._sql_storage.create_db_session() as sql_session:
-            storage_session: Optional[StorageSession] = (await self._sql_storage.get_for_update(sql_session, key))
-            if storage_session is None:
-                raise ValueError(f"Session {session.id} was not found")
-            merged_state = dict(storage_session.state or {})
-            merged_state.update(state_delta)
-            storage_session.state = merged_state  # type: ignore
-            await self._sql_storage.commit(sql_session)
-            await self._sql_storage.refresh(sql_session, storage_session)
-            session.state.update(state_delta)
             session.last_update_time = storage_session.update_timestamp_tz
 
     @override
