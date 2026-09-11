@@ -81,6 +81,16 @@ alembic -c examples/multi_tenant_im_agent/alembic.ini upgrade head
 
 生产环境从 `deploy/kubernetes.yaml` 起步，并将 Redis、SQL、Secret 管理和 Ingress 替换为企业托管服务。部署流水线应先等待迁移 Job 成功，再发布 Deployment；生产环境保持 `AUTO_CREATE_SCHEMA=false`。
 
+### 可选：真实模型冒烟测试
+
+在被 Git 忽略的 `.env.private` 中设置 `ACME_MODEL_API_KEY`、`REAL_MODEL_NAME` 和 `REAL_MODEL_BASE_URL`，将其注入环境后运行：
+
+```powershell
+uv run --no-project --with-editable . python examples/multi_tenant_im_agent/scripts/real_model_smoke.py
+```
+
+脚本只发送一次短请求，真实经过 tRPC-Agent `LlmAgent + Runner`。输出仅包含成功状态、回复长度和 Token 数，不输出凭据或模型回复正文，并带有请求与 Runner 关闭硬超时。
+
 ## 测试
 
 ```powershell
@@ -105,3 +115,4 @@ pytest examples/multi_tenant_im_agent/tests -q
 | `migrations/` | Alembic 版本化数据库迁移 |
 | `scripts/acceptance.py` | 已运行服务的黑盒验收 |
 | `scripts/judge_demo.py` | 自启动、自验收、自清理的一键评审演示 |
+| `scripts/real_model_smoke.py` | 不泄露凭据和回复正文的真实模型链路冒烟测试 |
