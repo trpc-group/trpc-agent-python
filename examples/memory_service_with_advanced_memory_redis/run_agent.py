@@ -14,13 +14,13 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
-load_dotenv(Path(__file__).with_name(".env"))
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 RUNNER_A_QUERIES = [
     "Do you remember my name?",
@@ -62,14 +62,13 @@ def build_redis_url_from_environment() -> str:
 
 def create_advanced_memory_service(redis_url: str) -> AdvancedMemoryService:
     """Create the long-term Advanced Memory service backed by Redis."""
-    memory_ttl = os.getenv("M_TTL")
     config = AdvancedMemoryServiceConfig(
         storage_backend="redis",
         redis_url=redis_url,
         redis_key_prefix="advanced-memory-redis-demo:v1",
-        memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
+        memory_ttl_seconds=120,
     )
-    return AdvancedMemoryService(config)
+    return AdvancedMemoryService(config=config)
 
 
 async def ask(runner: Runner, session_id: str, prompt: str) -> None:

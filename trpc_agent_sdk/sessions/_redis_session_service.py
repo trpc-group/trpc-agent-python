@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 from typing import Any
@@ -53,15 +52,6 @@ def _session_key_prefix(app_name: str, user_id: Optional[str] = None) -> str:
     if user_id is None:
         return f"session:{app_name}:*"
     return f"session:{app_name}:{user_id}:*"
-
-
-def _session_from_storage_json(value: Any) -> Session:
-    """Decode a Session and repair empty arrays changed to objects by Lua cjson."""
-    payload = json.loads(value)
-    for field_name in ("events", "historical_events", "historicalEvents"):
-        if payload.get(field_name) == {}:
-            payload[field_name] = []
-    return Session.model_validate(payload)
 
 
 class RedisSessionService(BaseSessionService):
@@ -458,7 +448,7 @@ class RedisSessionService(BaseSessionService):
         storage_session_data = await self._redis_storage.execute_command(redis_session, command)
         if storage_session_data:
             await self._refresh_ttl(redis_session, session_key)
-            session = _session_from_storage_json(storage_session_data)
+            session = Session.model_validate_json(storage_session_data)
             if not self._session_config.store_historical_events:
                 session.historical_events = []
             return session

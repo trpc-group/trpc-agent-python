@@ -392,8 +392,6 @@ class SqlSessionService(BaseSessionService):
                  is_async: bool = False,
                  session_config: Optional[SessionServiceConfig] = None,
                  **kwargs: Any):
-        self._db_url = db_url
-        self._is_async = is_async
         is_default_config = session_config is None
         super().__init__(
             summarizer_manager=summarizer_manager,
@@ -411,16 +409,6 @@ class SqlSessionService(BaseSessionService):
         self.__cleanup_stop_event: Optional[asyncio.Event] = None
 
         self._start_cleanup_task()
-
-    @property
-    def db_url(self) -> str:
-        """Return the configured SQL connection URL."""
-        return self._db_url
-
-    @property
-    def is_async(self) -> bool:
-        """Return whether this service uses asynchronous SQL sessions."""
-        return self._is_async
 
     @override
     async def create_session(
