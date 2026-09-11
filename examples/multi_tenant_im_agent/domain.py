@@ -102,7 +102,9 @@ class InboundMessage:
 @dataclass(frozen=True)
 class AgentReply:
     text: str
-    token_count: int = 0
+    # ``None`` means that the provider omitted usage metadata.  A real zero is
+    # kept distinct so callers never mistake it for an unknown value.
+    token_count: int | None = None
     cost: float = 0.0
     tool_names: tuple[str, ...] = ()
 

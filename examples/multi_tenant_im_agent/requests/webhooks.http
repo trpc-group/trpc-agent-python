@@ -9,6 +9,10 @@ GET {{baseUrl}}/healthz
 GET {{baseUrl}}/admin/tenants
 X-Admin-Token: {{adminToken}}
 
+### Tenant-labelled metrics require the same operations token
+GET {{baseUrl}}/metrics
+X-Metrics-Token: {{adminToken}}
+
 ### Telegram callback (change update_id before replaying a new turn)
 POST {{baseUrl}}/webhooks/telegram/acme-support-bot
 Content-Type: application/json

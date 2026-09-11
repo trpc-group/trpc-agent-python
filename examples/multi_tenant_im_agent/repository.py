@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from threading import RLock
 from typing import Any
 
 from sqlalchemy import (
@@ -21,15 +22,19 @@ from sqlalchemy import (
     create_engine,
     select,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from .config import ConfigurationError
 from .domain import AgentReply, DeliveryRequest, InboundMessage, TenantConfig
 
 OUTBOX_MAX_ATTEMPTS = 8
 OUTBOX_RETRY_BASE_SECONDS = 5
 OUTBOX_RETRY_CAP_SECONDS = 300
+OUTBOX_INLINE_CLAIM_SECONDS = 30
+PRECISE_DATETIME = DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), "mysql")
 
 
 def utcnow() -> datetime:
@@ -48,9 +53,7 @@ class TenantRecord(Base):
     config_version: Mapped[int] = mapped_column(Integer, default=1)
     token_budget_period: Mapped[str] = mapped_column(String(7), default="")
     token_usage: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
 
 
 class AgentAppRecord(Base):
@@ -63,7 +66,7 @@ class AgentAppRecord(Base):
     model_name: Mapped[str] = mapped_column(String(128))
     tool_allowlist_json: Mapped[str] = mapped_column(Text, default="[]")
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        PRECISE_DATETIME, default=utcnow, onupdate=utcnow
     )
 
 
@@ -93,7 +96,7 @@ class SessionRecord(Base):
     last_event_seq: Mapped[int] = mapped_column(Integer, default=0)
     state_json: Mapped[str] = mapped_column(Text, default="{}")
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        PRECISE_DATETIME, default=utcnow, onupdate=utcnow
     )
     __table_args__ = (
         ForeignKeyConstraint(
@@ -123,11 +126,9 @@ class MessageEventRecord(Base):
     content_redacted: Mapped[str] = mapped_column(Text, default="")
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        PRECISE_DATETIME, default=utcnow, onupdate=utcnow
     )
     __table_args__ = (
         UniqueConstraint(
@@ -158,9 +159,7 @@ class MemoryRecord(Base):
     kind: Mapped[str] = mapped_column(String(32))
     content_ref: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
 
 
 class SummaryRecord(Base):
@@ -174,9 +173,7 @@ class SummaryRecord(Base):
     )
     through_sequence: Mapped[int] = mapped_column(Integer)
     summary_text: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
     __table_args__ = (
         UniqueConstraint(
             "session_id", "through_sequence", name="uq_mt_summary_version"
@@ -195,9 +192,7 @@ class ArtifactRecord(Base):
     )
     object_uri: Mapped[str] = mapped_column(Text)
     content_type: Mapped[str] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
 
 
 class KnowledgeRecord(Base):
@@ -208,9 +203,7 @@ class KnowledgeRecord(Base):
     )
     vector_namespace: Mapped[str] = mapped_column(String(192))
     source_uri: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
 
 
 class AuditLogRecord(Base):
@@ -229,7 +222,7 @@ class AuditLogRecord(Base):
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     trace_id: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, index=True
+        PRECISE_DATETIME, default=utcnow, index=True
     )
 
 
@@ -237,7 +230,7 @@ class SessionLeaseRecord(Base):
     __tablename__ = "mt_session_leases"
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(128))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME)
 
 
 class OutboxRecord(Base):
@@ -249,12 +242,8 @@ class OutboxRecord(Base):
     payload_json: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    next_attempt_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    next_attempt_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(PRECISE_DATETIME, default=utcnow)
 
 
 @dataclass(frozen=True)
@@ -288,6 +277,10 @@ class ControlPlaneRepository:
             engine_kwargs["poolclass"] = StaticPool
         self.engine = create_engine(db_url, **engine_kwargs)
         self.Session = sessionmaker(self.engine, expire_on_commit=False)
+        # SQLite drops SELECT FOR UPDATE.  A repository-local lock preserves
+        # thread safety for the documented single-process evaluation mode;
+        # production replicas use MySQL/PostgreSQL row locks.
+        self._write_lock = RLock()
 
     def create_schema(self) -> None:
         Base.metadata.create_all(self.engine)
@@ -300,12 +293,16 @@ class ControlPlaneRepository:
     def sync_tenants(self, tenants: Iterable[TenantConfig]) -> None:
         """Idempotently seed public configuration; secret values are never stored."""
 
-        with self.Session.begin() as db:
+        configured_routes: set[tuple[str, str]] = set()
+        with self._write_lock, self.Session.begin() as db:
             for tenant in tenants:
                 record = db.get(TenantRecord, tenant.tenant_id)
                 if record is None:
                     record = TenantRecord(
-                        tenant_id=tenant.tenant_id, display_name=tenant.display_name
+                        tenant_id=tenant.tenant_id,
+                        display_name=tenant.display_name,
+                        token_budget_period=utcnow().strftime("%Y-%m"),
+                        token_usage=0,
                     )
                     db.add(record)
                 else:
@@ -326,9 +323,12 @@ class ControlPlaneRepository:
                     app.model_name = tenant.model_name
                     app.tool_allowlist_json = json.dumps(tenant.tool_allowlist)
                 for binding in tenant.bindings:
+                    channel = binding.channel.lower()
+                    route = (channel, binding.account_id)
+                    configured_routes.add(route)
                     existing = db.scalar(
                         select(ChannelBindingRecord).where(
-                            ChannelBindingRecord.channel == binding.channel,
+                            ChannelBindingRecord.channel == channel,
                             ChannelBindingRecord.account_id == binding.account_id,
                         )
                     )
@@ -336,16 +336,24 @@ class ControlPlaneRepository:
                         db.add(
                             ChannelBindingRecord(
                                 tenant_id=tenant.tenant_id,
-                                channel=binding.channel,
+                                channel=channel,
                                 account_id=binding.account_id,
                                 secret_ref=binding.webhook_secret_env,
                                 enabled=int(binding.enabled),
                             )
                         )
                     else:
-                        existing.tenant_id = tenant.tenant_id
+                        if existing.tenant_id != tenant.tenant_id:
+                            raise ConfigurationError(
+                                "channel account cannot move between tenants implicitly: "
+                                f"{route}"
+                            )
                         existing.secret_ref = binding.webhook_secret_env
                         existing.enabled = int(binding.enabled)
+            for existing in db.scalars(select(ChannelBindingRecord)):
+                route = (existing.channel.lower(), existing.account_id)
+                if route not in configured_routes:
+                    existing.enabled = 0
 
     def ensure_session(
         self,
@@ -357,7 +365,7 @@ class ControlPlaneRepository:
         user_hash: str,
     ) -> None:
         try:
-            with self.Session.begin() as db:
+            with self._write_lock, self.Session.begin() as db:
                 if db.get(SessionRecord, session_id) is None:
                     db.add(
                         SessionRecord(
@@ -379,7 +387,7 @@ class ControlPlaneRepository:
         now = utcnow()
         expires = now + timedelta(seconds=ttl_seconds)
         try:
-            with self.Session.begin() as db:
+            with self._write_lock, self.Session.begin() as db:
                 lease = db.scalar(
                     select(SessionLeaseRecord)
                     .where(SessionLeaseRecord.session_id == session_id)
@@ -404,7 +412,7 @@ class ControlPlaneRepository:
             return False
 
     def release_session_lease(self, session_id: str, owner_id: str) -> None:
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             lease = db.get(SessionLeaseRecord, session_id)
             if lease is not None and lease.owner_id == owner_id:
                 db.delete(lease)
@@ -418,7 +426,7 @@ class ControlPlaneRepository:
     ) -> bool:
         """Atomically reserve tenant budget before invoking a model."""
 
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             tenant = db.scalar(
                 select(TenantRecord)
                 .where(TenantRecord.tenant_id == tenant_id)
@@ -439,7 +447,7 @@ class ControlPlaneRepository:
     ) -> None:
         """Replace a reservation with actual usage, or release it on failure."""
 
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             tenant = db.scalar(
                 select(TenantRecord)
                 .where(TenantRecord.tenant_id == tenant_id)
@@ -449,11 +457,13 @@ class ControlPlaneRepository:
                 return
             tenant.token_usage = max(0, tenant.token_usage - reserved + max(0, actual))
 
-    def claim_message(self, message: InboundMessage, session_id: str) -> ClaimResult:
+    def claim_message(
+        self, message: InboundMessage, session_id: str, lease_owner: str
+    ) -> ClaimResult:
         """Atomically allocate session order and reject provider redelivery."""
 
         try:
-            with self.Session.begin() as db:
+            with self._write_lock, self.Session.begin() as db:
                 existing = db.scalar(
                     select(MessageEventRecord).where(
                         MessageEventRecord.tenant_id == message.tenant_id,
@@ -464,12 +474,20 @@ class ControlPlaneRepository:
                     )
                 )
                 if existing is not None:
+                    lease = db.get(SessionLeaseRecord, session_id)
+                    recoverable = existing.status == "failed" or (
+                        existing.status == "processing"
+                        and lease is not None
+                        and lease.owner_id == lease_owner
+                    )
                     if (
-                        existing.status == "failed"
+                        recoverable
+                        and existing.response_text is None
                         and existing.payload_hash == message.payload_hash()
                     ):
                         existing.status = "processing"
                         existing.error_type = None
+                        existing.updated_at = utcnow()
                         return ClaimResult(
                             True, existing.status, existing.id, existing.sequence
                         )
@@ -536,16 +554,35 @@ class ControlPlaneRepository:
         channel: str,
         reply: AgentReply,
         delivery: DeliveryRequest,
+        budget_period: str,
+        reserved_tokens: int,
+        actual_tokens: int,
     ) -> str:
         """Commit result and outbox atomically before attempting IM delivery."""
 
         outbox_id = uuid.uuid4().hex
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             event = db.get(MessageEventRecord, event_id)
             if event is None:
                 raise RuntimeError("message event disappeared")
+            if (
+                event.status != "processing"
+                or event.tenant_id != tenant_id
+                or event.session_id != session_id
+            ):
+                raise RuntimeError("message event is not claimable for completion")
             event.status = "completed"
             event.response_text = reply.text
+            tenant = db.scalar(
+                select(TenantRecord)
+                .where(TenantRecord.tenant_id == tenant_id)
+                .with_for_update()
+            )
+            if tenant is None or tenant.token_budget_period != budget_period:
+                raise RuntimeError("tenant budget period changed during request")
+            tenant.token_usage = max(
+                0, tenant.token_usage - reserved_tokens + max(0, actual_tokens)
+            )
             db.add(
                 OutboxRecord(
                     outbox_id=outbox_id,
@@ -563,13 +600,15 @@ class ControlPlaneRepository:
                         },
                         ensure_ascii=False,
                     ),
+                    next_attempt_at=utcnow()
+                    + timedelta(seconds=OUTBOX_INLINE_CLAIM_SECONDS),
                 )
             )
         return outbox_id
 
     def claim_outbox(self, outbox_id: str) -> bool:
         now = utcnow()
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             item = db.scalar(
                 select(OutboxRecord)
                 .where(OutboxRecord.outbox_id == outbox_id)
@@ -586,7 +625,7 @@ class ControlPlaneRepository:
         """Lease retryable rows; expired ``sending`` rows recover crashed workers."""
 
         now = utcnow()
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             rows = list(
                 db.scalars(
                     select(OutboxRecord)
@@ -609,16 +648,16 @@ class ControlPlaneRepository:
             return result
 
     def mark_message_failed(self, event_id: int, error_type: str) -> None:
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             event = db.get(MessageEventRecord, event_id)
-            if event is not None:
+            if event is not None and event.status == "processing":
                 event.status = "failed"
                 event.error_type = error_type[:128]
 
     def mark_outbox_sent(self, outbox_id: str) -> None:
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             item = db.get(OutboxRecord, outbox_id)
-            if item is not None:
+            if item is not None and item.status == "sending":
                 item.status = "sent"
 
     def mark_outbox_retry(
@@ -626,10 +665,12 @@ class ControlPlaneRepository:
     ) -> str:
         """Schedule bounded exponential retry or move an exhausted item to DLQ."""
 
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             item = db.get(OutboxRecord, outbox_id)
             if item is None:
                 return "missing"
+            if item.status != "sending":
+                return item.status
             if item.attempts >= OUTBOX_MAX_ATTEMPTS:
                 item.status = "dead_letter"
                 return item.status
@@ -667,6 +708,6 @@ class ControlPlaneRepository:
             "trace_id",
         }
         clean = {key: value for key, value in values.items() if key in allowed}
-        with self.Session.begin() as db:
+        with self._write_lock, self.Session.begin() as db:
             db.add(AuditLogRecord(audit_id=audit_id, **clean))
         return audit_id

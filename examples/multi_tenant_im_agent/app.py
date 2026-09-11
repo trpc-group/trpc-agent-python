@@ -52,6 +52,9 @@ def create_app(
         close = getattr(service.runtime, "close", None)
         if close is not None:
             await close()
+        close_sender = getattr(service.sender, "close", None)
+        if close_sender is not None:
+            await close_sender()
         await asyncio.to_thread(service.repository.close)
 
     app = FastAPI(
@@ -73,7 +76,10 @@ def create_app(
         return {"status": "ready"}
 
     @app.get("/metrics", response_class=PlainTextResponse, tags=["operations"])
-    async def metrics():
+    async def metrics(x_metrics_token: str = Header(default="")):
+        expected = require_secret(admin_token_env)
+        if not hmac.compare_digest(x_metrics_token, expected):
+            raise HTTPException(status_code=403, detail="forbidden")
         return service.metrics.render_prometheus()
 
     @app.get("/admin/tenants", tags=["admin"])
@@ -85,9 +91,18 @@ def create_app(
 
     @app.post("/webhooks/{channel}/{account_id}", tags=["webhooks"])
     async def webhook(channel: str, account_id: str, request: Request):
-        raw_body = await request.body()
-        if len(raw_body) > 1_048_576:
+        maximum = 1_048_576
+        content_length = request.headers.get("content-length", "")
+        if content_length.isdigit() and int(content_length) > maximum:
             raise HTTPException(status_code=413, detail="callback body too large")
+        chunks: list[bytes] = []
+        received = 0
+        async for chunk in request.stream():
+            received += len(chunk)
+            if received > maximum:
+                raise HTTPException(status_code=413, detail="callback body too large")
+            chunks.append(chunk)
+        raw_body = b"".join(chunks)
         response = await service.handle_webhook(
             channel=channel,
             account_id=account_id,
@@ -115,14 +130,18 @@ def build_app_from_env() -> FastAPI:
     )
     registry = load_tenant_registry(config_path)
     offline = os.environ.get("OFFLINE_ECHO_MODE", "false").lower() == "true"
+    require_secret("ADMIN_API_TOKEN")
+    for tenant in registry.all():
+        for binding in tenant.bindings:
+            # Callback authentication is mandatory in both offline and online
+            # modes; only outbound/provider credentials may be skipped offline.
+            require_secret(binding.webhook_secret_env)
     if not offline:
-        require_secret("ADMIN_API_TOKEN")
         for tenant in registry.all():
             require_secret(tenant.model_api_key_env)
             if tenant.session_backend is not StorageBackend.MEMORY:
                 require_secret(tenant.session_dsn_env)
             for binding in tenant.bindings:
-                require_secret(binding.webhook_secret_env)
                 if binding.channel.lower() == "telegram":
                     require_secret(binding.bot_token_env)
                 elif binding.channel.lower() == "wecom":

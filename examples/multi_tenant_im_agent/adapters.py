@@ -76,7 +76,9 @@ class TelegramAdapter(ChannelAdapter):
     ) -> InboundMessage:
         try:
             update = json.loads(raw_body)
-            message = update.get("message") or update.get("edited_message")
+            # Edits carry a new update_id and would otherwise rerun the model
+            # for the same logical message.  Treat them as unsupported events.
+            message = update.get("message")
             if not isinstance(message, dict):
                 raise UnsupportedMessageError(
                     "Telegram update has no supported message"
@@ -253,11 +255,14 @@ class HttpChannelSender:
     """Production delivery client with bounded timeouts and no secret logging."""
 
     def __init__(self, timeout_seconds: float = 10.0):
-        self.timeout_seconds = timeout_seconds
-
-    async def send(self, request: DeliveryRequest) -> Mapping[str, Any]:
         import httpx
 
+        self._client = httpx.AsyncClient(timeout=timeout_seconds)
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    async def send(self, request: DeliveryRequest) -> Mapping[str, Any]:
         if request.channel == "telegram":
             token = require_secret(request.credentials_env.get("bot_token", ""))
             url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -275,10 +280,9 @@ class HttpChannelSender:
                 f"no HTTP sender configured for channel: {request.channel}"
             )
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            result = response.json()
+        response = await self._client.post(url, json=payload)
+        response.raise_for_status()
+        result = response.json()
         return result if isinstance(result, dict) else {"accepted": True}
 
 

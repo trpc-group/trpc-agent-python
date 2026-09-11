@@ -12,7 +12,7 @@
 - SQL 唯一幂等键，防止 IM 重复投递造成模型和工具重复执行。
 - 数据库 Session 租约串行化同一会话，Worker 无状态且不依赖 sticky session。
 - tRPC-Agent Session 后端可按租户选择 InMemory、Redis 或 SQL。
-- 回复与 Outbox 同事务提交；投递失败后台重试，Worker 崩溃后可恢复过期任务。
+- 回复、Outbox 与 Token 预算结算同事务提交；投递失败后台重试，Worker 崩溃后可恢复过期消息和投递任务。
 - 租户级用户白名单、输入长度、单请求/月度 Token 预算，并在 Runner 内增加真实的 tRPC-Agent Filter 二次 fail-closed 校验。
 - 全字段审计表、Prometheus 指标、OpenTelemetry OTLP Trace。
 - Docker Compose 最小部署与 Kubernetes 生产部署样例。
@@ -43,7 +43,7 @@ examples/multi_tenant_im_agent/scripts/run_offline_demo.ps1
 
 - `GET /healthz`：进程存活探针。
 - `GET /readyz`：数据库就绪探针。
-- `GET /metrics`：Prometheus 文本指标。
+- `GET /metrics`：需 `X-Metrics-Token`（与 Admin Token 同值）的 Prometheus 文本指标。
 - `GET /admin/tenants`：需 `X-Admin-Token`，仅返回不含密钥的租户摘要。
 - `POST /webhooks/telegram/acme-support-bot`：Telegram 回调。
 - `POST /webhooks/wecom/acme-wecom-app`：企业微信回调。
@@ -97,7 +97,7 @@ uv run --no-project --with-editable . python examples/multi_tenant_im_agent/scri
 pytest examples/multi_tenant_im_agent/tests -q
 ```
 
-测试覆盖租户路由冲突、会话隔离、Telegram/企业微信验签、用户策略、幂等重投、载荷冲突、失败恢复、Session 租约、Outbox 重试和 HTTP 健康检查。
+当前 39 项测试覆盖租户路由冲突、会话隔离、Telegram/企业微信验签、并发重复、处理中断恢复、用户策略、幂等重投、载荷冲突、预算事务回滚、流式终态回复、超时资源关闭、Session 租约、Outbox 重试、MySQL 迁移契约、请求体上限和 HTTP 鉴权。
 
 ## 目录
 

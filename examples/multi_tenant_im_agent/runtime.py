@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Iterable, Mapping
+from itertools import pairwise
 from typing import Protocol
 
 from .config import ConfigurationError, require_secret
@@ -12,17 +13,21 @@ from .domain import AgentReply, InboundMessage, StorageBackend, TenantConfig
 TENANT_FILTER_NAME = "multi_tenant_im_governance"
 
 
-def event_token_count(event: object) -> int:
+def event_token_count(event: object) -> int | None:
     """Read provider-neutral token usage emitted by a tRPC-Agent Event."""
 
     usage = getattr(event, "usage_metadata", None)
     if usage is None:
-        return 0
+        return None
     total = getattr(usage, "total_token_count", None)
     if total is not None:
         return max(0, int(total))
-    prompt = getattr(usage, "prompt_token_count", 0) or 0
-    completion = getattr(usage, "candidates_token_count", 0) or 0
+    prompt = getattr(usage, "prompt_token_count", None)
+    completion = getattr(usage, "candidates_token_count", None)
+    if prompt is None and completion is None:
+        return None
+    prompt = prompt or 0
+    completion = completion or 0
     return max(0, int(prompt) + int(completion))
 
 
@@ -168,25 +173,37 @@ class TrpcAgentRuntime:
 
         runner = await self._runner_for(tenant)
 
+        stream = runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=Content(parts=[Part.from_text(text=message.text)]),
+            agent_context=new_agent_context(
+                timeout=tenant.model_timeout_seconds * 1000,
+                metadata={
+                    "tenant_id": tenant.tenant_id,
+                    "tenant_policy_approved": True,
+                    "tool_allowlist": tenant.tool_allowlist,
+                },
+            ),
+        )
+
         async def collect() -> AgentReply:
-            chunks: list[str] = []
+            partial_parts: list[str] = []
             final_parts: list[str] = []
             tools: set[str] = set()
-            token_count = 0
-            async for event in runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=Content(parts=[Part.from_text(text=message.text)]),
-                agent_context=new_agent_context(
-                    timeout=tenant.model_timeout_seconds * 1000,
-                    metadata={
-                        "tenant_id": tenant.tenant_id,
-                        "tenant_policy_approved": True,
-                        "tool_allowlist": tenant.tool_allowlist,
-                    },
-                ),
-            ):
-                token_count += event_token_count(event)
+            terminal_token_count: int | None = None
+            partial_token_count: int | None = None
+            async for event in stream:
+                event_usage = event_token_count(event)
+                if event_usage is not None:
+                    if event.partial:
+                        # Some providers repeat cumulative usage on every
+                        # partial event, so keep only the largest partial value.
+                        partial_token_count = max(partial_token_count or 0, event_usage)
+                    else:
+                        # Multiple terminal events can represent multiple model
+                        # calls in a tool loop and must all be charged.
+                        terminal_token_count = (terminal_token_count or 0) + event_usage
                 if not event.content:
                     continue
                 for part in event.content.parts or []:
@@ -195,15 +212,38 @@ class TrpcAgentRuntime:
                     if part.function_call:
                         tools.add(part.function_call.name)
                     elif part.text:
-                        (chunks if event.partial else final_parts).append(part.text)
-            text = "".join(chunks) if chunks else "".join(final_parts)
+                        (partial_parts if event.partial else final_parts).append(
+                            part.text
+                        )
+            if final_parts:
+                text = "".join(final_parts)
+            elif partial_parts:
+                cumulative = all(
+                    current.startswith(previous)
+                    for previous, current in pairwise(partial_parts)
+                )
+                text = partial_parts[-1] if cumulative else "".join(partial_parts)
+            else:
+                text = ""
+            if not text.strip():
+                text = "Sorry, this request produced no sendable text response."
+            token_count = (
+                terminal_token_count
+                if terminal_token_count is not None
+                else partial_token_count
+            )
             return AgentReply(
                 text=text,
                 token_count=token_count,
                 tool_names=tuple(sorted(tools)),
             )
 
-        return await asyncio.wait_for(collect(), timeout=tenant.model_timeout_seconds)
+        try:
+            return await asyncio.wait_for(
+                collect(), timeout=tenant.model_timeout_seconds
+            )
+        finally:
+            await stream.aclose()
 
     async def close(self) -> None:
         for runner in self._runners.values():

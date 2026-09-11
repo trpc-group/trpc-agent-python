@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
 from dataclasses import replace
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -34,7 +36,9 @@ from examples.multi_tenant_im_agent.repository import (
     ControlPlaneRepository,
     MessageEventRecord,
     OutboxRecord,
+    SessionLeaseRecord,
     TenantRecord,
+    utcnow,
 )
 from examples.multi_tenant_im_agent.runtime import (
     EchoRuntime,
@@ -152,6 +156,12 @@ def build_service(monkeypatch, repository, runtime=None, sender=None, tenants=No
 def test_registry_rejects_duplicate_channel_account():
     with pytest.raises(ConfigurationError):
         TenantRegistry([tenant("one", "shared"), tenant("two", "shared")])
+
+
+def test_repository_rejects_implicit_cross_tenant_binding_move(repository):
+    repository.sync_tenants([tenant("one", "shared")])
+    with pytest.raises(ConfigurationError, match="cannot move"):
+        repository.sync_tenants([tenant("two", "shared")])
 
 
 def test_registry_rejects_lease_shorter_than_model_timeout():
@@ -344,6 +354,72 @@ async def test_same_external_id_is_isolated_across_accounts(monkeypatch, reposit
 
 
 @pytest.mark.asyncio
+async def test_concurrent_duplicate_cannot_reenter_same_worker(monkeypatch, repository):
+    class BlockingRuntime(RecordingRuntime):
+        def __init__(self):
+            super().__init__()
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def reply(self, *, tenant, message, user_id, session_id):
+            self.calls.append(
+                (tenant.tenant_id, message.external_message_id, user_id, session_id)
+            )
+            self.started.set()
+            await self.release.wait()
+            return AgentReply(text="done", token_count=1)
+
+    runtime = BlockingRuntime()
+    service, _, _ = build_service(monkeypatch, repository, runtime=runtime)
+    kwargs = {
+        "channel": "telegram",
+        "account_id": "bot-a",
+        "headers": {"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        "query": {},
+        "raw_body": telegram_body(),
+    }
+    first = asyncio.create_task(service.handle_webhook(**kwargs))
+    await runtime.started.wait()
+    concurrent = await service.handle_webhook(**kwargs)
+    assert concurrent.status_code == 429
+    runtime.release.set()
+    assert (await first).status_code == 200
+    assert len(runtime.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_telegram_message_edits_are_ignored(monkeypatch, repository):
+    service, runtime, _ = build_service(monkeypatch, repository)
+    edited = json.loads(telegram_body())
+    edited["edited_message"] = edited.pop("message")
+    response = await service.handle_webhook(
+        channel="telegram",
+        account_id="bot-a",
+        headers={"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        query={},
+        raw_body=json.dumps(edited).encode(),
+    )
+    assert response.status_code == 202
+    assert not runtime.calls
+
+
+@pytest.mark.asyncio
+async def test_missing_callback_secret_fails_closed(monkeypatch, repository):
+    service, runtime, _ = build_service(monkeypatch, repository)
+    monkeypatch.delenv("TENANT_A_TG_SECRET")
+    response = await service.handle_webhook(
+        channel="telegram",
+        account_id="bot-a",
+        headers={"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        query={},
+        raw_body=telegram_body(),
+    )
+    assert response.status_code == 503
+    assert response.body["retryable"] is True
+    assert not runtime.calls
+
+
+@pytest.mark.asyncio
 async def test_failed_message_can_be_retried_without_duplicate_row(
     monkeypatch, repository
 ):
@@ -360,6 +436,38 @@ async def test_failed_message_can_be_retried_without_duplicate_row(
     assert (await service.handle_webhook(**kwargs)).status_code == 200
     with repository.Session() as db:
         assert db.scalar(select(func.count()).select_from(MessageEventRecord)) == 1
+
+
+def test_processing_message_recovers_only_after_new_worker_owns_lease(repository):
+    config = tenant()
+    repository.sync_tenants([config])
+    message = InboundMessage(
+        tenant_id=config.tenant_id,
+        channel="telegram",
+        account_id="bot-a",
+        external_message_id="crash-recovery",
+        user_id="42",
+        conversation_id="42",
+        chat_type=ChatType.DIRECT,
+        text="recover me",
+    )
+    session_id = derive_session_id(message, NAMESPACE_SECRET)
+    repository.ensure_session(
+        session_id=session_id,
+        tenant=config,
+        channel=message.channel,
+        conversation_hash="conversation-hash",
+        user_hash="user-hash",
+    )
+    assert repository.acquire_session_lease(session_id, "old-worker", 30)
+    assert repository.claim_message(message, session_id, "old-worker").accepted
+    with repository.Session.begin() as db:
+        lease = db.get(SessionLeaseRecord, session_id)
+        lease.expires_at = utcnow() - timedelta(seconds=1)
+    assert repository.acquire_session_lease(session_id, "new-worker", 30)
+    recovered = repository.claim_message(message, session_id, "new-worker")
+    assert recovered.accepted
+    assert recovered.event_id > 0
 
 
 @pytest.mark.asyncio
@@ -421,6 +529,35 @@ async def test_monthly_budget_uses_atomic_reserved_and_actual_usage(
         assert db.get(TenantRecord, "tenant-a").token_usage == 7
 
 
+@pytest.mark.asyncio
+async def test_result_transaction_failure_releases_budget_for_retry(
+    monkeypatch, repository
+):
+    service, runtime, _ = build_service(monkeypatch, repository)
+    original_complete = repository.complete_message
+
+    def fail_complete(**_kwargs):
+        raise RuntimeError("database commit failed")
+
+    monkeypatch.setattr(repository, "complete_message", fail_complete)
+    kwargs = {
+        "channel": "telegram",
+        "account_id": "bot-a",
+        "headers": {"x-telegram-bot-api-secret-token": "secret-tenant-a"},
+        "query": {},
+        "raw_body": telegram_body(),
+    }
+    assert (await service.handle_webhook(**kwargs)).status_code == 503
+    with repository.Session() as db:
+        assert db.get(TenantRecord, "tenant-a").token_usage == 0
+
+    monkeypatch.setattr(repository, "complete_message", original_complete)
+    assert (await service.handle_webhook(**kwargs)).status_code == 200
+    assert len(runtime.calls) == 2
+    with repository.Session() as db:
+        assert db.get(TenantRecord, "tenant-a").token_usage == 7
+
+
 def test_session_lease_excludes_other_worker(repository):
     assert repository.acquire_session_lease("session-a", "worker-1", 30)
     assert not repository.acquire_session_lease("session-a", "worker-2", 30)
@@ -466,6 +603,7 @@ async def test_outbox_moves_to_dead_letter_after_bounded_retries(
     with repository.Session.begin() as db:
         item = db.scalar(select(OutboxRecord))
         item.attempts = OUTBOX_MAX_ATTEMPTS
+        item.status = "sending"
         outbox_id = item.outbox_id
     assert repository.mark_outbox_retry(outbox_id) == "dead_letter"
     with repository.Session() as db:
@@ -522,7 +660,13 @@ def test_http_health_ready_metrics_and_admin(monkeypatch, repository):
     with TestClient(create_app(service)) as client:
         assert client.get("/healthz").status_code == 200
         assert client.get("/readyz").status_code == 200
-        assert client.get("/metrics").status_code == 200
+        assert client.get("/metrics").status_code == 403
+        assert (
+            client.get(
+                "/metrics", headers={"X-Metrics-Token": "admin-secret"}
+            ).status_code
+            == 200
+        )
         assert client.get("/admin/tenants").status_code == 403
         response = client.get(
             "/admin/tenants", headers={"X-Admin-Token": "admin-secret"}
@@ -531,10 +675,24 @@ def test_http_health_ready_metrics_and_admin(monkeypatch, repository):
         assert response.json()["tenants"][0]["tenant_id"] == "tenant-a"
 
 
+def test_http_rejects_oversized_callback_before_parsing(monkeypatch, repository):
+    service, _, _ = build_service(monkeypatch, repository)
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin-secret")
+    with TestClient(create_app(service)) as client:
+        response = client.post(
+            "/webhooks/telegram/bot-a",
+            content=b"x" * (1_048_576 + 1),
+        )
+    assert response.status_code == 413
+
+
 def test_environment_factory_runs_in_offline_mode(monkeypatch):
     monkeypatch.setenv("OFFLINE_ECHO_MODE", "true")
     monkeypatch.setenv("TENANT_NAMESPACE_SECRET", NAMESPACE_SECRET)
     monkeypatch.setenv("CONTROL_PLANE_DB_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "offline-admin-token")
+    monkeypatch.setenv("ACME_TELEGRAM_WEBHOOK_SECRET", "offline-telegram-secret")
+    monkeypatch.setenv("ACME_WECOM_CALLBACK_TOKEN", "offline-wecom-secret")
     with TestClient(build_app_from_env()) as client:
         assert client.get("/readyz").status_code == 200
 
@@ -601,6 +759,7 @@ async def test_trpc_runtime_awaits_runner_shutdown():
 
 
 def test_runtime_extracts_provider_usage_metadata():
+    assert event_token_count(SimpleNamespace()) is None
     assert (
         event_token_count(
             SimpleNamespace(usage_metadata=SimpleNamespace(total_token_count=37))
@@ -619,6 +778,132 @@ def test_runtime_extracts_provider_usage_metadata():
         )
         == 18
     )
+
+
+@pytest.mark.asyncio
+async def test_runtime_prefers_terminal_text_and_closes_stream():
+    class FakeStream:
+        def __init__(self):
+            self.closed = False
+            self.events = iter(
+                [
+                    SimpleNamespace(
+                        partial=True,
+                        usage_metadata=None,
+                        content=SimpleNamespace(
+                            parts=[
+                                SimpleNamespace(
+                                    thought=False, function_call=None, text="partial"
+                                )
+                            ]
+                        ),
+                    ),
+                    SimpleNamespace(
+                        partial=False,
+                        usage_metadata=SimpleNamespace(total_token_count=9),
+                        content=SimpleNamespace(
+                            parts=[
+                                SimpleNamespace(
+                                    thought=False,
+                                    function_call=None,
+                                    text="complete response",
+                                )
+                            ]
+                        ),
+                    ),
+                    SimpleNamespace(
+                        partial=False,
+                        usage_metadata=SimpleNamespace(total_token_count=4),
+                        content=None,
+                    ),
+                ]
+            )
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            try:
+                return next(self.events)
+            except StopIteration as exc:
+                raise StopAsyncIteration from exc
+
+        async def aclose(self):
+            self.closed = True
+
+    class FakeRunner:
+        def __init__(self):
+            self.stream = FakeStream()
+
+        def run_async(self, **_kwargs):
+            return self.stream
+
+    runtime = TrpcAgentRuntime()
+    runner = FakeRunner()
+    runtime._runners["tenant-a"] = runner
+    config = tenant()
+    message = InboundMessage(
+        tenant_id="tenant-a",
+        channel="telegram",
+        account_id="bot-a",
+        external_message_id="stream-1",
+        user_id="42",
+        conversation_id="42",
+        chat_type=ChatType.DIRECT,
+        text="hello",
+    )
+    reply = await runtime.reply(
+        tenant=config, message=message, user_id="safe-user", session_id="safe-session"
+    )
+    assert reply.text == "complete response"
+    assert reply.token_count == 13
+    assert runner.stream.closed
+
+
+@pytest.mark.asyncio
+async def test_runtime_timeout_closes_provider_stream():
+    class HangingStream:
+        def __init__(self):
+            self.closed = False
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            await asyncio.Event().wait()
+
+        async def aclose(self):
+            self.closed = True
+
+    class FakeRunner:
+        def __init__(self):
+            self.stream = HangingStream()
+
+        def run_async(self, **_kwargs):
+            return self.stream
+
+    runtime = TrpcAgentRuntime()
+    runner = FakeRunner()
+    runtime._runners["tenant-a"] = runner
+    config = replace(tenant(), model_timeout_seconds=0.01)
+    message = InboundMessage(
+        tenant_id="tenant-a",
+        channel="telegram",
+        account_id="bot-a",
+        external_message_id="timeout-1",
+        user_id="42",
+        conversation_id="42",
+        chat_type=ChatType.DIRECT,
+        text="hello",
+    )
+    with pytest.raises(asyncio.TimeoutError):
+        await runtime.reply(
+            tenant=config,
+            message=message,
+            user_id="safe-user",
+            session_id="safe-session",
+        )
+    assert runner.stream.closed
 
 
 @pytest.mark.asyncio

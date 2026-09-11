@@ -119,6 +119,8 @@ Session event → state → summary 的更新规则：原始事件先获得不�
 
 推荐生产组合：SQL 保存控制面和不可丢事件，Redis 保存热 Session，向量库保存 Knowledge/Memory，对象存储保存 Artifact。Redis 更新使用 Lua 或 CAS 版本，SQL 使用 `SELECT FOR UPDATE`/乐观版本，禁止“读整个 Session 后无条件覆盖”的丢更新模式。
 
+本地 SQLite 仅用于单进程验收；仓库在进程内用写锁补足 SQLite 忽略 `FOR UPDATE` 的线程语义，但不宣称支持多个进程共享同一 SQLite 文件。多副本部署必须使用 MySQL/PostgreSQL，迁移中的 MySQL 时间列保留微秒精度。
+
 跨节点可见性由共享 Redis/SQL Session 后端直接保证。若生产部署另加 Worker 本地只读缓存，建议在 Memory 写入成功后发布 `tenant/session/memory_version` 失效通知，并用短 TTL 与读取版本号兜底；该本地缓存层不属于本示例的已实现范围。
 
 ## 7. 数据迁移
@@ -170,6 +172,7 @@ Redis → SQL：按 Session 扫描，不使用生产 `KEYS *`；以版本 CAS �
 - 日志和 Trace 禁止记录正文、Authorization、IM token、模型 Key 和数据库密码。
 - HMAC namespace secret 定期轮换时需支持 current/previous 两个版本的读取窗口。
 - Admin API 生产中接入 mTLS/OIDC、RBAC、来源网段和操作审计；示例 token 仅用于最小演示。
+- `/metrics` 同样要求 `X-Metrics-Token`，避免公开按租户聚合的业务量、Token 和成本标签。
 - 容器只读根文件系统、非 root、丢弃 Linux capabilities；工具执行放独立沙箱池，禁止与 Gateway 共进程。
 
 ## 10. 可观测性与审计
@@ -208,7 +211,7 @@ im.callback → tenant.resolve → signature.verify → session.lease
 | IM 回复失败 | Agent 结果和 Outbox 已提交，后台重试，不再次运行 Agent |
 | 配置错误 | 原子热更新拒绝整批错误配置，继续使用上一版本 |
 
-Outbox 第 8 次投递仍失败后转为 `dead_letter` 状态，指标可直接告警；人工重放必须保留原 outbox_id。
+Outbox 第 8 次投递仍失败后转为 `dead_letter` 状态，指标可直接告警；人工重放必须保留原 outbox_id。外发是 at-least-once：若 IM 平台已接收、但确认响应丢失，后台恢复可能再次发送；能提供幂等键的平台应绑定 `outbox_id`，否则需结合发送回执对账。
 
 ## 12. 部署、灰度和回滚
 

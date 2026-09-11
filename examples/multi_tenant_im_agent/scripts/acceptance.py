@@ -125,7 +125,7 @@ def run(base_url: str) -> None:
         if len(admin.get("tenants", [])) != 1:
             raise AssertionError("Admin API did not return exactly one demo tenant")
         _passed("Admin API authentication and safe tenant summary")
-        metrics = client.get("/metrics")
+        metrics = client.get("/metrics", headers={"X-Metrics-Token": admin_token})
         _check(metrics, 200, "Prometheus metrics")
         if "trpc_im_requests_total" not in metrics.text:
             raise AssertionError("request metrics were not emitted")

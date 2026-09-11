@@ -121,6 +121,7 @@ optimize = [
 
 multi-tenant-im = [
     "alembic>=1.13.0",
+    "fastapi>=0.95.0",
 ]
 
 mem0 = [

@@ -15,7 +15,7 @@ from .adapters import (
     InvalidCallbackError,
     default_adapters,
 )
-from .config import TenantNotFoundError, TenantRegistry
+from .config import ConfigurationError, TenantNotFoundError, TenantRegistry
 from .domain import (
     ChannelResponse,
     derive_session_id,
@@ -84,6 +84,16 @@ class MultiTenantAgentService:
             return ChannelResponse(
                 status_code=401, body={"ok": False, "error": "invalid_callback"}
             )
+        except ConfigurationError:
+            logger.error("callback secret configuration is unavailable")
+            return ChannelResponse(
+                status_code=503,
+                body={
+                    "ok": False,
+                    "error": "temporarily_unavailable",
+                    "retryable": True,
+                },
+            )
         except ValueError as exc:
             return ChannelResponse(
                 status_code=202, body={"ok": True, "ignored": type(exc).__name__}
@@ -127,7 +137,9 @@ class MultiTenantAgentService:
             conversation_hash=conversation_hash,
             user_hash=session_user_id,
         )
-        lease_owner = f"{self.worker_id}:{message.external_message_id[:64]}"
+        # A fresh owner token prevents two concurrent deliveries of the same
+        # provider callback from being mistaken for one re-entrant worker.
+        lease_owner = f"{self.worker_id}:{uuid.uuid4().hex}"
         acquired = await asyncio.to_thread(
             self.repository.acquire_session_lease,
             session_id,
@@ -183,7 +195,7 @@ class MultiTenantAgentService:
                     body={"ok": False, "error": "monthly_token_budget_exceeded"},
                 )
             claim = await asyncio.to_thread(
-                self.repository.claim_message, message, session_id
+                self.repository.claim_message, message, session_id, lease_owner
             )
             event_id = claim.event_id
             if claim.payload_conflict:
@@ -240,15 +252,11 @@ class MultiTenantAgentService:
                         "model",
                         (perf_counter() - model_started) * 1000,
                     )
-                charged_tokens = reply.token_count or decision.estimated_tokens
-                await asyncio.to_thread(
-                    self.repository.settle_token_budget,
-                    tenant.tenant_id,
-                    budget_period,
-                    decision.estimated_tokens,
-                    charged_tokens,
+                charged_tokens = (
+                    reply.token_count
+                    if reply.token_count is not None
+                    else decision.estimated_tokens + max(1, (len(reply.text) + 3) // 4)
                 )
-                budget_settled = True
                 delivery = adapter.delivery(
                     binding=binding, message=message, reply=reply
                 )
@@ -262,7 +270,11 @@ class MultiTenantAgentService:
                         channel=message.channel,
                         reply=reply,
                         delivery=delivery,
+                        budget_period=budget_period,
+                        reserved_tokens=decision.estimated_tokens,
+                        actual_tokens=charged_tokens,
                     )
+                    budget_settled = True
                 finally:
                     self.metrics.observe_stage(
                         tenant.tenant_id,
@@ -274,25 +286,34 @@ class MultiTenantAgentService:
                     claimed = await asyncio.to_thread(
                         self.repository.claim_outbox, outbox_id
                     )
-                    if not claimed:
-                        raise RuntimeError("outbox claim failed")
-                    delivery_started = perf_counter()
-                    try:
-                        await self.sender.send(delivery)
-                    finally:
-                        self.metrics.observe_stage(
-                            tenant.tenant_id,
-                            "im_delivery",
-                            (perf_counter() - delivery_started) * 1000,
+                    if claimed:
+                        delivery_started = perf_counter()
+                        try:
+                            await self.sender.send(delivery)
+                        finally:
+                            self.metrics.observe_stage(
+                                tenant.tenant_id,
+                                "im_delivery",
+                                (perf_counter() - delivery_started) * 1000,
+                            )
+                        await asyncio.to_thread(
+                            self.repository.mark_outbox_sent, outbox_id
                         )
-                    await asyncio.to_thread(self.repository.mark_outbox_sent, outbox_id)
-                    self.metrics.observe_delivery(message.channel, "sent")
+                        self.metrics.observe_delivery(message.channel, "sent")
+                    else:
+                        # Another worker owns this row.  It will either mark it
+                        # sent or the sending lease will expire for recovery.
+                        delivery_queued = True
                 except Exception:  # noqa: BLE001 - provider failures are persisted for retry
                     delivery_queued = True
-                    retry_status = await asyncio.to_thread(
-                        self.repository.mark_outbox_retry, outbox_id
-                    )
-                    self.metrics.observe_delivery(message.channel, retry_status)
+                    try:
+                        retry_status = await asyncio.to_thread(
+                            self.repository.mark_outbox_retry, outbox_id
+                        )
+                    except Exception:  # noqa: BLE001 - sending lease remains recoverable
+                        logger.error("outbox retry scheduling failed")
+                    else:
+                        self.metrics.observe_delivery(message.channel, retry_status)
 
             await asyncio.to_thread(
                 self._audit,
@@ -305,7 +326,7 @@ class MultiTenantAgentService:
                 decision="delivery_queued" if delivery_queued else "completed",
                 latency_ms=trace_result.latency_ms,
                 cost=reply.cost,
-                token_count=reply.token_count or decision.estimated_tokens,
+                token_count=charged_tokens,
                 trace_id=trace_result.trace_id,
             )
             self.metrics.observe_request(
@@ -313,7 +334,7 @@ class MultiTenantAgentService:
                 message.channel,
                 "completed",
                 trace_result.latency_ms,
-                reply.token_count or decision.estimated_tokens,
+                charged_tokens,
                 reply.cost,
             )
             return ChannelResponse(

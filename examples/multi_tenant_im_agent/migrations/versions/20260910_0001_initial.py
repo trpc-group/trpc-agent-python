@@ -8,11 +8,16 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 revision: str = "20260910_0001"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+PRECISE_DATETIME = sa.DateTime(timezone=True).with_variant(
+    mysql.DATETIME(fsp=6), "mysql"
+)
 
 
 def upgrade() -> None:
@@ -24,7 +29,7 @@ def upgrade() -> None:
         sa.Column("config_version", sa.Integer(), nullable=False),
         sa.Column("token_budget_period", sa.String(7), nullable=False),
         sa.Column("token_usage", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_table(
         "mt_agent_apps",
@@ -39,7 +44,7 @@ def upgrade() -> None:
         sa.Column("agent_name", sa.String(128), nullable=False),
         sa.Column("model_name", sa.String(128), nullable=False),
         sa.Column("tool_allowlist_json", sa.Text(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_index("ix_mt_agent_apps_tenant_id", "mt_agent_apps", ["tenant_id"])
     op.create_table(
@@ -78,7 +83,7 @@ def upgrade() -> None:
         sa.Column("user_hash", sa.String(64), nullable=False),
         sa.Column("last_event_seq", sa.Integer(), nullable=False),
         sa.Column("state_json", sa.Text(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", PRECISE_DATETIME, nullable=False),
         sa.ForeignKeyConstraint(
             ["tenant_id", "agent_app_id"],
             ["mt_agent_apps.tenant_id", "mt_agent_apps.agent_app_id"],
@@ -112,8 +117,8 @@ def upgrade() -> None:
         sa.Column("content_redacted", sa.Text(), nullable=False),
         sa.Column("response_text", sa.Text(), nullable=True),
         sa.Column("error_type", sa.String(128), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
+        sa.Column("updated_at", PRECISE_DATETIME, nullable=False),
         sa.UniqueConstraint(
             "tenant_id",
             "channel",
@@ -152,7 +157,7 @@ def upgrade() -> None:
         sa.Column("kind", sa.String(32), nullable=False),
         sa.Column("content_ref", sa.Text(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_index("ix_mt_memories_tenant_id", "mt_memories", ["tenant_id"])
     op.create_index("ix_mt_memories_session_id", "mt_memories", ["session_id"])
@@ -173,7 +178,7 @@ def upgrade() -> None:
         ),
         sa.Column("through_sequence", sa.Integer(), nullable=False),
         sa.Column("summary_text", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
         sa.UniqueConstraint(
             "session_id", "through_sequence", name="uq_mt_summary_version"
         ),
@@ -197,7 +202,7 @@ def upgrade() -> None:
         ),
         sa.Column("object_uri", sa.Text(), nullable=False),
         sa.Column("content_type", sa.String(128), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_index("ix_mt_artifacts_tenant_id", "mt_artifacts", ["tenant_id"])
     op.create_index("ix_mt_artifacts_session_id", "mt_artifacts", ["session_id"])
@@ -212,7 +217,7 @@ def upgrade() -> None:
         ),
         sa.Column("vector_namespace", sa.String(192), nullable=False),
         sa.Column("source_uri", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_index("ix_mt_knowledge_tenant_id", "mt_knowledge", ["tenant_id"])
     op.create_table(
@@ -230,7 +235,7 @@ def upgrade() -> None:
         sa.Column("cost", sa.Float(), nullable=False),
         sa.Column("token_count", sa.Integer(), nullable=False),
         sa.Column("trace_id", sa.String(64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_index("ix_mt_audit_logs_tenant_id", "mt_audit_logs", ["tenant_id"])
     op.create_index("ix_mt_audit_logs_session_id", "mt_audit_logs", ["session_id"])
@@ -239,7 +244,7 @@ def upgrade() -> None:
         "mt_session_leases",
         sa.Column("session_id", sa.String(64), primary_key=True),
         sa.Column("owner_id", sa.String(128), nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("expires_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_table(
         "mt_outbox",
@@ -250,8 +255,8 @@ def upgrade() -> None:
         sa.Column("payload_json", sa.Text(), nullable=False),
         sa.Column("status", sa.String(24), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("next_attempt_at", PRECISE_DATETIME, nullable=False),
+        sa.Column("created_at", PRECISE_DATETIME, nullable=False),
     )
     op.create_index("ix_mt_outbox_tenant_id", "mt_outbox", ["tenant_id"])
     op.create_index("ix_mt_outbox_session_id", "mt_outbox", ["session_id"])
