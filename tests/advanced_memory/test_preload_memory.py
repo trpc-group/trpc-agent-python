@@ -5,11 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import MemoryDocument
-from trpc_agent_sdk.advanced_memory import MemoryPreloader
-from trpc_agent_sdk.advanced_memory import MemoryType
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory import MemoryDocument
+from trpc_agent_sdk.memory.advanced_memory import MemoryPreloader
+from trpc_agent_sdk.memory.advanced_memory import MemoryCandidate
+from trpc_agent_sdk.memory.advanced_memory import ModelMemoryRelevanceSelector
+from trpc_agent_sdk.memory.advanced_memory import MemoryType
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
 
 class _FakeSelector:
@@ -27,6 +31,44 @@ class _FailingSelector:
     async def select(self, query, candidates, ctx, *, limit):
         """Raise a selector failure."""
         raise RuntimeError("selector failed")
+
+
+class _FakeModel:
+    """Return one deterministic selector response."""
+
+    name = "test-model"
+
+    async def generate_async(self, request, *, stream, ctx):
+        """Return the requested memory filename without using a Runner."""
+        assert request.model == self.name
+        assert stream is False
+        assert ctx is None
+        yield SimpleNamespace(
+            content=Content(parts=[Part.from_text(text='{"selected_memories": ["project.md"]}')]),
+            error_code=None,
+            error_message=None,
+        )
+
+
+async def test_model_selector_uses_direct_llm_call() -> None:
+    """Ensure preload selection does not construct an Agent or Runner."""
+    candidate = MemoryCandidate(
+        filename="project.md",
+        name="Project",
+        description="Project details",
+        memory_type="project",
+        updated_at=None,
+    )
+    ctx = SimpleNamespace(agent=SimpleNamespace(model=_FakeModel()))
+
+    selected = await ModelMemoryRelevanceSelector().select(
+        "project",
+        [candidate],
+        ctx,
+        limit=1,
+    )
+
+    assert selected == ["project.md"]
 
 
 async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> None:

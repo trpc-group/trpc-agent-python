@@ -7,11 +7,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import LongTermMemoryContext
-from trpc_agent_sdk.advanced_memory import LongTermMemoryContextCallback
-from trpc_agent_sdk.advanced_memory import MemoryIndexEntry
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory import LongTermMemoryContext
+from trpc_agent_sdk.memory.advanced_memory import LongTermMemoryContextCallback
+from trpc_agent_sdk.memory.advanced_memory import MemoryDocument
+from trpc_agent_sdk.memory.advanced_memory import MemoryIndexEntry
+from trpc_agent_sdk.memory.advanced_memory import MemoryType
+from trpc_agent_sdk.abc import MemoryServiceABC
 from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
@@ -24,6 +27,20 @@ def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
         enabled=True,
         root_dir=tmp_path,
     ))
+
+
+@pytest.mark.asyncio
+async def test_advanced_memory_service_implements_memory_service_contract(tmp_path: Path) -> None:
+    """Ensure the tool-driven service remains compatible with the base API."""
+    memory_service = AdvancedMemoryService(runtime=_runtime(tmp_path))
+
+    assert isinstance(memory_service, MemoryServiceABC)
+    assert memory_service.enabled is True
+    await memory_service.store_session(SimpleNamespace())
+    response = await memory_service.search_memory("user", "anything")
+    assert response.memories == []
+
+    await memory_service.close()
 
 
 def test_staged_callback_rejects_invalid_stage(tmp_path: Path) -> None:
@@ -66,6 +83,15 @@ def test_staged_callback_treats_invalid_existing_stage_as_zero(tmp_path: Path) -
 async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
     """Ensure the index, paths, and on-demand read guidance are injected."""
     runtime = _runtime(tmp_path)
+    await runtime.long_term_memory.write_topic(
+        "project.md",
+        MemoryDocument(
+            name="项目约定",
+            description="项目代码规范",
+            memory_type=MemoryType.PROJECT,
+            content="使用清晰的项目代码规范。",
+        ),
+    )
     await runtime.long_term_memory.write_index(
         [MemoryIndexEntry(
             name="项目约定",

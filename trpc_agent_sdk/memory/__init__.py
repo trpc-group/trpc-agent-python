@@ -7,12 +7,13 @@
 
 This module provides memory/RAG functionality including:
 - Abstract memory service interfaces
-- In-memory memory service implementation
+- In-memory, Redis, SQL, and Advanced Memory implementations
 """
 
 from trpc_agent_sdk.abc import MemoryServiceABC as BaseMemoryService
 from trpc_agent_sdk.abc import MemoryServiceConfig
 
+from ._advanced_memory_service import AdvancedMemoryService
 from ._in_memory_memory_service import EventTtl
 from ._in_memory_memory_service import InMemoryMemoryService
 from ._redis_memory_service import RedisMemoryService
@@ -26,6 +27,7 @@ from ._utils import format_timestamp
 __all__ = [
     "BaseMemoryService",
     "MemoryServiceConfig",
+    "AdvancedMemoryService",
     "EventTtl",
     "InMemoryMemoryService",
     "RedisMemoryService",
@@ -36,4 +38,3 @@ __all__ = [
     "extract_words_lower",
     "format_timestamp",
 ]
-
