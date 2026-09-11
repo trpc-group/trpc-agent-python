@@ -36,7 +36,11 @@ from examples.multi_tenant_im_agent.repository import (
     OutboxRecord,
     TenantRecord,
 )
-from examples.multi_tenant_im_agent.runtime import TrpcAgentRuntime, event_token_count
+from examples.multi_tenant_im_agent.runtime import (
+    EchoRuntime,
+    TrpcAgentRuntime,
+    event_token_count,
+)
 from examples.multi_tenant_im_agent.service import MultiTenantAgentService
 from examples.multi_tenant_im_agent.telemetry import request_span
 
@@ -615,3 +619,31 @@ def test_runtime_extracts_provider_usage_metadata():
         )
         == 18
     )
+
+
+@pytest.mark.asyncio
+async def test_offline_runtime_still_executes_real_trpc_runner():
+    runtime = EchoRuntime()
+    config = replace(tenant(), model_name="offline-echo")
+    message = InboundMessage(
+        tenant_id=config.tenant_id,
+        channel="telegram",
+        account_id="bot-a",
+        external_message_id="offline-1",
+        user_id="42",
+        conversation_id="42",
+        chat_type=ChatType.DIRECT,
+        text="hello runner",
+    )
+    try:
+        reply = await runtime.reply(
+            tenant=config,
+            message=message,
+            user_id="safe-user",
+            session_id="safe-session",
+        )
+        assert reply.text == "[tenant-a] hello runner"
+        assert reply.token_count > 0
+        assert runtime._runners[config.tenant_id].__class__.__name__ == "Runner"
+    finally:
+        await runtime.close()

@@ -19,7 +19,10 @@ def _free_port() -> int:
 
 
 def _wait_until_ready(url: str, process: subprocess.Popen[bytes]) -> None:
-    deadline = time.monotonic() + 30
+    # Importing the complete SDK can take tens of seconds on a cold Windows
+    # environment. Runtime prewarming happens before readiness so callbacks
+    # keep their strict 10-second acceptance timeout.
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(f"gateway exited early with code {process.returncode}")
@@ -29,7 +32,7 @@ def _wait_until_ready(url: str, process: subprocess.Popen[bytes]) -> None:
                     return
         except (urllib.error.URLError, TimeoutError):
             time.sleep(0.2)
-    raise RuntimeError("gateway did not become ready within 30 seconds")
+    raise RuntimeError("gateway did not become ready within 60 seconds")
 
 
 def main() -> int:

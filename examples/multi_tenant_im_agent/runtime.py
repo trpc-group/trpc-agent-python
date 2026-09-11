@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Protocol
 
 from .config import ConfigurationError, require_secret
@@ -62,16 +62,6 @@ class AgentRuntime(Protocol):
     ) -> AgentReply: ...
 
 
-class EchoRuntime:
-    """Offline runtime used by the sample config and deterministic tests."""
-
-    async def reply(self, *, tenant, message, user_id, session_id) -> AgentReply:
-        return AgentReply(
-            text=f"[{tenant.display_name}] {message.text}",
-            token_count=max(1, len(message.text) // 4),
-        )
-
-
 class TrpcAgentRuntime:
     """Lazily builds genuine tRPC-Agent Runner instances per tenant.
 
@@ -79,10 +69,16 @@ class TrpcAgentRuntime:
     tenant-scoped, which keeps all framework Session/Memory keys isolated.
     """
 
-    def __init__(self, tool_registry: Mapping[str, object] | None = None):
+    def __init__(
+        self,
+        tool_registry: Mapping[str, object] | None = None,
+        *,
+        model_factory: Callable[[TenantConfig], object] | None = None,
+    ):
         self._runners: dict[str, object] = {}
         self._lock = asyncio.Lock()
         self._tool_registry = dict(tool_registry or {})
+        self._model_factory = model_factory
 
     async def _runner_for(self, tenant: TenantConfig):
         runner = self._runners.get(tenant.tenant_id)
@@ -95,6 +91,11 @@ class TrpcAgentRuntime:
             runner = self._build_runner(tenant)
             self._runners[tenant.tenant_id] = runner
             return runner
+
+    async def prewarm(self, tenants: Iterable[TenantConfig]) -> None:
+        """Build tenant runtimes before readiness so first callbacks stay fast."""
+
+        await asyncio.gather(*(self._runner_for(tenant) for tenant in tenants))
 
     def _resolve_tools(self, tenant: TenantConfig) -> list[object]:
         missing = [
@@ -118,12 +119,15 @@ class TrpcAgentRuntime:
 
         _ensure_tenant_filter_registered()
 
-        api_key = require_secret(tenant.model_api_key_env)
-        model = OpenAIModel(
-            model_name=tenant.model_name,
-            api_key=api_key,
-            base_url=tenant.model_base_url or None,
-        )
+        if self._model_factory is None:
+            api_key = require_secret(tenant.model_api_key_env)
+            model = OpenAIModel(
+                model_name=tenant.model_name,
+                api_key=api_key,
+                base_url=tenant.model_base_url or None,
+            )
+        else:
+            model = self._model_factory(tenant)
         # A tenant can receive only tools present in both its allowlist and the
         # process registry. Unknown names fail closed during runner creation.
         agent = LlmAgent(
@@ -137,7 +141,11 @@ class TrpcAgentRuntime:
             tools=self._resolve_tools(tenant),
             filters_name=[TENANT_FILTER_NAME],
         )
-        if tenant.session_backend is StorageBackend.MEMORY:
+        if self._model_factory is not None:
+            # Offline verification keeps the genuine Runner lifecycle while
+            # remaining independent of production Redis/SQL credentials.
+            session_service = InMemorySessionService()
+        elif tenant.session_backend is StorageBackend.MEMORY:
             session_service = InMemorySessionService()
         else:
             dsn = require_secret(tenant.session_dsn_env)
@@ -201,3 +209,50 @@ class TrpcAgentRuntime:
         for runner in self._runners.values():
             await runner.close()
         self._runners.clear()
+
+
+def _offline_model_for(tenant: TenantConfig) -> object:
+    """Build a deterministic model while retaining the real SDK Runner path."""
+
+    from trpc_agent_sdk.models import LLMModel, LlmResponse
+    from trpc_agent_sdk.types import (
+        Content,
+        GenerateContentResponseUsageMetadata,
+        Part,
+    )
+
+    class OfflineEchoModel(LLMModel):
+        def __init__(self) -> None:
+            super().__init__(model_name="offline-echo")
+
+        @classmethod
+        def supported_models(cls) -> list[str]:
+            return [r"offline-echo"]
+
+        async def _generate_async_impl(self, request, stream=False, ctx=None):
+            del stream, ctx
+            input_text = ""
+            for content in reversed(request.contents or []):
+                texts = [part.text for part in content.parts or [] if part.text]
+                if texts:
+                    input_text = "".join(texts)
+                    break
+            output = f"[{tenant.display_name}] {input_text}"
+            estimated = max(1, (len(input_text) + len(output) + 3) // 4)
+            yield LlmResponse(
+                content=Content(role="model", parts=[Part.from_text(text=output)]),
+                usage_metadata=GenerateContentResponseUsageMetadata(
+                    prompt_token_count=max(1, len(input_text) // 4),
+                    candidates_token_count=max(1, len(output) // 4),
+                    total_token_count=estimated,
+                ),
+            )
+
+    return OfflineEchoModel()
+
+
+class EchoRuntime(TrpcAgentRuntime):
+    """Deterministic offline model executed by a genuine tRPC-Agent Runner."""
+
+    def __init__(self) -> None:
+        super().__init__(model_factory=_offline_model_for)

@@ -41,6 +41,9 @@ def create_app(
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        prewarm = getattr(service.runtime, "prewarm", None)
+        if prewarm is not None:
+            await prewarm(service.registry.all())
         worker = asyncio.create_task(_outbox_loop(service))
         yield
         worker.cancel()
