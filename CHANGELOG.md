@@ -5,7 +5,7 @@
 ### Features
 
 * A2A: Added A2A 1.0 support through the new `a2a-v1` optional extra and `trpc_agent_sdk.server.a2a_v1` package, including agent services, remote agents, Agent Card discovery, artifact-first streaming, task cancellation, and compatibility bridging for legacy A2A 0.3 peers. Existing A2A 0.3 integrations remain supported without code changes.
-* Memory: Added the optional Advanced Memory subsystem for file-backed long-term and session memory, including `AdvancedMemoryService`, `AdvancedMemorySessionService`, transcript persistence, structured session-memory extraction, memory freshness metadata, and `save_memory`, `read_memory`, and `list_memory_index` tools.
+* Memory: Added the optional Advanced Memory subsystem for file-backed long-term and session memory, including `AdvancedMemory`, transcript persistence, structured session-memory extraction, memory freshness metadata, and `save_memory`, `read_memory`, and `list_memory_index` tools.
 * Memory: Added a staged context-management pipeline with bounded long-term-memory injection, oversized tool-result spill and preview, history trimming, micro-compaction, LLM-driven auto-compaction, token-aware context budgets, relevant-memory preloading, and cross-event-loop session coordination.
 * Runner: Added automatic binding and session-service wrapping when Advanced Memory services are supplied, allowing the Advanced Memory context pipeline to integrate through the existing `session_service` and `memory_service` interfaces.
 

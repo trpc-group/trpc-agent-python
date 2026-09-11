@@ -7,12 +7,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import LongTermMemoryContext
-from trpc_agent_sdk.advanced_memory import LongTermMemoryContextCallback
-from trpc_agent_sdk.advanced_memory import MemoryIndexEntry
-from trpc_agent_sdk.memory import AdvancedMemoryService
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemory
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryDocument
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryIndexEntry
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryConfig
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryType
+from trpc_agent_sdk.tools.advanced_memory import LongTermMemoryContext
+from trpc_agent_sdk.tools.advanced_memory import LongTermMemoryContextCallback
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -20,7 +22,7 @@ from trpc_agent_sdk.sessions import InMemorySessionService
 
 def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     """Create a test runtime with long-term memory injection enabled."""
-    return AdvancedMemoryRuntime.create(AdvancedMemoryServiceConfig(
+    return AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
         enabled=True,
         root_dir=tmp_path,
     ))
@@ -66,8 +68,17 @@ def test_staged_callback_treats_invalid_existing_stage_as_zero(tmp_path: Path) -
 async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
     """Ensure the index, paths, and on-demand read guidance are injected."""
     runtime = _runtime(tmp_path)
+    await runtime.long_term_memory.write_topic(
+        "project.md",
+        AdvancedMemoryDocument(
+            name="项目约定",
+            description="项目代码规范",
+            memory_type=AdvancedMemoryType.PROJECT,
+            content="使用清晰的项目代码规范。",
+        ),
+    )
     await runtime.long_term_memory.write_index(
-        [MemoryIndexEntry(
+        [AdvancedMemoryIndexEntry(
             name="项目约定",
             filename="project.md",
             summary="保存项目代码规范",
@@ -92,7 +103,7 @@ async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
 async def test_custom_memory_focus_is_injected_into_system_instruction(tmp_path: Path) -> None:
     """Ensure applications can prioritize a custom long-term memory focus."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryServiceConfig(
+        AdvancedMemoryConfig(
             enabled=True,
             root_dir=tmp_path,
             memory_focus_instruction="重点记住用户长期稳定的兴趣爱好。",
@@ -107,34 +118,35 @@ async def test_custom_memory_focus_is_injected_into_system_instruction(tmp_path:
     assert "重点记住用户长期稳定的兴趣爱好。" in instruction
 
 
-async def test_memory_service_does_not_install_session_compression(tmp_path: Path, ) -> None:
-    """Ensure the MemoryService leaves the supplied SessionService unchanged."""
+async def test_advanced_memory_does_not_install_session_compression(tmp_path: Path, ) -> None:
+    """Ensure Advanced Memory leaves the supplied SessionService unchanged."""
     runtime = _runtime(tmp_path)
-    memory_service = AdvancedMemoryService(runtime=runtime)
+    advanced_memory = AdvancedMemory(runtime=runtime)
     session_service = InMemorySessionService()
     agent = SimpleNamespace(before_model_callback=None, tools=[])
 
-    bound = memory_service.bind(agent, session_service)
+    agent.tools.append(advanced_memory.create_toolset())
+    advanced_memory.configure_agent(agent)
 
-    assert bound is session_service
     assert len(agent.before_model_callback) == 1
     assert isinstance(
         agent.before_model_callback[0],
         LongTermMemoryContextCallback,
     )
-    tool_names = {tool.name for tool in agent.tools}
+    tools = await agent.tools[0].get_tools()
+    tool_names = {tool.name for tool in tools}
     assert tool_names == {
         "save_memory",
         "read_memory",
         "list_memory_index",
     }
     await session_service.close()
-    await memory_service.close()
+    await advanced_memory.close()
 
 
 async def test_disabled_runtime_does_not_modify_system_instruction(tmp_path: Path) -> None:
     """Ensure disabled runtime does not inject long-term memory."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryServiceConfig(enabled=False, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=False, root_dir=tmp_path))
     request = LlmRequest(model="test-model")
 
     applied = await LongTermMemoryContext(runtime).apply(request)

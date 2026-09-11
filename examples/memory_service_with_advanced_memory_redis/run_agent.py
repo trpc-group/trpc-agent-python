@@ -14,13 +14,13 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.memory import AdvancedMemoryService
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemory
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryConfig
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
-load_dotenv(Path(__file__).with_name(".env"))
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 RUNNER_A_QUERIES = [
     "Do you remember my name?",
@@ -60,16 +60,15 @@ def build_redis_url_from_environment() -> str:
     return f"{scheme}://{auth}{host}:{port}/{database}"
 
 
-def create_advanced_memory_service(redis_url: str) -> AdvancedMemoryService:
+def create_advanced_memory(redis_url: str) -> AdvancedMemory:
     """Create the long-term Advanced Memory service backed by Redis."""
-    memory_ttl = os.getenv("M_TTL")
-    config = AdvancedMemoryServiceConfig(
+    config = AdvancedMemoryConfig(
         storage_backend="redis",
         redis_url=redis_url,
         redis_key_prefix="advanced-memory-redis-demo:v1",
-        memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
+        memory_ttl_seconds=120,
     )
-    return AdvancedMemoryService(config)
+    return AdvancedMemory(config=config)
 
 
 async def ask(runner: Runner, session_id: str, prompt: str) -> None:
@@ -95,11 +94,16 @@ async def run_phase(phase: str) -> None:
     """Run Runner A or Runner B against the same Redis user."""
     app_name = "advanced-memory-redis-demo"
     redis_url = build_redis_url_from_environment()
+    agent = create_agent()
+    advanced_memory = create_advanced_memory(redis_url)
+    agent.tools.append(advanced_memory.create_toolset())
+    advanced_memory.configure_agent(agent)
+    if preload_tool := advanced_memory.create_preload_tool():
+        agent.tools.append(preload_tool)
     runner = Runner(
         app_name=app_name,
-        agent=create_agent(),
+        agent=agent,
         session_service=InMemorySessionService(),
-        memory_service=create_advanced_memory_service(redis_url),
     )
     try:
         queries = RUNNER_A_QUERIES if phase == "write" else RUNNER_B_QUERIES
@@ -109,6 +113,7 @@ async def run_phase(phase: str) -> None:
             await ask(runner, f"redis-{phase}-session-{index}", prompt)
     finally:
         await runner.close()
+        await advanced_memory.close()
 
 
 def run_two_processes() -> None:

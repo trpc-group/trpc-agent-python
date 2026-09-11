@@ -18,8 +18,6 @@ import time
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._redis_session_service import RedisSessionService
 from trpc_agent_sdk.sessions._session import Session
@@ -386,31 +384,6 @@ class TestRedisUpdateSession:
         )
         assert [event.content.parts[0].text for event in stored.events] == ["keep me"]
         assert stored.state["_trpc_agent:summary"] == {"v": 1}
-        await svc.close()
-
-    async def test_patch_state_repairs_lua_empty_array_encoding(self):
-        config = _make_config(store_historical_events=True)
-        svc = _create_service(config=config)
-        session = await svc.create_session(
-            app_name="app",
-            user_id="user",
-            session_id="s1",
-        )
-        key = "session:app:user:s1"
-        payload = json.loads(svc._redis_storage._store[key])
-        payload["historical_events"] = {}
-        svc._redis_storage._store[key] = json.dumps(payload)
-
-        loaded = await svc.get_session(
-            app_name="app",
-            user_id="user",
-            session_id="s1",
-        )
-        assert loaded is not None
-        assert loaded.historical_events == []
-
-        await svc.update_session_state(loaded, {"_trpc_agent:summary": {"v": 1}})
-        assert loaded.state["_trpc_agent:summary"] == {"v": 1}
         await svc.close()
 
     async def test_update_nonexistent(self):

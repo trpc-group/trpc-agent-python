@@ -14,13 +14,13 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 from agent.agent import create_agent
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryServiceConfig
-from trpc_agent_sdk.memory import AdvancedMemoryService
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemory
+from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryConfig
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
-load_dotenv(Path(__file__).with_name(".env"))
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 RUNNER_A_QUERIES = [
     "Do you remember my name?",
@@ -57,26 +57,30 @@ def sql_is_async() -> bool:
     return os.getenv("SQL_IS_ASYNC", "true").lower() in {"1", "true", "yes"}
 
 
-def create_advanced_memory_service(sql_url: str) -> AdvancedMemoryService:
+def create_advanced_memory(sql_url: str) -> AdvancedMemory:
     """Create the long-term Advanced Memory service backed by SQL."""
-    memory_ttl = os.getenv("M_TTL")
-    config = AdvancedMemoryServiceConfig(
+    config = AdvancedMemoryConfig(
         storage_backend="sql",
         sql_url=sql_url,
         sql_is_async=sql_is_async(),
-        memory_ttl_seconds=int(memory_ttl) if memory_ttl else None,
+        memory_ttl_seconds=120,
     )
-    return AdvancedMemoryService(config)
+    return AdvancedMemory(config=config)
 
 
 async def run_phase(phase: str) -> None:
     """Run Runner A or Runner B against the same SQL database."""
     sql_url = build_sql_url_from_environment()
+    agent = create_agent()
+    advanced_memory = create_advanced_memory(sql_url)
+    agent.tools.append(advanced_memory.create_toolset())
+    advanced_memory.configure_agent(agent)
+    if preload_tool := advanced_memory.create_preload_tool():
+        agent.tools.append(preload_tool)
     runner = Runner(
         app_name="advanced-memory-sql-demo",
-        agent=create_agent(),
+        agent=agent,
         session_service=InMemorySessionService(),
-        memory_service=create_advanced_memory_service(sql_url),
     )
     try:
         queries = RUNNER_A_QUERIES if phase == "write" else RUNNER_B_QUERIES
@@ -100,6 +104,7 @@ async def run_phase(phase: str) -> None:
                         print(f"🤖 Assistant: {part.text}")
     finally:
         await runner.close()
+        await advanced_memory.close()
 
 
 def run_two_processes() -> None:
