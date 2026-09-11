@@ -7,6 +7,7 @@
 
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizerFilter
 
 from .config import get_model_config
 from .prompts import INSTRUCTION
@@ -22,6 +23,7 @@ def create_agent() -> LlmAgent:
             model_name=model_name,
             api_key=api_key,
             base_url=base_url,
+            filters=[AdvancedAutoCompactSummarizerFilter()],
         ),
         instruction=INSTRUCTION,
     )
