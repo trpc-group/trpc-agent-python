@@ -13,15 +13,15 @@ Covers:
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from trpc_agent_sdk.abc import ListSessionsResponse
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._base_session_service import BaseSessionService
 from trpc_agent_sdk.sessions._session import Session
-from trpc_agent_sdk.sessions._summarizer_manager import SummarizerSessionManager
+from trpc_agent_sdk.sessions.compact.default._summarizer_manager import (
+    DefaultSessionSummarizerManager as SummarizerSessionManager,
+)
 from trpc_agent_sdk.sessions._types import SessionServiceConfig
 from trpc_agent_sdk.types import Content, EventActions, Part, State
 
@@ -343,6 +343,16 @@ class TestBaseSessionServiceUpdateAndClose:
         svc = ConcreteSessionService()
         session = _make_session()
         await svc.update_session(session)
+
+    async def test_update_session_state_falls_back_to_full_update(self):
+        svc = ConcreteSessionService()
+        svc.update_session = AsyncMock()
+        session = _make_session()
+
+        await svc.update_session_state(session, {"summary": {"version": 1}})
+
+        assert session.state["summary"] == {"version": 1}
+        svc.update_session.assert_awaited_once_with(session)
 
     async def test_close(self):
         svc = ConcreteSessionService()

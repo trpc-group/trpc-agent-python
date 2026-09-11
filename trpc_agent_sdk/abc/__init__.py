@@ -16,6 +16,9 @@ from ._artifact_service import ArtifactEntry
 from ._artifact_service import ArtifactId
 from ._artifact_service import ArtifactServiceABC
 from ._artifact_service import ArtifactVersion
+from ._compact import CompactSummarizerABC
+from ._compact import CompactSummarizerManagerABC
+from ._compact import CompactTrigger
 from ._filter import FilterABC
 from ._filter import FilterAsyncGenHandleType
 from ._filter import FilterAsyncGenReturnType
@@ -43,6 +46,9 @@ __all__ = [
     "ArtifactId",
     "ArtifactServiceABC",
     "ArtifactVersion",
+    "CompactSummarizerABC",
+    "CompactSummarizerManagerABC",
+    "CompactTrigger",
     "FilterABC",
     "FilterAsyncGenHandleType",
     "FilterAsyncGenReturnType",

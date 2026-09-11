@@ -25,6 +25,11 @@ class EvalSessionService(BaseSessionService):
         self._inner = inner
         self._context_messages = context_messages
 
+    @property
+    def session_config(self):
+        """Expose the storage service's Session configuration."""
+        return self._inner.session_config
+
     @override
     async def create_session(
         self,

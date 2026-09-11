@@ -24,16 +24,17 @@
 """Base session service interface."""
 
 from __future__ import annotations
+
 from typing import Optional
 from typing_extensions import override
 
 from trpc_agent_sdk.abc import SessionServiceABC
+from trpc_agent_sdk.abc import CompactSummarizerManagerABC
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.types import State
 
 from ._session import Session
-from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
 
 
@@ -44,7 +45,7 @@ class BaseSessionService(SessionServiceABC):
     """
 
     def __init__(self,
-                 summarizer_manager: Optional[SummarizerSessionManager] = None,
+                 summarizer_manager: Optional[CompactSummarizerManagerABC] = None,
                  session_config: Optional[SessionServiceConfig] = None):
         """Initialize the base session service.
 
@@ -62,7 +63,7 @@ class BaseSessionService(SessionServiceABC):
             self._summarizer_manager.set_session_service(self)
 
     @property
-    def summarizer_manager(self) -> Optional[SummarizerSessionManager]:
+    def summarizer_manager(self) -> Optional[CompactSummarizerManagerABC]:
         """Get the summarizer manager."""
         return self._summarizer_manager
 
@@ -71,7 +72,7 @@ class BaseSessionService(SessionServiceABC):
         """Get the session service configuration."""
         return self._session_config
 
-    def set_summarizer_manager(self, summarizer_manager: SummarizerSessionManager, force: bool = False) -> None:
+    def set_summarizer_manager(self, summarizer_manager: CompactSummarizerManagerABC, force: bool = False) -> None:
         """Set the summarizer manager to use.
 
         Args:
@@ -80,7 +81,7 @@ class BaseSessionService(SessionServiceABC):
         """
         if not self._summarizer_manager or force:
             self._summarizer_manager = summarizer_manager
-            self._summarizer_manager.set_session_service(self)
+            self._summarizer_manager.set_session_service(self, force)
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
@@ -187,7 +188,9 @@ class BaseSessionService(SessionServiceABC):
         """
         if self._summarizer_manager:
             summary = await self._summarizer_manager.get_session_summary(session)
-            if summary:
+            if isinstance(summary, str):
+                return summary
+            if summary is not None:
                 return summary.summary_text
         return None
 
@@ -211,4 +214,5 @@ class BaseSessionService(SessionServiceABC):
     @override
     async def close(self) -> None:
         """Closes the session service and releases any resources."""
-        pass
+        if self._summarizer_manager:
+            await self._summarizer_manager.close()

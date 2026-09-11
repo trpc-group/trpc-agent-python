@@ -125,6 +125,20 @@ class SessionServiceABC(ABC):
             session: The session to update
         """
 
+    async def update_session_state(
+        self,
+        session: SessionABC,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Persist a session-scoped state delta.
+
+        Backends may override this method with an efficient partial update.
+        The default implementation preserves compatibility with existing
+        SessionService implementations by falling back to ``update_session``.
+        """
+        session.state.update(state_delta)
+        await self.update_session(session)
+
     @abstractmethod
     async def create_session_summary(self, session: SessionABC, ctx: "InvocationContext" = None) -> None:
         """Summarize a session."""

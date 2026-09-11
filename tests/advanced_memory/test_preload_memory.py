@@ -5,11 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import MemoryDocument
-from trpc_agent_sdk.advanced_memory import MemoryPreloader
-from trpc_agent_sdk.advanced_memory import MemoryType
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory import MemoryDocument
+from trpc_agent_sdk.memory.advanced_memory import MemoryPreloader
+from trpc_agent_sdk.memory.advanced_memory import MemoryCandidate
+from trpc_agent_sdk.memory.advanced_memory import ModelMemoryRelevanceSelector
+from trpc_agent_sdk.memory.advanced_memory import MemoryType
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
 
 class _FakeSelector:
@@ -29,17 +33,55 @@ class _FailingSelector:
         raise RuntimeError("selector failed")
 
 
+class _FakeModel:
+    """Return one deterministic selector response."""
+
+    name = "test-model"
+
+    async def generate_async(self, request, *, stream, ctx):
+        """Return the requested memory filename without using a Runner."""
+        assert request.model == self.name
+        assert stream is False
+        assert ctx is None
+        yield SimpleNamespace(
+            content=Content(parts=[Part.from_text(text='{"selected_memories": ["project.md"]}')]),
+            error_code=None,
+            error_message=None,
+        )
+
+
+async def test_model_selector_uses_direct_llm_call() -> None:
+    """Ensure preload selection does not construct an Agent or Runner."""
+    candidate = MemoryCandidate(
+        filename="project.md",
+        name="Project",
+        description="Project details",
+        memory_type="project",
+        updated_at=None,
+    )
+    ctx = SimpleNamespace(agent=SimpleNamespace(model=_FakeModel()))
+
+    selected = await ModelMemoryRelevanceSelector().select(
+        "project",
+        [candidate],
+        ctx,
+        limit=1,
+    )
+
+    assert selected == ["project.md"]
+
+
 async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> None:
     """Ensure selected topic content is rendered and bounded."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedMemoryServiceConfig(
             enabled=True,
             root_dir=tmp_path,
             preload_memory_enabled=True,
             preload_memory_max_chars=200,
         ))
     await runtime.initialize()
-    await runtime.long_term_memory.write_topic(
+    await runtime.for_scope("demo-app", "demo-user").long_term_memory.write_topic(
         "project.md",
         MemoryDocument(
             name="Project",
@@ -48,10 +90,15 @@ async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> N
             content="important project details",
         ),
     )
+    ctx = SimpleNamespace(session=SimpleNamespace(
+        app_name="demo-app",
+        user_id="demo-user",
+        id="session-a",
+    ))
 
     result = await MemoryPreloader(runtime, _FakeSelector()).preload(
         "What is relevant?",
-        SimpleNamespace(),
+        ctx,
     )
 
     assert result is not None
@@ -63,14 +110,14 @@ async def test_preloader_injects_selected_topic_with_budget(tmp_path: Path) -> N
 async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
     """Tell the main model when the configured content budget truncated a topic."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedMemoryServiceConfig(
             enabled=True,
             root_dir=tmp_path,
             preload_memory_enabled=True,
             preload_memory_max_chars=12,
         ))
     await runtime.initialize()
-    await runtime.long_term_memory.write_topic(
+    await runtime.for_scope("demo-app", "demo-user").long_term_memory.write_topic(
         "project.md",
         MemoryDocument(
             name="Project",
@@ -79,10 +126,15 @@ async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
             content="important project details",
         ),
     )
+    ctx = SimpleNamespace(session=SimpleNamespace(
+        app_name="demo-app",
+        user_id="demo-user",
+        id="session-a",
+    ))
 
     result = await MemoryPreloader(runtime, _FakeSelector()).preload(
         "What is relevant?",
-        SimpleNamespace(),
+        ctx,
     )
 
     assert result is not None
@@ -93,13 +145,13 @@ async def test_preloader_marks_truncated_content(tmp_path: Path) -> None:
 async def test_preloader_failure_is_best_effort(tmp_path: Path) -> None:
     """Return no prompt content when relevance screening fails."""
     runtime = AdvancedMemoryRuntime.create(
-        AdvancedMemoryConfig(
+        AdvancedMemoryServiceConfig(
             enabled=True,
             root_dir=tmp_path,
             preload_memory_enabled=True,
         ))
     await runtime.initialize()
-    await runtime.long_term_memory.write_topic(
+    await runtime.for_scope("demo-app", "demo-user").long_term_memory.write_topic(
         "project.md",
         MemoryDocument(
             name="Project",

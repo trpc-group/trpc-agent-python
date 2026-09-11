@@ -50,6 +50,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.types import Integer
 
 from trpc_agent_sdk.abc import ListSessionsResponse
+from trpc_agent_sdk.abc import CompactSummarizerManagerABC
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
@@ -72,7 +73,6 @@ from trpc_agent_sdk.utils import user_key
 
 from ._base_session_service import BaseSessionService
 from ._session import Session
-from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import extract_state_delta
@@ -389,20 +389,39 @@ class SqlSessionService(BaseSessionService):
 
     def __init__(self,
                  db_url: str,
-                 summarizer_manager: Optional[SummarizerSessionManager] = None,
+                 summarizer_manager: Optional[CompactSummarizerManagerABC] = None,
                  is_async: bool = False,
                  session_config: Optional[SessionServiceConfig] = None,
                  **kwargs: Any):
+        self._db_url = db_url
+        self._is_async = is_async
         is_default_config = session_config is None
-        super().__init__(summarizer_manager=summarizer_manager, session_config=session_config)
+        super().__init__(
+            summarizer_manager=summarizer_manager,
+            session_config=session_config,
+        )
         if is_default_config:
             # Default to store historical events for persistent backends.
             self._session_config.store_historical_events = True
+        # AsyncSession cannot perform an implicit refresh when an ORM
+        # attribute is accessed after commit. Keep committed values available
+        # because this service reads StorageSession state after committing.
+        kwargs.setdefault("expire_on_commit", False)
         self._sql_storage = SqlStorage(is_async=is_async, db_url=db_url, metadata=SessionStorageBase.metadata, **kwargs)
         self.__cleanup_task: Optional[asyncio.Task] = None
         self.__cleanup_stop_event: Optional[asyncio.Event] = None
 
         self._start_cleanup_task()
+
+    @property
+    def db_url(self) -> str:
+        """Return the configured SQL connection URL."""
+        return self._db_url
+
+    @property
+    def is_async(self) -> bool:
+        """Return whether this service uses asynchronous SQL sessions."""
+        return self._is_async
 
     @override
     async def create_session(
@@ -544,7 +563,10 @@ class SqlSessionService(BaseSessionService):
 
         async with self._sql_storage.create_db_session() as sql_session:
             session_key = SqlKey(key=(app_name, user_id, session_id), storage_cls=StorageSession)
-            storage_session: Optional[StorageSession] = await self._sql_storage.get(sql_session, session_key)
+            storage_session: Optional[StorageSession] = await self._sql_storage.get_for_update(
+                sql_session,
+                session_key,
+            )
             if not storage_session:
                 logger.warning("Session %s not found in storage, it will be created", session_id)
                 return event
@@ -616,6 +638,40 @@ class SqlSessionService(BaseSessionService):
             session.last_update_time = storage_session.update_timestamp_tz
 
         return event
+
+    @override
+    async def update_session_state(
+        self,
+        session: Session,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Persist session-scoped state without rewriting Event rows."""
+        if not state_delta:
+            return
+        session.state.update(state_delta)
+
+        async with self._sql_storage.create_db_session() as sql_session:
+            session_key = SqlKey(
+                key=(session.app_name, session.user_id, session.id),
+                storage_cls=StorageSession,
+            )
+            storage_session: Optional[StorageSession] = await self._sql_storage.get_for_update(
+                sql_session,
+                session_key,
+            )
+            if storage_session is None:
+                logger.warning(
+                    "Session %s not found in storage while updating state",
+                    session.id,
+                )
+                return
+
+            persisted_state = dict(storage_session.state or {})
+            persisted_state.update(state_delta)
+            storage_session.state = persisted_state  # type: ignore
+            await self._sql_storage.commit(sql_session)
+            await self._sql_storage.refresh(sql_session, storage_session)
+            session.last_update_time = storage_session.update_timestamp_tz
 
     @override
     async def update_session(self, session: Session) -> None:
@@ -705,6 +761,7 @@ class SqlSessionService(BaseSessionService):
                 app_state = storage_app_state.state
                 storage_app_state.update_time = func.now()
                 await self._sql_storage.commit(sql_session)
+                await self._sql_storage.refresh(sql_session, storage_app_state)
 
         return app_state
 
@@ -718,6 +775,7 @@ class SqlSessionService(BaseSessionService):
                 user_state = storage_user_state.state
                 storage_user_state.update_time = func.now()
                 await self._sql_storage.commit(sql_session)
+                await self._sql_storage.refresh(sql_session, storage_user_state)
 
         return user_state
 
@@ -734,6 +792,10 @@ class SqlSessionService(BaseSessionService):
 
         storage_session.update_time = PreciseNow()
         await self._sql_storage.commit(sql_session)
+        # Assigning a SQL expression expires the server-generated timestamp
+        # even when expire_on_commit=False. Refresh it before callers access
+        # update_time outside SQLAlchemy's async greenlet.
+        await self._sql_storage.refresh(sql_session, storage_session)
 
         return storage_session
 

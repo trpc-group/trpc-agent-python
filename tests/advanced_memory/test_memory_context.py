@@ -7,38 +7,40 @@ from types import SimpleNamespace
 
 import pytest
 
-from trpc_agent_sdk.advanced_memory import AutoCompactCallback
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryConfig
-from trpc_agent_sdk.advanced_memory import AdvancedMemoryRuntime
-from trpc_agent_sdk.advanced_memory import HistorySnipCallback
-from trpc_agent_sdk.advanced_memory import LongTermMemoryContext
-from trpc_agent_sdk.advanced_memory import LongTermMemoryContextCallback
-from trpc_agent_sdk.advanced_memory import MemoryIndexEntry
-from trpc_agent_sdk.advanced_memory import MicrocompactCallback
-from trpc_agent_sdk.advanced_memory import setup_advanced_memory
-from trpc_agent_sdk.advanced_memory import setup_context_management
-from trpc_agent_sdk.advanced_memory import ToolResultBudgetCallback
-from trpc_agent_sdk.advanced_memory import TranscriptSessionService
-from trpc_agent_sdk.advanced_memory._callbacks import install_staged_callback
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory import LongTermMemoryContext
+from trpc_agent_sdk.memory.advanced_memory import LongTermMemoryContextCallback
+from trpc_agent_sdk.memory.advanced_memory import MemoryDocument
+from trpc_agent_sdk.memory.advanced_memory import MemoryIndexEntry
+from trpc_agent_sdk.memory.advanced_memory import MemoryType
+from trpc_agent_sdk.abc import MemoryServiceABC
+from trpc_agent_sdk.memory import AdvancedMemoryService
 from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
 from trpc_agent_sdk.sessions import InMemorySessionService
-
-
-class FakeSummaryGenerator:
-    """Provide a summary generator that does not call a real model."""
-
-    async def generate(self, history: str, ctx) -> str:
-        """Return a fixed test summary."""
-        del history, ctx
-        return "summary"
 
 
 def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
     """Create a test runtime with long-term memory injection enabled."""
-    return AdvancedMemoryRuntime.create(AdvancedMemoryConfig(
+    return AdvancedMemoryRuntime.create(AdvancedMemoryServiceConfig(
         enabled=True,
         root_dir=tmp_path,
     ))
+
+
+@pytest.mark.asyncio
+async def test_advanced_memory_service_implements_memory_service_contract(tmp_path: Path) -> None:
+    """Ensure the tool-driven service remains compatible with the base API."""
+    memory_service = AdvancedMemoryService(runtime=_runtime(tmp_path))
+
+    assert isinstance(memory_service, MemoryServiceABC)
+    assert memory_service.enabled is True
+    await memory_service.store_session(SimpleNamespace())
+    response = await memory_service.search_memory("user", "anything")
+    assert response.memories == []
+
+    await memory_service.close()
 
 
 def test_staged_callback_rejects_invalid_stage(tmp_path: Path) -> None:
@@ -81,6 +83,15 @@ def test_staged_callback_treats_invalid_existing_stage_as_zero(tmp_path: Path) -
 async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
     """Ensure the index, paths, and on-demand read guidance are injected."""
     runtime = _runtime(tmp_path)
+    await runtime.long_term_memory.write_topic(
+        "project.md",
+        MemoryDocument(
+            name="项目约定",
+            description="项目代码规范",
+            memory_type=MemoryType.PROJECT,
+            content="使用清晰的项目代码规范。",
+        ),
+    )
     await runtime.long_term_memory.write_index(
         [MemoryIndexEntry(
             name="项目约定",
@@ -104,61 +115,52 @@ async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:
     assert "secrets, credentials, tokens, and other sensitive data" in instruction
 
 
-async def test_unified_setup_installs_complete_pipeline_in_order(tmp_path: Path) -> None:
-    """Ensure unified setup installs the five components in order."""
+async def test_custom_memory_focus_is_injected_into_system_instruction(tmp_path: Path) -> None:
+    """Ensure applications can prioritize a custom long-term memory focus."""
+    runtime = AdvancedMemoryRuntime.create(
+        AdvancedMemoryServiceConfig(
+            enabled=True,
+            root_dir=tmp_path,
+            memory_focus_instruction="重点记住用户长期稳定的兴趣爱好。",
+        ))
+    request = LlmRequest(model="test-model")
+
+    applied = await LongTermMemoryContext(runtime).apply(request)
+
+    instruction = str(request.config.system_instruction)
+    assert applied is True
+    assert "## Custom memory focus" in instruction
+    assert "重点记住用户长期稳定的兴趣爱好。" in instruction
+
+
+async def test_memory_service_does_not_install_session_compression(tmp_path: Path, ) -> None:
+    """Ensure the MemoryService leaves the supplied SessionService unchanged."""
     runtime = _runtime(tmp_path)
-    agent = SimpleNamespace(before_model_callback=None)
-
-    components = setup_context_management(
-        agent,
-        runtime,
-        FakeSummaryGenerator(),
-    )
-
-    assert components.long_term_memory.runtime is runtime
-    assert isinstance(agent.before_model_callback[0], LongTermMemoryContextCallback)
-    assert isinstance(agent.before_model_callback[1], ToolResultBudgetCallback)
-    assert isinstance(agent.before_model_callback[2], HistorySnipCallback)
-    assert isinstance(agent.before_model_callback[3], MicrocompactCallback)
-    assert isinstance(agent.before_model_callback[4], AutoCompactCallback)
-
-
-async def test_full_setup_wraps_session_service_and_is_idempotent(tmp_path: Path, ) -> None:
-    """Ensure unified setup assembles transcript, session memory, and callbacks."""
-    runtime = _runtime(tmp_path)
+    memory_service = AdvancedMemoryService(runtime=runtime)
+    session_service = InMemorySessionService()
     agent = SimpleNamespace(before_model_callback=None, tools=[])
 
-    first = setup_advanced_memory(
-        agent,
-        InMemorySessionService(),
-        runtime,
-        FakeSummaryGenerator(),
-    )
-    second = setup_advanced_memory(
-        agent,
-        first.session_service,
-        runtime,
-        FakeSummaryGenerator(),
-    )
+    bound = memory_service.bind(agent, session_service)
 
-    assert isinstance(first.session_service, TranscriptSessionService)
-    assert first.session_memory_extractor.runtime is runtime
-    assert first.session_service.session_memory_extractor is first.session_memory_extractor
-    assert second.session_service is first.session_service
-    assert second.session_memory_extractor is first.session_memory_extractor
-    assert second.long_term_memory_tools is first.long_term_memory_tools
-    assert len(agent.before_model_callback) == 5
+    assert bound is session_service
+    assert len(agent.before_model_callback) == 1
+    assert isinstance(
+        agent.before_model_callback[0],
+        LongTermMemoryContextCallback,
+    )
     tool_names = {tool.name for tool in agent.tools}
     assert tool_names == {
         "save_memory",
         "read_memory",
         "list_memory_index",
     }
+    await session_service.close()
+    await memory_service.close()
 
 
 async def test_disabled_runtime_does_not_modify_system_instruction(tmp_path: Path) -> None:
     """Ensure disabled runtime does not inject long-term memory."""
-    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryConfig(enabled=False, root_dir=tmp_path))
+    runtime = AdvancedMemoryRuntime.create(AdvancedMemoryServiceConfig(enabled=False, root_dir=tmp_path))
     request = LlmRequest(model="test-model")
 
     applied = await LongTermMemoryContext(runtime).apply(request)

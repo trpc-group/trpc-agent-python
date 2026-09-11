@@ -11,26 +11,50 @@ import asyncio
 from pathlib import Path
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.memory import AdvancedMemoryConfig
-from trpc_agent_sdk.sessions import AdvancedMemorySessionService
+from trpc_agent_sdk.memory.advanced_memory import AdvancedMemoryServiceConfig
+from trpc_agent_sdk.memory import AdvancedMemoryService
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.sessions import SessionServiceConfig
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizer
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizerConfig
+from trpc_agent_sdk.sessions.compact import AdvancedAutoCompactSummarizerManager
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
 from agent.agent import create_agent
 
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 
-def create_session_service() -> AdvancedMemorySessionService:
-    """Create the persistent Advanced Memory session service."""
-    return AdvancedMemorySessionService(
-        config=AdvancedMemoryConfig(root_dir=Path(__file__).resolve().parent),
-        session_config=SessionServiceConfig(ttl=SessionServiceConfig.create_ttl_config(
-            ttl_seconds=60,
-            cleanup_interval_seconds=5,
-        )),
+def create_session_service() -> InMemorySessionService:
+    """Create the session service with the independent Compact manager."""
+    compact_manager = AdvancedAutoCompactSummarizerManager(
+        summarizer=AdvancedAutoCompactSummarizer(
+            config=AdvancedAutoCompactSummarizerConfig(),
+        ),
     )
+    return InMemorySessionService(
+        session_config=SessionServiceConfig(
+            ttl=SessionServiceConfig.create_ttl_config(
+                enable=True,
+                ttl_seconds=60,
+                cleanup_interval_seconds=5,
+            ),
+            store_historical_events=True,
+        ),
+        summarizer_manager=compact_manager,
+    )
+
+
+def create_memory_service() -> AdvancedMemoryService:
+    """Create the independent long-term Advanced Memory service."""
+    memory_config = AdvancedMemoryServiceConfig(
+        root_dir=Path(__file__).resolve().parent,
+        memory_ttl_seconds=120,
+        memory_focus_instruction=("特别关注并主动记住用户长期稳定的兴趣爱好、"
+                                  "编程语言偏好、开发习惯和测试习惯。"),
+    )
+    return AdvancedMemoryService(config=memory_config)
 
 
 async def run_turn(runner, *, user_id: str, session_id: str, prompt: str) -> None:
@@ -57,12 +81,14 @@ async def main() -> None:
     """Run two independent sessions sharing Advanced Memory."""
     agent = create_agent()
     session_service = create_session_service()
+    memory_service = create_memory_service()
 
     from trpc_agent_sdk.runners import Runner
     runner = Runner(
         app_name="advanced_memory_demo",
         agent=agent,
         session_service=session_service,
+        memory_service=memory_service,
     )
     try:
         session_one_prompts = [
@@ -95,9 +121,6 @@ async def main() -> None:
             prompt="What do you remember about my favorite programming language?",
         )
 
-        print("\n⏳ Waiting for the session TTL cleanup...")
-        await asyncio.sleep(125)
-        print("🧹 Expired Advanced Memory sessions should now be removed.")
     finally:
         await runner.close()
 

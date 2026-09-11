@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from pydantic import Field
 
 from trpc_agent_sdk.abc import ListSessionsResponse
+from trpc_agent_sdk.abc import CompactSummarizerManagerABC
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
@@ -45,7 +46,6 @@ from trpc_agent_sdk.utils import user_key
 
 from ._base_session_service import BaseSessionService
 from ._session import Session
-from ._summarizer_manager import SummarizerSessionManager
 from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import extract_state_delta
@@ -107,7 +107,7 @@ class InMemorySessionService(BaseSessionService):
     """
 
     def __init__(self,
-                 summarizer_manager: Optional[SummarizerSessionManager] = None,
+                 summarizer_manager: Optional[CompactSummarizerManagerABC] = None,
                  session_config: Optional[SessionServiceConfig] = None):
         super().__init__(summarizer_manager=summarizer_manager, session_config=session_config)
         # Storage with TTL support
@@ -213,9 +213,8 @@ class InMemorySessionService(BaseSessionService):
 
     @override
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
-        if not self._is_session_exist(app_name=app_name, user_id=user_id, session_id=session_id):
-            return
-        del self._sessions[app_name][user_id][session_id]
+        if self._is_session_exist(app_name=app_name, user_id=user_id, session_id=session_id):
+            del self._sessions[app_name][user_id][session_id]
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
@@ -269,6 +268,26 @@ class InMemorySessionService(BaseSessionService):
         storage_session.conversation_count = session.conversation_count
 
         return event
+
+    @override
+    async def update_session_state(
+        self,
+        session: Session,
+        state_delta: dict[str, Any],
+    ) -> None:
+        """Patch stored session state without replacing its Event window."""
+        if not state_delta:
+            return
+        session.state.update(state_delta)
+
+        app_sessions = self._sessions.get(session.app_name)
+        user_sessions = app_sessions.get(session.user_id) if app_sessions else None
+        stored = user_sessions.get(session.id) if user_sessions else None
+        if stored is None:
+            logger.warning("Session %s not found while updating state", session.id)
+            return
+        stored.session.state.update(state_delta)
+        stored.ttl.update_expired_at()
 
     @override
     async def update_session(self, session: Session) -> None:

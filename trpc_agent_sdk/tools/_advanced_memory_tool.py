@@ -8,15 +8,15 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from typing import Any
 
-from trpc_agent_sdk.advanced_memory._formats import MemoryDocument
-from trpc_agent_sdk.advanced_memory._formats import MemoryIndexEntry
-from trpc_agent_sdk.advanced_memory._formats import MemoryType
-from trpc_agent_sdk.advanced_memory._formats import memory_freshness
-from trpc_agent_sdk.advanced_memory._formats import parse_memory_updated_at
-from trpc_agent_sdk.advanced_memory._runtime import AdvancedMemoryRuntime
+from trpc_agent_sdk.memory.advanced_memory._formats import MemoryDocument
+from trpc_agent_sdk.memory.advanced_memory._formats import MemoryIndexEntry
+from trpc_agent_sdk.memory.advanced_memory._formats import MemoryType
+from trpc_agent_sdk.memory.advanced_memory._formats import memory_freshness
+from trpc_agent_sdk.memory.advanced_memory._formats import parse_memory_updated_at
+from trpc_agent_sdk.memory.advanced_memory._storage import parse_memory_index
+from trpc_agent_sdk.memory.advanced_memory._runtime import AdvancedMemoryRuntime
 
 from ._function_tool import FunctionTool
 
@@ -25,27 +25,25 @@ ADVANCED_MEMORY_TOOL_NAMES = frozenset({
     "read_memory",
     "list_memory_index",
 })
-_INDEX_PATTERN = re.compile(r"^- \[(?P<name>.+?)\]（(?P<filename>.+?)）:(?P<summary>.+)$")
+
+
+def _memory_index_reference(runtime: Any) -> str:
+    """Return a storage-accurate reference to the tenant memory index."""
+    return runtime.paths.storage_reference("memory_index")
 
 
 def _parse_index(index: str) -> list[MemoryIndexEntry]:
     """Parse standard Advanced Memory index entries from MEMORY.md."""
-    entries: list[MemoryIndexEntry] = []
-    for line in index.splitlines():
-        match = _INDEX_PATTERN.match(line.strip())
-        if match is None:
-            continue
-        entries.append(MemoryIndexEntry(**match.groupdict()))
-    return entries
+    return parse_memory_index(index)
 
 
 class AdvancedMemoryTools:
     """Wrap long-term memory storage as three official Agent-callable tools."""
 
     def __init__(self, runtime: AdvancedMemoryRuntime) -> None:
-        """Store the runtime and create the index update lock."""
+        """Store the runtime and create tenant-scoped index update locks."""
         self._runtime = runtime
-        self._index_lock = asyncio.Lock()
+        self._index_locks: dict[str, asyncio.Lock] = {}
         self._tools = (
             FunctionTool(self.save_memory),
             FunctionTool(self.read_memory),
@@ -61,10 +59,22 @@ class AdvancedMemoryTools:
         """Return tools that can be appended directly to LlmAgent.tools."""
         return list(self._tools)
 
-    def owns_tool(self, tool: Any) -> bool:
-        """Return whether this container created the given FunctionTool."""
-        function = getattr(tool, "func", None)
-        return getattr(function, "__self__", None) is self
+    def _runtime_for_context(self, tool_context: Any | None) -> Any:
+        """Resolve storage from the authenticated session, never tool arguments."""
+        if tool_context is None:
+            return self._runtime
+        session = getattr(tool_context, "session", None)
+        return self._runtime.for_session(session)
+
+    def _index_lock(self, runtime: Any) -> asyncio.Lock:
+        """Return a lock for one long-term-memory tenant index."""
+        scope = getattr(runtime, "scope", None)
+        key = scope.storage_key if scope is not None else str(runtime.paths.root_dir)
+        lock = self._index_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._index_locks[key] = lock
+        return lock
 
     async def save_memory(
         self,
@@ -74,6 +84,7 @@ class AdvancedMemoryTools:
         memory_type: str,
         summary: str,
         content: str,
+        tool_context: Any | None = None,
     ) -> dict:
         """Save or overwrite a long-term memory file and update MEMORY.md."""
         try:
@@ -87,12 +98,13 @@ class AdvancedMemoryTools:
             memory_type=resolved_type,
             content=content,
         )
-        async with self._index_lock:
-            path = await self._runtime.long_term_memory.write_topic(
+        runtime = self._runtime_for_context(tool_context)
+        async with self._index_lock(runtime):
+            path = await runtime.long_term_memory.write_topic(
                 filename,
                 document,
             )
-            entries = _parse_index(await self._runtime.long_term_memory.read_index())
+            entries = _parse_index(await runtime.long_term_memory.read_index())
             new_entry = MemoryIndexEntry(
                 name=name,
                 filename=path.name,
@@ -100,19 +112,19 @@ class AdvancedMemoryTools:
             )
             entries = [entry for entry in entries if entry.filename != new_entry.filename]
             entries.insert(0, new_entry)
-            await self._runtime.long_term_memory.write_index(entries)
-        updated_at = parse_memory_updated_at(await self._runtime.long_term_memory.read_topic(filename) or "")
+            await runtime.long_term_memory.write_index(entries)
+        updated_at = parse_memory_updated_at(await runtime.long_term_memory.read_topic(filename) or "")
         return {
             "saved": True,
             "filename": path.name,
-            "path": str(path),
+            "path": runtime.paths.storage_reference("memory_topic", topic_name=path.name),
             "memory_type": resolved_type.value,
             "updated_at": updated_at.isoformat() if updated_at is not None else None,
         }
 
-    async def read_memory(self, filename: str) -> dict:
+    async def read_memory(self, filename: str, tool_context: Any | None = None) -> dict:
         """Read a complete long-term memory by its filename in MEMORY.md."""
-        content = await self._runtime.long_term_memory.read_topic(filename)
+        content = await self._runtime_for_context(tool_context).long_term_memory.read_topic(filename)
         if content is None:
             return {"found": False, "filename": filename}
         updated_at = parse_memory_updated_at(content)
@@ -133,14 +145,15 @@ class AdvancedMemoryTools:
                                  "update this memory if it is outdated or incorrect."),
         }
 
-    async def list_memory_index(self) -> dict:
-        """Return the current long-term memory index and its disk path."""
+    async def list_memory_index(self, tool_context: Any | None = None) -> dict:
+        """Return the current long-term memory index and its storage reference."""
+        runtime = self._runtime_for_context(tool_context)
         return {
-            "index_path": str(self._runtime.paths.memory_index_path),
-            "index": await self._runtime.long_term_memory.read_index(),
+            "index_path": _memory_index_reference(runtime),
+            "index": await runtime.long_term_memory.read_index(),
         }
 
 
-def create_advanced_memory_tools(runtime: AdvancedMemoryRuntime, ) -> list[FunctionTool]:
+def create_advanced_memory_tools(runtime: AdvancedMemoryRuntime) -> list[FunctionTool]:
     """Create the official Advanced Memory tools bound to the given runtime."""
     return AdvancedMemoryTools(runtime).as_tools()
