@@ -2,7 +2,7 @@
 
 这是针对“多租户与节点部署、数据同步与多后端、IM 接入、治理安全、故障恢复与运维”要求实现的可运行参考项目。它不是伪代码：在线模式会为每个租户创建真正的 tRPC-Agent `LlmAgent + Runner`，并按照租户配置选择 Redis、SQL 或内存 Session 后端。
 
-完整设计与逐项验收说明见 [ARCHITECTURE.zh_CN.md](./ARCHITECTURE.zh_CN.md)。
+完整设计见 [ARCHITECTURE.zh_CN.md](./ARCHITECTURE.zh_CN.md)，评委可从 [需求证据矩阵](./EVALUATION.zh_CN.md) 快速定位每项要求对应的代码和测试。
 
 ## 已实现能力
 
@@ -19,7 +19,7 @@
 
 ## 本地离线运行
 
-离线模式不会调用模型和 IM 平台，适合验收路由、验签、幂等和审计：
+离线模式不会调用外部模型和 IM 平台，但确定性模型仍由真实 tRPC-Agent `LlmAgent + Runner` 执行，适合验收路由、验签、幂等、Session 和审计：
 
 ### 评委一键验收（推荐）
 

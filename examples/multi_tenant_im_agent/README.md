@@ -2,7 +2,7 @@
 
 This production-oriented reference implements tenant routing, Telegram and WeCom adapters, shared tRPC-Agent sessions, cross-node session serialization, callback idempotency, a transactional delivery outbox, tenant governance, audit records, metrics, tracing, and deployment manifests.
 
-See the [Chinese quick start](./README.zh_CN.md) and the [full architecture and acceptance design](./ARCHITECTURE.zh_CN.md).
+See the [Chinese quick start](./README.zh_CN.md), [judge evidence matrix](./EVALUATION.zh_CN.md), and [full architecture and acceptance design](./ARCHITECTURE.zh_CN.md).
 
 ## Offline quick start
 
@@ -10,7 +10,7 @@ See the [Chinese quick start](./README.zh_CN.md) and the [full architecture and 
 python examples/multi_tenant_im_agent/scripts/judge_demo.py
 ```
 
-The judge demo starts a real local HTTP gateway, creates a temporary database, runs signed Telegram and WeCom black-box callbacks, verifies idempotency, authentication, and metrics, then cleans everything up. It makes no model or IM network calls. Production mode creates a real tRPC-Agent `LlmAgent + Runner` per tenant and selects the configured Redis, SQL, or in-memory session service.
+The judge demo starts a real local HTTP gateway, creates a temporary database, runs signed Telegram and WeCom black-box callbacks, verifies idempotency, authentication, and metrics, then cleans everything up. It makes no external model or IM network calls, while its deterministic model still executes inside a genuine tRPC-Agent `LlmAgent + Runner`. Production mode creates an isolated Runner per tenant and selects the configured Redis, SQL, or in-memory session service.
 
 In a second terminal, set the three local values from `.env.local.example` and run:
 
