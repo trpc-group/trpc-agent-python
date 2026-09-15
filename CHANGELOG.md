@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.1.21](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.21) (2026-09-15)
+
+### Features
+
+* Memory: Split Advanced Memory into two independently configurable capabilities: Session Compact under `trpc_agent_sdk.sessions.compact` and long-term memory tools under `trpc_agent_sdk.tools.advanced_memory`. Session Compact now exposes common summarizer/manager abstractions, supports `BEFORE_MODEL` and `AFTER_TURN` triggers, and keeps the existing `SessionSummarizer`, `SessionSummary`, and `SummarizerSessionManager` exports as aliases for the default implementation. ([#336](https://github.com/trpc-group/trpc-agent-python/pull/336))
+* Memory: Added a standalone `AdvancedMemory` integration and `AdvancedMemoryToolSet` with explicit `save_memory`, `read_memory`, and `list_memory_index` tools, tenant/session-scoped storage resolution, bounded index injection, optional relevance-based preload, freshness metadata, and local, Redis, or SQL storage backends. ([#336](https://github.com/trpc-group/trpc-agent-python/pull/336))
+* Memory: Reworked advanced context compaction as a Session Service capability, retaining staged tool-result budgeting, history snipping, micro-compaction, token tracking, LLM auto-compaction, and structured session-memory extraction without requiring a session-service wrapper. Compressed raw events can be retained through `SessionServiceConfig.store_historical_events`, and summary anchors are preserved when limiting the model-facing history. ([#336](https://github.com/trpc-group/trpc-agent-python/pull/336))
+* Model: Added `OpenAIModel.response_metadata_extractor` for allowlisted, JSON-serializable fields returned by OpenAI-compatible providers. Extracted values are exposed under `provider_response_metadata` on the final `LlmResponse` and trace for Chat Completions and Responses API calls, including streaming responses. ([#328](https://github.com/trpc-group/trpc-agent-python/pull/328))
+* Skill: Added `SkillToolSetWithDynamicTools` and made skill-declared tool discovery optional, allowing applications to omit `skill_list_tools` / `skill_select_tools` when dynamic tool selection is not needed. Clarified that `skill_list_tools` lists tools declared by one skill rather than every tool available to the Agent. ([#323](https://github.com/trpc-group/trpc-agent-python/pull/323))
+
+### Bug Fixes
+
+* Code Execution: Prevented executable-code parts and fenced code found in model thinking content from being treated as code to run; only visible model output is now eligible for automatic execution. ([#327](https://github.com/trpc-group/trpc-agent-python/pull/327))
+* Storage: Fixed MySQL session timestamp comparisons losing microsecond precision by compiling database-generated timestamps as `CURRENT_TIMESTAMP(6)`, while preserving the native `now()` behavior for PostgreSQL and SQLite. ([#322](https://github.com/trpc-group/trpc-agent-python/pull/322))
+* Sessions: Removed session summaries from system instructions so compressed context has a single model-facing source in session history, avoiding duplicated summary tokens and inconsistent behavior after process restarts. ([#336](https://github.com/trpc-group/trpc-agent-python/pull/336))
+
+### Docs
+
+* Memory: Added runnable Advanced Memory examples for local, Redis, and SQL long-term-memory storage, plus an advanced session summarizer example and updated configuration guidance. ([#336](https://github.com/trpc-group/trpc-agent-python/pull/336))
+* Model: Added English and Chinese documentation and a runnable example for extracting provider-specific response metadata. ([#328](https://github.com/trpc-group/trpc-agent-python/pull/328))
+* Skill: Updated English and Chinese Skill documentation and examples for static versus dynamic skill tool exposure. ([#323](https://github.com/trpc-group/trpc-agent-python/pull/323))
+
+### Internal
+
+* Memory: Removed the former `trpc_agent_sdk.advanced_memory`, `AdvancedMemoryService`, and `AdvancedMemorySessionService` layout in favor of the new Session Compact and standalone Advanced Memory APIs; applications importing those old paths should migrate to `trpc_agent_sdk.sessions.compact` and `trpc_agent_sdk.tools.advanced_memory`. ([#336](https://github.com/trpc-group/trpc-agent-python/pull/336))
+* Testing: Expanded coverage for Session Compact, summary retention across InMemory/Redis/SQL services, provider metadata extraction, thought-code execution safety, MySQL timestamp precision, and dynamic Skill tools.
+
 ## [1.1.20](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.20) (2026-09-01)
 
 ### Features
