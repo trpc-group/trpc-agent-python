@@ -29,8 +29,8 @@ from trpc_agent_sdk.types import Part
 
 from ._base import BaseCompactSummarizerHandler
 from ._config import AdvancedAutoCompactSummarizerConfig
-from ._formats import SESSION_MEMORY_SECTIONS
-from ._formats import SESSION_MEMORY_STATE_KEY
+from ._formats import _SESSION_MEMORY_SECTIONS
+from ._formats import _SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
 from ._formats import parse_session_memory_state
 from ._history_snip import estimate_request_chars
@@ -49,7 +49,7 @@ The following summary contains the important information from earlier messages.
 The complete original events remain available in the SessionService.
 
 """
-_LEGACY_SESSION_MEMORY_SECTION_LIST = "\n".join(f"- # {section}" for section in SESSION_MEMORY_SECTIONS)
+_LEGACY_SESSION_MEMORY_SECTION_LIST = "\n".join(f"- # {section}" for section in _SESSION_MEMORY_SECTIONS)
 
 LEGACY_SUMMARY_INSTRUCTION = """You are an isolated context-compaction Agent.
 Compress the provided old conversation into a dense Markdown summary that another Agent can continue seamlessly.
@@ -229,7 +229,7 @@ class AdvancedAutoCompactSummarizer(CompactSummarizerABC):
         return (f"{summary.rstrip()}\n\n"
                 "For exact content from before compaction, read the original "
                 "SessionService Events. Current session memory is stored in "
-                f"session.state[{SESSION_MEMORY_STATE_KEY!r}].")
+                f"session.state[{_SESSION_MEMORY_STATE_KEY!r}].")
 
     def _find_signature_index(
         self,
@@ -325,7 +325,7 @@ class AdvancedAutoCompactSummarizer(CompactSummarizerABC):
     ) -> tuple[str, str, int, str] | None:
         """Read Session Memory and its checkpoint from Session.state."""
         state = ctx.session.state
-        parsed = parse_session_memory_state(state.get(SESSION_MEMORY_STATE_KEY))
+        parsed = parse_session_memory_state(state.get(_SESSION_MEMORY_STATE_KEY))
         if parsed is None:
             return None
         document, checkpoint, _ = parsed

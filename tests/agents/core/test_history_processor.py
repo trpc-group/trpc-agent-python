@@ -25,6 +25,7 @@ from trpc_agent_sdk.types import Content, FunctionCall, FunctionResponse, Part
 
 
 class _StubAgent(BaseAgent):
+
     async def _run_async_impl(self, ctx):
         yield
 
@@ -56,9 +57,7 @@ def _make_event(
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test", user_id="u1", session_id="s1")
-    )
+    session = asyncio.run(service.create_session(app_name="test", user_id="u1", session_id="s1"))
     agent = _StubAgent(name="test_agent")
     ctx = InvocationContext(
         session_service=service,
@@ -77,6 +76,7 @@ def invocation_context():
 
 
 class TestTimelineFilterMode:
+
     def test_all_value(self):
         assert TimelineFilterMode.ALL == "all"
 
@@ -85,6 +85,7 @@ class TestTimelineFilterMode:
 
 
 class TestBranchFilterMode:
+
     def test_all_value(self):
         assert BranchFilterMode.ALL == "all"
 
@@ -101,6 +102,7 @@ class TestBranchFilterMode:
 
 
 class TestTimelineFiltering:
+
     def test_all_mode_includes_all(self, invocation_context):
         proc = HistoryProcessor(timeline_filter_mode=TimelineFilterMode.ALL)
         e1 = _make_event("user", "hi", invocation_id="inv-old")
@@ -134,6 +136,7 @@ class TestTimelineFiltering:
 
 
 class TestBranchFiltering:
+
     def test_all_mode_includes_all_branches(self, invocation_context):
         proc = HistoryProcessor(branch_filter_mode=BranchFilterMode.ALL)
         e1 = _make_event("a", "1", branch="coordinator.math_agent")
@@ -173,6 +176,7 @@ class TestBranchFiltering:
 
 
 class TestContentFiltering:
+
     def test_events_without_content_excluded(self, invocation_context):
         proc = HistoryProcessor()
         e = Event(invocation_id="inv-1", author="agent", content=None)
@@ -192,6 +196,7 @@ class TestContentFiltering:
 
 
 class TestTransferToAgentFiltering:
+
     def test_transfer_function_call_excluded(self, invocation_context):
         proc = HistoryProcessor()
         fc = FunctionCall(name="transfer_to_agent", args={"agent_name": "other"})
@@ -220,6 +225,7 @@ class TestTransferToAgentFiltering:
 
 
 class TestMaxHistoryMessages:
+
     def test_no_limit(self, invocation_context):
         proc = HistoryProcessor(max_history_messages=0)
         events_in = [_make_event("user", f"msg {i}") for i in range(10)]
@@ -240,6 +246,18 @@ class TestMaxHistoryMessages:
         assert events[0].content.parts[0].text == "msg 3"
         assert events[1].content.parts[0].text == "msg 4"
 
+    def test_limit_preserves_leading_summary_event(self, invocation_context):
+        proc = HistoryProcessor(max_history_messages=2)
+        summary_event = _make_event("system", "Previous conversation summary")
+        summary_event.set_summary_event(True)
+        events_in = [summary_event] + [_make_event("user", f"msg {i}") for i in range(4)]
+
+        events = proc.filter_events(invocation_context, events_in)
+
+        assert len(events) == 3
+        assert events[0].is_summary_event()
+        assert [event.content.parts[0].text for event in events[1:]] == ["msg 2", "msg 3"]
+
 
 # ---------------------------------------------------------------------------
 # User event branch tagging
@@ -247,6 +265,7 @@ class TestMaxHistoryMessages:
 
 
 class TestUserEventBranchTagging:
+
     def test_user_events_tagged_in_prefix_mode(self, invocation_context):
         proc = HistoryProcessor(branch_filter_mode=BranchFilterMode.PREFIX)
         e1 = _make_event("user", "hello")

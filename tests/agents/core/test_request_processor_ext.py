@@ -25,9 +25,7 @@ if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
 
 from trpc_agent_sdk.agents._llm_agent import LlmAgent
 from trpc_agent_sdk.agents.core._request_processor import (
-    RequestProcessor,
-    default_request_processor,
-)
+    RequestProcessor, )
 from trpc_agent_sdk.context import InvocationContext, create_agent_context
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
@@ -210,13 +208,14 @@ class TestAddInstructionsToRequest:
         assert "who's name is" not in sys_instr
 
     @pytest.mark.asyncio
-    async def test_session_summary_appended(self, processor, ctx):
-        """Session summary text is appended to instructions when present."""
+    async def test_session_summary_not_appended(self, processor, ctx):
+        """Session summary is provided through events, not instructions."""
         ctx.session_service.get_session_summary = AsyncMock(return_value="previous summary text")
         request = LlmRequest(model="test-rp-ext-model")
         result = await processor._add_instructions_to_request(ctx.agent, ctx, request)
         assert result is None
-        assert "previous summary text" in str(request.config.system_instruction)
+        assert "previous summary text" not in str(request.config.system_instruction)
+        ctx.session_service.get_session_summary.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -301,19 +300,15 @@ class TestAddAgentTransferCapabilities:
         """Error during transfer processing returns an error event."""
         ctx.agent._should_enable_agent_transfer = MagicMock(return_value=True)
         request = LlmRequest(model="test-rp-ext-model")
-        with patch(
-                "trpc_agent_sdk.agents.core._request_processor.default_agent_transfer_processor",
-                create=True,
-        ) as mock_proc:
+        with patch("trpc_agent_sdk.agents.core._request_processor.default_agent_transfer_processor",
+                   create=True) as mock_proc:
             mock_proc.process_agent_transfer = AsyncMock(side_effect=RuntimeError("transfer boom"))
             # The import inside the method means we need to patch the module
-            with patch.dict(
-                    "sys.modules",
-                {
-                    "trpc_agent_sdk.agents.core._agent_transfer_processor":
-                    MagicMock(default_agent_transfer_processor=mock_proc)
-                },
-            ):
+            module_patch = {
+                "trpc_agent_sdk.agents.core._agent_transfer_processor":
+                MagicMock(default_agent_transfer_processor=mock_proc)
+            }
+            with patch.dict("sys.modules", module_patch):
                 result = await processor._add_agent_transfer_capabilities(ctx.agent, ctx, request)
                 assert result is not None
                 assert result.error_code == "agent_transfer_setup_error"
@@ -512,13 +507,11 @@ class TestAddOutputSchemaCapabilities:
         ctx.agent.output_schema = {"type": "object"}
         ctx.agent.tools = [MagicMock()]
         request = LlmRequest(model="test-rp-ext-model")
-        with patch.dict(
-                "sys.modules",
-            {
-                "trpc_agent_sdk.agents.core._output_schema_processor":
-                MagicMock(default_output_schema_processor=MagicMock(run_async=AsyncMock()))
-            },
-        ):
+        module_patch = {
+            "trpc_agent_sdk.agents.core._output_schema_processor":
+            MagicMock(default_output_schema_processor=MagicMock(run_async=AsyncMock()))
+        }
+        with patch.dict("sys.modules", module_patch):
             result = await processor._add_output_schema_capabilities(ctx.agent, ctx, request)
             assert result is None
 

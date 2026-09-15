@@ -13,7 +13,7 @@ from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import fields
 
-SESSION_MEMORY_SECTIONS = (
+_SESSION_MEMORY_SECTIONS = (
     "Session Title",
     "Current State",
     "Task specification",
@@ -25,10 +25,10 @@ SESSION_MEMORY_SECTIONS = (
     "Key results",
     "Worklog",
 )
-SESSION_MEMORY_STATE_KEY = "_trpc_agent:summary"
-SESSION_MEMORY_STATE_SCHEMA_VERSION = 1
+_SESSION_MEMORY_STATE_KEY = "_trpc_agent:summary"
+_SESSION_MEMORY_STATE_SCHEMA_VERSION = 1
 
-SESSION_MEMORY_SECTION_DESCRIPTIONS = (
+_SESSION_MEMORY_SECTION_DESCRIPTIONS = (
     "A short and distinctive 5-10 word descriptive title for the session",
     "What is actively being worked on right now? Pending tasks not yet completed.",
     "What did the user ask to build? Any design decisions or other explanatory context",
@@ -73,8 +73,8 @@ class SessionMemoryDocument:
         )
         sections = [
             f"# {section}\n_{description}_\n\n{value.strip()}" for section, description, value in zip(
-                SESSION_MEMORY_SECTIONS,
-                SESSION_MEMORY_SECTION_DESCRIPTIONS,
+                _SESSION_MEMORY_SECTIONS,
+                _SESSION_MEMORY_SECTION_DESCRIPTIONS,
                 values,
             )
         ]
@@ -89,7 +89,7 @@ def build_session_memory_state(
 ) -> dict[str, object]:
     """Build the versioned Session.state payload used by Redis and SQL."""
     return {
-        "schema_version": SESSION_MEMORY_STATE_SCHEMA_VERSION,
+        "schema_version": _SESSION_MEMORY_STATE_SCHEMA_VERSION,
         "document": asdict(document),
         "checkpoint": checkpoint,
         "metrics": {
@@ -104,7 +104,7 @@ def parse_session_memory_state(
     """Parse a persisted Session Memory state value."""
     if not isinstance(value, dict):
         return None
-    if value.get("schema_version") != SESSION_MEMORY_STATE_SCHEMA_VERSION:
+    if value.get("schema_version") != _SESSION_MEMORY_STATE_SCHEMA_VERSION:
         return None
     raw_document = value.get("document")
     raw_checkpoint = value.get("checkpoint")
