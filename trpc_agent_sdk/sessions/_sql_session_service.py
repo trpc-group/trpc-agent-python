@@ -400,10 +400,6 @@ class SqlSessionService(BaseSessionService):
         if is_default_config:
             # Default to store historical events for persistent backends.
             self._session_config.store_historical_events = True
-        # AsyncSession cannot perform an implicit refresh when an ORM
-        # attribute is accessed after commit. Keep committed values available
-        # because this service reads StorageSession state after committing.
-        kwargs.setdefault("expire_on_commit", False)
         self._sql_storage = SqlStorage(is_async=is_async, db_url=db_url, metadata=SessionStorageBase.metadata, **kwargs)
         self.__cleanup_task: Optional[asyncio.Task] = None
         self.__cleanup_stop_event: Optional[asyncio.Event] = None

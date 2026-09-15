@@ -7,7 +7,7 @@
 
 This module provides memory/RAG functionality including:
 - Abstract memory service interfaces
-- In-memory, Redis, and SQL memory implementations
+- In-memory memory service implementation
 """
 
 from trpc_agent_sdk.abc import MemoryServiceABC as BaseMemoryService

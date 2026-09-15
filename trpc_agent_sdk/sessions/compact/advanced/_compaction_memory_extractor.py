@@ -27,9 +27,9 @@ from trpc_agent_sdk.types import Part
 
 from ..._session import Session
 
-from ._formats import SESSION_MEMORY_SECTION_DESCRIPTIONS
-from ._formats import SESSION_MEMORY_SECTIONS
-from ._formats import SESSION_MEMORY_STATE_KEY
+from ._formats import _SESSION_MEMORY_SECTION_DESCRIPTIONS
+from ._formats import _SESSION_MEMORY_SECTIONS
+from ._formats import _SESSION_MEMORY_STATE_KEY
 from ._formats import SessionMemoryDocument
 from ._formats import build_session_memory_state
 from ._formats import parse_session_memory_state
@@ -42,7 +42,7 @@ _SESSION_MEMORY_FIELDS = tuple(field.name for field in fields(SessionMemoryDocum
 
 _SESSION_MEMORY_SECTION_GUIDANCE = "\n".join(
     f"- {section}: {description}"
-    for section, description in zip(SESSION_MEMORY_SECTIONS, SESSION_MEMORY_SECTION_DESCRIPTIONS))
+    for section, description in zip(_SESSION_MEMORY_SECTIONS, _SESSION_MEMORY_SECTION_DESCRIPTIONS))
 
 SESSION_MEMORY_INSTRUCTION = """You are an isolated session-memory editing Agent.
 Maintain a dense state summary that helps a later Agent resume work quickly. This is not a transcript,
@@ -117,7 +117,7 @@ def parse_session_memory_markdown(text: str) -> SessionMemoryDocument:
     field_by_heading = {
         re.sub(r"\s+", " ",
                section.strip().lower()): field
-        for section, field in zip(SESSION_MEMORY_SECTIONS, _SESSION_MEMORY_FIELDS)
+        for section, field in zip(_SESSION_MEMORY_SECTIONS, _SESSION_MEMORY_FIELDS)
     }
     sections = {field: "" for field in _SESSION_MEMORY_FIELDS}
     heading_pattern = re.compile(r"(?m)^#{1,6}[ \t]+(.+?)\s*$")
@@ -583,7 +583,7 @@ class SessionMemoryExtractor:
 
     async def _read_current_memory(self, session: Session) -> str:
         """Read Session Memory from the SessionService-owned state."""
-        parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
+        parsed = parse_session_memory_state(session.state.get(_SESSION_MEMORY_STATE_KEY))
         return parsed[0].to_markdown() if parsed is not None else SessionMemoryDocument().to_markdown()
 
     def _state_checkpoint(
@@ -591,7 +591,7 @@ class SessionMemoryExtractor:
         session: Session,
     ) -> tuple[dict[str, Any] | None, int | None]:
         """Read the checkpoint and token metric from Session.state."""
-        parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
+        parsed = parse_session_memory_state(session.state.get(_SESSION_MEMORY_STATE_KEY))
         if parsed is None:
             return None, None
         _, checkpoint, metrics = parsed
@@ -669,7 +669,7 @@ class SessionMemoryExtractor:
             checkpoint=checkpoint,
             context_tokens=context_tokens,
         )
-        state_delta = {SESSION_MEMORY_STATE_KEY: payload}
+        state_delta = {_SESSION_MEMORY_STATE_KEY: payload}
         session_service = getattr(ctx, "session_service", None)
         if session_service is None:
             session.state.update(state_delta)

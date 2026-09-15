@@ -89,8 +89,6 @@ class LongTermMemoryContext:
 class LongTermMemoryContextCallback:
     """Adapt the long-term memory index injector to before_model_callback."""
 
-    advanced_memory_stage = 5
-
     def __init__(self, memory_context: LongTermMemoryContext) -> None:
         """Store the injector executed before each model request."""
         self._memory_context = memory_context
