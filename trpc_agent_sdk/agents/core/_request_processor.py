@@ -262,11 +262,6 @@ class RequestProcessor:
             instructions_parts.append(code_executor_instruction)
             logger.debug("Added code executor instruction for agent: %s", agent.name)
 
-        summary_text = await ctx.session_service.get_session_summary(ctx.session)
-        if summary_text:
-            instructions_parts.append(f"Here is a brief summary of your previous interactions: {summary_text}")
-            logger.debug("Added session summary to request: %s", summary_text)
-
         # Build and set system prompt if we have instructions
         if instructions_parts:
             try:

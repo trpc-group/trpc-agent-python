@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from trpc_agent_sdk.tools.advanced_memory import AdvancedMemory
 from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryDocument
 from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryIndexEntry
@@ -16,7 +14,6 @@ from trpc_agent_sdk.tools.advanced_memory import AdvancedMemoryType
 from trpc_agent_sdk.tools.advanced_memory import LongTermMemoryContext
 from trpc_agent_sdk.tools.advanced_memory import LongTermMemoryContextCallback
 from trpc_agent_sdk.models import LlmRequest
-from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
 from trpc_agent_sdk.sessions import InMemorySessionService
 
 
@@ -26,43 +23,6 @@ def _runtime(tmp_path: Path) -> AdvancedMemoryRuntime:
         enabled=True,
         root_dir=tmp_path,
     ))
-
-
-def test_staged_callback_rejects_invalid_stage(tmp_path: Path) -> None:
-    """Ensure a newly installed callback must declare an integer stage."""
-    agent = SimpleNamespace(before_model_callback=None)
-
-    with pytest.raises(TypeError, match="advanced_memory_stage must be an integer"):
-        install_staged_callback(
-            agent,
-            SimpleNamespace(advanced_memory_stage=None),
-            callback_type=SimpleNamespace,
-            component_attribute="component",
-            memory_runtime=_runtime(tmp_path),
-            conflict_message="conflict",
-        )
-
-
-def test_staged_callback_treats_invalid_existing_stage_as_zero(tmp_path: Path) -> None:
-    """Ensure malformed stages on existing callbacks do not break ordering."""
-
-    class StagedCallback:
-        advanced_memory_stage = 10
-
-    existing_callback = SimpleNamespace(advanced_memory_stage=None)
-    callback = StagedCallback()
-    agent = SimpleNamespace(before_model_callback=existing_callback)
-
-    install_staged_callback(
-        agent,
-        callback,
-        callback_type=StagedCallback,
-        component_attribute="component",
-        memory_runtime=_runtime(tmp_path),
-        conflict_message="conflict",
-    )
-
-    assert agent.before_model_callback == [existing_callback, callback]
 
 
 async def test_long_term_memory_index_is_injected_once(tmp_path: Path) -> None:

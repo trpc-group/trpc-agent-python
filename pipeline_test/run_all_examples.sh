@@ -68,6 +68,8 @@ SKIPPED_EXAMPLES=(
     "examples/mempalace_tools/run_agent.py"
     "examples/session_service_with_redis/run_agent.py"
     "examples/session_service_with_sql/run_agent.py"
+    "examples/memory_service_with_advanced_memory_redis/run_agent.py"
+    "examples/memory_service_with_advanced_memory_sql/run_agent.py"
     "examples/skills_hub/run_agent.py"
     "examples/skills_with_container/run_agent.py"
     "examples/skills_with_cube/run_agent.py"

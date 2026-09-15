@@ -19,13 +19,13 @@ from trpc_agent_sdk.models import LlmRequest
 
 from ..._session import Session
 from ._auto_compact import AdvancedAutoCompactSummarizer
-from ._formats import parse_session_memory_state
-from ._formats import SESSION_MEMORY_STATE_KEY
+from ._auto_compact import AdvancedAutoCompactSummarizerHandler
 from ._compaction_memory_extractor import SessionMemoryExtractor
+from ._formats import _SESSION_MEMORY_STATE_KEY
+from ._formats import parse_session_memory_state
 from ._history_snip import HistorySnipHandler
 from ._micro_compact import MicroCompactHandler
 from ._tool_result_budget import ToolResultBudgetHandler
-from ._auto_compact import AdvancedAutoCompactSummarizerHandler
 
 
 class AdvancedAutoCompactSummarizerManager(CompactSummarizerManagerABC):
@@ -95,7 +95,7 @@ class AdvancedAutoCompactSummarizerManager(CompactSummarizerManagerABC):
 
     async def get_session_summary(self, session: Session) -> str | None:
         """Read compact Session Memory through the existing summary API."""
-        parsed = parse_session_memory_state(session.state.get(SESSION_MEMORY_STATE_KEY))
+        parsed = parse_session_memory_state(session.state.get(_SESSION_MEMORY_STATE_KEY))
         if parsed is not None:
             return parsed[0].to_markdown()
         return None

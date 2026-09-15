@@ -133,25 +133,44 @@ class HistoryProcessor:
 
             filtered_events.append(event)
 
-        # Step 5: Max history runs limiting (applied last)
-        if self.max_history_messages > 0 and len(filtered_events) > self.max_history_messages:
-            logger.debug("Limiting history from %s to %s events", len(filtered_events), self.max_history_messages)
-
-            # Check if the first event after limiting contains function_response from current agent
-            first_element = filtered_events[-self.max_history_messages:][0]
-            if (first_element.branch == ctx.branch and first_element.content and first_element.content.parts
-                    and any(part.function_response for part in first_element.content.parts)):
-                # Include one more event to get the corresponding function_call
-                filtered_events = filtered_events[-(self.max_history_messages + 1):]
-                logger.debug("Added previous event with function_call to maintain continuity")
-            else:
-                filtered_events = filtered_events[-self.max_history_messages:]
+        # Step 5: Max history runs limiting while preserving a leading summary anchor.
+        filtered_events = self._limit_history_events(filtered_events, ctx)
 
         # Step 6: Clean up calculated branch from custom_metadata (only if calculation was performed)
         if need_calculate_branch:
             self._cleanup_calculated_branch(filtered_events)
 
         return filtered_events
+
+    def _limit_history_events(
+        self,
+        events: list[Event],
+        ctx: InvocationContext,
+    ) -> list[Event]:
+        """Limit recent events without dropping a leading summary event."""
+        if self.max_history_messages <= 0:
+            return events
+
+        summary_anchor = events[0] if events and events[0].is_summary_event() else None
+        recent_events = events[1:] if summary_anchor else events
+        if len(recent_events) <= self.max_history_messages:
+            return events
+
+        logger.debug("Limiting history from %s to %s recent events", len(recent_events), self.max_history_messages)
+        limited_events = recent_events[-self.max_history_messages:]
+
+        # Check if the first event after limiting contains function_response
+        # from the current agent.
+        first_element = limited_events[0]
+        if (first_element.branch == ctx.branch and first_element.content and first_element.content.parts
+                and any(part.function_response for part in first_element.content.parts)):
+            # Include one more event to get the corresponding function_call.
+            limited_events = recent_events[-(self.max_history_messages + 1):]
+            logger.debug("Added previous event with function_call to maintain continuity")
+
+        if summary_anchor:
+            return [summary_anchor, *limited_events]
+        return limited_events
 
     def _should_include_event_by_timeline(
         self,

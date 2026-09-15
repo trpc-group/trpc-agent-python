@@ -33,7 +33,6 @@ class BaseCompactSummarizerHandler(ABC):
     @abstractmethod
     async def handle(self, ctx: InvocationContext, req: LlmRequest):
         """Handle the compact summarizer."""
-        pass
 
 
 class BaseTokenEstimator(ABC):

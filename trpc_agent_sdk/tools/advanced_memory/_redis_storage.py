@@ -9,19 +9,24 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from trpc_agent_sdk.storage import RedisCommand, RedisExpire, RedisStorage
+from trpc_agent_sdk.storage import RedisCommand
+from trpc_agent_sdk.storage import RedisExpire
+from trpc_agent_sdk.storage import RedisStorage
 from trpc_agent_sdk.types import Ttl
 
 from ._config import AdvancedMemoryConfig
-from ._formats import AdvancedMemoryDocument, AdvancedMemoryIndexEntry
+from ._file_storage import parse_memory_index
+from ._file_storage import prune_memory_index
+from ._formats import AdvancedMemoryDocument
+from ._formats import AdvancedMemoryIndexEntry
 from ._formats import limit_memory_index
 from ._storage_key import AdvancedMemoryPaths
-from ._file_storage import parse_memory_index, prune_memory_index
 
 _RELEASE_LOCK_SCRIPT = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then

@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from trpc_agent_sdk.sessions.compact._callbacks import install_staged_callback
-
 from ._advanced_memory_preload import AdvancedMemoryPreloader
 from ._advanced_memory_preload import AdvancedModelMemoryRelevanceSelector
 from ._config import AdvancedMemoryConfig
@@ -80,14 +78,10 @@ class AdvancedMemory:
             return
 
         memory_context = LongTermMemoryContext(self._runtime)
-        install_staged_callback(
-            agent,
-            LongTermMemoryContextCallback(memory_context),
-            callback_type=LongTermMemoryContextCallback,
-            component_attribute="memory_context",
-            memory_runtime=self._runtime,
-            conflict_message="Long-term memory context is already configured with another runtime",
-        )
+        callback = LongTermMemoryContextCallback(memory_context)
+        existing = agent.before_model_callback
+        callbacks = existing if isinstance(existing, list) else ([existing] if existing else [])
+        agent.before_model_callback = [*callbacks, callback]
         self._configured_agent = agent
 
     async def close(self) -> None:

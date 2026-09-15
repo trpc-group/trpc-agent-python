@@ -8,18 +8,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+from enum import Enum
 
 from ._base import BaseTokenEstimator
 from ._base import BaseModelContextWindowResolver
 
-DEFAULT_COMPACTABLE_TOOL_NAMES = (
-    "Read",
-    "Bash",
-    "Grep",
-    "Glob",
-    "Search",
-    "CodeSearch",
-)
+
+class CompactableToolName(str, Enum):
+    """Tool names eligible for history snipping and micro compaction."""
+
+    READ = "Read"
+    BASH = "Bash"
+    GREP = "Grep"
+    GLOB = "Glob"
+    SEARCH = "Search"
+    CODE_SEARCH = "CodeSearch"
+
+
+DEFAULT_COMPACTABLE_TOOL_NAMES = tuple(tool.value for tool in CompactableToolName)
 
 
 def _require_positive(**values: int | float) -> None:

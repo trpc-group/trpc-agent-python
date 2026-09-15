@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import json
 import re
+from abc import ABC
+from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 from html import escape
-from typing import Protocol
 from typing import TYPE_CHECKING
 
 from trpc_agent_sdk.log import logger
@@ -51,14 +52,15 @@ class AdvancedMemoryCandidate:
         }
 
 
-class AdvancedMemoryRelevanceSelector(Protocol):
+class AdvancedMemoryRelevanceSelector(ABC):
     """Select relevant topic filenames for a user query."""
 
+    @abstractmethod
     async def select(
         self,
         query: str,
         candidates: list[AdvancedMemoryCandidate],
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         *,
         limit: int,
     ) -> list[str]:
@@ -87,14 +89,14 @@ def _candidate_from_content(filename: str, content: str) -> AdvancedMemoryCandid
     )
 
 
-class AdvancedModelMemoryRelevanceSelector:
+class AdvancedModelMemoryRelevanceSelector(AdvancedMemoryRelevanceSelector):
     """Use one direct LLM call to select relevant topic files."""
 
     def __init__(self, model: object | None = None) -> None:
         """Store an optional dedicated selector model."""
         self._model = model
 
-    async def _resolve_model(self, ctx: "InvocationContext") -> object:
+    async def _resolve_model(self, ctx: InvocationContext) -> object:
         """Prefer a dedicated selector model and resolve the main Agent model."""
         if self._model is not None:
             return self._model
@@ -155,7 +157,7 @@ class AdvancedModelMemoryRelevanceSelector:
         self,
         query: str,
         candidates: list[AdvancedMemoryCandidate],
-        ctx: "InvocationContext",
+        ctx: InvocationContext,
         *,
         limit: int,
     ) -> list[str]:
@@ -190,7 +192,7 @@ class AdvancedModelMemoryRelevanceSelector:
 async def select_relevant_memory_filenames(
     query: str,
     candidates: list[AdvancedMemoryCandidate],
-    ctx: "InvocationContext",
+    ctx: InvocationContext,
     *,
     selector: AdvancedMemoryRelevanceSelector,
     limit: int,
@@ -213,7 +215,7 @@ class AdvancedMemoryPreloader:
         self._runtime = runtime
         self._selector = selector or AdvancedModelMemoryRelevanceSelector()
 
-    async def _candidates(self, ctx: "InvocationContext") -> list[AdvancedMemoryCandidate]:
+    async def _candidates(self, ctx: InvocationContext) -> list[AdvancedMemoryCandidate]:
         """Read and sort bounded topic metadata for selection."""
         runtime = self._runtime.for_session(ctx.session)
         candidates: list[AdvancedMemoryCandidate] = []
@@ -227,7 +229,7 @@ class AdvancedMemoryPreloader:
         )
         return candidates[:runtime.config.preload_memory_candidate_limit]
 
-    async def preload(self, query: str, ctx: "InvocationContext") -> str | None:
+    async def preload(self, query: str, ctx: InvocationContext) -> str | None:
         """Select and render relevant topic bodies within the configured budget."""
         config = self._runtime.config
         if not config.enabled or not config.preload_memory_enabled or not query.strip():

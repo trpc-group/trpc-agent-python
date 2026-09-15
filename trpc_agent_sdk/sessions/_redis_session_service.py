@@ -80,8 +80,6 @@ class RedisSessionService(BaseSessionService):
                  session_config: Optional[SessionServiceConfig] = None,
                  is_async: bool = False,
                  **kwargs: Any):
-        self._db_url = db_url
-        self._is_async = is_async
         is_default_config = session_config is None
         super().__init__(
             summarizer_manager=summarizer_manager,
@@ -92,16 +90,6 @@ class RedisSessionService(BaseSessionService):
             self._session_config.store_historical_events = True
         # Redis needs default TTL configuration
         self._redis_storage = self._create_storage(db_url=db_url, is_async=is_async, **kwargs)
-
-    @property
-    def db_url(self) -> str:
-        """Return the configured Redis connection URL."""
-        return self._db_url
-
-    @property
-    def is_async(self) -> bool:
-        """Return whether this service uses the asynchronous Redis client."""
-        return self._is_async
 
     def _create_storage(self, db_url: str, is_async: bool, **kwargs: Any) -> RedisStorage:
         """Create the backing storage.
