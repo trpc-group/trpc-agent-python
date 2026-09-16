@@ -177,14 +177,16 @@ You could retry calling this tool, but it is IMPORTANT for you to provide all th
         # Callable's __call__ function is a coroutine function
         if (inspect.iscoroutinefunction(self.func)
                 or hasattr(self.func, '__call__') and inspect.iscoroutinefunction(self.func.__call__)):
-            res = await self.func(**args_to_call) or {}
+            res = await self.func(**args_to_call)
         else:
             parallel_tool_calls: bool = getattr(tool_context.agent, 'parallel_tool_calls', False)
             if parallel_tool_calls:
-                res = await asyncio.to_thread(self.func, **args_to_call) or {}
+                res = await asyncio.to_thread(self.func, **args_to_call)
             else:
-                res = self.func(**args_to_call) or {}
+                res = self.func(**args_to_call)
 
         if isinstance(res, BaseModel):
             return res.model_dump_json()
+        if res is None:
+            return {}
         return res
