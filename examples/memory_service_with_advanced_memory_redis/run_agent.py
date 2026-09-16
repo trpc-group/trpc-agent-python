@@ -20,7 +20,7 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
 
-load_dotenv(Path(__file__).with_name(".env"), override=True)
+load_dotenv(Path(__file__).with_name(".env"))
 
 RUNNER_A_QUERIES = [
     "Do you remember my name?",

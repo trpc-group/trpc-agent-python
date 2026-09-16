@@ -23,7 +23,7 @@ from trpc_agent_sdk.types import Part
 
 from agent.agent import create_agent
 
-load_dotenv(Path(__file__).with_name(".env"), override=True)
+load_dotenv(Path(__file__).with_name(".env"))
 
 
 def create_session_service() -> InMemorySessionService:
