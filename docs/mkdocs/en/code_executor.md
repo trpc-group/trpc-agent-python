@@ -366,10 +366,13 @@ runtime = create_cube_workspace_runtime(sandbox_client=sandbox_client)
 `domain`, `api_key`, and `template` may instead be supplied through
 `E2B_DOMAIN`, `E2B_API_KEY`, and `CUBE_TEMPLATE_ID`. Local E2B key-format
 validation defaults to `False` for AGS keys; remote authentication is still
-performed by AGS. When both endpoint fields are passed explicitly, `api_url`
-takes precedence over `domain`; explicit fields always take precedence over
-environment variables. The API URL form is useful when traffic must go through
-a private gateway.
+performed by AGS. A domain must be a bare hostname; pass a full URL through
+`api_url` instead. When a domain is selected, the config also supplies the
+derived `https://api.<domain>` control-plane URL so a stale `E2B_API_URL`
+cannot override it. An explicit `api_url` selects the control-plane endpoint;
+when `domain` is also supplied it remains the sandbox-routing domain. With
+environment-only configuration, `E2B_DOMAIN` takes precedence over
+`E2B_API_URL` for this provider-specific config.
 
 `CubeCodeExecutor` accepts the same `code_block_delimiters` as the other
 executors; by default it adds a `bash` delimiter on top of the default

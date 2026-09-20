@@ -13,7 +13,6 @@ from typing import Any
 from typing import Mapping
 from typing import Optional
 
-from ._types import ENV_API_URL
 from ._types import CubeClientConfig
 
 ENV_TENCENT_AGS_DOMAIN = "E2B_DOMAIN"
@@ -49,6 +48,8 @@ class TencentAGSClientConfig(CubeClientConfig):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        if self.domain is not None:
+            self._validate_domain(self.domain)
         if not isinstance(self.validate_api_key, bool):
             raise TypeError("validate_api_key must be a bool")
         if self.request_timeout is not None:
@@ -63,16 +64,45 @@ class TencentAGSClientConfig(CubeClientConfig):
         if not value:
             raise ValueError("Tencent AGS requires `domain`, E2B_DOMAIN, or an explicit "
                              "`api_url` / E2B_API_URL.")
+        return self._validate_domain(value)
+
+    @staticmethod
+    def _validate_domain(value: str) -> str:
+        if not isinstance(value, str):
+            raise TypeError("domain must be a string containing a bare hostname")
+        if (not value or value != value.strip() or any(char.isspace() for char in value)
+                or any(marker in value for marker in (":", "/", "\\", "?", "#"))):
+            raise ValueError("domain must be a bare hostname such as "
+                             "'ap-guangzhou.tencentags.com'; use api_url for a full URL")
         return value
 
+    @staticmethod
+    def _api_url_for_domain(domain: str) -> str:
+        """Build the control-plane URL using the E2B SDK's domain rule."""
+        return f"https://api.{domain}"
+
     def _e2b_connection_kwargs(self) -> dict[str, Any]:
+        configured_domain = self.domain or os.getenv(ENV_TENCENT_AGS_DOMAIN)
+        domain = self.resolve_domain() if configured_domain else None
+
         if self.api_url:
             endpoint = {"api_url": self.api_url}
-        elif self.domain:
-            endpoint = {"domain": self.domain}
+            if domain is not None:
+                endpoint["domain"] = domain
+        elif domain is not None:
+            # ConnectionConfig resolves api_url as: explicit value,
+            # E2B_API_URL, then https://api.<domain>. Pass the derived URL
+            # explicitly so a stale E2B_API_URL cannot override this domain.
+            endpoint = {
+                "api_url": self._api_url_for_domain(domain),
+                "domain": domain,
+            }
         else:
-            api_url = os.getenv(ENV_API_URL)
-            endpoint = {"api_url": api_url} if api_url else {"domain": self.resolve_domain()}
+            try:
+                endpoint = {"api_url": self.resolve_api_url()}
+            except ValueError as exc:
+                raise ValueError("Tencent AGS requires `domain`, E2B_DOMAIN, or an explicit "
+                                 "`api_url` / E2B_API_URL.") from exc
         kwargs: dict[str, Any] = {
             **endpoint,
             "api_key": self.resolve_api_key(),

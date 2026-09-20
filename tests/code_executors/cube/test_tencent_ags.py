@@ -10,6 +10,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from e2b import ConnectionConfig
 
 from trpc_agent_sdk.code_executors.cube import CubeSandboxClient
 from trpc_agent_sdk.code_executors.cube import TencentAGSClientConfig
@@ -56,6 +57,23 @@ class TestTencentAGSClientConfig:
         with pytest.raises(TypeError, match="validate_api_key must be a bool"):
             _cfg(validate_api_key=0)
 
+    @pytest.mark.parametrize("domain", [
+        "https://ap-guangzhou.tencentags.com",
+        "ap-guangzhou.tencentags.com/v1",
+        "ap-guangzhou.tencentags.com:443",
+        " ap-guangzhou.tencentags.com",
+    ])
+    def test_rejects_domain_that_is_not_a_bare_hostname(self, domain):
+        with pytest.raises(ValueError, match="domain must be a bare hostname"):
+            _cfg(domain=domain)
+
+    def test_rejects_invalid_environment_domain_when_resolved(self, monkeypatch):
+        monkeypatch.setenv("E2B_DOMAIN", "https://ap-guangzhou.tencentags.com")
+        cfg = _cfg(domain=None, api_url=None)
+
+        with pytest.raises(ValueError, match="domain must be a bare hostname"):
+            cfg._e2b_connection_kwargs()
+
 
 class TestTencentAGSClientConnectionOptions:
 
@@ -72,6 +90,7 @@ class TestTencentAGSClientConnectionOptions:
         fake_e2b.AsyncSandbox.create.assert_awaited_once_with(
             template="tmpl",
             timeout=123,
+            api_url="https://api.ap-guangzhou.tencentags.com",
             domain="ap-guangzhou.tencentags.com",
             api_key="ark-secret",
             validate_api_key=False,
@@ -92,6 +111,7 @@ class TestTencentAGSClientConnectionOptions:
 
         fake_e2b.AsyncSandbox.connect.assert_awaited_once_with(
             "sbx-42",
+            api_url="https://api.ap-guangzhou.tencentags.com",
             domain="ap-guangzhou.tencentags.com",
             api_key="ark-secret",
             validate_api_key=False,
@@ -106,7 +126,7 @@ class TestTencentAGSClientConnectionOptions:
 
         kwargs = fake_e2b.AsyncSandbox.create.await_args.kwargs
         assert kwargs["api_url"] == "https://private-gateway.example.com"
-        assert "domain" not in kwargs
+        assert kwargs["domain"] == "ap-guangzhou.tencentags.com"
 
     @pytest.mark.asyncio
     async def test_explicit_domain_takes_precedence_over_environment_api_url(self, fake_e2b, fake_async_sandbox,
@@ -118,12 +138,30 @@ class TestTencentAGSClientConnectionOptions:
 
         kwargs = fake_e2b.AsyncSandbox.create.await_args.kwargs
         assert kwargs["domain"] == "ap-shanghai.tencentags.com"
-        assert "api_url" not in kwargs
+        assert kwargs["api_url"] == "https://api.ap-shanghai.tencentags.com"
+
+        sdk_config = ConnectionConfig(**_cfg(domain="ap-shanghai.tencentags.com")._e2b_connection_kwargs())
+        assert sdk_config.domain == "ap-shanghai.tencentags.com"
+        assert sdk_config.api_url == "https://api.ap-shanghai.tencentags.com"
+
+    @pytest.mark.asyncio
+    async def test_environment_domain_takes_precedence_over_environment_api_url(self, fake_e2b, fake_async_sandbox,
+                                                                                monkeypatch):
+        fake_e2b.AsyncSandbox.create = AsyncMock(return_value=fake_async_sandbox)
+        monkeypatch.setenv("E2B_DOMAIN", "ap-shanghai.tencentags.com")
+        monkeypatch.setenv("E2B_API_URL", "https://stale.example.com")
+
+        await CubeSandboxClient.open_new(_cfg(domain=None))
+
+        kwargs = fake_e2b.AsyncSandbox.create.await_args.kwargs
+        assert kwargs["domain"] == "ap-shanghai.tencentags.com"
+        assert kwargs["api_url"] == "https://api.ap-shanghai.tencentags.com"
 
     @pytest.mark.asyncio
     async def test_environment_api_url_is_used_when_endpoint_fields_are_empty(self, fake_e2b, fake_async_sandbox,
                                                                               monkeypatch):
         fake_e2b.AsyncSandbox.create = AsyncMock(return_value=fake_async_sandbox)
+        monkeypatch.delenv("E2B_DOMAIN", raising=False)
         monkeypatch.setenv("E2B_API_URL", "https://env-gateway.example.com")
 
         await CubeSandboxClient.open_new(_cfg(domain=None))

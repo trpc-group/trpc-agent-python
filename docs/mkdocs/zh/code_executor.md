@@ -360,9 +360,11 @@ runtime = create_cube_workspace_runtime(sandbox_client=sandbox_client)
 
 `domain`、`api_key` 和 `template` 也可以分别通过 `E2B_DOMAIN`、
 `E2B_API_KEY` 和 `CUBE_TEMPLATE_ID` 提供。AGS API Key 默认关闭 E2B SDK
-的本地格式校验，但 AGS 服务端鉴权仍然生效。同时显式设置两个端点字段时，
-`api_url` 优先于 `domain`；显式字段始终优先于环境变量。API URL 形式适用于
-需要经过私有网关的场景。
+的本地格式校验，但 AGS 服务端鉴权仍然生效。`domain` 必须是裸域名；完整 URL
+请通过 `api_url` 传入。选择 domain 时，配置还会显式传入派生的
+`https://api.<domain>` 控制面 URL，避免残留的 `E2B_API_URL` 覆盖它。显式
+`api_url` 用于选择控制面端点；同时提供 `domain` 时，后者仍用于沙箱路由。
+仅使用环境变量时，该提供商配置中的 `E2B_DOMAIN` 优先于 `E2B_API_URL`。
 
 `CubeCodeExecutor` 也支持 `code_block_delimiters`，默认在标准的 `python`
 和 `tool_code` 之外又加了一个 `bash` 分隔符，所以普通的

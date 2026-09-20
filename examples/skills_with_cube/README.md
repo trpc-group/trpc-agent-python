@@ -43,29 +43,8 @@ source .venv/bin/activate
 - `TRPC_AGENT_BASE_URL`
 - `TRPC_AGENT_MODEL_NAME`
 - `CUBE_TEMPLATE_ID=your-cube-template-id`
-- `E2B_API_KEY=your-e2b-api-key`
-
-通用 E2B/Cube 网关配置：
-
 - `E2B_API_URL=your-e2b-api-url`
-
-腾讯云 Agent Sandbox 可改用 `TencentAGSClientConfig`，并配置：
-
-- `E2B_DOMAIN=ap-guangzhou.tencentags.com`
-
-```python
-from trpc_agent_sdk.code_executors.cube import TencentAGSClientConfig
-
-cfg = TencentAGSClientConfig(
-    request_timeout=60,
-    metadata={"application": "skills-with-cube"},
-    auto_recover=True,
-)
-```
-
-`TencentAGSClientConfig` 默认关闭 E2B SDK 对 AGS API Key 的本地格式校验；
-AGS 服务端鉴权仍然生效。显式配置优先于环境变量；同时显式传入 `api_url`
-和 `domain` 时，`api_url` 优先，可用于私有网关或代理。
+- `E2B_API_KEY=your-e2b-api-key`
 
 ### 运行命令
 
