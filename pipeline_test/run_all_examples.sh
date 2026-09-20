@@ -225,7 +225,7 @@ run_python_file_from_dir() {
 
     (
         cd "${REPO_ROOT}/${work_dir}"
-        timeout "$EXAMPLE_TIMEOUT_SECONDS" python3 "$file_name"
+        run_with_timeout "$EXAMPLE_TIMEOUT_SECONDS" python3 "$file_name"
     )
 }
 
@@ -239,7 +239,7 @@ run_pytest_file_from_dir() {
 
     (
         cd "${REPO_ROOT}/${work_dir}"
-        timeout "$EXAMPLE_TIMEOUT_SECONDS" pytest "$file_name" -v -s
+        run_with_timeout "$EXAMPLE_TIMEOUT_SECONDS" pytest "$file_name" -v -s
     )
 }
 
