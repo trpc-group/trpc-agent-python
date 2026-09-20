@@ -140,7 +140,12 @@ class TestTencentAGSClientConnectionOptions:
         assert kwargs["domain"] == "ap-shanghai.tencentags.com"
         assert kwargs["api_url"] == "https://api.ap-shanghai.tencentags.com"
 
-        sdk_config = ConnectionConfig(**_cfg(domain="ap-shanghai.tencentags.com")._e2b_connection_kwargs())
+        connection_kwargs = _cfg(domain="ap-shanghai.tencentags.com")._e2b_connection_kwargs()
+        sdk_config = ConnectionConfig(
+            api_key=connection_kwargs["api_key"],
+            api_url=connection_kwargs["api_url"],
+            domain=connection_kwargs["domain"],
+        )
         assert sdk_config.domain == "ap-shanghai.tencentags.com"
         assert sdk_config.api_url == "https://api.ap-shanghai.tencentags.com"
 
