@@ -333,6 +333,37 @@ cfg = CubeCodeExecutorConfig(
 executor = await CubeCodeExecutor.create(cfg)
 ```
 
+### 腾讯云 Agent Sandbox
+
+腾讯云 Agent Sandbox（AGS）通过地域域名提供 E2B 兼容接口。使用
+`TencentAGSClientConfig` 可以直接配置该域名，无需手工将其转换成
+`api_url`：
+
+```python
+from trpc_agent_sdk.code_executors.cube import (
+    TencentAGSClientConfig,
+    create_cube_sandbox_client,
+    create_cube_workspace_runtime,
+)
+
+cfg = TencentAGSClientConfig(
+    template="your-template-id",
+    api_key="your-ags-api-key",
+    domain="ap-guangzhou.tencentags.com",
+    request_timeout=60,
+    metadata={"application": "my-agent"},
+    auto_recover=True,
+)
+sandbox_client = await create_cube_sandbox_client(cfg)
+runtime = create_cube_workspace_runtime(sandbox_client=sandbox_client)
+```
+
+`domain`、`api_key` 和 `template` 也可以分别通过 `E2B_DOMAIN`、
+`E2B_API_KEY` 和 `CUBE_TEMPLATE_ID` 提供。AGS API Key 默认关闭 E2B SDK
+的本地格式校验，但 AGS 服务端鉴权仍然生效。同时显式设置两个端点字段时，
+`api_url` 优先于 `domain`；显式字段始终优先于环境变量。API URL 形式适用于
+需要经过私有网关的场景。
+
 `CubeCodeExecutor` 也支持 `code_block_delimiters`，默认在标准的 `python`
 和 `tool_code` 之外又加了一个 `bash` 分隔符，所以普通的
 \`\`\`bash\n ... \n\`\`\` 围栏也能被识别。

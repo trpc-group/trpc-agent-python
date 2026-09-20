@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Any
 from typing import Optional
 
 DEFAULT_REMOTE_WORKSPACE = "/workspace/cube_agent"
@@ -103,6 +104,26 @@ class CubeClientConfig:
         if not value:
             raise ValueError(f"Cube sandbox requires `api_key` or {ENV_API_KEY} env.")
         return value
+
+    def _e2b_connection_kwargs(self) -> dict[str, Any]:
+        """Build SDK options shared by sandbox creation and attachment.
+
+        This is the provider adaptation seam for E2B-compatible services.
+        Subclasses may select a different endpoint mechanism or add transport
+        options without coupling :class:`CubeSandboxClient` to a provider.
+        """
+        return {
+            "api_url": self.resolve_api_url(),
+            "api_key": self.resolve_api_key(),
+        }
+
+    def _e2b_create_kwargs(self) -> dict[str, Any]:
+        """Build SDK options for creating a sandbox."""
+        return {
+            "template": self.resolve_template(),
+            "timeout": self.idle_timeout,
+            **self._e2b_connection_kwargs(),
+        }
 
 
 # Deprecated, will be removed in the future

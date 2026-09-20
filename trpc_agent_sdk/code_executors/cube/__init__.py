@@ -22,6 +22,7 @@ from ._runtime import create_cube_workspace_runtime
 from ._sandbox import CubeCommandResult
 from ._sandbox import CubeSandboxClient
 from ._sandbox import create_cube_sandbox_client
+from ._tencent_ags import TencentAGSClientConfig
 from ._transfer import OnExisting
 from ._types import CubeClientConfig
 from ._types import CubeCodeExecutorConfig
@@ -39,6 +40,7 @@ __all__ = [
     "CubeWorkspaceManager",
     "CubeWorkspaceRuntime",
     "CubeWorkspaceRuntimeConfig",
+    "TencentAGSClientConfig",
     "OnExisting",
     "create_cube_workspace_runtime",
 ]

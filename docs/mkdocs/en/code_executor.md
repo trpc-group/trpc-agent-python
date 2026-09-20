@@ -338,6 +338,39 @@ cfg = CubeCodeExecutorConfig(
 executor = await CubeCodeExecutor.create(cfg)
 ```
 
+### Tencent Cloud Agent Sandbox
+
+Tencent Cloud Agent Sandbox (AGS) exposes an E2B-compatible endpoint through
+a regional domain. Use `TencentAGSClientConfig` to select that endpoint without
+turning the domain into an `api_url` manually:
+
+```python
+from trpc_agent_sdk.code_executors.cube import (
+    TencentAGSClientConfig,
+    create_cube_sandbox_client,
+    create_cube_workspace_runtime,
+)
+
+cfg = TencentAGSClientConfig(
+    template="your-template-id",
+    api_key="your-ags-api-key",
+    domain="ap-guangzhou.tencentags.com",
+    request_timeout=60,
+    metadata={"application": "my-agent"},
+    auto_recover=True,
+)
+sandbox_client = await create_cube_sandbox_client(cfg)
+runtime = create_cube_workspace_runtime(sandbox_client=sandbox_client)
+```
+
+`domain`, `api_key`, and `template` may instead be supplied through
+`E2B_DOMAIN`, `E2B_API_KEY`, and `CUBE_TEMPLATE_ID`. Local E2B key-format
+validation defaults to `False` for AGS keys; remote authentication is still
+performed by AGS. When both endpoint fields are passed explicitly, `api_url`
+takes precedence over `domain`; explicit fields always take precedence over
+environment variables. The API URL form is useful when traffic must go through
+a private gateway.
+
 `CubeCodeExecutor` accepts the same `code_block_delimiters` as the other
 executors; by default it adds a `bash` delimiter on top of the default
 `python` and `tool_code` delimiters so plain `\`\`\`bash\n ... \n\`\`\``

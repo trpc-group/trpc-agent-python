@@ -1103,7 +1103,7 @@ LLM calls skill_run(skill="python-math", command="python3 scripts/fib.py 10")
 - **Cube executor** (remote E2B sandbox): [trpc_agent_sdk/code_executors/cube/_runtime.py](../../../trpc_agent_sdk/code_executors/cube/_runtime.py)
   - Executes inside a remote Cube/E2B sandbox; suitable for environments without local Docker, or when strong remote isolation is required
   - Construct via `create_cube_workspace_runtime(executor, workspace_cfg=...)`; see [code_executor.md](code_executor.md#cubeworkspaceruntime) for details
-  - Requires the optional `[cube]` extra (`pip install 'trpc-agent-py[cube]'`) and the `E2B_API_URL` / `E2B_API_KEY` / `CUBE_TEMPLATE_ID` environment variables (or equivalent cfg fields)
+  - Requires the optional `[cube]` extra (`pip install 'trpc-agent-py[cube]'`) and either a generic E2B endpoint (`E2B_API_URL`) or `TencentAGSClientConfig` with `E2B_DOMAIN`; credentials and template come from `E2B_API_KEY` / `CUBE_TEMPLATE_ID` or equivalent cfg fields
 
 **Container executor notes**:
 - The run base directory is writable; when `$SKILLS_ROOT` is set, it is mounted in read-only mode

@@ -1102,7 +1102,7 @@ LLM 调用 skill_run(skill="python-math", command="python3 scripts/fib.py 10")
 - **Cube 执行器**（远端 E2B 沙箱）：[trpc_agent_sdk/code_executors/cube/_runtime.py](../../../trpc_agent_sdk/code_executors/cube/_runtime.py)
   - 在远端 Cube/E2B 沙箱中执行；适合宿主上没有 Docker、或者需要强远端隔离的场景
   - 通过 `create_cube_workspace_runtime(executor, workspace_cfg=...)` 构造；详见 [code_executor.md](code_executor.md#cubeworkspaceruntime)
-  - 需要安装可选 extra `[cube]`（`pip install 'trpc-agent-py[cube]'`），并配置 `E2B_API_URL` / `E2B_API_KEY` / `CUBE_TEMPLATE_ID` 环境变量（或对应 cfg 字段）
+  - 需要安装可选 extra `[cube]`（`pip install 'trpc-agent-py[cube]'`），并配置通用 E2B 地址（`E2B_API_URL`），或使用 `TencentAGSClientConfig` 配合 `E2B_DOMAIN`；凭证与模板可通过 `E2B_API_KEY` / `CUBE_TEMPLATE_ID` 或对应 cfg 字段提供
 
 **容器执行器注意事项**：
 - 运行基础目录可写；当设置了 `$SKILLS_ROOT` 时，会以只读方式挂载

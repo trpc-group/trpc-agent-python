@@ -140,12 +140,7 @@ class CubeSandboxClient:
     @classmethod
     async def open_new(cls, cfg: CubeClientConfig) -> "CubeSandboxClient":
         """Create a brand-new remote sandbox."""
-        sbx = await e2b.AsyncSandbox.create(
-            template=cfg.resolve_template(),
-            api_url=cfg.resolve_api_url(),
-            api_key=cfg.resolve_api_key(),
-            timeout=cfg.idle_timeout,
-        )
+        sbx = await e2b.AsyncSandbox.create(**cfg._e2b_create_kwargs())
         return cls(sbx, cfg)
 
     @classmethod
@@ -164,11 +159,7 @@ class CubeSandboxClient:
         """
         if not cfg.sandbox_id:
             raise ValueError("CubeSandboxClient.open_existing requires cfg.sandbox_id")
-        sbx = await e2b.AsyncSandbox.connect(
-            cfg.sandbox_id,
-            api_url=cfg.resolve_api_url(),
-            api_key=cfg.resolve_api_key(),
-        )
+        sbx = await e2b.AsyncSandbox.connect(cfg.sandbox_id, **cfg._e2b_connection_kwargs())
         client = cls(sbx, cfg)
         await client.assert_running()
         return client
