@@ -38,6 +38,7 @@ nav:
           - Goal: en/goal.md
           - Code Executor: en/code_executor.md
           - OpenAPI Tools: en/openapi_tools.md
+          - CodeAct: en/codeact.md
           - Skills: en/skill.md
       - Session & Memory:
           - Session: en/session.md
@@ -85,6 +86,7 @@ nav:
           - Goal 工具: zh/goal.md
           - 代码执行器: zh/code_executor.md
           - OpenAPI 工具: zh/openapi_tools.md
+          - CodeAct: zh/codeact.md
           - Skills: zh/skill.md
       - Session 与 Memory:
           - Session: zh/session.md

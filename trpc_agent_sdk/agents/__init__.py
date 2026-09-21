@@ -11,6 +11,7 @@ multi-agent composition patterns, and all essential type definitions for agent d
 """
 from typing import Any
 
+from trpc_agent_sdk.codeact import CodeActConfig
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.context import new_invocation_context_id
@@ -82,6 +83,7 @@ __all__ = [
     "ToolCallback",
     "ToolCallbackFilter",
     "ChainAgent",
+    "CodeActConfig",
     "CycleAgent",
     "LangGraphAgent",
     "LlmAgent",

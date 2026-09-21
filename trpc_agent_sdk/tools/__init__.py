@@ -9,6 +9,13 @@ from typing import TYPE_CHECKING
 
 from trpc_agent_sdk.abc import ToolPredicate
 from trpc_agent_sdk.abc import ToolSetABC as BaseToolSet
+from trpc_agent_sdk.codeact import BaseCodeActImplementationStore
+from trpc_agent_sdk.codeact import CodeActImplementation
+from trpc_agent_sdk.codeact import CodeActImplementationPolicy
+from trpc_agent_sdk.codeact import FileCodeActImplementationStore
+from trpc_agent_sdk.codeact import InMemoryCodeActImplementationStore
+from trpc_agent_sdk.codeact import RedisCodeActImplementationStore
+from trpc_agent_sdk.codeact import SqlCodeActImplementationStore
 
 if TYPE_CHECKING:
     # Lazy re-export — see ``_LAZY_REEXPORTS`` below.
@@ -17,6 +24,8 @@ if TYPE_CHECKING:
 
 from ._agent_tool import AGENT_TOOL_APP_NAME_SUFFIX
 from ._agent_tool import AgentTool
+from ._code_act_tool import CodeActTool
+from ._code_act_tool import is_code_act_function
 from ._base_tool import BaseTool
 from ._constants import TOOL_NAME
 from ._context_var import get_tool_var
@@ -114,6 +123,15 @@ __all__ = [
     "BaseToolSet",
     "AGENT_TOOL_APP_NAME_SUFFIX",
     "AgentTool",
+    "BaseCodeActImplementationStore",
+    "CodeActImplementation",
+    "CodeActImplementationPolicy",
+    "FileCodeActImplementationStore",
+    "InMemoryCodeActImplementationStore",
+    "RedisCodeActImplementationStore",
+    "SqlCodeActImplementationStore",
+    "CodeActTool",
+    "is_code_act_function",
     "BaseTool",
     "get_tool_var",
     "reset_tool_var",

@@ -26,7 +26,10 @@ from typing_extensions import override
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import field_validator
+from pydantic import model_validator
 
+from trpc_agent_sdk.codeact import CodeActConfig
+from trpc_agent_sdk.codeact import CodeActResponseProcessor
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
@@ -45,6 +48,7 @@ from trpc_agent_sdk.tools import LongRunningFunctionTool
 from trpc_agent_sdk.tools import transfer_to_agent
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import GenerateContentConfig
+from trpc_agent_sdk.types import Part
 
 from ..exceptions import RunCancelledException
 from ._base_agent import BaseAgent
@@ -66,6 +70,9 @@ InstructionProvider: TypeAlias = Callable[[InvocationContext], Union[str, Awaita
 
 # Type aliases for tool definitions
 ToolUnion: TypeAlias = Union[BaseTool, BaseToolSet]
+
+CODEACT_FUNCTION_CALL_RETRY_MESSAGE = ("Traditional function calls are disabled in CodeAct mode. "
+                                       "Use a Python cell and call capabilities through await self.<tool>(...).")
 
 
 class LlmAgent(BaseAgent):
@@ -105,6 +112,14 @@ class LlmAgent(BaseAgent):
     - Callable functions (will be wrapped in FunctionTool)
     - BaseTool instances (used directly)
     - BaseToolSet instances (will be expanded to individual tools)
+    """
+
+    code_act: Optional[CodeActConfig] = None
+    """Optional model-generated Python execution mode.
+
+    When enabled, the model solves the task with Python code blocks and calls
+    ``return_result(value)`` to submit a validated final result. Its runtime is
+    configured on this object and remains independent from ``code_executor``.
     """
 
     parallel_tool_calls: bool = False
@@ -465,6 +480,7 @@ class LlmAgent(BaseAgent):
             if local_messages is not None and not event.partial and event.content:
                 local_messages.append(event.content)
 
+        codeact_iterations = 0
         try:
             running = agent_context.get_metadata(TRPC_AGENT_RUNNING_KEY, True)
             # Multi-turn conversation loop - continue until no more tool calls or code execution
@@ -473,6 +489,15 @@ class LlmAgent(BaseAgent):
                 await ctx.raise_if_cancelled()
 
                 ctx.raise_if_limit(RunLimitType.MAX_ITERATIONS)
+                if self.code_act:
+                    codeact_iterations += 1
+                    if codeact_iterations > self.code_act.max_iterations:
+                        raise RunLimitException(
+                            agent_name=self.name,
+                            limit_type=RunLimitType.MAX_ITERATIONS,
+                            configured_value=self.code_act.max_iterations,
+                            observed_value=codeact_iterations,
+                        )
 
                 # Step 1: Build request using the request processor (includes conversation history)
                 request = LlmRequest(model=model_instance.name, )
@@ -488,8 +513,9 @@ class LlmAgent(BaseAgent):
                     yield error_event
                     return
 
-                # Step 1.5: Process code execution requests if code executor is configured
-                if self.code_executor:
+                # CodeAct owns model-generated Python cells. A separately
+                # configured code executor remains available to Skills/tools.
+                if self.code_executor and not self.code_act:
                     async for event in CodeExecutionRequestProcessor.run_async(ctx, request):
                         yield event
 
@@ -499,6 +525,8 @@ class LlmAgent(BaseAgent):
                 # Step 2: Call LLM and collect all responses
                 collected_tool_calls = []
                 code_was_executed = False
+                codeact_text_only = False
+                codeact_usage_metadata = None
 
                 ctx.raise_if_limit(RunLimitType.MAX_LLM_CALLS)
                 logger.debug("Starting LLM call for agent: %s", self.name)
@@ -511,27 +539,40 @@ class LlmAgent(BaseAgent):
                         yield event
                         return
                     elif event.content:
+                        if self.code_act and not event.partial and event.usage_metadata:
+                            codeact_usage_metadata = event.usage_metadata
+
                         # Skip streaming tool calls (partial=True with streaming_tool_call metadata)
                         # These events are yielded directly for consumers to handle
-                        if event.is_streaming_tool_call():
-                            pass
-                        else:
+                        if not event.is_streaming_tool_call():
                             function_calls = event.get_function_calls()
                             if function_calls:
                                 collected_tool_calls.extend(function_calls)
                                 logger.debug("Collected %s tool calls from LLM", len(function_calls))
 
                         if event.is_final_response():
-                            self._save_output_to_state(ctx, event)
+                            if self.code_act and self.code_act.require_result:
+                                codeact_text_only = True
+                            else:
+                                self._save_output_to_state(ctx, event)
 
-                        # Process code execution responses if code executor is configured.
+                        # Route model-generated cells to exactly one execution
+                        # path. CodeAct and user/Skill code executors are separate.
                         # We collect code execution events first (this mutates event.content in place,
                         # stripping executable_code parts but keeping text/function_call), then yield
                         # the main event BEFORE the code execution events so the causal order in
                         # session is preserved: assistant declaration → code execution → result.
                         pending_code_events: list[Event] = []
-                        if self.code_executor and event.content:
-                            async for code_event in CodeExecutionResponseProcessor.run_async(ctx, event):
+                        codeact_final_event: Optional[Event] = None
+                        code_processor = None
+                        if self.code_act:
+                            code_processor = CodeActResponseProcessor
+                        elif self.code_executor:
+                            code_processor = CodeExecutionResponseProcessor
+                        if code_processor and event.content:
+                            async for code_event in code_processor.run_async(ctx, event):
+                                if code_event.object == "codeact.result":
+                                    codeact_final_event = code_event
                                 if code_event.content and code_event.content.parts:
                                     for part in code_event.content.parts:
                                         if part.code_execution_result or part.executable_code:
@@ -539,16 +580,26 @@ class LlmAgent(BaseAgent):
                                             break
                                 pending_code_events.append(code_event)
 
-                        # Yield the main LLM response event first (now stripped of executable_code
-                        # but still carrying text and function_call parts).
-                        # Skip empty events (content became None after all parts were consumed).
-                        if event.content is not None:
+                        # CodeAct model output is control code, not a user-facing
+                        # answer. Its executable-code and observation events are
+                        # emitted below; only the validated codeact.result is final.
+                        allow_codeact_text = bool(self.code_act and not self.code_act.require_result
+                                                  and event.is_final_response() and not pending_code_events)
+                        if event.content is not None and (not self.code_act or allow_codeact_text):
                             yield event
                             accumulate_content(event)
 
                         # Then yield code execution events in order.
+                        if pending_code_events and event.usage_metadata:
+                            pending_code_events[-1].usage_metadata = event.usage_metadata
+                            codeact_usage_metadata = None
                         for code_event in pending_code_events:
                             yield code_event
+                            accumulate_content(code_event)
+
+                        if codeact_final_event is not None:
+                            self._save_output_to_state(ctx, codeact_final_event)
+                            return
                     else:
                         # Yield other events directly
                         yield event
@@ -557,9 +608,26 @@ class LlmAgent(BaseAgent):
                 # CHECKPOINT 4: Before tool execution
                 await ctx.raise_if_cancelled()
 
+                if self.code_act and collected_tool_calls:
+                    feedback_event = Event(
+                        invocation_id=ctx.invocation_id,
+                        author=self.name,
+                        branch=ctx.branch,
+                        content=Content(
+                            role="user",
+                            parts=[Part(text=CODEACT_FUNCTION_CALL_RETRY_MESSAGE)],
+                        ),
+                        usage_metadata=codeact_usage_metadata,
+                        visible=False,
+                        object="codeact.feedback",
+                    )
+                    yield feedback_event
+                    accumulate_content(feedback_event)
+                    logger.debug("CodeAct rejected %s traditional tool calls", len(collected_tool_calls))
+                    continue
+
                 # Step 3: Execute tools if any were collected
                 if collected_tool_calls:
-                    logger.debug("Executing %s tool calls", len(collected_tool_calls))
                     logger.debug("Executing %s tool calls", len(collected_tool_calls))
 
                     try:
@@ -665,13 +733,9 @@ class LlmAgent(BaseAgent):
                         logger.debug("Tool execution completed, continuing conversation")
                         continue
 
-                    except RunCancelledException:
+                    except (RunCancelledException, RunLimitException):
                         # raise to runner to handle
                         raise
-
-                    except RunLimitException:
-                        raise
-
                     except Exception as ex:  # pylint: disable=broad-except
                         logger.error("Error executing tools for agent %s: %s", self.name, ex, exc_info=True)
 
@@ -686,16 +750,32 @@ class LlmAgent(BaseAgent):
                 # CHECKPOINT 6: After tool execution, before loop continuation
                 await ctx.raise_if_cancelled()
 
+                if self.code_act and self.code_act.require_result and codeact_text_only and not code_was_executed:
+                    feedback_event = Event(
+                        invocation_id=ctx.invocation_id,
+                        author=self.name,
+                        branch=ctx.branch,
+                        content=Content(
+                            role="user",
+                            parts=[Part(text=self.code_act.text_only_retry_message)],
+                        ),
+                        usage_metadata=codeact_usage_metadata,
+                        visible=False,
+                        object="codeact.feedback",
+                    )
+                    yield feedback_event
+                    accumulate_content(feedback_event)
+                    logger.debug("CodeAct received a text-only response; requesting a Python cell")
+                    continue
+
                 # Step 4: Check if code was executed and continue loop to let agent summarize results
                 if code_was_executed:
                     logger.debug("Code execution completed, continuing conversation for agent to summarize results")
                     continue
 
                 running = agent_context.get_metadata(TRPC_AGENT_RUNNING_KEY, False)
-        except RunCancelledException:
+        except (RunCancelledException, RunLimitException):
             # raise to runner to handle
-            raise
-        except RunLimitException:
             raise
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Unexpected error in LLM agent %s: %s", self.name, ex, exc_info=True)
@@ -706,6 +786,17 @@ class LlmAgent(BaseAgent):
                 "agent_execution_failed",
                 f"Agent execution failed: {str(ex)}",
             )
+        finally:
+            if self.code_act:
+                try:
+                    await self.code_act.runtime.release(ctx.invocation_id)
+                except Exception as ex:  # pylint: disable=broad-except
+                    logger.error(
+                        "Failed to release CodeAct runtime state for invocation %s: %s",
+                        ctx.invocation_id,
+                        ex,
+                        exc_info=True,
+                    )
 
     def _save_output_to_state(self, ctx: InvocationContext, event: Event) -> None:
         """Save agent output to session state if output_key is configured.
@@ -744,6 +835,15 @@ class LlmAgent(BaseAgent):
         if code_executor and not isinstance(code_executor, BaseCodeExecutor):
             raise ValueError('Code executor must be an instance of BaseCodeExecutor.')
         return code_executor
+
+    @model_validator(mode="after")
+    def _validate_code_act_configuration(self) -> "LlmAgent":
+        """Validate the opt-in CodeAct execution contract."""
+        if self.code_act is None:
+            return self
+        if self.tools and not self.code_act.runtime.supports_tools:
+            raise ValueError("code_act tools require a runtime with supports_tools=True")
+        return self
 
 
 # Ensure forward references are resolved when this module is imported
