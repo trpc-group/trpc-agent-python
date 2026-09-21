@@ -38,6 +38,16 @@ class FilterRunner(ABC):
         self._name = self.__class__.__name__
         self._type = FilterType.UNSUPPORTED
 
+    def _convert_filters(self) -> list[BaseFilter]:
+        """Resolve registered filter names while preserving filter instances."""
+        filter_instances = list(self._filters)
+        for filter_name in self._filters_name:
+            filter_instance = get_filter(self._type, filter_name)
+            if not filter_instance:
+                raise ValueError(f"Filter {filter_name} not found, type: {self._type}")
+            filter_instances.append(filter_instance)
+        return filter_instances
+
     @property
     def filters_name(self) -> list[str]:
         """Get filter name."""
@@ -53,11 +63,8 @@ class FilterRunner(ABC):
 
     def _init_filters(self):
         """Initialize filters."""
-        for filter_name in self._filters_name:
-            filter_instance = get_filter(self._type, filter_name)
-            if not filter_instance:
-                raise ValueError(f"Filter {filter_name} not found, type: {self._type}")
-            self._filters.append(filter_instance)
+        self._filters = self._convert_filters()
+        self._filters_name = [filter.name for filter in self._filters]
 
     @property
     def filters(self) -> list[BaseFilter]:

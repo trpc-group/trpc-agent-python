@@ -8,6 +8,7 @@
 from ._constants import DEFAULT_MAX_KEY_LENGTH
 from ._constants import DEFAULT_MAX_VARCHAR_LENGTH
 from ._db import BaseStorage
+from ._file import FileStorage
 from ._redis import EXPIRE_METHOD
 from ._redis import RedisAsyncContextManager
 from ._redis import RedisCommand
@@ -43,6 +44,7 @@ __all__ = [
     "DEFAULT_MAX_KEY_LENGTH",
     "DEFAULT_MAX_VARCHAR_LENGTH",
     "BaseStorage",
+    "FileStorage",
     "RedisAsyncContextManager",
     "RedisCommand",
     "RedisCondition",

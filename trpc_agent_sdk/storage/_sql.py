@@ -130,7 +130,11 @@ class SqlStorage(BaseStorage):
         self.__sessionmaker_kwargs.setdefault("expire_on_commit", expire_on_commit)
         self.__kwargs = kwargs
 
-    def _migrate_missing_columns(self, connection: Connection) -> None:
+    def _migrate_missing_columns(
+        self,
+        connection: Connection,
+        metadata: Optional[MetaData] = None,
+    ) -> None:
         """Add columns that exist in the ORM model but are missing from the database,
         for forward compatibility across version changes.
 
@@ -152,7 +156,8 @@ class SqlStorage(BaseStorage):
         ddl_compiler = dialect.ddl_compiler(dialect, None)
 
         pending_add_columns: list[tuple[str, str, str]] = []
-        for table_name, table in self.__metadata.tables.items():
+        target_metadata = metadata or self.__metadata
+        for table_name, table in target_metadata.tables.items():
             if not insp.has_table(table_name):
                 continue
             existing: set[str] = {col["name"] for col in insp.get_columns(table_name)}
@@ -249,6 +254,27 @@ class SqlStorage(BaseStorage):
                 raise ValueError(f"Database related module not found for URL '{self.__db_url}'.") from ex
             raise ValueError(f"Failed to create database engine for URL '{self.__db_url}'") from ex
         self._db_engine = db_engine
+
+    async def ensure_metadata(self, metadata: MetaData) -> None:
+        """Create and forward-migrate another service's tables.
+
+        This allows multiple framework services to share one ``SqlStorage``
+        engine and connection pool while retaining separate SQLAlchemy metadata.
+        """
+        await self.create_sql_engine()
+        if self._db_engine is None:
+            raise RuntimeError("SQL storage engine is not initialized")
+        if isinstance(self._db_engine, AsyncEngine):
+            async with self._db_engine.begin() as connection:
+                await connection.run_sync(metadata.create_all)
+                await connection.run_sync(lambda sync_connection: self._migrate_missing_columns(
+                    sync_connection,
+                    metadata,
+                ))
+            return
+        metadata.create_all(self._db_engine)
+        with self._db_engine.begin() as connection:
+            self._migrate_missing_columns(connection, metadata)
 
     @override
     async def close(self):

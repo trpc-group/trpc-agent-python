@@ -197,7 +197,8 @@ class RequestProcessor:
                 deep=True) if agent.generate_content_config else GenerateContentConfig())
 
             # If agent has output_schema, set it on the config
-            if agent.output_schema and hasattr(agent, 'tools') and not agent.tools:
+            if (agent.output_schema and hasattr(agent, 'tools') and not agent.tools
+                    and not getattr(agent, "code_act", None)):
                 # Set output schema on the llm request's parameter. It needs the model support.
                 request.set_output_schema(agent.output_schema)
 
@@ -249,8 +250,10 @@ class RequestProcessor:
                 return self._create_error_event(ctx, "agent_instruction_error",
                                                 f"Failed to resolve agent instruction: {str(ex)}")
 
-        # Add code executor instruction if code_executor is enabled
-        if agent.code_executor:
+        code_act = getattr(agent, "code_act", None)
+
+        # Add code executor instruction if code_executor is enabled.
+        if agent.code_executor and not code_act:
             code_executor_instruction = (
                 "# NOTICE\n"
                 "YOU SHOULD NOT GENERATE CODE EXECUTION RESULT WHICH ARE PREFIXED WITH "
@@ -261,6 +264,15 @@ class RequestProcessor:
                 "THE OUTPUT OF CODE EXECUTION RESULT SHOULD BE PRINTED OUT IN THE LAST LINE.\n\n")
             instructions_parts.append(code_executor_instruction)
             logger.debug("Added code executor instruction for agent: %s", agent.name)
+
+        if code_act:
+            supports_tools = code_act.runtime.supports_tools
+            instructions_parts.append(
+                code_act.build_instruction(
+                    getattr(agent, "output_schema", None),
+                    supports_tools=supports_tools,
+                ))
+            logger.debug("Added CodeAct instruction for agent: %s", agent.name)
 
         # Build and set system prompt if we have instructions
         if instructions_parts:
@@ -290,6 +302,11 @@ class RequestProcessor:
         Returns:
             Event: Error event if tool processing fails, None if successful
         """
+        # CodeAct capabilities are discovered and called through the generated
+        # Python ``self`` proxy. Do not expose duplicate provider tool schemas.
+        if getattr(agent, "code_act", None):
+            return None
+
         # Prepare tools list - start with agent's existing tools
         tools_to_process = agent.tools.copy() if agent.tools else []
 
@@ -395,6 +412,9 @@ class RequestProcessor:
         Returns:
             Event: Error event if transfer processing fails, None if successful
         """
+        if getattr(agent, "code_act", None):
+            return None
+
         # Only add transfer capabilities if the agent should support transfers
         if agent._should_enable_agent_transfer():
             try:
@@ -869,7 +889,8 @@ class RequestProcessor:
             Event: Error event if output schema processing fails, None if successful
         """
         # Only add output schema capabilities if the agent has both output_schema and tools
-        if hasattr(agent, "output_schema") and agent.output_schema and agent.tools:
+        if (hasattr(agent, "output_schema") and agent.output_schema and agent.tools
+                and not getattr(agent, "code_act", None)):
             try:
                 from ._output_schema_processor import default_output_schema_processor
 
