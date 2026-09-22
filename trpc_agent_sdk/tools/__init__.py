@@ -97,6 +97,12 @@ from .mcp_tool import SseConnectionParams
 from .mcp_tool import StdioConnectionParams
 from .mcp_tool import StreamableHTTPConnectionParams
 from .mcp_tool import patch_mcp_cancel_scope_exit_issue
+from ._openapi_tools import OpenAPIHTTPError
+from ._openapi_tools import OpenAPISpecError
+from ._openapi_tools import OpenAPITool
+from ._openapi_tools import OpenAPIToolError
+from ._openapi_tools import OpenAPIToolSet
+from ._openapi_tools import load_openapi_document
 from .utils import build_function_declaration
 from .utils import from_function_with_options
 from .utils import get_required_fields
@@ -188,6 +194,12 @@ __all__ = [
     "StdioConnectionParams",
     "StreamableHTTPConnectionParams",
     "patch_mcp_cancel_scope_exit_issue",
+    "OpenAPIHTTPError",
+    "OpenAPISpecError",
+    "OpenAPITool",
+    "OpenAPIToolError",
+    "OpenAPIToolSet",
+    "load_openapi_document",
     "build_function_declaration",
     "from_function_with_options",
     "get_required_fields",

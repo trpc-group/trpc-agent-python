@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: Local Pet API
+  version: 1.0.0
+servers:
+  - url: https://pets.local/v1
+paths:
+  /pets/{pet_id}:
+    get:
+      operationId: get_pet
+      summary: Get one pet by ID
+      parameters:
+        - name: pet_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pet details
+  /pets:
+    post:
+      operationId: create_pet
+      summary: Create a pet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetInput"
+      responses:
+        "201":
+          description: Created pet
+components:
+  schemas:
+    PetInput:
+      type: object
+      properties:
+        name:
+          type: string
+        species:
+          type: string
+      required:
+        - name
+        - species

@@ -628,6 +628,67 @@ class TestConvertToolsToOpenAIFormat:
         assert "city" in params["properties"]
         assert params["required"] == ["city"]
 
+    def test_with_parameters_json_schema(self):
+        """Preserves nested raw JSON Schema used by OpenAPI tools."""
+        model = _model()
+        json_schema = {
+            "type": "object",
+            "properties": {
+                "request_body": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                        },
+                        "species": {
+                            "type": "string",
+                        },
+                    },
+                    "required": ["name", "species"],
+                },
+            },
+            "required": ["request_body"],
+        }
+        fd = FunctionDeclaration(
+            name="create_pet",
+            parameters_json_schema=json_schema,
+        )
+        tool = Tool(function_declarations=[fd])
+
+        result = model._convert_tools_to_openai_format([tool])
+        params = result[0]["function"]["parameters"]
+
+        assert params == json_schema
+        params["properties"]["request_body"]["required"].append("age")
+        assert fd.parameters_json_schema == json_schema
+
+    def test_parameters_json_schema_takes_precedence(self):
+        """Prefers raw JSON Schema when both schema forms are populated."""
+        model = _model()
+        fd = FunctionDeclaration(
+            name="lookup",
+            parameters=Schema(
+                type=Type.OBJECT,
+                properties={
+                    "legacy": Schema(type=Type.STRING),
+                },
+            ),
+            parameters_json_schema={
+                "type": "object",
+                "properties": {
+                    "item_id": {
+                        "type": "string",
+                    },
+                },
+                "required": ["item_id"],
+            },
+        )
+        tool = Tool(function_declarations=[fd])
+
+        result = model._convert_tools_to_openai_format([tool])
+
+        assert result[0]["function"]["parameters"] == fd.parameters_json_schema
+
 
 # ---------------------------------------------------------------------------
 # _convert_schema_to_openai_format
