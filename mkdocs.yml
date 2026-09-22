@@ -44,6 +44,7 @@ nav:
           - Redis Session: en/session_redis.md
           - Session Summary: en/session_summary.md
           - Memory: en/memory.md
+          - Artifact: en/artifact.md
       - Knowledge:
           - Knowledge: en/knowledge.md
           - Document Loader: en/knowledge_document_loader.md
@@ -90,6 +91,7 @@ nav:
           - Redis Session: zh/session_redis.md
           - Session Summary: zh/session_summary.md
           - Memory: zh/memory.md
+          - Artifact: zh/artifact.md
       - Knowledge:
           - Knowledge: zh/knowledge.md
           - 文档加载器: zh/knowledge_document_loader.md

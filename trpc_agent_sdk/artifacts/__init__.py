@@ -8,10 +8,12 @@
 This module provides artifact management functionality including:
 - Abstract artifact service interfaces
 - In-memory artifact service implementation
+- Filesystem-backed artifact service implementation
 """
 
 from trpc_agent_sdk.abc import ArtifactServiceABC as BaseArtifactService
 
+from ._file_artifact_service import FileArtifactService
 from ._in_memory_artifact_service import InMemoryArtifactService
 from ._utils import ParsedArtifactUri
 from ._utils import artifact_path
@@ -23,6 +25,7 @@ from ._utils import parse_artifact_uri
 
 __all__ = [
     "BaseArtifactService",
+    "FileArtifactService",
     "InMemoryArtifactService",
     "ParsedArtifactUri",
     "artifact_path",
