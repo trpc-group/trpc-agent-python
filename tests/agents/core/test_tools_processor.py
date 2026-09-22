@@ -23,6 +23,10 @@ if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
     _skills_pkg.get_skill_processor_parameters = _compat_get_skill_processor_parameters
 
 from trpc_agent_sdk.agents._base_agent import BaseAgent
+from trpc_agent_sdk.agents.core._history_processor import (
+    HistoryProcessor,
+    TimelineFilterMode,
+)
 from trpc_agent_sdk.agents.core._tools_processor import ToolsProcessor
 from trpc_agent_sdk.context import InvocationContext, create_agent_context
 from trpc_agent_sdk.events import Event, EventActions
@@ -218,15 +222,64 @@ class TestMergeParallelFunctionResponseEvents:
         e1 = Event(
             invocation_id="inv-1",
             author="agent",
-            content=Content(role="user", parts=[Part(text="r1")]),
+            content=Content(
+                role="user",
+                parts=[
+                    Part.from_function_response(
+                        name="tool-1",
+                        response={"result": "r1"},
+                    )
+                ],
+            ),
         )
         e2 = Event(
             invocation_id="inv-1",
             author="agent",
-            content=Content(role="user", parts=[Part(text="r2")]),
+            content=Content(
+                role="user",
+                parts=[
+                    Part.from_function_response(
+                        name="tool-2",
+                        response={"result": "r2"},
+                    )
+                ],
+            ),
         )
         result = proc._merge_parallel_function_response_events([e1, e2])
+        assert result.invocation_id == "inv-1"
         assert len(result.content.parts) == 2
+        assert [
+            part.function_response.name for part in result.content.parts
+        ] == ["tool-1", "tool-2"]
+
+    def test_merged_event_survives_invocation_timeline_filter(
+        self,
+        invocation_context,
+    ):
+        proc = ToolsProcessor([])
+        events = [
+            Event(
+                invocation_id=invocation_context.invocation_id,
+                author="agent",
+                content=Content(
+                    role="user",
+                    parts=[
+                        Part.from_function_response(
+                            name=f"tool-{index}",
+                            response={"result": index},
+                        )
+                    ],
+                ),
+            )
+            for index in range(2)
+        ]
+
+        merged = proc._merge_parallel_function_response_events(events)
+        history = HistoryProcessor(
+            timeline_filter_mode=TimelineFilterMode.INVOCATION,
+        )
+
+        assert history.filter_events(invocation_context, [merged]) == [merged]
 
     def test_empty_events_raises(self):
         proc = ToolsProcessor([])
