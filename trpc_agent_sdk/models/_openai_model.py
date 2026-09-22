@@ -12,6 +12,7 @@ responses, tool calls, and various OpenAI-specific features.
 
 import asyncio
 import base64
+import copy
 import functools
 import inspect
 import json
@@ -1867,8 +1868,12 @@ class OpenAIModel(LLMModel):
                         },
                     }
 
-                    # Convert parameters schema - always include parameters field
-                    if func_decl.parameters:
+                    # Prefer raw JSON Schema when provided. OpenAPI and MCP
+                    # tools use parameters_json_schema to preserve nested
+                    # objects, required fields, and other JSON Schema details.
+                    if func_decl.parameters_json_schema:
+                        openai_tool["function"]["parameters"] = copy.deepcopy(func_decl.parameters_json_schema)
+                    elif func_decl.parameters:
                         openai_tool["function"]["parameters"] = self._convert_schema_to_openai_format(
                             func_decl.parameters)
                     else:
