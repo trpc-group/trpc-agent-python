@@ -714,7 +714,7 @@ class ToolsProcessor:
 
         # Create the new merged event
         merged_event = Event(
-            invocation_id=Event.new_id(),
+            invocation_id=base_event.invocation_id,
             author=base_event.author,
             content=Content(role="user", parts=merged_parts),
             actions=merged_actions,
