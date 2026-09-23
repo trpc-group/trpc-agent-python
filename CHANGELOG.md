@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.0](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.2.0) (2026-09-23)
+
+### Features
+
+* CodeAct: Added an optional `LlmAgent` execution mode that lets models orchestrate tools with Python code, retain large tool results locally by reference, and generate, approve, persist, and reuse user-defined function implementations. ([#341](https://github.com/trpc-group/trpc-agent-python/pull/341))
+* Tools: Added `OpenAPIToolSet` for converting OpenAPI 3.x operations into Agent tools, with schema conversion, operation filtering, asynchronous HTTP execution, authentication and static-header support, host allowlists, and explicit lifecycle management. ([#343](https://github.com/trpc-group/trpc-agent-python/pull/343))
+* Code Execution: Added `TencentAGSClientConfig` so Cube workspaces can connect to Tencent Cloud Agent Sandbox while preserving the provider-neutral Cube client and runtime. Configuration supports endpoint precedence, API key validation control, request timeouts, and sandbox creation metadata. ([#340](https://github.com/trpc-group/trpc-agent-python/pull/340))
+
+### Bug Fixes
+
+* Tools: Preserved the invocation ID when merging parallel function responses so merged responses are not incorrectly filtered in `INVOCATION` mode. ([#342](https://github.com/trpc-group/trpc-agent-python/pull/342))
+* Code Execution: Preserved binary files collected from workspaces without lossy UTF-8 replacement decoding; callers can now recover the original bytes from Base64-backed collected content. ([#344](https://github.com/trpc-group/trpc-agent-python/pull/344))
+* Storage: Enforced configured maximum key lengths consistently across file-storage operations, validated positive limits, switched session filenames to fixed-length SHA-256 paths, and added automatic migration for legacy plaintext filenames and historical directories. ([#345](https://github.com/trpc-group/trpc-agent-python/pull/345))
+* Examples: Fixed Advanced Memory examples to read their configuration from environment variables correctly. ([#338](https://github.com/trpc-group/trpc-agent-python/pull/338))
+
+### Docs
+
+* Added English and Chinese guides and runnable examples for CodeAct, OpenAPI tools, and Tencent Cloud Agent Sandbox configuration.
+
+### Internal
+
+* Expanded regression coverage for CodeAct, OpenAPI conversion and HTTP behavior, Tencent AGS configuration, parallel tool-response merging, binary workspace collection, and file-storage migration.
+
 ## [1.1.21](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.21) (2026-09-15)
 
 ### Features
