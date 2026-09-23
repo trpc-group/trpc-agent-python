@@ -10,6 +10,7 @@ This module defines workspace types, policies, and interfaces for managing
 isolated execution environments.
 """
 
+import base64
 from abc import ABC
 from abc import abstractmethod
 from typing import Awaitable
@@ -54,6 +55,14 @@ Contract:
 - The fetcher must *not* raise for merely-empty files; it should raise only
   for genuine I/O errors so the backend can surface a meaningful message.
 """
+
+
+def _encode_collected_content(data: bytes) -> Tuple[str, str]:
+    """Return lossless text and Base64 representations for collected bytes."""
+    try:
+        return data.decode("utf-8"), ""
+    except UnicodeDecodeError:
+        return "", base64.b64encode(data).decode("ascii")
 
 
 class BaseWorkspaceManager(ABC):
@@ -159,10 +168,12 @@ class BaseWorkspaceFS(ABC):
                 out.append(CodeFile(name=rel, content="", mime_type="application/octet-stream"))
                 continue
             mime = detect_content_type(full_path, data)
+            content, content_base64 = _encode_collected_content(data)
             out.append(
                 CodeFile(
                     name=rel,
-                    content=data.decode("utf-8", errors="replace"),
+                    content=content,
+                    content_base64=content_base64,
                     mime_type=mime,
                     size_bytes=raw_size,
                     truncated=raw_size > len(data),
@@ -274,7 +285,7 @@ class BaseWorkspaceFS(ABC):
             file_ref = ManifestFileRef(name=rel, mime_type=mime)
 
             if spec.inline:
-                file_ref.content = data.decode("utf-8", errors="replace")
+                file_ref.content, file_ref.content_base64 = _encode_collected_content(data)
 
             if spec.save:
                 if ctx is None:

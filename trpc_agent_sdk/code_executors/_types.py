@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Optional
 
 from pydantic import BaseModel
@@ -22,7 +23,10 @@ class CodeFile(BaseModel):
     """File name."""
 
     content: str
-    """File content."""
+    """UTF-8 file content. Empty when binary content is stored as Base64."""
+
+    content_base64: str = ""
+    """Base64-encoded content for files that are not valid UTF-8."""
 
     mime_type: str
     """MIME type of the file."""
@@ -32,6 +36,12 @@ class CodeFile(BaseModel):
 
     truncated: bool = False
     """Whether the file is truncated."""
+
+    def get_bytes(self) -> bytes:
+        """Return the collected content without losing binary bytes."""
+        if self.content_base64:
+            return base64.b64decode(self.content_base64, validate=True)
+        return self.content.encode("utf-8")
 
 
 class CodeBlock(BaseModel):
@@ -279,13 +289,22 @@ class ManifestFileRef(BaseModel):
     """ mime type"""
 
     content: str = ""
-    """ content"""
+    """ UTF-8 content; empty when binary content is stored as Base64."""
+
+    content_base64: str = ""
+    """ Base64-encoded content for files that are not valid UTF-8."""
 
     saved_as: str = ""
     """ saved as"""
 
     version: int = 0
     """ version"""
+
+    def get_bytes(self) -> bytes:
+        """Return inline content without losing binary bytes."""
+        if self.content_base64:
+            return base64.b64decode(self.content_base64, validate=True)
+        return self.content.encode("utf-8")
 
 
 class ManifestOutput(BaseModel):

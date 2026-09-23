@@ -50,6 +50,15 @@ class TestModuleHelpers:
         f = CodeFile(name="a.txt", content="ok", mime_type="text/plain", size_bytes=2)
         assert _should_inline_file_content(f) is True
 
+        binary = CodeFile(
+            name="a.bin",
+            content="",
+            content_base64="gA==",
+            mime_type="application/octet-stream",
+            size_bytes=1,
+        )
+        assert _should_inline_file_content(binary) is False
+
     def test_truncate_output(self):
         s, truncated = _truncate_output("x" * 20000)
         assert truncated is True

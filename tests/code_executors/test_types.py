@@ -48,6 +48,17 @@ class TestCodeFile:
 
         assert file.content == ""
 
+    def test_code_file_decodes_base64_content(self):
+        """Test recovering binary content without replacement characters."""
+        file = CodeFile(
+            name="image.png",
+            content="",
+            content_base64="iVBORw0KGgo=",
+            mime_type="image/png",
+        )
+
+        assert file.get_bytes() == b"\x89PNG\r\n\x1a\n"
+
     def test_code_file_default_size_bytes(self):
         """Test default size_bytes is 0."""
         file = CodeFile(name="f.txt", content="data", mime_type="text/plain")

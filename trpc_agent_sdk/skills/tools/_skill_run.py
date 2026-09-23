@@ -128,6 +128,8 @@ def _is_text_mime(mime: str) -> bool:
 
 def _should_inline_file_content(f: CodeFile) -> bool:
     """Return True when the file content should be included inline in the response."""
+    if f.content_base64:
+        return False
     if not f.content:
         return True
     if not _is_text_mime(f.mime_type):
@@ -858,6 +860,7 @@ class SkillRunTool(BaseTool):
                     cf = CodeFile(
                         name=fr.name,
                         content=fr.content,
+                        content_base64=fr.content_base64,
                         mime_type=fr.mime_type,
                         size_bytes=getattr(fr, "size_bytes", 0),
                         truncated=getattr(fr, "truncated", False),

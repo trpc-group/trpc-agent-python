@@ -435,20 +435,16 @@ async def test_bug8_create_workspace_surfaces_mkdir_failure_on_reconcile(mock_cl
 
 
 # ===========================================================================
-# BUG 9 — collect() decodes binary files to str with errors="replace"
+# BUG 9 — collect() decoded binary files to str with errors="replace" [FIXED]
 #
-# File: trpc_agent_sdk/code_executors/cube/_runtime.py:230
-#     content=content.decode("utf-8", errors="replace"),
+# File: trpc_agent_sdk/code_executors/_base_workspace_runtime.py
 #
-# ``CodeFile.content: str`` forces a string, so binary files (PDFs,
-# images, gzip archives) are converted to a UTF-8 replacement-laden
-# mess. Downstream consumers cannot recover the original bytes. The
-# sibling ``collect_outputs`` avoids this with ``inline=True``
-# gated — but ``collect()`` has no such guard.
+# Non-UTF-8 files are now represented explicitly through
+# ``CodeFile.content_base64``. ``CodeFile.get_bytes()`` returns the
+# original bytes while ordinary UTF-8 text remains in ``content``.
 # ===========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="BUG 9: collect() corrupts binary files to str (_runtime.py:230)")
 @pytest.mark.asyncio
 async def test_bug9_collect_preserves_binary_bytes(mock_client):
     ws = _ws()
@@ -458,11 +454,9 @@ async def test_bug9_collect_preserves_binary_bytes(mock_client):
     fs = CubeWorkspaceFS(mock_client, 30.0)
     files = await fs.collect(ws, ["*.png"])
     assert len(files) == 1
-    # The raw bytes should be recoverable. They are not: utf-8
-    # replace turns \x80 into U+FFFD, and re-encoding does not roundtrip.
-    assert files[0].content.encode("utf-8") == binary, (
-        "binary file silently corrupted by utf-8 replace"
-    )
+    assert files[0].content == ""
+    assert files[0].content_base64
+    assert files[0].get_bytes() == binary
 
 
 # ===========================================================================
