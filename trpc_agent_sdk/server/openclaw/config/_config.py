@@ -120,7 +120,7 @@ class MemoryConfig(BaseModel):
 class FileStorageConfig(BaseModel):
     """trpc_claw file storage config."""
     base_dir: str = ""
-    max_key_length: int = 255
+    max_key_length: int = Field(default=255, ge=1)
 
 
 class SqlStorageConfig(BaseModel):

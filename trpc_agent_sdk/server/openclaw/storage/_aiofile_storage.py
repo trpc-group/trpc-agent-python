@@ -27,7 +27,6 @@ from aiofiles import os as aio_os
 from aiofiles import ospath as aio_ospath
 from nanobot.utils.helpers import safe_filename
 from trpc_agent_sdk.storage import BaseStorage
-from trpc_agent_sdk.storage import DEFAULT_MAX_KEY_LENGTH
 
 from ..config import FileStorageConfig
 from ._constants import HISTORY_FILENAME
@@ -113,6 +112,7 @@ class AioFileStorage(BaseStorage):
 
     @override
     async def delete(self, db: FileSession, key: str, conditions: Optional[FileCondition] = None) -> None:
+        self._validate_key(key)
         file_path = await self._resolve_key_path(db.base_dir, key)
         if not await aio_ospath.exists(file_path):
             return
@@ -140,6 +140,7 @@ class AioFileStorage(BaseStorage):
 
     @override
     async def get(self, db: FileSession, key: str) -> Any:
+        self._validate_key(key)
         file_path = await self._resolve_key_path(db.base_dir, key)
         if not await aio_ospath.exists(file_path):
             return None
@@ -177,12 +178,11 @@ class AioFileStorage(BaseStorage):
     def _path_to_key(path: Path) -> str:
         return unquote(path.stem)
 
-    @staticmethod
-    def _validate_key(key: str) -> None:
+    def _validate_key(self, key: str) -> None:
         if not key:
             raise ValueError("AioFileStorage key cannot be empty")
-        if len(key) > DEFAULT_MAX_KEY_LENGTH:
-            raise ValueError(f"AioFileStorage key too long: {len(key)} > {DEFAULT_MAX_KEY_LENGTH}")
+        if len(key) > self._max_key_length:
+            raise ValueError(f"AioFileStorage key too long: {len(key)} > {self._max_key_length}")
         if "/" in key or "\\" in key:
             # Key is logical identifier, not filesystem path.
             raise ValueError("AioFileStorage key must not contain path separators")
