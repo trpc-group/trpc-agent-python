@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -47,15 +48,26 @@ class TestGetSessionPath:
 
     def test_constructs_correct_path(self, tmp_path):
         svc = _make_service(tmp_path)
-        path = svc._get_session_path("app:user:session")
+        save_key = "app:user:session"
+        path = svc._get_session_path(save_key)
         assert path.parent == svc.sessions_dir
         assert path.suffix == ".jsonl"
-        assert "app_user_session" in path.stem or "app" in path.stem
+        assert path.stem == hashlib.sha256(save_key.encode("utf-8")).hexdigest()
 
-    def test_replaces_colons(self, tmp_path):
+    def test_filename_length_is_bounded(self, tmp_path):
         svc = _make_service(tmp_path)
-        path = svc._get_session_path("a:b:c")
-        assert ":" not in path.name
+        short_path = svc._get_session_path("a:b:c")
+        long_path = svc._get_session_path("app:" + "user" * 1000 + ":session")
+
+        assert len(short_path.name) == len(long_path.name) == 70
+        assert short_path != long_path
+
+    def test_unhashed_path_preserves_previous_format(self, tmp_path):
+        svc = _make_service(tmp_path)
+        path = svc._get_unhashed_session_path("app:user:session")
+
+        assert path.parent == svc.sessions_dir
+        assert "app_user_session" in path.stem or "app" in path.stem
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +121,18 @@ class TestMaybeMigrate:
         assert target.exists()
         assert target.read_text() == "legacy data"
         assert not legacy.exists()
+
+    def test_migrates_unhashed_current_session(self, tmp_path):
+        svc = _make_service(tmp_path)
+        save_key = "app:user:session"
+        target = svc._get_session_path(save_key)
+        unhashed = svc._get_unhashed_session_path(save_key)
+        unhashed.write_text("current session data")
+
+        svc._maybe_migrate(save_key, target)
+
+        assert target.read_text() == "current session data"
+        assert not unhashed.exists()
 
     @patch("trpc_agent_sdk.server.openclaw.session_memory._claw_session_service.shutil.move",
            side_effect=OSError("permission denied"))

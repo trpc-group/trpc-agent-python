@@ -17,7 +17,6 @@ from trpc_agent_sdk.server.openclaw.storage._constants import (
     HISTORY_FILENAME,
     MEMORY_FILENAME,
 )
-from trpc_agent_sdk.storage import DEFAULT_MAX_KEY_LENGTH
 
 
 class TestAioFileStorageInit:
@@ -42,28 +41,31 @@ class TestAioFileStorageInit:
 class TestValidateKey:
     """Tests for AioFileStorage._validate_key."""
 
-    def test_empty_key_raises(self):
+    def test_empty_key_raises(self, tmp_path):
+        storage = _make_storage(tmp_path)
         with pytest.raises(ValueError, match="cannot be empty"):
-            AioFileStorage._validate_key("")
+            storage._validate_key("")
 
-    def test_too_long_key_raises(self):
-        long_key = "a" * (DEFAULT_MAX_KEY_LENGTH + 1)
-        with pytest.raises(ValueError, match="too long"):
-            AioFileStorage._validate_key(long_key)
+    def test_configured_max_key_length_is_enforced(self, tmp_path):
+        storage = AioFileStorage(FileStorageConfig(base_dir=str(tmp_path), max_key_length=140))
 
-    def test_forward_slash_raises(self):
+        storage._validate_key("a" * 140)
+        with pytest.raises(ValueError, match="141 > 140"):
+            storage._validate_key("a" * 141)
+
+    def test_forward_slash_raises(self, tmp_path):
+        storage = _make_storage(tmp_path)
         with pytest.raises(ValueError, match="path separators"):
-            AioFileStorage._validate_key("a/b")
+            storage._validate_key("a/b")
 
-    def test_backslash_raises(self):
+    def test_backslash_raises(self, tmp_path):
+        storage = _make_storage(tmp_path)
         with pytest.raises(ValueError, match="path separators"):
-            AioFileStorage._validate_key("a\\b")
+            storage._validate_key("a\\b")
 
-    def test_valid_key(self):
-        AioFileStorage._validate_key("valid-key_123")
-
-    def test_max_length_key_ok(self):
-        AioFileStorage._validate_key("a" * DEFAULT_MAX_KEY_LENGTH)
+    def test_valid_key(self, tmp_path):
+        storage = _make_storage(tmp_path)
+        storage._validate_key("valid-key_123")
 
 
 class TestKeyToPathAndPathToKey:
@@ -192,6 +194,15 @@ class TestAdd:
         with pytest.raises(ValueError):
             await storage.add(db, {"key": "", "value": "data"})
 
+    async def test_add_honors_configured_max_key_length(self, tmp_path):
+        storage = AioFileStorage(FileStorageConfig(base_dir=str(tmp_path), max_key_length=255))
+        db = FileSession(base_dir=tmp_path)
+        key = "k" * 150
+
+        await storage.add(db, {"key": key, "value": "persisted"})
+
+        assert await storage.get(db, key) == "persisted"
+
 
 class TestGet:
     """Tests for AioFileStorage.get."""
@@ -208,6 +219,12 @@ class TestGet:
         db = FileSession(base_dir=tmp_path)
         result = await storage.get(db, "nope")
         assert result is None
+
+    async def test_get_validates_key(self, tmp_path):
+        storage = AioFileStorage(FileStorageConfig(base_dir=str(tmp_path), max_key_length=3))
+        db = FileSession(base_dir=tmp_path)
+        with pytest.raises(ValueError, match="4 > 3"):
+            await storage.get(db, "long")
 
     async def test_get_text_file(self, tmp_path):
         storage = _make_storage(tmp_path)
@@ -240,6 +257,12 @@ class TestDelete:
         storage = _make_storage(tmp_path)
         db = FileSession(base_dir=tmp_path)
         await storage.delete(db, "nosuchkey")
+
+    async def test_delete_validates_key(self, tmp_path):
+        storage = AioFileStorage(FileStorageConfig(base_dir=str(tmp_path), max_key_length=3))
+        db = FileSession(base_dir=tmp_path)
+        with pytest.raises(ValueError, match="4 > 3"):
+            await storage.delete(db, "long")
 
 
 class TestQuery:

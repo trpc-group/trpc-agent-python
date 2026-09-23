@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import shutil
 import uuid
 from pathlib import Path
@@ -191,6 +192,11 @@ class ClawSessionService(InMemorySessionService):
     # ------------------------------------------------------------------
 
     def _get_session_path(self, save_key: str) -> Path:
+        digest = hashlib.sha256(save_key.encode("utf-8")).hexdigest()
+        return self.sessions_dir / f"{digest}.jsonl"
+
+    def _get_unhashed_session_path(self, save_key: str) -> Path:
+        """Return the session path used before filenames were hashed."""
         safe_key = safe_filename(save_key.replace(":", "_"))
         return self.sessions_dir / f"{safe_key}.jsonl"
 
@@ -199,14 +205,19 @@ class ClawSessionService(InMemorySessionService):
         return self.legacy_sessions_dir / f"{safe_key}.jsonl"
 
     def _maybe_migrate(self, save_key: str, target: Path) -> None:
-        """Move a legacy session file to *target* if one exists and target is absent."""
+        """Move an older session file to *target* when one exists."""
         if target.exists():
             return
-        legacy = self._get_legacy_session_path(save_key)
-        if not legacy.exists():
+        candidates = (
+            self._get_unhashed_session_path(save_key),
+            self._get_legacy_session_path(save_key),
+        )
+        for source in candidates:
+            if not source.exists():
+                continue
+            try:
+                shutil.move(str(source), str(target))
+                logger.info("Migrated session %s from %s", save_key, source)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error("Failed to migrate session %s from %s: %s", save_key, source, exc)
             return
-        try:
-            shutil.move(str(legacy), str(target))
-            logger.info("Migrated session %s from legacy path", save_key)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error("Failed to migrate session %s: %s", save_key, exc)
