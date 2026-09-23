@@ -97,6 +97,20 @@ class TestBuildCodeFiles:
             assert f.truncated is False
             assert f.size_bytes == len(payloads[f"/ws/{f.name}"])
 
+    async def test_binary_collection_is_lossless(self):
+        binary = b"\x89PNG\r\n\x1a\nnot-valid-utf8\x80\x81\x82"
+
+        files = await BaseWorkspaceFS._build_code_files(
+            "/ws",
+            ["/ws/image.png"],
+            _make_fetcher({"/ws/image.png": binary}),
+        )
+
+        assert len(files) == 1
+        assert files[0].content == ""
+        assert files[0].content_base64
+        assert files[0].get_bytes() == binary
+
     async def test_deduplicates_by_relative_name(self):
         # Two glob patterns can yield the same absolute path. The helper
         # must surface only the first hit, not double-count it.
@@ -221,6 +235,23 @@ class TestBuildManifestOutput:
         assert ref.saved_as == ""
         assert ref.version == 0
         assert manifest.limits_hit is False
+
+    async def test_binary_inline_is_lossless(self):
+        binary = b"\x89PNG\r\n\x1a\nnot-valid-utf8\x80\x81\x82"
+        spec = WorkspaceOutputSpec(globs=["**/*"], inline=True)
+
+        manifest, _, _ = await BaseWorkspaceFS._build_manifest_output(
+            "/ws",
+            spec,
+            ["/ws/image.png"],
+            _make_fetcher({"/ws/image.png": binary}),
+            ctx=None,
+        )
+
+        ref = manifest.files[0]
+        assert ref.content == ""
+        assert ref.content_base64
+        assert ref.get_bytes() == binary
 
     async def test_save_branch_uses_name_template_and_records_versions(self):
         spec = WorkspaceOutputSpec(globs=["**/*"], save=True, name_template="run-1/")
