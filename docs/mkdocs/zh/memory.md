@@ -28,6 +28,7 @@
 - **InMemoryMemoryService**：存储在进程内存的字典中
 - **RedisMemoryService**：存储在 Redis List 中（JSON 格式）
 - **SqlMemoryService**：存储在 MySQL/PostgreSQL 的 `mem_events` 表中
+- **TencentDBMemoryService**：写入 TencentDB Agent Memory L0 对话，并由服务端异步提取长期记忆
 
 **代码示例**：
 ```python
@@ -54,7 +55,7 @@ async def store_session(self, session: Session, agent_context: Optional[AgentCon
 
 **功能**：根据查询关键词搜索相关的历史记忆。
 
-**搜索方式**：**关键词匹配**（非语义搜索）
+**搜索方式**：InMemory/Redis/SQL 使用**关键词匹配**；TencentDB Agent Memory 等扩展服务可提供记忆提取或语义检索。
 
 **实现逻辑**（以 `InMemoryMemoryService` 为例）：
 ```python
@@ -540,6 +541,54 @@ python3 run_agent.py
 ---
 
 ## 扩展 MemoryService 实现
+
+### 集成 TencentDB Agent Memory
+
+`TencentDBMemoryService` 用于对接
+[TencentDB Agent Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
+V3 网关。每轮对话结束后，框架会将新增文本事件增量写入
+`/v3/conversation/add`；配置了 `load_memory_tool` 的 Agent 会通过
+`/v3/atomic/search` 检索异步提取出的 L1 原子记忆。
+
+```python
+from trpc_agent_sdk.memory.tencentdb_memory_service import (
+    TencentDBMemoryService,
+    TencentDBMemoryServiceConfig,
+)
+from trpc_agent_sdk.tools import load_memory_tool
+
+memory_service = TencentDBMemoryService(
+    TencentDBMemoryServiceConfig(
+        enabled=True,
+        endpoint="http://127.0.0.1:8420",
+        api_key="local",
+        service_id="memory-service-id",
+        team_id="team-id",
+        agent_id="assistant-id",
+    )
+)
+
+# 将 load_memory_tool 加入 LlmAgent.tools，并把 memory_service 传给 Runner。
+```
+
+隔离字段映射如下：
+
+- `service_id` 通过 `x-tdai-service-id` 请求头传递。
+- `team_id` 和 `agent_id` 来自服务配置。
+- `user_id` 来自框架 Session 或搜索 key。
+- `session_id` 仅在写入 L0 对话时传递；搜索时不传，以支持同一用户跨会话召回。
+
+使用时需要注意：
+
+- L1 记忆提取是异步的，写入成功后不保证立即可以搜索到。
+- 进程内会记录已成功写入的事件 ID；进程重启后采用至少一次投递语义。
+- 记忆保留策略由 TencentDB Agent Memory 管理，框架 TTL 配置不适用于该服务。
+- 使用前需要部署 V3 网关和记忆提取流水线。
+
+环境变量和跨会话运行流程见
+[完整示例](../../../examples/memory_service_with_tencentdb/README.md)。
+
+---
 
 ### 集成 Mempalace
 
