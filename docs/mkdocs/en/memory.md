@@ -29,6 +29,7 @@ Based on the implementation in [trpc_agent_sdk/memory/](../../../trpc_agent_sdk/
 - **RedisMemoryService**: Stored in a Redis List (JSON format)
 - **SqlMemoryService**: Stored in the `mem_events` table in MySQL/PostgreSQL
 - **MempalaceMemoryService**: Stored as MemPalace drawers in a local ChromaDB-backed palace
+- **TencentDBMemoryService**: Sent to TencentDB Agent Memory as L0 conversations and asynchronously extracted memories
 
 **Code Example**:
 ```python
@@ -55,7 +56,7 @@ async def store_session(self, session: Session, agent_context: Optional[AgentCon
 
 **Function**: Searches for related historical memories based on query keywords.
 
-**Search Method**: Built-in InMemory/Redis/SQL services use **keyword matching**; semantic memory services such as MemPalace and Mem0 use vector / semantic retrieval.
+**Search Method**: Built-in InMemory/Redis/SQL services use **keyword matching**; semantic memory services such as TencentDB Agent Memory, MemPalace, and Mem0 use extracted or vector / semantic retrieval.
 
 **Implementation Logic** (using `InMemoryMemoryService` as an example):
 ```python
@@ -584,6 +585,60 @@ python3 run_agent.py
 cd examples/memory_service_with_sql/
 python3 run_agent.py
 ```
+
+---
+
+## Integrating TencentDB Agent Memory
+
+`TencentDBMemoryService` connects the framework to a
+[TencentDB Agent Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
+V3 gateway. After each completed turn, the framework incrementally sends new
+text events to `/v3/conversation/add`. An Agent equipped with
+`load_memory_tool` searches extracted L1 atomic memories through
+`/v3/atomic/search`.
+
+```python
+from trpc_agent_sdk.memory.tencentdb_memory_service import (
+    TencentDBMemoryService,
+    TencentDBMemoryServiceConfig,
+)
+from trpc_agent_sdk.tools import load_memory_tool
+
+memory_service = TencentDBMemoryService(
+    TencentDBMemoryServiceConfig(
+        enabled=True,
+        endpoint="http://127.0.0.1:8420",
+        api_key="local",
+        service_id="memory-service-id",
+        team_id="team-id",
+        agent_id="assistant-id",
+    )
+)
+
+# Add load_memory_tool to LlmAgent.tools and pass memory_service to Runner.
+```
+
+Isolation is mapped as follows:
+
+- `service_id` is sent in the `x-tdai-service-id` header.
+- `team_id` and `agent_id` come from the service configuration.
+- `user_id` comes from the framework session/search key.
+- `session_id` is sent only when writing L0 conversations; searches omit it
+  to support cross-session recall for the same user.
+
+Operational notes:
+
+- L1 extraction is asynchronous, so a memory may not be searchable immediately
+  after a successful write.
+- Successfully accepted event IDs are checkpointed in process. Delivery is
+  at-least-once across restarts.
+- TencentDB Agent Memory controls retention; framework TTL settings do not
+  apply to this service.
+- Deploy the V3 gateway and extraction pipeline before using the integration.
+
+See the
+[complete runnable example](../../../examples/memory_service_with_tencentdb/README.md)
+for environment variables and a cross-session demonstration.
 
 ---
 
