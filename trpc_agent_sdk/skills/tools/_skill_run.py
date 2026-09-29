@@ -232,11 +232,6 @@ def _split_command_line(cmd: str) -> list[str]:
     """
     if not cmd.strip():
         raise ValueError("skill_run: command is empty")
-    for ch in _DISALLOWED_SHELL_META:
-        if ch in cmd:
-            raise ValueError(f"skill_run: shell meta character {ch!r} is not allowed when "
-                             "command restrictions are enabled. Provide a single executable "
-                             "with args only (no redirects/pipes/chaining).")
     args: list[str] = []
     cur: list[str] = []
     in_single = False
@@ -256,6 +251,10 @@ def _split_command_line(cmd: str) -> list[str]:
         if not in_single and ch == '"':
             in_double = not in_double
             continue
+        if not in_single and not in_double and ch in _DISALLOWED_SHELL_META:
+            raise ValueError(f"skill_run: shell meta character {ch!r} is not allowed when "
+                             "command restrictions are enabled. Provide a single executable "
+                             "with args only (no redirects/pipes/chaining).")
         if not in_single and not in_double and ch in (" ", "\t"):
             if cur:
                 args.append("".join(cur))

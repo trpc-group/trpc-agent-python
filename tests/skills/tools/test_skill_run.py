@@ -87,6 +87,23 @@ class TestModuleHelpers:
         with pytest.raises(ValueError):
             _split_command_line("a | b")
 
+    @pytest.mark.parametrize(
+        ("command", "expected"),
+        [
+            ('python3 calc.py --expr "A > 5"', ["python3", "calc.py", "--expr", "A > 5"]),
+            ("grep -E 'a|b' data.txt", ["grep", "-E", "a|b", "data.txt"]),
+            ('echo "x;y"', ["echo", "x;y"]),
+            (r"echo x\&y", ["echo", "x&y"]),
+        ],
+    )
+    def test_split_command_line_allows_quoted_or_escaped_shell_meta(self, command, expected):
+        assert _split_command_line(command) == expected
+
+    @pytest.mark.parametrize("meta", [">", "<", "|", ";", "&", "\n", "\r"])
+    def test_split_command_line_rejects_unquoted_shell_meta(self, meta):
+        with pytest.raises(ValueError, match="shell meta character"):
+            _split_command_line(f"echo before{meta}after")
+
     def test_build_editor_wrapper_script(self):
         script = _build_editor_wrapper_script("/tmp/file")
         assert script.startswith("#!/bin/sh")
@@ -114,6 +131,20 @@ class TestSkillRunToolBasics:
         cmd, args = tool._build_command("python run.py", "/tmp/ws", "skills/x")
         assert cmd == "bash"
         assert "-c" in args
+
+    def test_build_restricted_command_preserves_quoted_shell_meta_argument(self):
+        repo = MagicMock()
+        repo.workspace_runtime = MagicMock()
+        tool = SkillRunTool(repository=repo, allowed_cmds=["python3"])
+
+        cmd, args = tool._build_command(
+            'python3 calc.py --expr "A > 5"',
+            "/tmp/ws",
+            "skills/x",
+        )
+
+        assert cmd == "python3"
+        assert args == ["calc.py", "--expr", "A > 5"]
 
     def test_get_repository(self):
         repo = MagicMock()
