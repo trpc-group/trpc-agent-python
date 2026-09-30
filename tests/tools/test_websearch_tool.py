@@ -18,6 +18,9 @@ Covers the full BaseTool surface area:
   missing credentials)
 - Tavily Search path (results, optional images, domain include/exclude,
   API error, missing credentials, extra params)
+- You.com Search path (results, snippet/description fallback, server-side
+  include_domains, client-side blocked filtering, language mapping,
+  API error, missing credentials, extra params)
 - HTTP errors surfacing as structured tool errors
 - ``process_request`` registering the declaration and appending the
   "current month / Sources" system instruction
@@ -168,6 +171,25 @@ class TestWebSearchToolInit:
         monkeypatch.setenv("TAVILY_API_KEY", "env-tavily-key")
         t = WebSearchTool(provider="tavily")
         assert t._api_key == "env-tavily-key"
+
+    def test_youcom_without_creds_warns_not_raises(self, monkeypatch):
+        # Empty ``api_key`` falls back to ``YDC_API_KEY``; clear it so the
+        # missing-credentials path is exercised even when CI exports the var.
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        t = WebSearchTool(provider="youcom", api_key="")
+        assert t._provider == "youcom"
+        assert t._api_key == ""
+
+    def test_youcom_reads_api_key_from_env(self, monkeypatch):
+        monkeypatch.setenv("YDC_API_KEY", "env-ydc-key")
+        t = WebSearchTool(provider="youcom")
+        assert t._api_key == "env-ydc-key"
+
+    def test_youcom_default_base_url(self):
+        from trpc_agent_sdk.tools._websearch_tool import _YOUCOM_BASE_URL
+        t = WebSearchTool(provider="youcom", api_key="k")
+        assert t._base_url == _YOUCOM_BASE_URL
+        assert _YOUCOM_BASE_URL == "https://ydc-index.io/v1/search"
 
     def test_results_num_clamped(self):
         from trpc_agent_sdk.tools._websearch_tool import _MAX_COUNT
@@ -1336,6 +1358,226 @@ class TestTavilyProvider:
         )
         assert len(res["results"]) == 1
         assert len(res["images"]) == 1
+        await client.aclose()
+
+
+_YOUCOM_RESPONSE: Dict[str, Any] = {
+    "results": {
+        "web": [
+            {
+                "title": "What's New In Python 3.13",
+                "url": "https://docs.python.org/3/whatsnew/3.13.html",
+                "description": "Python 3.13 release notes",
+                "snippets": ["Python 3.13 includes free-threaded builds"],
+            },
+            {
+                "title": "Python (programming language) - Wikipedia",
+                "url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+                "description": "General-purpose programming language",
+                "snippets": [],
+            },
+        ],
+    },
+    "metadata": {
+        "query": "Python 3.13",
+    },
+}
+
+
+class TestYoucomProvider:
+
+    @pytest.mark.asyncio
+    async def test_missing_credentials_returns_helpful_result(self, monkeypatch):
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        t = WebSearchTool(provider="youcom", api_key="")
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={"query": "python"},
+        )
+        assert res["provider"] == "youcom"
+        assert res["results"] == []
+        assert "not configured" in res["summary"]
+
+    @pytest.mark.asyncio
+    async def test_happy_path_posts_payload_and_parses_results(self):
+        client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "Python 3.13",
+                "count": 2,
+            },
+        )
+        assert res["provider"] == "youcom"
+        assert res["query"] == "Python 3.13"
+        assert [h["url"] for h in res["results"]] == [
+            "https://docs.python.org/3/whatsnew/3.13.html",
+            "https://en.wikipedia.org/wiki/Python_(programming_language)",
+        ]
+        # The query-relevant snippet wins over the static description.
+        assert "free-threaded" in res["results"][0]["snippet"]
+        # No snippets → falls back to the description field.
+        assert res["results"][1]["snippet"] == "General-purpose programming language"
+
+        req = client._captured["last_request"]
+        assert req.method == "POST"
+        assert req.headers.get("x-api-key") == "ydc-test"
+        payload = json.loads(req.content)
+        assert payload["query"] == "Python 3.13"
+        assert payload["count"] == 2
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_allowed_domains_mapped_to_include_domains(self):
+        client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "allowed_domains": ["python.org"],
+            },
+        )
+        req = client._captured["last_request"]
+        payload = json.loads(req.content)
+        assert payload["include_domains"] == ["python.org"]
+        # Client-side filter keeps only python.org (docs.python.org matches).
+        assert [h["url"] for h in res["results"]] == [
+            "https://docs.python.org/3/whatsnew/3.13.html",
+        ]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_blocked_domains_filtered_client_side(self):
+        """You.com has no server-side exclude parameter — the blocklist is
+        applied by the shared post-hoc domain filter."""
+        client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "blocked_domains": ["wikipedia.org"],
+            },
+        )
+        req = client._captured["last_request"]
+        payload = json.loads(req.content)
+        assert "include_domains" not in payload
+        urls = [h["url"] for h in res["results"]]
+        assert "https://en.wikipedia.org/wiki/Python_(programming_language)" not in urls
+        assert "https://docs.python.org/3/whatsnew/3.13.html" in urls
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_results_are_deduplicated_by_url(self):
+        body = {
+            "results": {
+                "web": [
+                    {
+                        "title": "Python docs",
+                        "url": "https://docs.python.org/3",
+                        "description": "first",
+                    },
+                    {
+                        "title": "Python docs (dup)",
+                        "url": "https://www.docs.python.org/3/",
+                        "description": "duplicate",
+                    },
+                    {
+                        "title": "PEP 8",
+                        "url": "https://peps.python.org/pep-0008/",
+                        "description": "style",
+                    },
+                ],
+            },
+        }
+        client = _make_mock_client({"/v1/search": body})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert [h["url"] for h in res["results"]] == [
+            "https://docs.python.org/3",
+            "https://peps.python.org/pep-0008/",
+        ]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_lang_mapped_to_uppercase_language(self):
+        """You.com takes a BCP 47 ``language`` code; 'zh-CN' → 'ZH-CN'."""
+        client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+            lang="zh-CN",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["language"] == "ZH-CN"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_extra_params_are_merged(self):
+        client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+            youcom_extra_params={"freshness": "week"},
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["freshness"] == "week"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_api_error_surfaced_as_structured_result(self):
+        client = _make_mock_client({"/v1/search": {"detail": "Missing required scopes"}})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="bad",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert "Missing required scopes" in res["summary"]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_count_limits_hits(self):
+        client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+            results_num=1,
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert len(res["results"]) == 1
         await client.aclose()
 
 

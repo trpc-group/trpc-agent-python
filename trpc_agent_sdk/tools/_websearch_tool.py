@@ -6,8 +6,8 @@
 """Web search tool for TRPC Agent framework.
 
 Provides a client-side :class:`WebSearchTool` that lets LLMs search the
-public web for up-to-date information. Three pluggable provider backends
-are supported, ``duckduckgo``, ``google search``, and ``tavily``:
+public web for up-to-date information. Four pluggable provider backends
+are supported, ``duckduckgo``, ``google search``, ``tavily``, and ``youcom``:
 
 1. ``duckduckgo`` — DuckDuckGo(DDG) Instant Answer API. Keyless, good for
    factual/encyclopedic/definition lookups. Returns curated instant
@@ -17,6 +17,10 @@ are supported, ``duckduckgo``, ``google search``, and ``tavily``:
    filtering and language targeting.
 3. ``tavily`` — Tavily Search API. Requires ``api_key``; returns LLM-ready
    web results and optionally direct image URLs.
+4. ``youcom`` — You.com Search API. Requires ``api_key`` (or the
+   ``YDC_API_KEY`` environment variable); returns web results with
+   query-relevant snippets, plus server-side domain allowlists and
+   language targeting.
 """
 
 from __future__ import annotations
@@ -68,6 +72,8 @@ _DDG_BASE_URL = "https://api.duckduckgo.com"
 _GOOGLE_BASE_URL = "https://www.googleapis.com/customsearch/v1"
 # Tavily Search base URL
 _TAVILY_BASE_URL = "https://api.tavily.com/search"
+# You.com Search base URL
+_YOUCOM_BASE_URL = "https://ydc-index.io/v1/search"
 # Description shown to the LLM as part of the tool schema.
 _BASE_DESCRIPTION = """\
 Search the public web and use the results to inform responses.
@@ -95,7 +101,7 @@ Usage notes:
     for the required 'Sources:' format.\
 """
 
-ProviderType = Literal["duckduckgo", "google", "tavily"]
+ProviderType = Literal["duckduckgo", "google", "tavily", "youcom"]
 
 
 class SearchHit(BaseModel):
@@ -277,8 +283,8 @@ class WebSearchTool(BaseTool):
     """LLM tool that searches the public web.
 
     The WebSearchTool enables LLM agents to search the public web using major search engines
-    such as DuckDuckGo (default, no API key required), Google Custom Search, and Tavily.
-    It retrieves up-to-date information including titles, URLs, and content snippets, and also
+    such as DuckDuckGo (default, no API key required), Google Custom Search, Tavily, and
+    You.com. It retrieves up-to-date information including titles, URLs, and content snippets, and also
     provides instant-answer summaries when available (e.g., via DuckDuckGo). This tool is best
     used for queries about recent events, new releases, factual lookups, or definitions that benefit
     from authoritative and citable sources. Results are automatically filtered by site/domain
@@ -286,9 +292,11 @@ class WebSearchTool(BaseTool):
     sources as Markdown hyperlinks in the final output.
 
     Args:
-        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``, or ``"tavily"``.
+        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``,
+            ``"tavily"``, or ``"youcom"``.
         api_key: Provider API key. Falls back to ``GOOGLE_CSE_API_KEY`` for
-            Google or ``TAVILY_API_KEY`` for Tavily.
+            Google, ``TAVILY_API_KEY`` for Tavily, or ``YDC_API_KEY`` for
+            You.com.
         engine_id: Google CSE engine id (``cx``); falls back to ``GOOGLE_CSE_ENGINE_ID``.
         results_num: Default result count, clamped to ``[1, _MAX_COUNT]``.
         snippet_len: Max snippet length, clamped to ``[1, _MAX_SNIPPET_LEN]``.
@@ -322,6 +330,7 @@ class WebSearchTool(BaseTool):
         ddg_extra_params: Optional[dict[str, Any]] = None,
         google_extra_params: Optional[dict[str, Any]] = None,
         tavily_extra_params: Optional[dict[str, Any]] = None,
+        youcom_extra_params: Optional[dict[str, Any]] = None,
         filters_name: Optional[List[str]] = None,
         filters: Optional[List[BaseFilter]] = None,
     ) -> None:
@@ -333,13 +342,15 @@ class WebSearchTool(BaseTool):
             filters=filters,
         )
 
-        if provider not in ("duckduckgo", "google", "tavily"):
+        if provider not in ("duckduckgo", "google", "tavily", "youcom"):
             raise ValueError(f"Unsupported web search provider: {provider!r}")
         self._provider: ProviderType = provider
         if provider == "google":
             self._api_key = api_key or os.environ.get("GOOGLE_CSE_API_KEY", "")
         elif provider == "tavily":
             self._api_key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        elif provider == "youcom":
+            self._api_key = api_key or os.environ.get("YDC_API_KEY", "")
         else:
             self._api_key = api_key or ""
         self._engine_id = engine_id or os.environ.get("GOOGLE_CSE_ENGINE_ID", "")
@@ -351,6 +362,7 @@ class WebSearchTool(BaseTool):
             "duckduckgo": _DDG_BASE_URL,
             "google": _GOOGLE_BASE_URL,
             "tavily": _TAVILY_BASE_URL,
+            "youcom": _YOUCOM_BASE_URL,
         }
         self._base_url = base_url or default_base_urls[provider]
         self._user_agent = user_agent
@@ -361,12 +373,16 @@ class WebSearchTool(BaseTool):
         self._ddg_extra_params = ddg_extra_params or {}
         self._google_extra_params = google_extra_params or {}
         self._tavily_extra_params = tavily_extra_params or {}
+        self._youcom_extra_params = youcom_extra_params or {}
 
         if provider == "google" and not (self._api_key and self._engine_id):
             logger.warning("WebSearchTool: provider='google' but api_key or "
                            "engine_id is missing; calls will return an error.")
         if provider == "tavily" and not self._api_key:
             logger.warning("WebSearchTool: provider='tavily' but api_key is "
+                           "missing; calls will return an error.")
+        if provider == "youcom" and not self._api_key:
+            logger.warning("WebSearchTool: provider='youcom' but api_key is "
                            "missing; calls will return an error.")
 
     @override
@@ -409,8 +425,9 @@ class WebSearchTool(BaseTool):
             "lang":
             Schema(
                 type=Type.STRING,
-                description=("Optional. Language hint for the provider (Google CSE 'hl'); "
-                             "ignored by DuckDuckGo and Tavily. Default: tool-level lang or unset. "
+                description=("Optional. Language hint for the provider (Google CSE 'hl', "
+                             "You.com 'language'); ignored by DuckDuckGo and Tavily. "
+                             "Default: tool-level lang or unset. "
                              "Example: 'en', 'zh-CN', 'ja'."),
             ),
         }
@@ -510,6 +527,8 @@ class WebSearchTool(BaseTool):
                     blocked,
                     include_images,
                 )
+            elif self._provider == "youcom":
+                result = await self._search_youcom(query, n, allowed, blocked, lang)
             else:
                 result = await self._search_google(query, n, allowed, blocked, lang)
         except httpx.HTTPError as e:
@@ -679,6 +698,87 @@ class WebSearchTool(BaseTool):
             results=hits,
             summary=_truncate(answer, self._snippet_len),
             images=images,
+        )
+
+    async def _search_youcom(
+        self,
+        query: str,
+        n: int,
+        allowed: Optional[List[str]],
+        blocked: Optional[List[str]],
+        lang: Optional[str],
+    ) -> WebSearchResult:
+        """Hit the You.com Search API."""
+        if not self._api_key:
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary=("You.com provider is not configured: set api_key "
+                         "or YDC_API_KEY."),
+            )
+
+        payload: dict[str, Any] = {
+            "query": query,
+            # max results to return
+            "count": n,
+        }
+        if allowed:
+            # You.com supports a server-side domain allowlist.
+            payload["include_domains"] = allowed
+        if lang:
+            # BCP 47 language code, e.g. "EN", "ZH-CN".
+            payload["language"] = lang.upper()
+        payload.update(self._youcom_extra_params)
+
+        data = await self._post_json(
+            self._base_url,
+            payload,
+            headers={"X-API-Key": self._api_key},
+        )
+        if err := (data.get("error") or data.get("detail")):
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary=f"You.com Search API error: {err}",
+            )
+
+        hits: List[SearchHit] = []
+        seen: set[str] = set()
+        web_results = ((data.get("results") or {}).get("web")) or []
+        for item in web_results:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or "").strip()
+            # Blocked domains have no server-side equivalent — filter here.
+            if _is_blocked(url, allowed, blocked):
+                continue
+            if self._dedup_urls:
+                key = _dedup_key(url)
+                if key in seen:
+                    continue
+                seen.add(key)
+            # Prefer the query-relevant snippet over the static description.
+            snippet = ""
+            snippets = item.get("snippets") or []
+            if snippets and isinstance(snippets[0], str):
+                snippet = snippets[0].strip()
+            if not snippet:
+                snippet = str(item.get("description") or "").strip()
+            hits.append(
+                SearchHit(
+                    title=_truncate(str(item.get("title") or ""), self._title_len),
+                    url=url,
+                    snippet=_truncate(snippet, self._snippet_len),
+                ))
+            if len(hits) >= n:
+                break
+        return WebSearchResult(
+            query=query,
+            provider="youcom",
+            results=hits,
+            summary="",
         )
 
     async def _search_duckduckgo(
