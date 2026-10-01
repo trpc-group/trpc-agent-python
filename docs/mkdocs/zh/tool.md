@@ -2584,22 +2584,23 @@ if __name__ == "__main__":
 
 `WebSearchTool` 是 trpc-agent-python 框架内置的**公网搜索工具**。当 Agent 需要回答"最新动态 / 版本号 / 事件 / 定义 / 事实类"等超出模型知识截止日期的问题时，可以通过该工具调用主流搜索引擎的检索 API，获取带标题、URL 与摘要的结构化结果，并按约定将所有引用以 Markdown 超链接的形式列在 `Sources:` 段落中。
 
-该工具采用**可插拔 provider** 设计，目前内置三种后端：
+该工具采用**可插拔 provider** 设计，目前内置四种后端：
 
 - **`duckduckgo`（默认）**：DuckDuckGo Instant Answer API，**无需 API Key**。返回 DDG 精选的 instant answer / abstract / definition 摘要及相关主题，适合百科/定义/事实类查询；注意返回的并非完整的实时网页结果，而是 DDG 的 curated 结果集
 - **`google`**：Google Custom Search（CSE）JSON API，需要配置 `api_key` 与 `engine_id`（即 CSE 的 `cx`）；返回真实的公网搜索结果，支持 `siteSearch`、`hl`（语言）、`safe`（SafeSearch）、`dateRestrict`（时效性）等 CSE 原生参数
 - **`tavily`**：Tavily Search API，需要配置 `api_key`（或环境变量 `TAVILY_API_KEY`）；返回面向 LLM 的网页结果，并可选返回图片 URL（调用参数 `include_images=true`）
+- **`youcom`**：You.com Search API，需要配置 `api_key`（或环境变量 `YDC_API_KEY`）；返回带标题、URL 与关键词片段（snippets）的真实网页搜索结果，支持 `count`、`language`（BCP 47）、`include_domains` 等原生参数
 
 在此基础上，`WebSearchTool` 还内置了**域名白/黑名单过滤、URL 归一化去重、结果裁剪、引用规范强制注入、HTTP 连接池复用**等能力，帮助你在生产环境中稳定、可控地把联网检索接入 LLM Agent。
 
 ### 功能特性
 
-- **多 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）、`google`（CSE，真实公网搜索）与 `tavily`（LLM-ready 搜索，可选图片）通过 `provider` 参数切换；基础 `FunctionDeclaration` 保持一致，`tavily` 额外暴露 `include_images`
-- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤；Tavily 会映射为 `include_domains` / `exclude_domains`，并仍做客户端二次过滤
+- **多 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）、`google`（CSE，真实公网搜索）、`tavily`（LLM-ready 搜索，可选图片）与 `youcom`（You.com 网页搜索，关键词片段）通过 `provider` 参数切换；基础 `FunctionDeclaration` 保持一致，`tavily` 额外暴露 `include_images`
+- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤；Tavily 会映射为 `include_domains` / `exclude_domains`，并仍做客户端二次过滤；You.com 会把白名单映射为服务端 `include_domains`，黑名单映射为服务端 `exclude_domains`，并仍做客户端二次过滤
 - **URL 归一化去重**：`dedup_urls=True`（默认）会按 scheme/host/path 归一化键合并重复命中，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
 - **结果裁剪**：`results_num` / `snippet_len` / `title_len` 分别控制返回条数、单条摘要与标题的字符上限，所有参数都会按 `[1, _MAX_*]` 做 clamp，避免误配超上下文窗口；LLM 还可通过 `count` 参数在调用时进一步控制返回条数
 - **强制引用规范**：工具在 `process_request` 阶段自动向 LLM 追加指令，**强制**要求：（1）回答末尾必须追加 `Sources:` 段并以 `[Title](URL)` 列出工具返回的 URL；（2）不得编造 URL；（3）涉及"最新/recent"类查询时使用**当前年月**入参，避免幻觉旧年份
-- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` / `tavily_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`，或 Tavily 的 `search_depth`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
+- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` / `tavily_extra_params` / `youcom_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`，Tavily 的 `search_depth`，或 You.com 的 `freshness`、`country`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
 - **共享 httpx 连接池**：通过构造参数 `http_client` 传入预建好的 `httpx.AsyncClient`，可在多个 agent / 多次调用之间复用连接池；调用方负责其生命周期（工具不会帮你 `aclose`）
 - **结构化输出**：统一返回 `WebSearchResult`（Tavily 为扩展的 `TavilyWebSearchResult`），包含 `query` / `provider` / `results: List[{title, url, snippet}]` / `summary`；Tavily 还可额外返回 `images`
 
@@ -2607,13 +2608,13 @@ if __name__ == "__main__":
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `provider` | `Literal["duckduckgo", "google", "tavily"]` | `"duckduckgo"` | 搜索后端；`google` 需要 `api_key` + `engine_id`，`tavily` 需要 `api_key`，否则调用时返回未配置提示 |
-| `api_key` | `Optional[str]` | `None` | Provider API Key。Google 缺省回退到 `GOOGLE_CSE_API_KEY`；Tavily 缺省回退到 `TAVILY_API_KEY` |
+| `provider` | `Literal["duckduckgo", "google", "tavily", "youcom"]` | `"duckduckgo"` | 搜索后端；`google` 需要 `api_key` + `engine_id`，`tavily` / `youcom` 需要 `api_key`，否则调用时返回未配置提示 |
+| `api_key` | `Optional[str]` | `None` | Provider API Key。Google 缺省回退到 `GOOGLE_CSE_API_KEY`；Tavily 缺省回退到 `TAVILY_API_KEY`；You.com 缺省回退到 `YDC_API_KEY` |
 | `engine_id` | `Optional[str]` | `None` | Google CSE 引擎 ID（即 `cx`），缺省时回退到环境变量 `GOOGLE_CSE_ENGINE_ID` |
 | `base_url` | `Optional[str]` | provider 默认 | 覆盖 provider 的 API Base URL（主要用于测试 / 代理） |
 | `user_agent` | `str` | `"trpc-agent-python-websearch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
 | `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
-| `lang` | `Optional[str]` | `None` | Google CSE 默认语言（对应 `hl` 参数），DDG / Tavily 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
+| `lang` | `Optional[str]` | `None` | 默认语言提示：Google CSE 对应 `hl`、You.com 对应 `language`（BCP 47），DDG / Tavily 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
 | `http_client` | `Optional[httpx.AsyncClient]` | `None` | 可选的预构建 `httpx.AsyncClient`，用于复用连接池（调用方负责生命周期） |
 | `results_num` | `int` | `5` | 默认返回条数上限，clamp 到 `[1, 10]`；可被调用参数 `count` 覆盖 |
 | `snippet_len` | `int` | `300` | 单条 `snippet` 的字符上限，clamp 到 `[1, 1000]` |
@@ -2623,6 +2624,7 @@ if __name__ == "__main__":
 | `ddg_extra_params` | `Optional[dict]` | `None` | 透传给 DDG 的额外查询参数 |
 | `google_extra_params` | `Optional[dict]` | `None` | 透传给 Google CSE 的额外查询参数（如 `{"safe": "active"}`、`{"dateRestrict": "m6"}`、`{"gl": "us"}` 等） |
 | `tavily_extra_params` | `Optional[dict]` | `None` | 透传给 Tavily Search 的额外 JSON 参数（如 `{"search_depth": "advanced"}`、`{"include_answer": True}`） |
+| `youcom_extra_params` | `Optional[dict]` | `None` | 透传给 You.com Search 的额外 JSON 参数（如 `{"freshness": "week"}`、`{"country": "US"}`、`{"safesearch": "strict"}`） |
 | `filters_name` | `Optional[List[str]]` | `None` | 关联的 filter 名称，透传给 `BaseTool` |
 | `filters` | `Optional[List[BaseFilter]]` | `None` | 直接注入的 filter 实例，透传给 `BaseTool` |
 
@@ -2634,7 +2636,7 @@ if __name__ == "__main__":
 | `count` | `integer` | 否 | 本次调用的返回条数上限，`1-10`（clamp）；默认为工具级 `results_num` |
 | `allowed_domains` | `array[string]` | 否 | 域名白名单（host only，子域感知，`www.` 自动剥离）；与 `blocked_domains` 互斥 |
 | `blocked_domains` | `array[string]` | 否 | 域名黑名单，匹配规则同上；与 `allowed_domains` 互斥 |
-| `lang` | `string` | 否 | 仅 Google CSE 生效（对应 `hl`），DDG / Tavily 会忽略；覆盖工具级 `lang` |
+| `lang` | `string` | 否 | 语言提示：Google CSE 对应 `hl`、You.com 对应 `language`（BCP 47）；DDG / Tavily 会忽略；覆盖工具级 `lang` |
 | `include_images` | `boolean` | 否 | **仅 `provider="tavily"` 暴露**。为 `true` 时请求 Tavily 返回图片 URL；默认 `false` |
 
 **`WebSearchResult` 返回字段**：
@@ -2642,7 +2644,7 @@ if __name__ == "__main__":
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `query` | `str` | 本次检索的查询词（原样回显） |
-| `provider` | `"duckduckgo" \| "google" \| "tavily"` | 实际使用的 provider |
+| `provider` | `"duckduckgo" \| "google" \| "tavily" \| "youcom"` | 实际使用的 provider |
 | `results` | `List[SearchHit]` | 结构化命中列表，每项包含 `title` / `url` / `snippet` |
 | `summary` | `str` | DDG 的 instant answer / abstract / definition 聚合摘要；Google 在发生拼写纠错或 API 错误时也会写入此字段；Tavily 响应包含 `answer` 时会将其写入此字段。工具默认发送 `include_answer=false`，可通过 `tavily_extra_params` 开启 |
 | `images` | `List[ImageHit]` | **仅 Tavily**：可选图片列表，每项包含 `url` / `description`（未请求图片时为空列表） |
@@ -2763,12 +2765,43 @@ def create_tavily_agent() -> LlmAgent:
     )
 ```
 
+**切换到 You.com Search**：当需要带关键词片段（snippets）的 LLM-ready 网页检索结果时，切换到 `provider="youcom"`。可在 [You.com Platform](https://you.com/platform/api-keys) 申请 API Key，并通过构造参数或环境变量 `YDC_API_KEY` 注入：
+
+```python
+import os
+
+from trpc_agent_sdk.tools import WebSearchTool
+
+
+def create_youcom_agent() -> LlmAgent:
+    """创建基于 You.com Search 的 WebSearchTool Agent"""
+    web_search = WebSearchTool(
+        provider="youcom",
+        api_key=os.getenv("YDC_API_KEY"),
+        results_num=5,
+        snippet_len=300,
+        title_len=100,
+        timeout=15.0,
+        youcom_extra_params={
+            # "freshness": "week",   # 时效性过滤：day / week / month / year
+            # "country": "US",       # 国家偏向
+        },
+    )
+    return LlmAgent(
+        name="youcom_research_assistant",
+        description="Web research assistant powered by You.com Search.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
 > **注意**：
-> - `provider` 只接受 `duckduckgo` / `google` / `tavily`；传入其它值会在构造 `WebSearchTool` 时抛出 `ValueError`
+> - `provider` 只接受 `duckduckgo` / `google` / `tavily` / `youcom`；传入其它值会在构造 `WebSearchTool` 时抛出 `ValueError`
 > - `allowed_domains` / `blocked_domains` 由 **LLM 在调用参数里**填入（而非构造参数），LLM 可根据用户 prompt 决定是否启用；两者互斥，同时传入会返回 `INVALID_ARGS`
 > - 当传入外部 `http_client` 时，`WebSearchTool` **不会**帮你调用 `aclose()`，需要调用方在**同一个事件循环**内显式关闭，避免 `Unclosed client` 警告
 > - 即使复用外部 client，工具内部仍会在每次请求时强制应用构造器里的 `timeout` 与 `user_agent`，保证 agent 层的约束始终生效
-> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等；对 Tavily 可通过 `tavily_extra_params` 透传 `search_depth`、`include_answer` 等
+> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等；对 Tavily 可通过 `tavily_extra_params` 透传 `search_depth`、`include_answer` 等；对 You.com 可通过 `youcom_extra_params` 透传 `freshness`、`country`、`safesearch` 等
 > - `include_images` 仅在 `provider="tavily"` 时出现在工具 schema 中；默认关闭，只有回答确实需要图片时再让模型打开
 
 #### 驱动 Agent 并打印工具事件
