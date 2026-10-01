@@ -2596,7 +2596,7 @@ if __name__ == "__main__":
 ### 功能特性
 
 - **多 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）、`google`（CSE，真实公网搜索）、`tavily`（LLM-ready 搜索，可选图片）与 `youcom`（You.com 网页搜索，关键词片段）通过 `provider` 参数切换；基础 `FunctionDeclaration` 保持一致，`tavily` 额外暴露 `include_images`
-- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤；Tavily 会映射为 `include_domains` / `exclude_domains`，并仍做客户端二次过滤；You.com 会把白名单映射为服务端 `include_domains`，黑名单走客户端过滤
+- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤；Tavily 会映射为 `include_domains` / `exclude_domains`，并仍做客户端二次过滤；You.com 会把白名单映射为服务端 `include_domains`，黑名单映射为服务端 `exclude_domains`，并仍做客户端二次过滤
 - **URL 归一化去重**：`dedup_urls=True`（默认）会按 scheme/host/path 归一化键合并重复命中，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
 - **结果裁剪**：`results_num` / `snippet_len` / `title_len` 分别控制返回条数、单条摘要与标题的字符上限，所有参数都会按 `[1, _MAX_*]` 做 clamp，避免误配超上下文窗口；LLM 还可通过 `count` 参数在调用时进一步控制返回条数
 - **强制引用规范**：工具在 `process_request` 阶段自动向 LLM 追加指令，**强制**要求：（1）回答末尾必须追加 `Sources:` 段并以 `[Title](URL)` 列出工具返回的 URL；（2）不得编造 URL；（3）涉及"最新/recent"类查询时使用**当前年月**入参，避免幻觉旧年份

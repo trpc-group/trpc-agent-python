@@ -19,8 +19,8 @@ are supported, ``duckduckgo``, ``google search``, ``tavily``, and ``youcom``:
    web results and optionally direct image URLs.
 4. ``youcom`` — You.com Search API. Requires ``api_key`` (or the
    ``YDC_API_KEY`` environment variable); returns web results with
-   query-relevant snippets, plus server-side domain allowlists and
-   language targeting.
+   query-relevant snippets, plus server-side domain allow/block lists
+   and language targeting.
 """
 
 from __future__ import annotations
@@ -726,6 +726,12 @@ class WebSearchTool(BaseTool):
         if allowed:
             # You.com supports a server-side domain allowlist.
             payload["include_domains"] = allowed
+        if blocked:
+            # You.com also honours a server-side blocklist, which avoids
+            # trimming hits after the fact (and the wasted traffic); the
+            # client-side filter below stays as a safety net for proxied
+            # or non-You.com base URLs that ignore the parameter.
+            payload["exclude_domains"] = blocked
         if lang:
             # BCP 47 language code, e.g. "EN", "ZH-CN".
             payload["language"] = lang.upper()
@@ -751,7 +757,8 @@ class WebSearchTool(BaseTool):
             if not isinstance(item, dict):
                 continue
             url = str(item.get("url") or "").strip()
-            # Blocked domains have no server-side equivalent — filter here.
+            # Safety net: keep filtering client-side too, since a proxied or
+            # generic base_url may not honour exclude_domains upstream.
             if _is_blocked(url, allowed, blocked):
                 continue
             if self._dedup_urls:

@@ -1460,8 +1460,9 @@ class TestYoucomProvider:
 
     @pytest.mark.asyncio
     async def test_blocked_domains_filtered_client_side(self):
-        """You.com has no server-side exclude parameter — the blocklist is
-        applied by the shared post-hoc domain filter."""
+        """You.com takes ``exclude_domains`` server-side; the blocklist is
+        sent upstream AND re-applied by the shared post-hoc filter as a
+        safety net for proxied/generic base URLs."""
         client = _make_mock_client({"/v1/search": _YOUCOM_RESPONSE})
         t = WebSearchTool(
             provider="youcom",
@@ -1479,6 +1480,7 @@ class TestYoucomProvider:
         req = client._captured["last_request"]
         payload = json.loads(req.content)
         assert "include_domains" not in payload
+        assert payload["exclude_domains"] == ["wikipedia.org"]
         urls = [h["url"] for h in res["results"]]
         assert "https://en.wikipedia.org/wiki/Python_(programming_language)" not in urls
         assert "https://docs.python.org/3/whatsnew/3.13.html" in urls
@@ -1595,6 +1597,28 @@ class TestHttpErrorHandling:
         assert "error" in res
         assert "HTTP_ERROR" in res["error"]
         assert res["provider"] == "duckduckgo"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_structured_error_not_crash(self):
+        """A transport-level timeout (httpx.TimeoutException subclasses
+        httpx.HTTPError) must surface as a structured error dict, never
+        propagate out of the tool call."""
+        def hang(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectTimeout("upstream unreachable")
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(hang))
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://ydc-index.io/v1/search",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert "error" in res
+        assert "HTTP_ERROR" in res["error"]
+        assert "upstream unreachable" in res["error"]
+        assert res["provider"] == "youcom"
         await client.aclose()
 
 
