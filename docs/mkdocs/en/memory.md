@@ -594,8 +594,9 @@ python3 run_agent.py
 [TencentDB Agent Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 V3 gateway. After each completed turn, the framework incrementally sends new
 text events to `/v3/conversation/add`. An Agent equipped with
-`load_memory_tool` searches extracted L1 atomic memories through
-`/v3/atomic/search`.
+`load_memory_tool` recalls L1 atomic memories, L2 scenario navigation, and L3
+core memory in parallel. If all three layers have no usable content, the
+service searches raw L0 conversations through `/v3/conversation/search`.
 
 ```python
 from trpc_agent_sdk.memory.tencentdb_memory_service import (
@@ -630,6 +631,11 @@ Operational notes:
 
 - L1 extraction is asynchronous, so a memory may not be searchable immediately
   after a successful write.
+- Recall requests `/v3/atomic/search`, `/v3/scenario/ls`, and `/v3/core/read`
+  concurrently. A failure in one layer does not discard results from the other
+  layers.
+- L0 conversation search is used only when L1, L2, and L3 all have no usable
+  content.
 - Successfully accepted event IDs are checkpointed in process. Delivery is
   at-least-once across restarts.
 - TencentDB Agent Memory controls retention; framework TTL settings do not
