@@ -2,7 +2,8 @@
 
 本示例演示如何通过 `TencentDBMemoryService` 将 tRPC-Agent 接入
 [TencentDB Agent Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)，
-在一个 Session 中写入用户偏好，并在另一个 Session 中召回服务端提取的 L1 长期记忆。
+在一个 Session 中写入带唯一验证标识的办公场景信息，并在另一个 Session 中召回
+服务端提取的长期记忆。
 
 ## 工作流程
 
@@ -15,8 +16,8 @@
 第二轮对话
   -> Agent 调用 load_memory
   -> TencentDBMemoryService.search_memory()
-  -> POST /v3/atomic/search 搜索 L1 记忆
-  -> L1 无结果时，POST /v3/conversation/search 搜索 L0 原始对话
+  -> 并行读取 L1 /v3/atomic/search、L2 /v3/scenario/ls 和 L3 /v3/core/read
+  -> L1/L2/L3 均无可用内容时，POST /v3/conversation/search 搜索 L0 原始对话
 ```
 
 写入记忆由框架自动完成，不需要给 Agent 添加 `save_memory` 工具。Agent 只需通过
@@ -32,7 +33,7 @@
 > - `chat`：个人偏好、用户画像、对话经历、教学和通用助手场景。
 > - `code`：项目事实、工程任务、技术决策、SOP 和团队协作场景。
 >
-> 本示例写入“喜欢的颜色”。本地部署需要在 Memory Core 服务端选择 `chat`
+> 本示例写入工程任务和发版评审信息。本地部署需要在 Memory Core 服务端选择 `code`
 > 模式。腾讯云托管实例的提取策略由产品服务端管理，本客户端不会读取或发送
 > `MEMORY_PROMPT_MODE`。
 
@@ -78,11 +79,11 @@ cd TencentDB-Agent-Memory/deploy/global-images
 cp .env.example .env
 ```
 
-本示例保存的是“喜欢的颜色”这类个人偏好，服务端必须使用 `chat` 提取模式。在
+本示例保存的是工程任务和发版评审信息，服务端应使用 `code` 提取模式。在
 `TencentDB-Agent-Memory/deploy/global-images/.env` 中确认：
 
 ```dotenv
-MEMORY_PROMPT_MODE=chat
+MEMORY_PROMPT_MODE=code
 ```
 
 然后运行启动脚本。脚本会交互式要求填写 Memory 和 Proxy 使用的 LLM 地址、
@@ -259,28 +260,31 @@ python3 examples/memory_service_with_tencentdb/run_agent.py
 
 示例执行以下流程：
 
-1. `session-write` 告诉 Agent：“My favorite color is blue.”
-2. 第一轮结束后，Runner 自动将新增事件写入 L0。
-3. Memory Core 异步将该偏好提取为 L1 记忆。
-4. 等待提取完成后，`session-recall` 在另一个 Session 中询问喜欢的颜色。
-5. Agent 调用 `load_memory`，跨 Session 搜索 `alice` 的长期记忆。
+1. 为本次运行生成唯一的 `验证项目-<run-id>` 标识。
+2. 写入 Agent 不加载历史记忆，只发送本轮办公场景对话并由 Runner 写入 L0。
+3. Memory Core 异步提取 L1/L2/L3。
+4. 等待配置的提取时间后，通过公开 `search_memory()` 输出各层召回结果。
+5. 召回 Agent 在新的 Session 中根据唯一标识询问评审会最终安排。
 
 ## 测试结果
 
 一次成功运行的关键输出如下，模型的具体措辞可能不同：
 
 ```text
-User (session-write): My favorite color is blue. Please remember it.
-Assistant: ... I've noted that your favorite color is blue.
+TencentDB verification marker: 验证项目-1234abcd
+User (office-write-1234abcd): 验证项目-1234abcd 的 Q4 发版评审会原定于...
 Waiting <N>s for asynchronous memory extraction...
 
-User (session-recall): What is my favorite color?
-Assistant: Your favorite color is blue!
+TencentDB recall verification summary: layers=L1,L2,L3, memories=<N>,
+current_run_l1_found=True, current_run_final_found=True
+
+User (office-recall-1234abcd): 验证项目-1234abcd 的 Q4 发版评审会最终安排...
+Assistant: 11 月 6 日上午 10 点，会议室 3B。
 ```
 
-实际写入发生在对话结束后的 Runner 阶段，对 Agent 是透明的。第二个 Session 能
-回答 `blue`，说明记忆检索链路可用；但由于当前实现会在 L1 无结果时搜索 L0 原始
-对话，仅凭回答正确不能证明 L1 已成功提取。
+`current_run_final_found=True` 表示包含本次唯一标识的 L1 已提取出最终改期信息，
+不会因为历史记录中恰好存在相同日期和会议室而误判。若 L1、L2、L3 均无结果，
+服务仍会搜索 L0 原始对话作为兜底。
 
 ## 故障排查
 
@@ -314,8 +318,7 @@ l1-empty reason=empty_scenes
 
 1. Gateway 地址、实例 ID、Team ID 和 Agent ID 来自同一个实例。
 2. `run_agent.py` 的 `user_id` 与查询时使用的业务用户一致。
-3. 当前实例的服务端提取策略适合测试内容。默认编码场景可能不会沉淀“喜欢的颜色”
-   这类个人偏好。
+3. 当前实例的服务端提取策略适合测试内容。本示例属于工程协作场景。
 4. 已等待足够时间；L0 写入成功不代表 L1 已经生成。
 
 如果仍然无法生成或检索 L1，请参考腾讯云官方文档检查服务端配置：
@@ -352,8 +355,10 @@ POST /v3/atomic/search status=200
 
 - `service_id/team_id/agent_id/user_id` 共同构成记忆隔离边界。
 - `session_id` 仅在写入时发送；搜索时不限定 Session，因此支持跨 Session 召回。
-- `/v3/atomic/search` 是 L1 语义检索接口；如果 L1 没有命中，当前实现会使用
-  `/v3/conversation/search` 对 L0 原始对话做语义兜底。
+- 召回时会并行读取 L1 `/v3/atomic/search`、L2 `/v3/scenario/ls` 和 L3
+  `/v3/core/read`；只要任意一层有可用内容就返回组合结果。
+- L1/L2/L3 均无可用内容时，使用 `/v3/conversation/search` 对 L0 原始对话
+  做语义兜底。
 - 服务只发送当前进程中尚未成功写入的事件。
 - 进程重启后采用至少一次投递语义，因为 V3 写入接口没有调用方提供的幂等键。
 - L1 提取是异步的，写入成功不代表记忆可以立即搜索。

@@ -35,6 +35,8 @@ from ._utils import event_to_text
 _CONVERSATION_ADD_PATH = "/v3/conversation/add"
 _CONVERSATION_SEARCH_PATH = "/v3/conversation/search"
 _ATOMIC_SEARCH_PATH = "/v3/atomic/search"
+_SCENARIO_LIST_PATH = "/v3/scenario/ls"
+_CORE_READ_PATH = "/v3/core/read"
 _MAX_MESSAGES_PER_REQUEST = 100
 _MAX_MESSAGE_UTF16_UNITS = 8192
 
@@ -110,9 +112,10 @@ class TencentDBMemoryService(BaseMemoryService):
     at-least-once across process restarts because the V3 API does not accept a
     caller-provided idempotency key.
 
-    L0 writes use ``/v3/conversation/add`` with session isolation. Searches
-    use ``/v3/atomic/search`` without a session ID so memories can be recalled
-    across sessions for the same user.
+    L0 writes use ``/v3/conversation/add`` with session isolation. Recall
+    combines L1 atomic memories, L2 scenario navigation and L3 core memory
+    without a session ID so memories can be recalled across sessions. L0
+    conversation search is used only when none of those layers has content.
     """
 
     def __init__(
@@ -181,29 +184,42 @@ class TencentDBMemoryService(BaseMemoryService):
         limit: int = 10,
         agent_context: Optional[AgentContext] = None,
     ) -> SearchMemoryResponse:
-        """Search V3 L1 atomic memories across the user's sessions."""
+        """Recall V3 L1/L2/L3 memories, falling back to L0."""
         del agent_context
         response = SearchMemoryResponse()
         user_id = self._user_id_from_key(key)
-        body = {
+        isolation = self._isolation_body(user_id)
+        search_body = {
             "query": query,
             "limit": limit,
-            **self._isolation_body(user_id),
+            **isolation,
         }
+        layer_results = await asyncio.gather(
+            self._post(_ATOMIC_SEARCH_PATH, search_body),
+            self._post(_SCENARIO_LIST_PATH, isolation),
+            self._post(_CORE_READ_PATH, isolation),
+            return_exceptions=True,
+        )
+
+        self._append_layer_items(
+            response,
+            layer_results[0],
+            field="items",
+            layer="L1",
+        )
+        self._append_scenario_entries(response, layer_results[1])
+        self._append_core_memory(response, layer_results[2])
+        if response.memories:
+            return response
+
         try:
-            # search atomic memories for the user L1
-            data = await self._post(_ATOMIC_SEARCH_PATH, body)
-            items = data.get("items", [])
-            if not items:
-                # search conversation memories for the user L0
-                data = await self._post(_CONVERSATION_SEARCH_PATH, body)
-                items = data.get("messages", [])
-            if not isinstance(items, list):
-                raise ValueError("TencentDB Agent Memory search response must contain a list")
-            for item in items:
-                entry = self._to_memory_entry(item)
-                if entry is not None:
-                    response.memories.append(entry)
+            data = await self._post(_CONVERSATION_SEARCH_PATH, search_body)
+            self._append_layer_items(
+                response,
+                data,
+                field="messages",
+                layer="L0",
+            )
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning(
                 "Failed to search TencentDB Agent Memory. key=%s, query=%s, err=%s",
@@ -212,6 +228,87 @@ class TencentDBMemoryService(BaseMemoryService):
                 exc,
             )
         return response
+
+    @classmethod
+    def _append_layer_items(
+        cls,
+        response: SearchMemoryResponse,
+        result: Any,
+        *,
+        field: str,
+        layer: str,
+    ) -> None:
+        if isinstance(result, Exception):
+            logger.warning(
+                "Failed to recall TencentDB Agent Memory %s. err=%s",
+                layer,
+                result,
+            )
+            return
+        items = result.get(field, [])
+        if not isinstance(items, list):
+            logger.warning(
+                "TencentDB Agent Memory %s response field %s must be a list",
+                layer,
+                field,
+            )
+            return
+        for item in items:
+            entry = cls._to_memory_entry(item)
+            if entry is not None:
+                response.memories.append(entry)
+
+    @classmethod
+    def _append_scenario_entries(
+        cls,
+        response: SearchMemoryResponse,
+        result: Any,
+    ) -> None:
+        if isinstance(result, Exception):
+            logger.warning(
+                "Failed to recall TencentDB Agent Memory L2. err=%s",
+                result,
+            )
+            return
+        entries = result.get("entries", [])
+        if not isinstance(entries, list):
+            logger.warning("TencentDB Agent Memory L2 response field entries must be a list", )
+            return
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path")
+            if not isinstance(path, str) or not path.strip():
+                continue
+            entry = cls._to_memory_entry({
+                "type": "scenario",
+                "content": path.strip(),
+                "created_at": item.get("created_at"),
+                "updated_at": item.get("updated_at"),
+            })
+            if entry is not None:
+                response.memories.append(entry)
+
+    @classmethod
+    def _append_core_memory(
+        cls,
+        response: SearchMemoryResponse,
+        result: Any,
+    ) -> None:
+        if isinstance(result, Exception):
+            logger.warning(
+                "Failed to recall TencentDB Agent Memory L3. err=%s",
+                result,
+            )
+            return
+        entry = cls._to_memory_entry({
+            "type": "core",
+            "content": result.get("content"),
+            "created_at": result.get("created_at"),
+            "updated_at": result.get("updated_at"),
+        })
+        if entry is not None:
+            response.memories.append(entry)
 
     @override
     async def close(self) -> None:

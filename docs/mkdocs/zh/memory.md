@@ -547,8 +547,9 @@ python3 run_agent.py
 `TencentDBMemoryService` 用于对接
 [TencentDB Agent Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 V3 网关。每轮对话结束后，框架会将新增文本事件增量写入
-`/v3/conversation/add`；配置了 `load_memory_tool` 的 Agent 会通过
-`/v3/atomic/search` 检索异步提取出的 L1 原子记忆。
+`/v3/conversation/add`；配置了 `load_memory_tool` 的 Agent 会并行召回
+L1 原子记忆、L2 场景导航和 L3 核心记忆。三层均无可用内容时，再通过
+`/v3/conversation/search` 搜索 L0 原始对话。
 
 ```python
 from trpc_agent_sdk.memory.tencentdb_memory_service import (
@@ -581,6 +582,9 @@ memory_service = TencentDBMemoryService(
 使用时需要注意：
 
 - L1 记忆提取是异步的，写入成功后不保证立即可以搜索到。
+- 召回请求并行访问 `/v3/atomic/search`、`/v3/scenario/ls` 和
+  `/v3/core/read`；单层失败不会丢弃其他层的有效结果。
+- 只有 L1、L2、L3 均无可用内容时才回退搜索 L0。
 - 进程内会记录已成功写入的事件 ID；进程重启后采用至少一次投递语义。
 - 记忆保留策略由 TencentDB Agent Memory 管理，框架 TTL 配置不适用于该服务。
 - 使用前需要部署 V3 网关和记忆提取流水线。

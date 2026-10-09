@@ -266,27 +266,32 @@ async def test_store_session_skips_empty_partial_and_error_events():
 
 
 @pytest.mark.asyncio
-async def test_search_memory_maps_v3_atomic_items_across_sessions():
-    captured_body: dict[str, Any] = {}
+async def test_search_memory_combines_v3_l1_l2_l3_across_sessions():
+    captured_bodies: dict[str, dict[str, Any]] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        captured_body.update(json.loads(request.content))
-        return _json_response({
-            "items": [
-                {
+        captured_bodies[request.url.path] = json.loads(request.content)
+        if request.url.path == "/v3/atomic/search":
+            return _json_response({
+                "items": [{
                     "id": "atomic-1",
                     "type": "persona",
                     "content": "The user's favorite color is blue.",
                     "score": 0.97,
                     "created_at": "2026-09-24T10:00:00Z",
                     "updated_at": "2026-09-24T10:01:00Z",
-                },
-                {
-                    "id": "atomic-2",
-                    "type": "episodic",
-                    "content": "",
-                },
-            ],
+                }],
+            })
+        if request.url.path == "/v3/scenario/ls":
+            return _json_response({
+                "entries": [{
+                    "path": "projects/release-review.md",
+                    "updated_at": "2026-09-24T10:02:00Z",
+                }],
+            })
+        return _json_response({
+            "content": "Always run the full regression suite before release.",
+            "updated_at": "2026-09-24T10:03:00Z",
         })
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -298,17 +303,60 @@ async def test_search_memory_maps_v3_atomic_items_across_sessions():
         limit=5,
     )
 
-    assert captured_body == {
+    assert captured_bodies["/v3/atomic/search"] == {
         "query": "favorite color",
         "limit": 5,
         "team_id": "team-1",
         "agent_id": "agent-1",
         "user_id": "user-1",
     }
-    assert len(result.memories) == 1
+    assert captured_bodies["/v3/scenario/ls"] == {
+        "team_id": "team-1",
+        "agent_id": "agent-1",
+        "user_id": "user-1",
+    }
+    assert captured_bodies["/v3/core/read"] == captured_bodies["/v3/scenario/ls"]
+    assert len(result.memories) == 3
     assert result.memories[0].content.parts[0].text == ("The user's favorite color is blue.")
     assert result.memories[0].author == "persona"
     assert result.memories[0].timestamp == "2026-09-24T10:01:00Z"
+    assert result.memories[1].content.parts[0].text == "projects/release-review.md"
+    assert result.memories[1].author == "scenario"
+    assert result.memories[2].content.parts[0].text == ("Always run the full regression suite before release.")
+    assert result.memories[2].author == "core"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_search_memory_keeps_successful_layer_on_partial_recall_failure():
+    paths: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == "/v3/scenario/ls":
+            return _json_response({
+                "entries": [{
+                    "path": "projects/release-review.md",
+                }],
+            })
+        return httpx.Response(503, text="unavailable")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    service = TencentDBMemoryService(_config(), client=client)
+
+    result = await service.search_memory(
+        key="memory-demo/user-1",
+        query="release review",
+    )
+
+    assert paths == [
+        "/v3/atomic/search",
+        "/v3/scenario/ls",
+        "/v3/core/read",
+    ]
+    assert len(result.memories) == 1
+    assert result.memories[0].author == "scenario"
+    assert result.memories[0].content.parts[0].text == "projects/release-review.md"
     await client.aclose()
 
 
@@ -320,6 +368,10 @@ async def test_search_memory_falls_back_to_semantic_conversation_search():
         requests.append(request)
         if request.url.path == "/v3/atomic/search":
             return _json_response({"items": []})
+        if request.url.path == "/v3/scenario/ls":
+            return _json_response({"entries": []})
+        if request.url.path == "/v3/core/read":
+            return _json_response({"content": ""})
         return _json_response({
             "messages": [{
                 "id": "message-1",
@@ -341,9 +393,11 @@ async def test_search_memory_falls_back_to_semantic_conversation_search():
 
     assert [request.url.path for request in requests] == [
         "/v3/atomic/search",
+        "/v3/scenario/ls",
+        "/v3/core/read",
         "/v3/conversation/search",
     ]
-    assert json.loads(requests[1].content)["query"] == "What color do I like?"
+    assert json.loads(requests[3].content)["query"] == "What color do I like?"
     assert result.memories[0].content.parts[0].text == "My favorite color is blue."
     assert result.memories[0].author == "user"
     assert result.memories[0].timestamp == "2026-09-24T10:00:00Z"
