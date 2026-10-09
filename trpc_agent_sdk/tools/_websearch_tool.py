@@ -6,8 +6,8 @@
 """Web search tool for TRPC Agent framework.
 
 Provides a client-side :class:`WebSearchTool` that lets LLMs search the
-public web for up-to-date information. Three pluggable provider backends
-are supported, ``duckduckgo``, ``google search``, and ``tavily``:
+public web for up-to-date information. Four pluggable provider backends
+are supported, ``duckduckgo``, ``google search``, ``tavily``, and ``youcom``:
 
 1. ``duckduckgo`` — DuckDuckGo(DDG) Instant Answer API. Keyless, good for
    factual/encyclopedic/definition lookups. Returns curated instant
@@ -17,11 +17,16 @@ are supported, ``duckduckgo``, ``google search``, and ``tavily``:
    filtering and language targeting.
 3. ``tavily`` — Tavily Search API. Requires ``api_key``; returns LLM-ready
    web results and optionally direct image URLs.
+4. ``youcom`` — You.com ``you-search`` MCP tool over streamable HTTP.
+   Keyless through the free profile endpoint; ``YDC_API_KEY`` optionally
+   switches requests to the authenticated endpoint. Returns web and news
+   hits with descriptions and query-relevant highlights.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 from typing import Any
 from typing import List
@@ -68,6 +73,10 @@ _DDG_BASE_URL = "https://api.duckduckgo.com"
 _GOOGLE_BASE_URL = "https://www.googleapis.com/customsearch/v1"
 # Tavily Search base URL
 _TAVILY_BASE_URL = "https://api.tavily.com/search"
+# You.com MCP streamable-HTTP endpoints. The free profile is keyless and
+# exposes the ``you-search`` tool; YDC_API_KEY switches to the authenticated endpoint.
+_YOUCOM_BASE_URL = "https://api.you.com/mcp?profile=free"
+_YOUCOM_AUTH_BASE_URL = "https://api.you.com/mcp"
 # Description shown to the LLM as part of the tool schema.
 _BASE_DESCRIPTION = """\
 Search the public web and use the results to inform responses.
@@ -95,7 +104,7 @@ Usage notes:
     for the required 'Sources:' format.\
 """
 
-ProviderType = Literal["duckduckgo", "google", "tavily"]
+ProviderType = Literal["duckduckgo", "google", "tavily", "youcom"]
 
 
 class SearchHit(BaseModel):
@@ -273,11 +282,37 @@ def _extract_desc_from_pagemap(pagemap: dict[str, Any]) -> str:
         return ""
 
 
+def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
+    """Parse the ``data:`` lines of a streamable-HTTP SSE body.
+
+    A streamable-HTTP server answers a JSON-RPC request with one SSE body
+    whose ``data:`` lines carry one JSON object each (progress notifications
+    followed by the final result). Lines that fail to parse are skipped so a
+    stray keep-alive or partial frame cannot break the search.
+    """
+    payloads: List[dict[str, Any]] = []
+    for line in (text or "").splitlines():
+        if not line.startswith("data:"):
+            continue
+        raw = line[len("data:"):].strip()
+        if not raw:
+            continue
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("WebSearchTool: skipping unparseable SSE line: %.80s", raw)
+            continue
+        if isinstance(decoded, dict):
+            payloads.append(decoded)
+    return payloads
+
+
 class WebSearchTool(BaseTool):
     """LLM tool that searches the public web.
 
     The WebSearchTool enables LLM agents to search the public web using major search engines
-    such as DuckDuckGo (default, no API key required), Google Custom Search, and Tavily.
+    such as DuckDuckGo (default, no API key required), Google Custom Search, Tavily,
+    and You.com (keyless through its free MCP profile).
     It retrieves up-to-date information including titles, URLs, and content snippets, and also
     provides instant-answer summaries when available (e.g., via DuckDuckGo). This tool is best
     used for queries about recent events, new releases, factual lookups, or definitions that benefit
@@ -286,9 +321,11 @@ class WebSearchTool(BaseTool):
     sources as Markdown hyperlinks in the final output.
 
     Args:
-        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``, or ``"tavily"``.
+        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``,
+            ``"tavily"``, or ``"youcom"``.
         api_key: Provider API key. Falls back to ``GOOGLE_CSE_API_KEY`` for
-            Google or ``TAVILY_API_KEY`` for Tavily.
+            Google, ``TAVILY_API_KEY`` for Tavily, or ``YDC_API_KEY`` for
+            You.com (optional; the free profile is keyless).
         engine_id: Google CSE engine id (``cx``); falls back to ``GOOGLE_CSE_ENGINE_ID``.
         results_num: Default result count, clamped to ``[1, _MAX_COUNT]``.
         snippet_len: Max snippet length, clamped to ``[1, _MAX_SNIPPET_LEN]``.
@@ -322,6 +359,7 @@ class WebSearchTool(BaseTool):
         ddg_extra_params: Optional[dict[str, Any]] = None,
         google_extra_params: Optional[dict[str, Any]] = None,
         tavily_extra_params: Optional[dict[str, Any]] = None,
+        youcom_extra_params: Optional[dict[str, Any]] = None,
         filters_name: Optional[List[str]] = None,
         filters: Optional[List[BaseFilter]] = None,
     ) -> None:
@@ -333,13 +371,17 @@ class WebSearchTool(BaseTool):
             filters=filters,
         )
 
-        if provider not in ("duckduckgo", "google", "tavily"):
+        if provider not in ("duckduckgo", "google", "tavily", "youcom"):
             raise ValueError(f"Unsupported web search provider: {provider!r}")
         self._provider: ProviderType = provider
         if provider == "google":
             self._api_key = api_key or os.environ.get("GOOGLE_CSE_API_KEY", "")
         elif provider == "tavily":
             self._api_key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        elif provider == "youcom":
+            # You.com is keyless via the free MCP profile; a YDC_API_KEY
+            # switches requests to the authenticated endpoint.
+            self._api_key = api_key or os.environ.get("YDC_API_KEY", "")
         else:
             self._api_key = api_key or ""
         self._engine_id = engine_id or os.environ.get("GOOGLE_CSE_ENGINE_ID", "")
@@ -351,6 +393,7 @@ class WebSearchTool(BaseTool):
             "duckduckgo": _DDG_BASE_URL,
             "google": _GOOGLE_BASE_URL,
             "tavily": _TAVILY_BASE_URL,
+            "youcom": _YOUCOM_AUTH_BASE_URL if self._api_key else _YOUCOM_BASE_URL,
         }
         self._base_url = base_url or default_base_urls[provider]
         self._user_agent = user_agent
@@ -361,6 +404,7 @@ class WebSearchTool(BaseTool):
         self._ddg_extra_params = ddg_extra_params or {}
         self._google_extra_params = google_extra_params or {}
         self._tavily_extra_params = tavily_extra_params or {}
+        self._youcom_extra_params = youcom_extra_params or {}
 
         if provider == "google" and not (self._api_key and self._engine_id):
             logger.warning("WebSearchTool: provider='google' but api_key or "
@@ -409,7 +453,8 @@ class WebSearchTool(BaseTool):
             "lang":
             Schema(
                 type=Type.STRING,
-                description=("Optional. Language hint for the provider (Google CSE 'hl'); "
+                description=("Optional. Language hint for the provider (Google CSE 'hl'; "
+                             "You.com maps it to the inline `lang:` filter); "
                              "ignored by DuckDuckGo and Tavily. Default: tool-level lang or unset. "
                              "Example: 'en', 'zh-CN', 'ja'."),
             ),
@@ -510,6 +555,8 @@ class WebSearchTool(BaseTool):
                     blocked,
                     include_images,
                 )
+            elif self._provider == "youcom":
+                result = await self._search_youcom(query, n, allowed, blocked, lang)
             else:
                 result = await self._search_google(query, n, allowed, blocked, lang)
         except httpx.HTTPError as e:
@@ -571,6 +618,41 @@ class WebSearchTool(BaseTool):
             )
             resp.raise_for_status()
             return resp.json()
+        finally:
+            if close:
+                await client.aclose()
+
+    async def _post_sse(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        *,
+        headers: Optional[dict[str, str]] = None,
+    ) -> List[dict[str, Any]]:
+        """Issue a POST and decode the SSE ``data:`` payloads in the body.
+
+        Used for JSON-RPC endpoints that answer with ``text/event-stream``
+        instead of a single JSON document (the You.com MCP endpoint).
+        """
+        client = self._get_client()
+        close = self._http_client is None
+        request_headers = {
+            "User-Agent": self._user_agent,
+            # The streamable-HTTP server rejects JSON-only Accept headers
+            # with 406 Not Acceptable, so SSE must be listed here.
+            "Accept": "application/json, text/event-stream",
+        }
+        if headers:
+            request_headers.update(headers)
+        try:
+            resp = await client.post(
+                url,
+                json=payload,
+                timeout=self._timeout,
+                headers=request_headers,
+            )
+            resp.raise_for_status()
+            return _parse_sse_payloads(resp.text)
         finally:
             if close:
                 await client.aclose()
@@ -679,6 +761,137 @@ class WebSearchTool(BaseTool):
             results=hits,
             summary=_truncate(answer, self._snippet_len),
             images=images,
+        )
+
+    async def _search_youcom(
+        self,
+        query: str,
+        n: int,
+        allowed: Optional[List[str]],
+        blocked: Optional[List[str]],
+        lang: Optional[str],
+    ) -> WebSearchResult:
+        """Search the public web through the You.com ``you-search`` MCP tool.
+
+        The endpoint is stateless JSON-RPC over streamable HTTP: a single
+        ``tools/call`` POST is answered by one SSE body whose ``data:`` lines
+        carry the tool result. The free profile works without an API key; a
+        configured ``YDC_API_KEY`` upgrades requests to the authenticated
+        endpoint. Blocked domains are excluded server-side; allowlists are
+        enforced post-hoc by ``_is_blocked``, mirroring the other providers.
+        """
+        arguments: dict[str, Any] = {"query": query, "count": n}
+        if lang:
+            # You.com maps an inline ``lang:`` operator to a language filter.
+            arguments["query"] = f"{query} lang:{lang}"
+        if blocked:
+            arguments["exclude_domains"] = blocked
+        arguments.update(self._youcom_extra_params)
+
+        payload: dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "you-search",
+                "arguments": arguments,
+            },
+        }
+        headers: Optional[dict[str, str]] = None
+        if self._api_key:
+            headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        payloads = await self._post_sse(self._base_url, payload, headers=headers)
+
+        result: Optional[dict[str, Any]] = None
+        error: Optional[dict[str, Any]] = None
+        for item in payloads:
+            if "result" in item:
+                result = item["result"]
+            elif "error" in item:
+                error = item["error"]
+        if error is not None:
+            message = error.get("message") if isinstance(error, dict) else str(error)
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary=_truncate(f"You.com search error: {message}", self._snippet_len),
+            )
+        if not isinstance(result, dict):
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary="You.com search returned no result payload.",
+            )
+
+        text = ""
+        for content in result.get("content") or []:
+            if isinstance(content, dict) and content.get("type") == "text":
+                text = str(content.get("text") or "")
+                break
+        if result.get("isError") and text:
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary=_truncate(f"You.com search error: {text}", self._snippet_len),
+            )
+
+        data: Any = None
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+        if not isinstance(data, dict):
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary="You.com search returned an unexpected payload.",
+            )
+
+        sections = data.get("results")
+        if not isinstance(sections, dict):
+            sections = {}
+        items: List[dict[str, Any]] = []
+        for section in ("web", "news"):
+            for item in sections.get(section) or []:
+                if isinstance(item, dict):
+                    items.append(item)
+
+        hits: List[SearchHit] = []
+        seen: set[str] = set()
+        for item in items:
+            url = str(item.get("url") or "").strip()
+            if not url or _is_blocked(url, allowed, blocked):
+                continue
+            if self._dedup_urls:
+                key = _dedup_key(url)
+                if key in seen:
+                    continue
+                seen.add(key)
+            description = str(item.get("description") or "").strip()
+            if not description:
+                contents = item.get("contents")
+                highlights = contents.get("highlights") if isinstance(contents, dict) else None
+                if highlights:
+                    description = str(highlights[0]).strip()
+            hits.append(
+                SearchHit(
+                    title=_truncate(str(item.get("title") or ""), self._title_len),
+                    url=url,
+                    snippet=_truncate(description, self._snippet_len),
+                ))
+            if len(hits) >= n:
+                break
+
+        return WebSearchResult(
+            query=query,
+            provider="youcom",
+            results=hits,
+            summary="",
         )
 
     async def _search_duckduckgo(

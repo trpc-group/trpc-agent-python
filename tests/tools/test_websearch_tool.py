@@ -18,6 +18,10 @@ Covers the full BaseTool surface area:
   missing credentials)
 - Tavily Search path (results, optional images, domain include/exclude,
   API error, missing credentials, extra params)
+- You.com ``you-search`` MCP path (stateless JSON-RPC over SSE, keyless
+  free profile, YDC_API_KEY authenticated endpoint, lang inline filter,
+  server-side excluded / post-hoc allowed domains, JSON-RPC and tool
+  errors, extra params)
 - HTTP errors surfacing as structured tool errors
 - ``process_request`` registering the declaration and appending the
   "current month / Sources" system instruction
@@ -52,6 +56,7 @@ from trpc_agent_sdk.tools._websearch_tool import _extract_domain_from_url
 from trpc_agent_sdk.tools._websearch_tool import _extract_desc_from_pagemap
 from trpc_agent_sdk.tools._websearch_tool import _extract_title_from_ddg_topic
 from trpc_agent_sdk.tools._websearch_tool import _is_blocked
+from trpc_agent_sdk.tools._websearch_tool import _parse_sse_payloads
 from trpc_agent_sdk.tools._websearch_tool import _truncate
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Type
@@ -79,6 +84,38 @@ def _make_mock_client(responses: Dict[str, Dict[str, Any]], *, status: int = 200
         if body is None:
             return httpx.Response(404, json={"error": "no mock for path"})
         return httpx.Response(status, json=body)
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.AsyncClient(transport=transport)
+    # Stash captures on the client so tests can introspect them.
+    client._captured = captured  # type: ignore[attr-defined]
+    return client
+
+
+def _make_mock_sse_client(responses: Dict[str, str], *, status: int = 200) -> httpx.AsyncClient:
+    """Build an ``httpx.AsyncClient`` backed by ``MockTransport`` for SSE bodies.
+
+    The You.com MCP endpoint answers JSON-RPC POSTs with
+    ``text/event-stream`` instead of a JSON document; ``responses`` maps
+    request URL path (e.g. ``"/mcp"``) to the raw SSE text to return.
+    All non-matching paths return 404 so test misses surface loudly.
+    The returned client captures the last request for assertions via
+    ``client._captured``.
+    """
+
+    captured = {"last_request": None, "all_requests": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["last_request"] = request
+        captured["all_requests"].append(request)
+        body = responses.get(request.url.path)
+        if body is None:
+            return httpx.Response(404, json={"error": "no mock for path"})
+        return httpx.Response(
+            status,
+            text=body,
+            headers={"content-type": "text/event-stream"},
+        )
 
     transport = httpx.MockTransport(handler)
     client = httpx.AsyncClient(transport=transport)
@@ -169,6 +206,20 @@ class TestWebSearchToolInit:
         t = WebSearchTool(provider="tavily")
         assert t._api_key == "env-tavily-key"
 
+    def test_youcom_keyless_by_default(self, monkeypatch):
+        # No YDC_API_KEY → keyless free profile, no credentials needed.
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        t = WebSearchTool(provider="youcom")
+        assert t._api_key == ""
+        assert t._base_url == "https://api.you.com/mcp?profile=free"
+
+    def test_youcom_reads_api_key_from_env(self, monkeypatch):
+        monkeypatch.setenv("YDC_API_KEY", "env-ydc-key")
+        t = WebSearchTool(provider="youcom")
+        assert t._api_key == "env-ydc-key"
+        # A configured key switches to the authenticated endpoint.
+        assert t._base_url == "https://api.you.com/mcp"
+
     def test_results_num_clamped(self):
         from trpc_agent_sdk.tools._websearch_tool import _MAX_COUNT
         # Above the cap → clamped to _MAX_COUNT.
@@ -201,6 +252,18 @@ class TestGetDeclaration:
         props = decl.parameters.properties
         assert "include_images" in props
         assert props["include_images"].type == Type.BOOLEAN
+
+    def test_youcom_declaration_has_base_props_only(self):
+        decl = WebSearchTool(provider="youcom")._get_declaration()
+        props = decl.parameters.properties
+        # youcom adds no provider-specific properties (include_images is Tavily-only).
+        assert set(props.keys()) == {
+            "query",
+            "count",
+            "allowed_domains",
+            "blocked_domains",
+            "lang",
+        }
 
 
 class TestInputValidation:
@@ -1337,6 +1400,334 @@ class TestTavilyProvider:
         assert len(res["results"]) == 1
         assert len(res["images"]) == 1
         await client.aclose()
+
+
+_YOUCOM_TOOL_TEXT: str = json.dumps({
+    "results": {
+        "web": [
+            {
+                "title": "What's New In Python 3.13",
+                "url": "https://docs.python.org/3/whatsnew/3.13.html",
+                "description": "This article explains the new features in Python 3.13.",
+                "contents": {
+                    "highlights": ["Python 3.13 adds free-threaded support."],
+                },
+            },
+            {
+                # No description — snippet must fall back to the first highlight.
+                "title": "Python on Wikipedia",
+                "url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+                "description": "",
+                "contents": {
+                    "highlights": ["Python is a high-level programming language."],
+                },
+            },
+        ],
+        "news": [
+            {
+                "title": "Python 3.13.1 released",
+                "url": "https://blog.python.org/python-3-13-1-released",
+                "description": "The first maintenance release of Python 3.13.",
+            },
+        ],
+    },
+})
+
+
+def _youcom_sse_body(text: str) -> str:
+    """Build the SSE body the You.com endpoint returns for ``tools/call``.
+
+    Mirrors the wire format of ``https://api.you.com/mcp``: an optional
+    ``notifications/message`` notification followed by the JSON-RPC result
+    carrying the tool text content.
+    """
+    notification = {
+        "jsonrpc": "2.0",
+        "method": "notifications/message",
+        "params": {
+            "level": "info",
+            "data": "Search successful",
+        },
+    }
+    result = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "content": [{
+                "type": "text",
+                "text": text,
+            }],
+        },
+    }
+    return ("event: message\n"
+            f"data: {json.dumps(notification)}\n\n"
+            "event: message\n"
+            f"data: {json.dumps(result)}\n\n")
+
+
+class TestYoucomProvider:
+    """You.com ``youcom`` provider: stateless JSON-RPC over streamable HTTP."""
+
+    @pytest.mark.asyncio
+    async def test_keyless_search_maps_web_and_news_hits(self, monkeypatch):
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(provider="youcom", http_client=client)
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "Python 3.13"})
+        assert res["provider"] == "youcom"
+        assert res["query"] == "Python 3.13"
+        assert res["summary"] == ""
+        urls = [h["url"] for h in res["results"]]
+        # Web hits first, then news hits merged in.
+        assert urls == [
+            "https://docs.python.org/3/whatsnew/3.13.html",
+            "https://en.wikipedia.org/wiki/Python_(programming_language)",
+            "https://blog.python.org/python-3-13-1-released",
+        ]
+        # Descriptions map to snippets...
+        assert "new features in Python 3.13" in res["results"][0]["snippet"]
+        # ...with first-highlight fallback when description is empty.
+        assert res["results"][1]["snippet"] == "Python is a high-level programming language."
+        req = client._captured["last_request"]
+        # Keyless: no Authorization header on the free-profile request.
+        assert req.headers.get("authorization") is None
+        # The endpoint rejects JSON-only Accept headers (406); SSE must be accepted.
+        assert "text/event-stream" in req.headers.get("accept", "")
+        payload = json.loads(req.content)
+        assert payload["method"] == "tools/call"
+        assert payload["params"]["name"] == "you-search"
+        arguments = payload["params"]["arguments"]
+        assert arguments["query"] == "Python 3.13"
+        assert arguments["count"] == 5  # default results_num
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_api_key_sends_bearer_header(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://api.you.com/mcp",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        req = client._captured["last_request"]
+        assert req.headers.get("authorization") == "Bearer ydc-test"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_lang_maps_to_inline_filter(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python release",
+                "lang": "zh-CN"
+            },
+        )
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["params"]["arguments"]["query"] == "python release lang:zh-CN"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_blocked_domains_sent_server_side_and_filtered(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "blocked_domains": ["wikipedia.org"]
+            },
+        )
+        payload = json.loads(client._captured["last_request"].content)
+        # Blocked domains ride along as server-side exclude_domains.
+        assert payload["params"]["arguments"]["exclude_domains"] == ["wikipedia.org"]
+        urls = [h["url"] for h in res["results"]]
+        assert all("wikipedia.org" not in u for u in urls)
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_allowed_domains_filter_post_hoc(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={
+                "query": "python",
+                "allowed_domains": ["python.org"]
+            },
+        )
+        payload = json.loads(client._captured["last_request"].content)
+        # Allowlists are enforced client-side; nothing rides along server-side.
+        assert "exclude_domains" not in payload["params"]["arguments"]
+        urls = [h["url"] for h in res["results"]]
+        assert urls == [
+            "https://docs.python.org/3/whatsnew/3.13.html",
+            "https://blog.python.org/python-3-13-1-released",
+        ]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_extra_params_are_merged(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+            youcom_extra_params={"freshness": "week"},
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["params"]["arguments"]["freshness"] == "week"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_count_limits_hits(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+            results_num=1,
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert len(res["results"]) == 1
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["params"]["arguments"]["count"] == 1
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_dedup_urls_and_urlless_hits_skipped(self):
+        text = json.dumps({
+            "results": {
+                "web": [
+                    {
+                        "title": "A",
+                        "url": "https://example.com/page",
+                        "description": "d1"
+                    },
+                    # Trailing slash — same normalised key as the first hit.
+                    {
+                        "title": "B",
+                        "url": "https://example.com/page/",
+                        "description": "d2"
+                    },
+                    # No URL — must be skipped.
+                    {
+                        "title": "C",
+                        "url": "",
+                        "description": "d3"
+                    },
+                ],
+            },
+        })
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(text)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        urls = [h["url"] for h in res["results"]]
+        assert urls == ["https://example.com/page"]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_jsonrpc_error_surfaced_as_summary(self):
+        error = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {
+                "code": -32000,
+                "message": "rate limited",
+            },
+        }
+        body = f"event: message\ndata: {json.dumps(error)}\n\n"
+        client = _make_mock_sse_client({"/mcp": body})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert "rate limited" in res["summary"]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_tool_iserror_surfaced_as_summary(self):
+        result = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "isError": True,
+                "content": [{
+                    "type": "text",
+                    "text": "upstream provider unavailable",
+                }],
+            },
+        }
+        body = f"event: message\ndata: {json.dumps(result)}\n\n"
+        client = _make_mock_sse_client({"/mcp": body})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert "upstream provider unavailable" in res["summary"]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_no_result_payload_returns_summary(self):
+        # SSE body carrying only a notification — no JSON-RPC result line.
+        notification = {"jsonrpc": "2.0", "method": "notifications/message", "params": {}}
+        body = f"data: {json.dumps(notification)}\n\n"
+        client = _make_mock_sse_client({"/mcp": body})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert res["summary"] == "You.com search returned no result payload."
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_non_json_tool_text_returns_summary(self):
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body("<not json>")})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert res["summary"] == "You.com search returned an unexpected payload."
+        await client.aclose()
+
+    def test_parse_sse_payloads_skips_garbage_lines(self):
+        text = ('data: not-json\n\n'
+                'event: message\n'
+                'data: {"result": {"x": 1}}\n\n')
+        payloads = _parse_sse_payloads(text)
+        assert payloads == [{"result": {"x": 1}}]
 
 
 class TestHttpErrorHandling:
