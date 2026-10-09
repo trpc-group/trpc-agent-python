@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 import pytest
+from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import DEFAULT_EXEC_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_IO_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_POLL_LINES
@@ -17,10 +18,13 @@ from trpc_agent_sdk.skills.tools._skill_exec import PollSessionTool
 from trpc_agent_sdk.skills.tools._skill_exec import SkillExecTool
 from trpc_agent_sdk.skills.tools._skill_exec import WriteStdinTool
 from trpc_agent_sdk.skills.tools._skill_exec import _close_session
+from trpc_agent_sdk.skills.tools._skill_exec import _collect_final_result
 from trpc_agent_sdk.skills.tools._skill_exec import _detect_interaction
 from trpc_agent_sdk.skills.tools._skill_exec import _has_selection_items
 from trpc_agent_sdk.skills.tools._skill_exec import _last_non_empty_line
+from trpc_agent_sdk.skills.tools._skill_exec import _start_session
 from trpc_agent_sdk.skills.tools._skill_exec import create_exec_tools
+from trpc_agent_sdk.skills.tools._skill_run import SkillRunFile
 
 
 def _make_exec_tool() -> SkillExecTool:
@@ -107,3 +111,58 @@ class TestCloseSession:
         sess.proc.close = AsyncMock()
         await _close_session(sess)
         sess.proc.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_collect_final_result_passes_workspace_runtime_and_returns_files():
+    ctx = MagicMock()
+    ws = MagicMock()
+    workspace_runtime = MagicMock(spec=BaseWorkspaceRuntime)
+    output_file = SkillRunFile(
+        name="result.txt",
+        content="done",
+        mime_type="text/plain",
+        size_bytes=4,
+    )
+
+    async def prepare_outputs(got_ctx, got_ws, got_runtime, input_data):
+        assert got_ctx is ctx
+        assert got_ws is ws
+        assert got_runtime is workspace_runtime
+        assert input_data.output_files == ["result.txt"]
+        return [output_file], None
+
+    run_tool = MagicMock()
+    run_tool._prepare_outputs = prepare_outputs
+    run_tool._attach_artifacts_if_requested = AsyncMock()
+    run_tool._merge_manifest_artifact_refs = MagicMock()
+
+    proc = MagicMock()
+    proc.run_result = AsyncMock(return_value=MagicMock(
+        stdout="command completed",
+        stderr="",
+        exit_code=0,
+    ), )
+    runner = MagicMock()
+    runner.start_program = AsyncMock(return_value=proc)
+    inputs = ExecInput(
+        skill="test",
+        command="echo done > result.txt",
+        output_files=["result.txt"],
+    )
+    exec_session = await _start_session(
+        runner=runner,
+        tool_context=ctx,
+        inputs=inputs,
+        ws=ws,
+        workspace_runtime=workspace_runtime,
+        rel_cwd="skills/test",
+        env={},
+    )
+
+    result = await _collect_final_result(ctx, exec_session, run_tool)
+
+    assert result is not None
+    assert result.output_files == [output_file]
+    assert result.primary_output == output_file
+    assert exec_session.finalized is True
