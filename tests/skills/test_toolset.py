@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from trpc_agent_sdk.skills._dynamic_toolset import SkillToolSetWithDynamicTools
 from trpc_agent_sdk.skills._toolset import SkillToolSet
 
@@ -28,6 +30,7 @@ def _make_ctx():
 
 
 class TestSkillToolSetInit:
+
     def test_default_init(self, tmp_path):
         ts = SkillToolSet(paths=[str(tmp_path)])
         assert ts.name == "skill_toolset"
@@ -41,6 +44,7 @@ class TestSkillToolSetInit:
 
 
 class TestSkillToolSetGetTools:
+
     async def test_get_tools_returns_tools(self, tmp_path):
         ts = SkillToolSet(paths=[str(tmp_path)])
         ctx = _make_ctx()
@@ -74,7 +78,51 @@ class TestSkillToolSetGetTools:
         ctx.agent_context.with_metadata.assert_called()
 
 
+@pytest.mark.parametrize("toolset_cls", [SkillToolSet, SkillToolSetWithDynamicTools])
+class TestSkillToolSetFiltering:
+
+    async def test_name_filter_applies_to_first_and_cached_calls(self, tmp_path, toolset_cls):
+        ts = toolset_cls(
+            paths=[str(tmp_path)],
+            tool_filter=["skill_load"],
+            is_include_all_tools=False,
+        )
+
+        for _ in range(2):
+            tools = await ts.get_tools(_make_ctx())
+            assert [tool.name for tool in tools] == ["skill_load"]
+
+    async def test_predicate_rechecks_current_context_without_filtering_cache(self, tmp_path, toolset_cls):
+
+        def predicate(tool, invocation_context):
+            return tool.name in invocation_context.allowed_tools
+
+        ts = toolset_cls(
+            paths=[str(tmp_path)],
+            tool_filter=predicate,
+            is_include_all_tools=False,
+        )
+
+        for allowed_tools in ({"skill_run"}, {"skill_load"}):
+            ctx = _make_ctx()
+            ctx.allowed_tools = allowed_tools
+            tools = await ts.get_tools(ctx)
+            assert {tool.name for tool in tools} == allowed_tools
+
+    async def test_include_all_tools_overrides_filter(self, tmp_path, toolset_cls):
+        ts = toolset_cls(
+            paths=[str(tmp_path)],
+            tool_filter=["skill_load"],
+            is_include_all_tools=True,
+        )
+
+        tools = await ts.get_tools(_make_ctx())
+        assert "skill_load" in {tool.name for tool in tools}
+        assert len(tools) > 1
+
+
 class TestSkillToolSetWithDynamicTools:
+
     async def test_get_tools_includes_dynamic_selection_helpers(self, tmp_path):
         ts = SkillToolSetWithDynamicTools(paths=[str(tmp_path)])
         ctx = _make_ctx()

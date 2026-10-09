@@ -144,15 +144,21 @@ class SkillToolSet(ToolSetABC):
         """Get the skill repository."""
         return self._repository
 
+    def _get_selected_tools(self, invocation_context: Optional[InvocationContext]) -> List[ToolABC]:
+        """Return tools selected for the current invocation."""
+        if not self._tool_filter or self._is_include_all_tools:
+            return self._default_tools
+        return [tool for tool in self._default_tools if self._is_tool_selected(tool, invocation_context)]
+
     @override
     async def get_tools(self, invocation_context: Optional[InvocationContext] = None) -> List[ToolABC]:
         """Get all tools from registered skills.
 
         Args:
-            invocation_context: Optional invocation context (not used currently)
+            invocation_context: Optional invocation context used for filtering.
 
         Returns:
-            List of tools from all registered skills
+            List of tools selected for the current invocation.
         """
         if self._repo_resolver is not None:
             repository = self._repo_resolver(invocation_context)
@@ -167,7 +173,7 @@ class SkillToolSet(ToolSetABC):
             if not is_exist_skill_config(agent_context):
                 set_skill_config(agent_context, self._skill_config)
         if self._default_tools:
-            return self._default_tools.copy()
+            return self._get_selected_tools(invocation_context)
 
         tools: List[ToolABC] = []
         tools.append(self._load_tool)
@@ -184,4 +190,4 @@ class SkillToolSet(ToolSetABC):
                 logger.warning("Failed to get tools from skill '%s': %s", skill_function.__name__, ex)
                 continue
         self._default_tools.extend(tools)
-        return tools
+        return self._get_selected_tools(invocation_context)

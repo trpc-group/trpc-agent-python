@@ -182,6 +182,68 @@ Always use environment variables in commands:
 - **代码位置**：
   - 工具包入口（聚合导出）：[trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
   - `skill_run` 实现：[trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)（其余工具见下文各节「声明位置」）
+
+#### 按场景限制 Skill 工具
+
+`SkillToolSet` 默认暴露全部内置工具。通常不需要配置过滤器；如果需要减少
+LLM 可见工具、实施权限控制，或者只启用某类 Skill，可以同时配置
+`tool_filter` 和 `is_include_all_tools=False`：
+
+```python
+# 指导型 Skill：只加载 SKILL.md 和文档，不执行其中的脚本。
+skill_tool_set = SkillToolSet(
+    repository=repository,
+    tool_filter=["skill_load"],
+    is_include_all_tools=False,
+)
+
+# 脚本型 Skill：先加载说明，再执行一次性命令。
+skill_tool_set = SkillToolSet(
+    repository=repository,
+    tool_filter=["skill_load", "skill_run"],
+    is_include_all_tools=False,
+    run_tool_kwargs={"require_skill_loaded": True},
+)
+
+# 也可以根据当前调用上下文动态判断。
+def select_skill_tool(tool, invocation_context):
+    allowed_tools = invocation_context.session_state.get(
+        "allowed_skill_tools", []
+    )
+    return tool.name in allowed_tools
+
+skill_tool_set = SkillToolSet(
+    repository=repository,
+    tool_filter=select_skill_tool,
+    is_include_all_tools=False,
+)
+```
+
+`tool_filter` 支持工具名称列表或 Predicate 函数。Predicate 会在每次
+`get_tools()` 时使用当前 `InvocationContext` 重新判断，因此可以根据用户权限、
+会话状态或租户配置动态暴露工具。默认的 `is_include_all_tools=True` 会忽略过滤器，
+保持向后兼容；只有设置为 `False` 时过滤器才会生效。
+
+按用途可以将工具分为：
+
+- `skill_load`：加载 Skill 主体和文档。仅提供操作指导、Prompt 或领域知识的
+  Skill 通常只需要该工具。
+- `skill_run`：执行 Skill 中的一次性脚本或命令。默认允许直接运行；如果设置
+  `run_tool_kwargs={"require_skill_loaded": True}`，必须同时允许 `skill_load`。
+- `skill_exec`：启动需要交互或长时间运行的 Skill 命令。
+- `skill_list`、`skill_list_docs`、`skill_select_docs`：用于发现 Skill 和按需
+  选择文档，均为辅助工具。
+- `workspace_exec`、`workspace_write_stdin`、`workspace_kill_session`：直接执行、
+  输入或终止工作区命令。
+- `workspace_save_artifact`：需要将工作区文件保存为 Artifact 时使用。
+- `skill_list_tools`、`skill_select_tools`：仅由
+  `SkillToolSetWithDynamicTools` 提供，用于动态业务工具选择。
+
+过滤器采用白名单语义，不会自动补齐依赖。例如仅允许 `skill_load` 后，LLM
+不能再调用 `skill_run`。因此，指导型 Skill 可以只保留 `skill_load`；常规脚本型
+Skill 建议至少保留 `skill_load` 和 `skill_run`；需要文档选择、交互执行、工作区
+操作或 Artifact 时，再加入对应工具。
+
 ### 3) 运行示例
 
 完整示例交互式演示：[examples/skills/run_agent.py](../../../examples/skills/run_agent.py)

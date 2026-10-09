@@ -183,6 +183,74 @@ Key points:
   - Package entry (aggregated exports): [trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
   - `skill_run` implementation: [trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py) (for other tools, see **Declaration location** in each section below)
 
+#### Restricting Skill Tools by Use Case
+
+`SkillToolSet` exposes all built-in tools by default. You normally do not need
+to configure a filter. To reduce the tools visible to the LLM, enforce access
+control, or enable only a particular type of skill, configure `tool_filter`
+together with `is_include_all_tools=False`:
+
+```python
+# Instruction-only skill: load SKILL.md and docs without running its scripts.
+skill_tool_set = SkillToolSet(
+    repository=repository,
+    tool_filter=["skill_load"],
+    is_include_all_tools=False,
+)
+
+# Script-based skill: load its instructions, then run a one-shot command.
+skill_tool_set = SkillToolSet(
+    repository=repository,
+    tool_filter=["skill_load", "skill_run"],
+    is_include_all_tools=False,
+    run_tool_kwargs={"require_skill_loaded": True},
+)
+
+# You can also make the decision dynamically for each invocation.
+def select_skill_tool(tool, invocation_context):
+    allowed_tools = invocation_context.session_state.get(
+        "allowed_skill_tools", []
+    )
+    return tool.name in allowed_tools
+
+skill_tool_set = SkillToolSet(
+    repository=repository,
+    tool_filter=select_skill_tool,
+    is_include_all_tools=False,
+)
+```
+
+`tool_filter` accepts either a list of tool names or a predicate function. The
+predicate is evaluated by `get_tools()` against the current
+`InvocationContext` on every invocation, so it can expose tools based on user
+permissions, session state, or tenant configuration. The default
+`is_include_all_tools=True` ignores the filter for backward compatibility; the
+filter takes effect only when this option is set to `False`.
+
+The tools serve the following purposes:
+
+- `skill_load`: Loads the skill body and documentation. An instruction-only
+  skill that provides guidance, prompts, or domain knowledge usually needs only
+  this tool.
+- `skill_run`: Runs a one-shot script or command from a skill. It can run
+  directly by default. If `run_tool_kwargs={"require_skill_loaded": True}` is
+  set, `skill_load` must also be allowed.
+- `skill_exec`: Starts an interactive or long-running skill command.
+- `skill_list`, `skill_list_docs`, and `skill_select_docs`: Optional helpers
+  for skill discovery and on-demand documentation selection.
+- `workspace_exec`, `workspace_write_stdin`, and `workspace_kill_session`:
+  Run, provide input to, or terminate workspace commands directly.
+- `workspace_save_artifact`: Saves workspace files as artifacts when needed.
+- `skill_list_tools` and `skill_select_tools`: Available only from
+  `SkillToolSetWithDynamicTools` for dynamic business-tool selection.
+
+The filter uses allowlist semantics and does not automatically add dependencies.
+For example, if only `skill_load` is allowed, the LLM cannot call `skill_run`.
+An instruction-only skill can keep only `skill_load`; a typical script-based
+skill should keep at least `skill_load` and `skill_run`. Add the corresponding
+tools when documentation selection, interactive execution, workspace
+operations, or artifacts are required.
+
 ### 3) Running the Example
 
 Full interactive demo: [examples/skills/run_agent.py](../../../examples/skills/run_agent.py)
