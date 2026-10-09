@@ -52,6 +52,7 @@ from pydantic import BaseModel
 from pydantic import Field
 from trpc_agent_sdk.code_executors import BaseProgramRunner
 from trpc_agent_sdk.code_executors import BaseProgramSession
+from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import DEFAULT_EXEC_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_IO_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_SESSION_KILL_SEC
@@ -216,6 +217,7 @@ class _ExecSession:
 
     proc: BaseProgramSession
     ws: WorkspaceInfo
+    workspace_runtime: BaseWorkspaceRuntime
     in_data: ExecInput
 
     # Final state
@@ -458,6 +460,7 @@ class SkillExecTool(BaseTool):
             tool_context=tool_context,
             inputs=inputs,
             ws=ws,
+            workspace_runtime=workspace_runtime,
             rel_cwd=rel_cwd,
             env=merged_env,
         )
@@ -730,6 +733,7 @@ async def _start_session(
     tool_context: InvocationContext,
     inputs: ExecInput,
     ws: WorkspaceInfo,
+    workspace_runtime: BaseWorkspaceRuntime,
     rel_cwd: str,
     env: dict[str, str],
 ) -> _ExecSession:
@@ -744,7 +748,12 @@ async def _start_session(
         tty=inputs.tty,
     )
     proc = await runner.start_program(tool_context, ws, spec)
-    return _ExecSession(proc=proc, ws=ws, in_data=inputs)
+    return _ExecSession(
+        proc=proc,
+        ws=ws,
+        workspace_runtime=workspace_runtime,
+        in_data=inputs,
+    )
 
 
 async def _write_stdin(exec_session: _ExecSession, chars: str, submit: bool) -> None:
@@ -779,7 +788,12 @@ async def _collect_final_result(
         outputs=in_data.outputs,
     )
     try:
-        files, manifest = await run_tool._prepare_outputs(ctx, exec_session.ws, fake_run_input)
+        files, manifest = await run_tool._prepare_outputs(
+            ctx,
+            exec_session.ws,
+            exec_session.workspace_runtime,
+            fake_run_input,
+        )
     except Exception as ex:  # pylint: disable=broad-except
         logger.warning("skill_exec: collect outputs failed: %s", ex)
         files, manifest = [], None
