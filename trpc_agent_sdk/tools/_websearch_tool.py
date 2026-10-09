@@ -283,27 +283,57 @@ def _extract_desc_from_pagemap(pagemap: dict[str, Any]) -> str:
 
 
 def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
-    """Parse the ``data:`` lines of a streamable-HTTP SSE body.
+    """Parse the ``data:`` payloads of a streamable-HTTP SSE body.
 
     A streamable-HTTP server answers a JSON-RPC request with one SSE body
-    whose ``data:`` lines carry one JSON object each (progress notifications
-    followed by the final result). Lines that fail to parse are skipped so a
-    stray keep-alive or partial frame cannot break the search.
+    whose events carry one JSON object each (progress notifications
+    followed by the final result). Per the SSE spec an event's data may
+    span several consecutive ``data:`` lines, so they are joined with
+    ``\\n`` before parsing, and a leading UTF-8 BOM is stripped. When the
+    joined chunk does not parse, each line is tried on its own so servers
+    that omit blank-line event separators still work. Anything that still
+    fails is skipped so a stray keep-alive or partial frame cannot break
+    the search.
     """
     payloads: List[dict[str, Any]] = []
-    for line in (text or "").splitlines():
-        if not line.startswith("data:"):
-            continue
-        raw = line[len("data:"):].strip()
+    lines = (text or "").splitlines()
+    if lines and lines[0].startswith("\ufeff"):
+        lines[0] = lines[0].lstrip("\ufeff")
+
+    def _try_decode(raw: str) -> Optional[dict[str, Any]]:
+        raw = raw.strip()
         if not raw:
-            continue
+            return None
         try:
             decoded = json.loads(raw)
         except json.JSONDecodeError:
-            logger.warning("WebSearchTool: skipping unparseable SSE line: %.80s", raw)
-            continue
-        if isinstance(decoded, dict):
+            return None
+        return decoded if isinstance(decoded, dict) else None
+
+    buffer: List[str] = []
+
+    def _flush() -> None:
+        if not buffer:
+            return
+        decoded = _try_decode("\n".join(buffer))
+        if decoded is not None:
             payloads.append(decoded)
+        else:
+            for piece in buffer:
+                decoded = _try_decode(piece)
+                if decoded is None:
+                    logger.warning("WebSearchTool: skipping unparseable SSE line: %.80s", piece)
+                    continue
+                payloads.append(decoded)
+        buffer.clear()
+
+    for line in lines:
+        if line.startswith("data:"):
+            buffer.append(line[len("data:"):].strip())
+        elif not line.strip():
+            # A blank line dispatches the event per the SSE spec.
+            _flush()
+    _flush()
     return payloads
 
 
@@ -783,10 +813,24 @@ class WebSearchTool(BaseTool):
         arguments: dict[str, Any] = {"query": query, "count": n}
         if lang:
             # You.com maps an inline ``lang:`` operator to a language filter.
-            arguments["query"] = f"{query} lang:{lang}"
+            # Guard against the model passing the operator form verbatim
+            # (``lang:ja``) after reading the schema description.
+            lang_value = str(lang).strip()
+            while lang_value.startswith("lang:"):
+                lang_value = lang_value[len("lang:"):].strip()
+            if lang_value:
+                arguments["query"] = f"{query} lang:{lang_value}"
         if blocked:
             arguments["exclude_domains"] = blocked
-        arguments.update(self._youcom_extra_params)
+        for key, value in self._youcom_extra_params.items():
+            if key in ("query", "count", "exclude_domains"):
+                # These are built per call; a pinned value would silently
+                # override every search the model issues.
+                logger.warning(
+                    "WebSearchTool: ignoring youcom_extra_params key %r; "
+                    "it would override per-call arguments", key)
+                continue
+            arguments[key] = value
 
         payload: dict[str, Any] = {
             "jsonrpc": "2.0",
@@ -805,12 +849,25 @@ class WebSearchTool(BaseTool):
 
         result: Optional[dict[str, Any]] = None
         error: Optional[dict[str, Any]] = None
+        error_wins = False
         for item in payloads:
-            if "result" in item:
-                result = item["result"]
-            elif "error" in item:
+            if not isinstance(item, dict):
+                continue
+            frame_id = item.get("id")
+            # Only frames replying to this request carry its id; frames
+            # without one are notifications and carry no result/error.
+            if frame_id is not None and frame_id != payload["id"]:
+                continue
+            if "error" in item:
+                # A JSON-RPC response carries either ``result`` or ``error``;
+                # a frame carrying both is treated as an error.
                 error = item["error"]
-        if error is not None:
+                error_wins = True
+            if "result" in item and "error" not in item:
+                # A later valid result supersedes an earlier stray error.
+                result = item["result"]
+                error_wins = False
+        if error is not None and (error_wins or result is None):
             message = error.get("message") if isinstance(error, dict) else str(error)
             return WebSearchResult(
                 query=query,
@@ -831,12 +888,26 @@ class WebSearchTool(BaseTool):
             if isinstance(content, dict) and content.get("type") == "text":
                 text = str(content.get("text") or "")
                 break
-        if result.get("isError") and text:
+        if result.get("isError"):
+            # Flag the error whatever the text content looks like: MCP servers
+            # may mark ``isError`` without any text, keeping details only in
+            # ``structuredContent``; either way the call failed and the summary
+            # must say so instead of falling through to payload parsing.
+            detail = text
+            if not detail:
+                structured = result.get("structuredContent")
+                if isinstance(structured, dict):
+                    try:
+                        detail = json.dumps(structured, ensure_ascii=False)
+                    except (TypeError, ValueError):
+                        detail = ""
+            if not detail:
+                detail = "no detail returned"
             return WebSearchResult(
                 query=query,
                 provider="youcom",
                 results=[],
-                summary=_truncate(f"You.com search error: {text}", self._snippet_len),
+                summary=_truncate(f"You.com search error: {detail}", self._snippet_len),
             )
 
         data: Any = None
@@ -844,6 +915,12 @@ class WebSearchTool(BaseTool):
             data = json.loads(text)
         except (json.JSONDecodeError, TypeError):
             data = None
+        if not isinstance(data, dict):
+            # Some MCP servers put the structured payload in
+            # ``structuredContent`` and keep the text human-readable.
+            structured = result.get("structuredContent")
+            if isinstance(structured, dict):
+                data = structured
         if not isinstance(data, dict):
             return WebSearchResult(
                 query=query,
@@ -854,10 +931,24 @@ class WebSearchTool(BaseTool):
 
         sections = data.get("results")
         if not isinstance(sections, dict):
+            if sections:
+                # A non-empty non-dict ``results`` is a shape change upstream,
+                # not an empty search; surface it instead of reporting 0 hits.
+                return WebSearchResult(
+                    query=query,
+                    provider="youcom",
+                    results=[],
+                    summary="You.com search returned an unexpected results shape.",
+                )
             sections = {}
         items: List[dict[str, Any]] = []
         for section in ("web", "news"):
-            for item in sections.get(section) or []:
+            section_items = sections.get(section)
+            if not isinstance(section_items, list):
+                if section_items:
+                    logger.warning("WebSearchTool: ignoring non-list %r section in You.com results", section)
+                continue
+            for item in section_items:
                 if isinstance(item, dict):
                     items.append(item)
 
@@ -876,8 +967,10 @@ class WebSearchTool(BaseTool):
             if not description:
                 contents = item.get("contents")
                 highlights = contents.get("highlights") if isinstance(contents, dict) else None
-                if highlights:
-                    description = str(highlights[0]).strip()
+                # Only a list of strings is a usable fallback; anything else
+                # (a bare string, a dict, ...) must not crash the whole search.
+                if isinstance(highlights, list) and highlights and isinstance(highlights[0], str):
+                    description = highlights[0].strip()
             hits.append(
                 SearchHit(
                     title=_truncate(str(item.get("title") or ""), self._title_len),
