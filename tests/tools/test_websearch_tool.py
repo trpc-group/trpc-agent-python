@@ -102,6 +102,8 @@ def _make_mock_sse_client(
     *,
     status: int = 200,
     client_headers: Dict[str, str] | None = None,
+    client_auth: Any = None,
+    response_headers: Dict[str, str] | None = None,
 ) -> httpx.AsyncClient:
     """Build an ``httpx.AsyncClient`` backed by ``MockTransport`` for SSE bodies.
 
@@ -110,7 +112,10 @@ def _make_mock_sse_client(
     request URL path (e.g. ``"/mcp"``) to the raw SSE text to return.
     All non-matching paths return 404 so test misses surface loudly.
     ``client_headers`` configures client-level headers on the client, the
-    way a shared gateway client would carry its own credentials.
+    way a shared gateway client would carry its own credentials, and
+    ``client_auth`` configures client-level auth (``("user", "pass")``,
+    ``BearerAuth``, ...) the same way. ``response_headers`` adds extra
+    headers (e.g. ``Set-Cookie``) to every mocked response.
     The returned client captures the last request for assertions via
     ``client._captured``.
     """
@@ -123,14 +128,19 @@ def _make_mock_sse_client(
         body = responses.get(request.url.path)
         if body is None:
             return httpx.Response(404, json={"error": "no mock for path"})
+        headers = {"content-type": "text/event-stream"}
+        headers.update(response_headers or {})
         return httpx.Response(
             status,
             text=body,
-            headers={"content-type": "text/event-stream"},
+            headers=headers,
         )
 
     transport = httpx.MockTransport(handler)
-    client = httpx.AsyncClient(transport=transport, headers=client_headers or {})
+    client_kwargs: Dict[str, Any] = {"transport": transport, "headers": client_headers or {}}
+    if client_auth is not None:
+        client_kwargs["auth"] = client_auth
+    client = httpx.AsyncClient(**client_kwargs)
     # Stash captures on the client so tests can introspect them.
     client._captured = captured  # type: ignore[attr-defined]
     return client
@@ -1669,6 +1679,108 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_shared_client_basic_auth_not_forwarded(self, monkeypatch):
+        # ``client.send`` applies client-level ``auth`` (Basic/Bearer/custom
+        # flows) even to a bare request, so the You.com call must suppress
+        # it per call: a shared gateway client configured with
+        # ``auth=("user", "pass")`` must not leak those credentials to the
+        # third-party endpoint.
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        client = _make_mock_sse_client(
+            {"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)},
+            client_auth=("user", "pass"),
+        )
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        req = client._captured["last_request"]
+        assert res["provider"] == "youcom"
+        assert req.headers.get("authorization") is None
+        assert len(res["results"]) == 3
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_shared_client_basic_auth_superseded_by_tool_key(self):
+        # With the tool's own key configured, only that key goes out; the
+        # shared client's Basic auth is still suppressed.
+        client = _make_mock_sse_client(
+            {"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)},
+            client_auth=("user", "pass"),
+        )
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://api.you.com/mcp",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        req = client._captured["last_request"]
+        assert req.headers.get("authorization") == "Bearer ydc-test"
+        assert "Basic" not in (req.headers.get("authorization") or "")
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_set_cookie_not_persisted_to_shared_jar(self):
+        # A ``Set-Cookie`` on the You.com response must not linger in the
+        # shared client's cookie jar, where it would be replayed to other
+        # providers (e.g. Tavily) through the same ``http_client``.
+        client = _make_mock_sse_client(
+            {"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)},
+            response_headers={"set-cookie": "you_session=abc; Path=/"},
+        )
+        client.cookies.set("gw_session", "keepme", domain="gateway.internal")
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # The You.com cookie was dropped again...
+        assert client.cookies.get("you_session") is None
+        # ...while pre-existing cookies on the shared client survive.
+        assert client.cookies.get("gw_session") == "keepme"
+        # A follow-up request through the same client carries no You.com cookie.
+        await client.post("https://api.tavily.com/search", json={"query": "python"})
+        followup = client._captured["all_requests"][-1]
+        assert "you_session" not in (followup.headers.get("cookie") or "")
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_redirect_followed(self):
+        # httpx does not follow redirects by default; the You.com call must
+        # opt in so a 301/302 (e.g. a base-url change) does not degrade to
+        # parsing the empty 3xx body as a silent 0-hit search.
+        captured: Dict[str, Any] = {"all_requests": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["all_requests"].append(request)
+            if request.url.path == "/mcp":
+                return httpx.Response(
+                    302,
+                    headers={"location": "https://api.you.com/mcp-moved"},
+                )
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={"content-type": "text/event-stream"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert len(captured["all_requests"]) == 2
+        assert captured["all_requests"][-1].url.path == "/mcp-moved"
+        assert len(res["results"]) == 3
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_frame_ids_compared_as_strings(self):
         # Some servers echo the JSON-RPC id back as a string ("1"); a strict
         # int comparison would drop every reply frame and report an empty
@@ -2180,10 +2292,32 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_flat_list_results_shape_parses_hits(self):
+        # Shape drift: a non-empty list ``results`` (a flat list of hits
+        # instead of ``{"web": [...], "news": [...]}`` sections) maps to
+        # hits instead of dropping every entry.
+        text = json.dumps({
+            "results": [
+                {"url": "https://example.com", "title": "flat", "description": "d"},
+            ],
+        })
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(text)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert [h["url"] for h in res["results"]] == ["https://example.com"]
+        assert res["results"][0]["title"] == "flat"
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_non_dict_results_shape_surfaced_as_summary(self):
-        # A non-empty non-dict ``results`` is an upstream shape change, not
-        # an empty search; it used to degrade to a silent 0-hit success.
-        text = json.dumps({"results": [{"url": "https://example.com", "title": "flat"}]})
+        # A non-empty scalar ``results`` (string, number, ...) is an upstream
+        # shape change, not an empty search; surface the observed type
+        # instead of reporting 0 hits.
+        text = json.dumps({"results": "unavailable"})
         client = _make_mock_sse_client({"/mcp": _youcom_sse_body(text)})
         t = WebSearchTool(
             provider="youcom",
@@ -2192,7 +2326,9 @@ class TestYoucomProvider:
         )
         res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
         assert res["results"] == []
-        assert res["summary"] == "You.com search returned an unexpected results shape."
+        assert res["summary"] == (
+            "You.com search returned an unexpected results shape (str); no hits parsed."
+        )
         await client.aclose()
 
     @pytest.mark.asyncio

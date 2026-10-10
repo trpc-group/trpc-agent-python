@@ -689,7 +689,20 @@ class WebSearchTool(BaseTool):
         client-level headers into ``client.post`` requests, which would
         silently forward any credentials configured on a shared
         ``http_client`` (a gateway bearer token, a cookie jar, ...) to this
-        third-party endpoint. A request sent as-is carries none of them.
+        third-party endpoint. Two further client-level settings are pinned
+        per call so a shared client cannot leak into this request either:
+
+        * ``auth=None`` — ``client.send`` applies the client-level ``auth``
+          (Basic/Bearer/custom auth flows) even to a bare request, so it is
+          suppressed per call.
+        * ``follow_redirects=True`` — httpx does not follow redirects by
+          default, and an unfollowed 3xx would fall through to parsing an
+          empty body as a silent 0-hit search.
+
+        Finally, any ``Set-Cookie`` the You.com response writes into the
+        shared client's cookie jar is dropped again afterwards, so it cannot
+        be replayed to other providers (e.g. Tavily) through the same
+        ``http_client``.
         """
         client = self._get_client()
         close = self._http_client is None
@@ -706,7 +719,24 @@ class WebSearchTool(BaseTool):
         # absent; keep the per-call timeout semantics of the other providers.
         request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
         try:
-            resp = await client.send(request)
+            known_cookies = {(cookie.name, cookie.domain, cookie.path) for cookie in client.cookies.jar}
+            resp = await client.send(
+                request,
+                auth=None,
+                follow_redirects=True,
+            )
+            for cookie in list(client.cookies.jar):
+                if (cookie.name, cookie.domain, cookie.path) not in known_cookies:
+                    client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
+            if 300 <= resp.status_code < 400:
+                # Defensive: with redirects followed this should not be
+                # reachable, but a residual 3xx must not read downstream as
+                # a normal empty search.
+                logger.warning(
+                    "WebSearchTool: You.com endpoint responded %d without "
+                    "following the redirect; search may return no results.",
+                    resp.status_code,
+                )
             resp.raise_for_status()
             return _parse_sse_payloads(resp.text)
         finally:
@@ -966,15 +996,26 @@ class WebSearchTool(BaseTool):
             )
 
         sections = data.get("results")
+        if isinstance(sections, list):
+            # Shape drift upstream: some You.com variants return a flat list
+            # of hits instead of ``{"web": [...], "news": [...]}`` sections.
+            # Route the parseable entries through the same section loop
+            # instead of dropping every hit.
+            sections = {"web": sections}
         if not isinstance(sections, dict):
             if sections:
-                # A non-empty non-dict ``results`` is a shape change upstream,
-                # not an empty search; surface it instead of reporting 0 hits.
+                # A non-empty, non-dict, non-list ``results`` is a shape
+                # change upstream, not an empty search; surface it instead
+                # of reporting 0 hits.
                 return WebSearchResult(
                     query=query,
                     provider="youcom",
                     results=[],
-                    summary="You.com search returned an unexpected results shape.",
+                    summary=_truncate(
+                        "You.com search returned an unexpected results shape "
+                        f"({type(sections).__name__}); no hits parsed.",
+                        self._snippet_len,
+                    ),
                 )
             sections = {}
         items: List[dict[str, Any]] = []
