@@ -15,6 +15,7 @@ from trpc_agent_sdk.skills.tools._skill_run import SkillRunFile
 from trpc_agent_sdk.skills.tools._skill_run import SkillRunInput
 from trpc_agent_sdk.skills.tools._skill_run import SkillRunOutput
 from trpc_agent_sdk.skills.tools._skill_run import SkillRunTool
+from trpc_agent_sdk.skills.tools._skill_run import _apply_skill_run_env
 from trpc_agent_sdk.skills.tools._skill_run import _build_editor_wrapper_script
 from trpc_agent_sdk.skills.tools._skill_run import _filter_failed_empty_outputs
 from trpc_agent_sdk.skills.tools._skill_run import _is_text_mime
@@ -32,6 +33,7 @@ def _make_tool() -> SkillRunTool:
 
 
 class TestSchemaHelpers:
+
     def test_inline_json_schema_refs(self):
         schema = {"$defs": {"X": {"type": "string"}}, "properties": {"x": {"$ref": "#/$defs/X"}}}
         out = inline_json_schema_refs(schema)
@@ -40,6 +42,54 @@ class TestSchemaHelpers:
 
 
 class TestModuleHelpers:
+
+    def test_apply_skill_run_env_filters_empty_entries(self, monkeypatch):
+        monkeypatch.delenv("TEST_SKILL_ENV", raising=False)
+        repository = MagicMock()
+        repository.skill_run_env.return_value = {
+            " TEST_SKILL_ENV ": " injected ",
+            "": "ignored",
+            "  ": "ignored",
+            "TEST_EMPTY_ENV": "  ",
+        }
+        env = {}
+
+        _apply_skill_run_env(repository, "test", env)
+
+        assert env == {"TEST_SKILL_ENV": " injected "}
+        repository.skill_run_env.assert_called_once_with("test")
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "LD_PRELOAD",
+            "ld_preload",
+            "LD_LIBRARY_PATH",
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_LIBRARY_PATH",
+            "DYLD_FORCE_FLAT_NAMESPACE",
+            "OPENSSL_CONF",
+        ],
+    )
+    def test_apply_skill_run_env_blocks_loader_keys(self, monkeypatch, key):
+        monkeypatch.delenv(key, raising=False)
+        repository = MagicMock()
+        repository.skill_run_env.return_value = {key: "blocked"}
+        env = {}
+
+        _apply_skill_run_env(repository, "test", env)
+
+        assert env == {}
+
+    def test_apply_skill_run_env_ignores_repository_errors(self):
+        repository = MagicMock()
+        repository.skill_run_env.side_effect = RuntimeError("repository env unavailable")
+        env = {"TEST_SKILL_ENV": "explicit"}
+
+        _apply_skill_run_env(repository, "test", env)
+
+        assert env == {"TEST_SKILL_ENV": "explicit"}
+
     def test_is_text_mime(self):
         assert _is_text_mime("text/plain") is True
         assert _is_text_mime("application/json") is True
@@ -111,6 +161,7 @@ class TestModuleHelpers:
 
 
 class TestModels:
+
     def test_run_models(self):
         inp = SkillRunInput(skill="s", command="echo hi")
         out = SkillRunOutput()
@@ -121,6 +172,7 @@ class TestModels:
 
 
 class TestSkillRunToolBasics:
+
     def test_resolve_cwd(self):
         tool = _make_tool()
         assert tool._resolve_cwd("", "skills/x") == "skills/x"
