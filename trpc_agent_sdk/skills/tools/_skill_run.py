@@ -116,6 +116,25 @@ _TEXT_MIME_EXACT = frozenset({
 # ---------------------------------------------------------------------------
 
 
+def _apply_skill_run_env(repository: BaseSkillRepository, skill_name: str, env: dict[str, str]) -> None:
+    """Inject skill-specific env without overriding explicit or non-empty host values."""
+    try:
+        skill_env: dict[str, str] = repository.skill_run_env(skill_name)
+        for k, v in skill_env.items():
+            k = k.strip()
+            if not k or not v.strip():
+                continue
+            if k in env:  # don't override explicit tool-call env
+                continue
+            if os.environ.get(k, "").strip():  # don't override host env
+                continue
+            if k.upper() in _BLOCKED_SKILL_ENV_KEYS:
+                continue
+            env[k] = v
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+
 def _is_text_mime(mime: str) -> bool:
     """Return True when *mime* is a text-like content type."""
     if not mime:
@@ -770,21 +789,7 @@ class SkillRunTool(BaseTool):
 
         # Inject skill-specific env from repository (e.g. api_key → primary_env)
         repository = self._get_repository(ctx)
-        try:
-            skill_env: dict[str, str] = repository.skill_run_env(input_data.skill)
-            for k, v in skill_env.items():
-                k = k.strip()
-                if not k or not v.strip():
-                    continue
-                if k in env:  # don't override explicit tool-call env
-                    continue
-                if os.environ.get(k, "").strip():  # don't override host env
-                    continue
-                if k.upper() in _BLOCKED_SKILL_ENV_KEYS:
-                    continue
-                env[k] = v
-        except Exception:  # pylint: disable=broad-except
-            pass
+        _apply_skill_run_env(repository, input_data.skill, env)
 
         # Stage editor helper if requested
         await self._prepare_editor_env(ctx, ws, workspace_runtime, env, input_data.editor_text)
