@@ -2593,7 +2593,7 @@ On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filte
 | `query` | `str` | Query term used for this search (echoed back verbatim) |
 | `provider` | `"duckduckgo" \| "google" \| "tavily" \| "youcom"` | Provider actually used |
 | `results` | `List[SearchHit]` | Structured hit list, where each item contains `title`, `url`, and `snippet` |
-| `summary` | `str` | Aggregated summary from DDG instant answers / abstracts / definitions. For Google, this field is also populated when spelling correction or API errors occur |
+| `summary` | `str` | Aggregated summary from DDG instant answers / abstracts / definitions. For Google, this field is also populated when spelling correction or API errors occur; for Tavily, when the response carries an `answer`; You.com also writes JSON-RPC / tool errors to this field |
 
 When call-time arguments are invalid, such as passing both `allowed_domains` and `blocked_domains`, or when `query` is too short, or when an HTTP error occurs, the tool returns a structured error object such as `{"error": "INVALID_ARGS: ..."}` or `{"error": "HTTP_ERROR: ..."}`, making it easier for the LLM to perform graceful fallback handling.
 

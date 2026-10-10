@@ -730,24 +730,35 @@ class WebSearchTool(BaseTool):
         * ``auth=None`` — ``client.send`` applies the client-level ``auth``
           (Basic/Bearer/custom auth flows) even to a bare request, so it is
           suppressed per call.
-        * redirects are followed manually, one request at a time, and only
-          to same-origin (or same-host http-to-https upgrade) targets.
-          httpx's automatic redirect handling keeps ``Authorization`` on
-          same-origin/same-host-upgrade redirects and re-attaches cookie-jar
-          cookies to every redirect request, so a 3xx naming another origin
-          is dropped with a warning instead of followed — the ``YDC_API_KEY``
-          bearer header must never reach a third-party host. An unfollowed
+        * redirects are followed manually, one request at a time. Every hop
+          is checked against the URL it redirects *from* and must stay
+          same-origin with it (a same-host http-to-https upgrade still
+          qualifies), and no hop may land on a plaintext ``http`` target
+          unless the endpoint itself was configured that way (same-origin
+          with the original URL). httpx's automatic redirect handling keeps
+          ``Authorization`` on same-origin/same-host-upgrade redirects and
+          re-attaches cookie-jar cookies to every redirect request, so a 3xx
+          naming another origin — or downgrading an upgraded hop back to
+          plaintext http — is dropped with a warning instead of followed:
+          the ``YDC_API_KEY`` bearer header must never leave the You.com
+          origin, and never travel over plaintext http. An unfollowed
           residual 3xx also warns rather than parsing an empty body as a
-          silent 0-hit search.
+          silent 0-hit search. A relative ``Location`` keeps the original
+          ``profile`` query parameter (``URL.join`` drops it), so a keyless
+          free-profile call does not get redirected onto the authenticated
+          endpoint.
         * each response is closed in a ``finally`` block — a read that dies
           mid-stream (e.g. a read timeout on a keep-alive-heavy body) must
           not leave a broken connection in the shared client's pool for the
           next provider call.
 
-        Finally, any ``Set-Cookie`` the You.com response writes into the
-        shared client's cookie jar is dropped again afterwards, so it cannot
-        be replayed to other providers (e.g. Tavily) through the same
-        ``http_client``.
+        Finally, the shared client's cookie jar is snapshotted before the
+        first request and any ``Set-Cookie`` the You.com responses (followed
+        or unfollowed, including the skipped 3xx hops) write into it is
+        rolled back in the same ``finally`` block, so it cannot be replayed
+        to other providers (e.g. Tavily) through the same ``http_client`` —
+        no matter whether the call returns normally, bails out on a
+        cross-origin redirect, or dies mid-request.
         """
         client = self._get_client()
         close = self._http_client is None
@@ -759,9 +770,11 @@ class WebSearchTool(BaseTool):
         }
         if headers:
             request_headers.update(headers)
+        # Snapshot the jar before any request goes out; the rollback in the
+        # finally block below relies on it covering every You.com response.
+        known_cookies = {(cookie.name, cookie.domain, cookie.path) for cookie in client.cookies.jar}
         resp: Optional[httpx.Response] = None
         try:
-            known_cookies = {(cookie.name, cookie.domain, cookie.path) for cookie in client.cookies.jar}
             current_url = url
             redirects = 0
             while True:
@@ -782,7 +795,16 @@ class WebSearchTool(BaseTool):
                     break
                 location = resp.headers.get("location", "")
                 try:
-                    next_url = str(httpx.URL(current_url).join(location))
+                    next_obj = httpx.URL(current_url).join(location)
+                    # URL.join follows urljoin semantics, so a relative
+                    # Location drops the original query string: a keyless
+                    # "?profile=free" call would silently land on the
+                    # authenticated endpoint after the redirect. Re-attach
+                    # the profile param, keeping any the Location carries.
+                    origin_profile = httpx.URL(url).params.get("profile")
+                    if origin_profile is not None and next_obj.params.get("profile") is None:
+                        next_obj = next_obj.copy_with(params=next_obj.params.merge({"profile": origin_profile}))
+                    next_url = str(next_obj)
                 except Exception as ex:  # pylint: disable=broad-except
                     logger.warning(
                         "WebSearchTool: You.com redirect target %r is not a valid URL (%s); "
@@ -791,21 +813,25 @@ class WebSearchTool(BaseTool):
                         ex,
                     )
                     break
-                if not _same_origin(url, next_url):
-                    # The request carries this tool's Authorization header when
-                    # a key is configured; following a redirect to another
-                    # origin would forward it (and any cookies httpx re-attaches
-                    # to redirect requests) to whatever host the 3xx names.
+                # Validate each hop on its own: the request (and the tool's
+                # Authorization header) travels to current_url's origin, so
+                # the hop must be same-origin with the *previous* URL — not
+                # merely with the first one — and it may not downgrade to
+                # plaintext http unless the endpoint was configured that way
+                # (same-origin with the original URL). Otherwise the bearer
+                # header (and any cookies httpx re-attaches to redirect
+                # requests) would travel to whatever host or plaintext hop
+                # the 3xx names.
+                if not (_same_origin(current_url, next_url) and
+                        (_same_origin(url, next_url) or httpx.URL(next_url).scheme == "https")):
                     logger.warning(
                         "WebSearchTool: dropping redirect from the You.com endpoint to "
-                        "non-same-origin URL %r; search may return no results.",
+                        "URL %r (not same-origin with the previous hop or plaintext http); "
+                        "search may return no results.",
                         next_url,
                     )
                     return []
                 current_url = next_url
-            for cookie in list(client.cookies.jar):
-                if (cookie.name, cookie.domain, cookie.path) not in known_cookies:
-                    client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
             if 300 <= resp.status_code < 400:
                 # Defensive: a 3xx that was not followed (missing/invalid
                 # location, or the redirect budget ran out) must not read
@@ -818,6 +844,16 @@ class WebSearchTool(BaseTool):
             resp.raise_for_status()
             return _parse_sse_payloads(resp.text)
         finally:
+            # Roll back any Set-Cookie the You.com responses (followed or
+            # unfollowed, including skipped 3xx hops) wrote into the shared
+            # client's jar, so it cannot be replayed to other providers
+            # (e.g. Tavily) through the same http_client. Running here — not
+            # on the happy path — guarantees the rollback also happens on
+            # the cross-origin early return, the redirect-budget break, and
+            # any exception raised mid-loop.
+            for cookie in list(client.cookies.jar):
+                if (cookie.name, cookie.domain, cookie.path) not in known_cookies:
+                    client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
             # Release the response and its pooled connection even when the
             # body read dies mid-stream (e.g. a read timeout): an abandoned
             # half-read response would otherwise leave a broken connection
@@ -1089,8 +1125,16 @@ class WebSearchTool(BaseTool):
             # Shape drift upstream: some You.com variants return a flat list
             # of hits instead of ``{"web": [...], "news": [...]}`` sections.
             # Route the parseable entries through the same section loop
-            # instead of dropping every hit.
-            sections = {"web": sections}
+            # instead of dropping every hit — merging (not replacing) any
+            # real section lists that sit next to ``results``, so a genuine
+            # ``web``/``news`` section is never clobbered by the fallback.
+            flat = sections
+            sections = {}
+            for section in ("web", "news"):
+                sibling = data.get(section)
+                if isinstance(sibling, list):
+                    sections[section] = sibling
+            sections["web"] = sections.get("web", []) + flat
         if not isinstance(sections, dict):
             if sections:
                 # A non-empty, non-dict, non-list ``results`` is a shape
@@ -1121,15 +1165,36 @@ class WebSearchTool(BaseTool):
         hits: List[SearchHit] = []
         seen: set[str] = set()
         for item in items:
-            url = str(item.get("url") or "").strip()
-            if not url or _is_blocked(url, allowed, blocked):
+            # Type-guard every field instead of str()-coercing: a dict or
+            # list value would become its Python repr — a repr "url" then
+            # fails the blocklist check and silently drops a legitimate
+            # hit, and a repr title/description leaks stray text like
+            # "{'kind': 'web', ...}" into the results.
+            raw_url = item.get("url")
+            url = ""
+            if isinstance(raw_url, str):
+                url = raw_url.strip()
+            elif isinstance(raw_url, dict):
+                # Shape drift: some variants wrap the URL in an object;
+                # take the standard ``href`` field if it is a string.
+                href = raw_url.get("href")
+                if isinstance(href, str):
+                    url = href.strip()
+            if not url:
+                logger.debug(
+                    "WebSearchTool: skipping You.com hit without a usable url field (%r)",
+                    raw_url,
+                )
+                continue
+            if _is_blocked(url, allowed, blocked):
                 continue
             if self._dedup_urls:
                 key = _dedup_key(url)
                 if key in seen:
                     continue
                 seen.add(key)
-            description = str(item.get("description") or "").strip()
+            raw_description = item.get("description")
+            description = raw_description.strip() if isinstance(raw_description, str) else ""
             if not description:
                 # ``snippets`` is You.com's canonical summary field (a list
                 # of strings returned by default); some hits — notably
@@ -1147,9 +1212,11 @@ class WebSearchTool(BaseTool):
                 # (a bare string, a dict, ...) must not crash the whole search.
                 if isinstance(highlights, list) and highlights and isinstance(highlights[0], str):
                     description = highlights[0].strip()
+            raw_title = item.get("title")
+            title = raw_title if isinstance(raw_title, str) else ""
             hits.append(
                 SearchHit(
-                    title=_truncate(str(item.get("title") or ""), self._title_len),
+                    title=_truncate(title, self._title_len),
                     url=url,
                     snippet=_truncate(description, self._snippet_len),
                 ))

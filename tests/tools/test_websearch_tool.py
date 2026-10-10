@@ -1812,6 +1812,74 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_youcom_cross_origin_redirect_rolls_back_cookies(self):
+        # The cross-origin bail-out returns before the tool parses a body,
+        # but httpx has already written the dropped 3xx's Set-Cookie into
+        # the shared client's jar (extract_cookies runs for unfollowed
+        # responses too). The cookie rollback must run on the early-return
+        # path as well, or the You.com cookie would be replayed to the
+        # next provider sharing the client.
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                302,
+                headers={
+                    "location": "https://collector.example.com/mcp",
+                    "set-cookie": "you_session=abc; Path=/",
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client.cookies.set("gw_session", "keepme", domain="gateway.internal")
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        # The You.com cookie written by the dropped 3xx was rolled back...
+        assert client.cookies.get("you_session") is None
+        # ...while pre-existing cookies on the shared client survive.
+        assert client.cookies.get("gw_session") == "keepme"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_plaintext_downgrade_after_upgrade_dropped(self):
+        # Every hop is validated against the URL it redirects *from*: after
+        # a same-host http->https upgrade, a further hop back down to
+        # plaintext http must be dropped (comparing against the *original*
+        # URL would pass it), or the Authorization header would travel
+        # over plaintext http.
+        captured: Dict[str, Any] = {"all_requests": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["all_requests"].append(request)
+            if request.url.scheme == "http" and request.url.path == "/mcp":
+                return httpx.Response(302, headers={"location": "https://api.you.com/mcp2"})
+            if request.url.scheme == "https" and request.url.path == "/mcp2":
+                return httpx.Response(302, headers={"location": "http://api.you.com/mcp3"})
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={"content-type": "text/event-stream"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="http://api.you.com/mcp",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # The http->https upgrade was followed; the https->http
+        # downgrade was not.
+        assert [r.url.scheme for r in captured["all_requests"]] == ["http", "https"]
+        assert all(r.url.host == "api.you.com" for r in captured["all_requests"])
+        assert res["results"] == []
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_youcom_same_origin_redirect_followed_with_key(self):
         # Redirects are followed manually, one request at a time; a
         # same-origin move (e.g. a path change on the same host) is still
@@ -1841,6 +1909,40 @@ class TestYoucomProvider:
         assert captured["all_requests"][-1].url.host == "api.you.com"
         assert captured["all_requests"][-1].url.path == "/mcp-moved"
         assert captured["all_requests"][-1].headers.get("authorization") == "Bearer ydc-test"
+        assert len(res["results"]) == 3
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_relative_redirect_keeps_profile_query(self):
+        # ``URL.join`` follows urljoin semantics: a relative Location drops
+        # the original query string. A keyless "?profile=free" call must
+        # re-attach the profile param on the followed hop, or the redirect
+        # would silently land on the authenticated endpoint (which rejects
+        # it, since no key is configured).
+        captured: Dict[str, Any] = {"all_requests": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["all_requests"].append(request)
+            if request.url.path == "/mcp":
+                return httpx.Response(302, headers={"location": "/mcp-moved"})
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={"content-type": "text/event-stream"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert len(captured["all_requests"]) == 2
+        followup = captured["all_requests"][-1]
+        assert followup.url.path == "/mcp-moved"
+        assert followup.url.host == "api.you.com"
+        assert followup.url.params.get("profile") == "free"
         assert len(res["results"]) == 3
         await client.aclose()
 
@@ -2396,6 +2498,76 @@ class TestYoucomProvider:
         res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
         assert [h["url"] for h in res["results"]] == ["https://example.com"]
         assert res["results"][0]["title"] == "flat"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_flat_list_results_with_sibling_sections_merged(self):
+        # Shape drift can put a real ``web``/``news`` section *next to* a
+        # flat-list ``results``: the flat fallback must merge with (not
+        # clobber) the genuine sections, so real hits are never dropped.
+        text = json.dumps({
+            "results": [
+                {"url": "https://flat.example.com", "title": "flat", "description": "d"},
+            ],
+            "web": [
+                {"url": "https://real.example.com", "title": "real", "description": "d"},
+            ],
+            "news": [
+                {"url": "https://news.example.com", "title": "news", "description": "d"},
+            ],
+        })
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(text)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        urls = [h["url"] for h in res["results"]]
+        # The real sections survive; the flat list still parses.
+        assert "https://real.example.com" in urls
+        assert "https://news.example.com" in urls
+        assert "https://flat.example.com" in urls
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_non_string_fields_not_coerced(self):
+        # Structured url objects (``{"href": ...}``) are unwrapped rather
+        # than str()-repr'd; non-string title/description fields yield
+        # empty values (then the snippets fallback) instead of leaking
+        # Python repr text into titles and snippets, and hits without any
+        # usable url are skipped rather than turning into a repr that the
+        # blocklist check silently drops.
+        text = json.dumps({
+            "results": {
+                "web": [
+                    {
+                        "url": {"kind": "web", "href": "https://href.example.com"},
+                        "title": "href hit",
+                        "description": {"nested": "dict"},
+                        "snippets": ["structured description"],
+                    },
+                    {
+                        "url": ["https://list.example.com"],
+                        "title": ["list", "title"],
+                        "description": "list url hit",
+                    },
+                ],
+            },
+        })
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(text)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # The list-shaped url was skipped, not repr'd into a fake hit.
+        assert [h["url"] for h in res["results"]] == ["https://href.example.com"]
+        hit = res["results"][0]
+        assert hit["title"] == "href hit"
+        # The dict description fell through to snippets instead of a repr.
+        assert hit["snippet"] == "structured description"
         await client.aclose()
 
     @pytest.mark.asyncio
