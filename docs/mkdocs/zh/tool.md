@@ -2624,7 +2624,7 @@ if __name__ == "__main__":
 | `ddg_extra_params` | `Optional[dict]` | `None` | 透传给 DDG 的额外查询参数 |
 | `google_extra_params` | `Optional[dict]` | `None` | 透传给 Google CSE 的额外查询参数（如 `{"safe": "active"}`、`{"dateRestrict": "m6"}`、`{"gl": "us"}` 等） |
 | `tavily_extra_params` | `Optional[dict]` | `None` | 透传给 Tavily Search 的额外 JSON 参数（如 `{"search_depth": "advanced"}`、`{"include_answer": True}`） |
-| `youcom_extra_params` | `Optional[dict]` | `None` | 透传给 You.com `you-search` 的额外参数（如 `{"freshness": "week"}`、`{"safesearch": "strict"}`）。每次调用生成的 `query` / `count` / `exclude_domains` 为保留参数，不能在此固化 |
+| `youcom_extra_params` | `Optional[dict]` | `None` | 透传给 You.com `you-search` 的额外参数（如 `{"freshness": "week"}`、`{"safesearch": "strict"}`）。每次调用生成的 `query` / `count` / `exclude_domains` / `lang` 为保留参数，不能在此固化（`lang` 是拼在每次调用 query 里的内联 `lang:` 过滤符） |
 | `filters_name` | `Optional[List[str]]` | `None` | 关联的 filter 名称，透传给 `BaseTool` |
 | `filters` | `Optional[List[BaseFilter]]` | `None` | 直接注入的 filter 实例，透传给 `BaseTool` |
 

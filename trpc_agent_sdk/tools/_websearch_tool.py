@@ -78,6 +78,8 @@ _TAVILY_BASE_URL = "https://api.tavily.com/search"
 # exposes the ``you-search`` tool; YDC_API_KEY switches to the authenticated endpoint.
 _YOUCOM_BASE_URL = "https://api.you.com/mcp?profile=free"
 _YOUCOM_AUTH_BASE_URL = "https://api.you.com/mcp"
+# Maximum redirects the SSE POST follows manually before giving up.
+_SSE_MAX_REDIRECTS = 3
 # Description shown to the LLM as part of the tool schema.
 _BASE_DESCRIPTION = """\
 Search the public web and use the results to inform responses.
@@ -291,15 +293,20 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
     followed by the final result). Per the SSE spec an event's data may
     span several consecutive ``data:`` lines, so they are joined with
     ``\\n`` before parsing, and a leading UTF-8 BOM is stripped. When the
-    joined chunk does not parse, each line is tried on its own so servers
-    that omit blank-line event separators still work. Anything that still
-    fails is skipped so a stray keep-alive or partial frame cannot break
-    the search.
+    joined chunk does not parse, the chunks are retried joined with no
+    separator (some servers split one JSON frame mid-string, where
+    re-inserted newlines are invalid JSON control characters) and then
+    each line is tried on its own so servers that omit blank-line event
+    separators still work. Anything that still fails is skipped so a
+    stray keep-alive or partial frame cannot break the search.
     """
     payloads: List[dict[str, Any]] = []
     lines = (text or "").splitlines()
     if lines and lines[0].startswith("\ufeff"):
         lines[0] = lines[0].lstrip("\ufeff")
+        if not lines[0]:
+            # A BOM-only first line is a framing artifact, not a data line.
+            lines = lines[1:]
 
     def _try_decode(raw: str) -> Optional[dict[str, Any]]:
         raw = raw.strip()
@@ -324,6 +331,15 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
         if not buffer:
             return
         decoded = _try_decode("\n".join(buffer))
+        if decoded is None and len(buffer) > 1:
+            # A server may chunk one JSON frame across several ``data:``
+            # lines without regard for JSON token boundaries. Re-inserting
+            # newlines between the chunks (the SSE join above) puts raw
+            # control characters inside the serialized JSON, which strict
+            # ``json.loads`` always rejects; the whole event would then
+            # degrade to a silently dropped frame. Try the chunks joined
+            # with no separator before falling back to per-line parsing.
+            decoded = _try_decode("".join(buffer))
         if decoded is not None:
             payloads.append(decoded)
         else:
@@ -355,6 +371,24 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
             _flush()
     _flush()
     return payloads
+
+
+def _same_origin(left: str, right: str) -> bool:
+    """Whether ``right`` is a same-origin target for a redirect from ``left``.
+
+    Same scheme, host, and port qualifies, as does a same-host upgrade from
+    ``http`` to ``https`` — the two cases where httpx keeps ``Authorization``
+    on an automatically followed redirect. Anything else (different host or
+    port, or a scheme downgrade) does not: a redirect there would carry the
+    tool's bearer header to a third party.
+    """
+    try:
+        lhs, rhs = httpx.URL(left), httpx.URL(right)
+        if (lhs.host, lhs.port) != (rhs.host, rhs.port):
+            return False
+        return lhs.scheme == rhs.scheme or rhs.scheme == "https"
+    except Exception:  # pylint: disable=broad-except
+        return False
 
 
 class WebSearchTool(BaseTool):
@@ -689,15 +723,26 @@ class WebSearchTool(BaseTool):
         client-level headers into ``client.post`` requests, which would
         silently forward any credentials configured on a shared
         ``http_client`` (a gateway bearer token, a cookie jar, ...) to this
-        third-party endpoint. Two further client-level settings are pinned
-        per call so a shared client cannot leak into this request either:
+        third-party endpoint. Three further client-level settings are
+        handled per call so a shared client cannot leak into this request
+        either:
 
         * ``auth=None`` — ``client.send`` applies the client-level ``auth``
           (Basic/Bearer/custom auth flows) even to a bare request, so it is
           suppressed per call.
-        * ``follow_redirects=True`` — httpx does not follow redirects by
-          default, and an unfollowed 3xx would fall through to parsing an
-          empty body as a silent 0-hit search.
+        * redirects are followed manually, one request at a time, and only
+          to same-origin (or same-host http-to-https upgrade) targets.
+          httpx's automatic redirect handling keeps ``Authorization`` on
+          same-origin/same-host-upgrade redirects and re-attaches cookie-jar
+          cookies to every redirect request, so a 3xx naming another origin
+          is dropped with a warning instead of followed — the ``YDC_API_KEY``
+          bearer header must never reach a third-party host. An unfollowed
+          residual 3xx also warns rather than parsing an empty body as a
+          silent 0-hit search.
+        * each response is closed in a ``finally`` block — a read that dies
+          mid-stream (e.g. a read timeout on a keep-alive-heavy body) must
+          not leave a broken connection in the shared client's pool for the
+          next provider call.
 
         Finally, any ``Set-Cookie`` the You.com response writes into the
         shared client's cookie jar is dropped again afterwards, so it cannot
@@ -714,24 +759,57 @@ class WebSearchTool(BaseTool):
         }
         if headers:
             request_headers.update(headers)
-        request = httpx.Request("POST", url, json=payload, headers=request_headers)
-        # send() falls back to the client timeout when the extension is
-        # absent; keep the per-call timeout semantics of the other providers.
-        request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
+        resp: Optional[httpx.Response] = None
         try:
             known_cookies = {(cookie.name, cookie.domain, cookie.path) for cookie in client.cookies.jar}
-            resp = await client.send(
-                request,
-                auth=None,
-                follow_redirects=True,
-            )
+            current_url = url
+            redirects = 0
+            while True:
+                request = httpx.Request("POST", current_url, json=payload, headers=request_headers)
+                # send() falls back to the client timeout when the extension is
+                # absent; keep the per-call timeout semantics of the other providers.
+                request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
+                resp = await client.send(request, auth=None, follow_redirects=False)
+                if not resp.has_redirect_location:
+                    break
+                redirects += 1
+                if redirects > _SSE_MAX_REDIRECTS:
+                    logger.warning(
+                        "WebSearchTool: You.com endpoint exceeded %d redirects; "
+                        "search may return no results.",
+                        _SSE_MAX_REDIRECTS,
+                    )
+                    break
+                location = resp.headers.get("location", "")
+                try:
+                    next_url = str(httpx.URL(current_url).join(location))
+                except Exception as ex:  # pylint: disable=broad-except
+                    logger.warning(
+                        "WebSearchTool: You.com redirect target %r is not a valid URL (%s); "
+                        "search may return no results.",
+                        location,
+                        ex,
+                    )
+                    break
+                if not _same_origin(url, next_url):
+                    # The request carries this tool's Authorization header when
+                    # a key is configured; following a redirect to another
+                    # origin would forward it (and any cookies httpx re-attaches
+                    # to redirect requests) to whatever host the 3xx names.
+                    logger.warning(
+                        "WebSearchTool: dropping redirect from the You.com endpoint to "
+                        "non-same-origin URL %r; search may return no results.",
+                        next_url,
+                    )
+                    return []
+                current_url = next_url
             for cookie in list(client.cookies.jar):
                 if (cookie.name, cookie.domain, cookie.path) not in known_cookies:
                     client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
             if 300 <= resp.status_code < 400:
-                # Defensive: with redirects followed this should not be
-                # reachable, but a residual 3xx must not read downstream as
-                # a normal empty search.
+                # Defensive: a 3xx that was not followed (missing/invalid
+                # location, or the redirect budget ran out) must not read
+                # downstream as a normal empty search.
                 logger.warning(
                     "WebSearchTool: You.com endpoint responded %d without "
                     "following the redirect; search may return no results.",
@@ -740,6 +818,12 @@ class WebSearchTool(BaseTool):
             resp.raise_for_status()
             return _parse_sse_payloads(resp.text)
         finally:
+            # Release the response and its pooled connection even when the
+            # body read dies mid-stream (e.g. a read timeout): an abandoned
+            # half-read response would otherwise leave a broken connection
+            # in the shared client's pool for the next provider call.
+            if resp is not None:
+                await resp.aclose()
             if close:
                 await client.aclose()
 
@@ -872,18 +956,23 @@ class WebSearchTool(BaseTool):
         if lang:
             # You.com maps an inline ``lang:`` operator to a language filter.
             # Guard against the model passing the operator form verbatim
-            # (``lang:ja``) after reading the schema description.
+            # (``lang:ja``, possibly with stray whitespace or casing) after
+            # reading the schema description.
             lang_value = str(lang).strip()
-            while lang_value.startswith("lang:"):
-                lang_value = lang_value[len("lang:"):].strip()
+            while lang_value[:5].lower() == "lang:":
+                lang_value = lang_value[5:].strip()
             if lang_value:
                 arguments["query"] = f"{query} lang:{lang_value}"
         if blocked:
             arguments["exclude_domains"] = blocked
         for key, value in self._youcom_extra_params.items():
-            if key in ("query", "count", "exclude_domains"):
+            if key in ("query", "count", "exclude_domains", "lang", "lang:"):
                 # These are built per call; a pinned value would silently
-                # override every search the model issues.
+                # override every search the model issues. ``lang`` belongs
+                # here too: the language filter is an inline ``lang:``
+                # operator inside the per-call query, so a standalone
+                # ``lang`` argument would conflict with it instead of
+                # pinning the language.
                 logger.warning(
                     "WebSearchTool: ignoring youcom_extra_params key %r; "
                     "it would override per-call arguments", key)

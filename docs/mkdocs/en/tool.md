@@ -2572,7 +2572,7 @@ On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filte
 | `ddg_extra_params` | `Optional[dict]` | `None` | Additional query parameters passed through to DDG |
 | `google_extra_params` | `Optional[dict]` | `None` | Additional query parameters passed through to Google CSE, such as `{"safe": "active"}`, `{"dateRestrict": "m6"}`, or `{"gl": "us"}` |
 | `tavily_extra_params` | `Optional[dict]` | `None` | Additional JSON parameters passed through to Tavily Search, such as `{"search_depth": "advanced"}` or `{"include_answer": True}` |
-| `youcom_extra_params` | `Optional[dict]` | `None` | Additional parameters passed through to the You.com `you-search` tool, such as `{"freshness": "week"}` or `{"safesearch": "strict"}`. Per-call arguments `query` / `count` / `exclude_domains` are reserved and cannot be pinned here |
+| `youcom_extra_params` | `Optional[dict]` | `None` | Additional parameters passed through to the You.com `you-search` tool, such as `{"freshness": "week"}` or `{"safesearch": "strict"}`. Per-call arguments `query` / `count` / `exclude_domains` / `lang` are reserved and cannot be pinned here (`lang` is an inline `lang:` operator inside the per-call query) |
 | `filters_name` | `Optional[List[str]]` | `None` | Names of associated filters, passed through to `BaseTool` |
 | `filters` | `Optional[List[BaseFilter]]` | `None` | Filter instances injected directly, passed through to `BaseTool` |
 

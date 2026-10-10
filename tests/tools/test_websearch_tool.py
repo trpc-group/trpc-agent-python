@@ -62,6 +62,7 @@ from trpc_agent_sdk.tools._websearch_tool import _extract_desc_from_pagemap
 from trpc_agent_sdk.tools._websearch_tool import _extract_title_from_ddg_topic
 from trpc_agent_sdk.tools._websearch_tool import _is_blocked
 from trpc_agent_sdk.tools._websearch_tool import _parse_sse_payloads
+from trpc_agent_sdk.tools._websearch_tool import _same_origin
 from trpc_agent_sdk.tools._websearch_tool import _truncate
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Type
@@ -1781,6 +1782,91 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_youcom_cross_origin_redirect_dropped(self):
+        # httpx keeps Authorization on same-origin (and same-host upgrade)
+        # redirects and re-attaches cookie-jar cookies to every redirect
+        # request. A 3xx naming another origin must therefore be dropped,
+        # not followed, or the YDC_API_KEY bearer header would reach
+        # whatever host the redirect names.
+        captured: Dict[str, Any] = {"all_requests": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["all_requests"].append(request)
+            return httpx.Response(
+                302,
+                headers={"location": "https://collector.example.com/mcp"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://api.you.com/mcp",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # Only the original request went out; the redirect was not followed.
+        assert len(captured["all_requests"]) == 1
+        assert captured["all_requests"][0].url.host == "api.you.com"
+        assert res["results"] == []
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_same_origin_redirect_followed_with_key(self):
+        # Redirects are followed manually, one request at a time; a
+        # same-origin move (e.g. a path change on the same host) is still
+        # followed, and the tool's own Authorization header stays on the
+        # follow-up request because the target is the same origin.
+        captured: Dict[str, Any] = {"all_requests": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["all_requests"].append(request)
+            if request.url.path == "/mcp":
+                return httpx.Response(302, headers={"location": "/mcp-moved"})
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={"content-type": "text/event-stream"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://api.you.com/mcp",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert len(captured["all_requests"]) == 2
+        assert captured["all_requests"][-1].url.host == "api.you.com"
+        assert captured["all_requests"][-1].url.path == "/mcp-moved"
+        assert captured["all_requests"][-1].headers.get("authorization") == "Bearer ydc-test"
+        assert len(res["results"]) == 3
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_lang_extra_param_is_reserved(self):
+        # ``lang`` is an inline ``lang:`` operator inside the per-call query,
+        # so a pinned ``youcom_extra_params={"lang": ...}`` must be rejected
+        # with a warning instead of landing in the tools/call arguments.
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            youcom_extra_params={"lang": "pinned", "freshness": "week"},
+        )
+        with _capture_sdk_logs() as cap:
+            await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        req = client._captured["last_request"]
+        payload = json.loads(req.content)
+        arguments = payload["params"]["arguments"]
+        assert "lang" not in arguments
+        assert arguments["freshness"] == "week"
+        warnings = [m for level, m in cap.messages if level >= logging.WARNING]
+        assert any("youcom_extra_params key 'lang'" in m for m in warnings)
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_frame_ids_compared_as_strings(self):
         # Some servers echo the JSON-RPC id back as a string ("1"); a strict
         # int comparison would drop every reply frame and report an empty
@@ -2371,6 +2457,26 @@ class TestYoucomProvider:
         payloads = _parse_sse_payloads(text)
         assert payloads == [{"result": {"x": 1}}]
 
+    def test_parse_sse_payloads_joins_chunked_frames_without_separator(self):
+        # A server may chunk one JSON frame across data: lines without
+        # regard for JSON token boundaries. The SSE "\n" join puts a raw
+        # control character inside the JSON string (always rejected by
+        # json.loads); the separator-less join must recover the frame
+        # instead of silently dropping it as a 0-hit search.
+        text = 'data: {"result": "ab\ndata: c"}\n\n'
+        payloads = _parse_sse_payloads(text)
+        assert payloads == [{"result": "abc"}]
+
+    def test_parse_sse_payloads_bom_only_first_line(self):
+        # A BOM-only first line is a framing artifact, not data; the rest
+        # of the body must still parse.
+        text = '﻿\ndata: {"result": {"x": 1}}\n\n'
+        payloads = _parse_sse_payloads(text)
+        assert payloads == [{"result": {"x": 1}}]
+
+    def test_parse_sse_payloads_bom_only_body_is_empty(self):
+        assert _parse_sse_payloads("﻿") == []
+
     def test_parse_sse_payloads_falls_back_to_single_lines_without_separators(self):
         # Servers that omit blank-line event separators: each line is
         # still tried on its own so complete frames are not dropped.
@@ -2397,6 +2503,32 @@ class TestYoucomProvider:
         warnings = [m for level, m in cap.messages if level >= logging.WARNING]
         assert len(warnings) == 1
         assert "not-json" in warnings[0]
+
+
+class TestSameOrigin:
+    """Redirect-target policy for the You.com SSE call."""
+
+    def test_same_scheme_host_port_qualifies(self):
+        assert _same_origin("https://api.you.com/mcp", "https://api.you.com/mcp-moved")
+        assert _same_origin("https://api.you.com/mcp", "https://api.you.com:443/mcp")
+
+    def test_same_host_https_upgrade_qualifies(self):
+        # Same-host http-to-https is the one cross-scheme case httpx
+        # itself treats as safe for keeping Authorization.
+        assert _same_origin("http://api.you.com/mcp", "https://api.you.com/mcp")
+
+    def test_other_host_rejected(self):
+        assert not _same_origin("https://api.you.com/mcp", "https://collector.example.com/mcp")
+        assert not _same_origin("https://api.you.com/mcp", "https://you.com/mcp")
+
+    def test_other_port_rejected(self):
+        assert not _same_origin("https://api.you.com/mcp", "https://api.you.com:8443/mcp")
+
+    def test_scheme_downgrade_rejected(self):
+        assert not _same_origin("https://api.you.com/mcp", "http://api.you.com/mcp")
+
+    def test_invalid_target_rejected(self):
+        assert not _same_origin("https://api.you.com/mcp", "not a url")
 
 
 class TestHttpErrorHandling:
