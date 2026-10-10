@@ -4,6 +4,7 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 
+import os
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -13,10 +14,14 @@ from trpc_agent_sdk.code_executors import DEFAULT_EXEC_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_IO_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_POLL_LINES
 from trpc_agent_sdk.code_executors import DEFAULT_SESSION_TTL_SEC
+from trpc_agent_sdk.code_executors import ENV_SKILL_NAME
+from trpc_agent_sdk.code_executors import WorkspaceRunResult
+from trpc_agent_sdk.skills.stager import SkillStageResult
 from trpc_agent_sdk.skills.tools._skill_exec import ExecInput
 from trpc_agent_sdk.skills.tools._skill_exec import PollSessionTool
 from trpc_agent_sdk.skills.tools._skill_exec import SkillExecTool
 from trpc_agent_sdk.skills.tools._skill_exec import WriteStdinTool
+from trpc_agent_sdk.skills.tools._skill_exec import _ExecSession
 from trpc_agent_sdk.skills.tools._skill_exec import _close_session
 from trpc_agent_sdk.skills.tools._skill_exec import _collect_final_result
 from trpc_agent_sdk.skills.tools._skill_exec import _detect_interaction
@@ -25,6 +30,7 @@ from trpc_agent_sdk.skills.tools._skill_exec import _last_non_empty_line
 from trpc_agent_sdk.skills.tools._skill_exec import _start_session
 from trpc_agent_sdk.skills.tools._skill_exec import create_exec_tools
 from trpc_agent_sdk.skills.tools._skill_run import SkillRunFile
+from trpc_agent_sdk.skills.tools._skill_run import SkillRunTool
 
 
 def _make_exec_tool() -> SkillExecTool:
@@ -40,6 +46,7 @@ def _make_exec_tool() -> SkillExecTool:
 
 
 class TestHelpers:
+
     def test_last_non_empty_line(self):
         assert _last_non_empty_line("a\n\nb\n") == "b"
 
@@ -59,6 +66,7 @@ class TestHelpers:
 
 
 class TestModelsAndConstants:
+
     def test_exec_input_defaults(self):
         inp = ExecInput(skill="s", command="echo hi")
         assert inp.yield_time_ms == 0
@@ -73,6 +81,7 @@ class TestModelsAndConstants:
 
 
 class TestSessionStore:
+
     @pytest.mark.asyncio
     async def test_put_get_remove(self):
         tool = _make_exec_tool()
@@ -87,6 +96,7 @@ class TestSessionStore:
 
 
 class TestFactoryAndDeclarations:
+
     def test_create_exec_tools(self):
         run_tool = MagicMock()
         run_tool._repository = MagicMock()
@@ -105,12 +115,75 @@ class TestFactoryAndDeclarations:
 
 
 class TestCloseSession:
+
     @pytest.mark.asyncio
     async def test_close_session(self):
         sess = MagicMock()
         sess.proc.close = AsyncMock()
         await _close_session(sess)
         sess.proc.close.assert_awaited_once()
+
+
+class TestExecutionEnvironment:
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tool_name", ["skill_run", "skill_exec"])
+    @pytest.mark.parametrize(
+        ("call_env", "host_env", "expected"),
+        [
+            pytest.param({}, None, "injected", id="repository"),
+            pytest.param({"TEST_SKILL_ENV": "explicit"}, None, "explicit", id="explicit"),
+            pytest.param({}, "host", "host", id="host"),
+            pytest.param({"TEST_SKILL_ENV": "explicit"}, "host", "explicit", id="explicit-over-host"),
+            pytest.param({}, "  ", "injected", id="blank-host"),
+            pytest.param({"TEST_SKILL_ENV": ""}, None, "", id="empty-explicit"),
+        ],
+    )
+    async def test_skill_tools_apply_repository_env(self, tmp_path, monkeypatch, tool_name, call_env, host_env,
+                                                    expected):
+        if host_env is None:
+            monkeypatch.delenv("TEST_SKILL_ENV", raising=False)
+        else:
+            monkeypatch.setenv("TEST_SKILL_ENV", host_env)
+
+        ctx = MagicMock()
+        ctx.agent_name = ""
+        ctx.actions.state_delta = {}
+        ctx.session_state = {}
+        ws = MagicMock(path=str(tmp_path))
+        workspace_runtime = MagicMock(spec=BaseWorkspaceRuntime)
+        workspace_runtime.manager.return_value.create_workspace = AsyncMock(return_value=ws)
+        workspace_runtime.fs.return_value.collect = AsyncMock(return_value=[])
+        runner = workspace_runtime.runner.return_value
+        runner.run_program = AsyncMock(return_value=WorkspaceRunResult(stdout="done", exit_code=0))
+        runner.start_program = AsyncMock(return_value=MagicMock())
+
+        repository = MagicMock()
+        repository.get_workspace_runtime.return_value = workspace_runtime
+        repository.skill_run_env.return_value = {"TEST_SKILL_ENV": "injected"}
+        run_tool = SkillRunTool(repository=repository)
+        run_tool.skill_stager.stage_skill = AsyncMock(return_value=SkillStageResult(workspace_skill_dir="skills/test"))
+        monkeypatch.setattr(_ExecSession, "yield_output", AsyncMock(return_value=("running", "", 0, 0)))
+        tool = run_tool if tool_name == "skill_run" else SkillExecTool(run_tool)
+
+        await tool._run_async_impl(
+            tool_context=ctx,
+            args={
+                "skill": " test ",
+                "command": "echo done",
+                "env": call_env
+            },
+        )
+
+        if tool_name == "skill_run":
+            env = runner.run_program.call_args.args[1].env
+            effective_env = os.environ.copy()
+            effective_env.update(env)
+        else:
+            effective_env = runner.start_program.call_args.args[2].env
+        assert effective_env["TEST_SKILL_ENV"] == expected
+        assert effective_env[ENV_SKILL_NAME] == "test"
+        repository.skill_run_env.assert_called_once_with("test")
 
 
 @pytest.mark.asyncio

@@ -91,6 +91,7 @@ from ._file_stager import SkillStageRequest
 from ._skill_run import SkillRunInput
 from ._skill_run import SkillRunOutput
 from ._skill_run import SkillRunTool
+from ._skill_run import _apply_skill_run_env
 from ._skill_run import _filter_failed_empty_outputs
 from ._skill_run import _select_primary_output
 from ._skill_run import _truncate_output
@@ -447,6 +448,7 @@ class SkillExecTool(BaseTool):
         extra_env: dict[str, str] = dict(inputs.env)
         if ENV_SKILL_NAME not in extra_env:
             extra_env[ENV_SKILL_NAME] = normalized_skill
+        _apply_skill_run_env(repository, normalized_skill, extra_env)
         merged_env = _build_exec_env(ws, extra_env)
 
         # Start interactive program session via runtime runner.

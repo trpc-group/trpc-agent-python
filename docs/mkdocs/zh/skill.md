@@ -1009,6 +1009,11 @@ Assistant: Let me check what documentation is available.
 - 收集指定的输出文件并返回
 - 支持自定义环境变量覆盖
 
+`skill_run` 和 `skill_exec` 都会调用 `repository.skill_run_env(skill_name)`
+补充 Skill 专属环境变量。钩子返回的变量不会覆盖调用参数 `env` 中已有的键，也不会
+覆盖宿主环境中的非空值。空键、空白值以及禁止注入的键（如 `LD_PRELOAD`）会被忽略；
+钩子抛出异常时，命令仍继续执行。
+
 **提示词指导**：
 
 这个工具由 LLM 在准备好后执行实际命令。提示词应包含详细的使用指南：

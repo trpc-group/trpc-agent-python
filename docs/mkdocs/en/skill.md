@@ -1016,6 +1016,12 @@ Assistant: Let me check what documentation is available.
 - Collects specified output files and returns them
 - Supports custom environment variable overrides
 
+Both `skill_run` and `skill_exec` call `repository.skill_run_env(skill_name)`
+to add skill-specific environment variables. Values returned by the hook do not
+override keys already present in the call's `env` or non-empty host environment
+values. Empty keys, blank values, and blocked keys such as `LD_PRELOAD` are ignored.
+If the hook raises an exception, command execution continues.
+
 **Prompt guidance**:
 
 This tool is called by the LLM when ready to execute actual commands. The prompt should include detailed usage guidelines:
