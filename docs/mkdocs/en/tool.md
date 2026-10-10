@@ -2532,21 +2532,23 @@ The example covers the following scenarios:
 
 `WebSearchTool` is the built-in **public web search tool** in the trpc-agent-python framework. When an Agent needs to answer questions about "latest developments / version numbers / events / definitions / factual topics" that fall beyond the model's knowledge cutoff, it can use this tool to call mainstream search-engine retrieval APIs, obtain structured results containing titles, URLs, and snippets, and then list all citations in a `Sources:` section as Markdown hyperlinks according to the prescribed format.
 
-This tool uses a **pluggable provider** design and currently includes two built-in backends:
+This tool uses a **pluggable provider** design and currently includes four built-in backends:
 
 - **`duckduckgo` (default)**: DuckDuckGo Instant Answer API, which **does not require an API key**. It returns DDG-curated instant answers / abstracts / definitions and related topics, making it suitable for encyclopedia, definition, and fact-based queries. Note that it does not return full real-time web search results, but rather DDG's curated result set
 - **`google`**: Google Custom Search (CSE) JSON API, which requires `api_key` and `engine_id` (that is, the CSE `cx`). It returns real public web search results and supports native CSE parameters such as `siteSearch`, `hl` (language), `safe` (SafeSearch), and `dateRestrict` (freshness)
+- **`tavily`**: Tavily Search API, which requires `api_key` (or the `TAVILY_API_KEY` environment variable). It returns LLM-oriented web results and can optionally return image URLs (call-time parameter `include_images=true`)
+- **`youcom`**: You.com `you-search` MCP tool over stateless JSON-RPC (streamable HTTP). It **runs keyless by default** through the free-profile endpoint (`https://api.you.com/mcp?profile=free`), just like the DDG backend — zero configuration. Setting `YDC_API_KEY` (or the `api_key` constructor argument) automatically switches requests to the authenticated endpoint. It returns web and news hits whose snippets fall back from the hit `description` to You.com's canonical `snippets` field and then to query-relevant `contents.highlights`. Only the tool's own headers reach the endpoint, so credentials configured on a shared `http_client` (a gateway token, a cookie jar) are never forwarded to You.com
 
 On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filtering, URL normalization and deduplication, result truncation, mandatory citation-policy injection, and HTTP connection-pool reuse**, helping you integrate network retrieval into LLM Agents in a stable and controllable way for production environments.
 
 ### Features
 
-- **Dual provider support**: switch between `duckduckgo` (keyless, suitable for definitions/encyclopedia/facts) and `google` (requires CSE API credentials and supports real public web search) through the `provider` parameter, while exposing a consistent `FunctionDeclaration` to the LLM
+- **Multi-provider support**: switch between `duckduckgo` (keyless, suitable for definitions/encyclopedia/facts), `google` (requires CSE API credentials and supports real public web search), `tavily` (LLM-oriented search with optional images), and `youcom` (You.com MCP, keyless via the free profile or authenticated via `YDC_API_KEY`) through the `provider` parameter, while exposing a consistent `FunctionDeclaration` to the LLM
 - **Domain allowlist/blocklist**: the LLM may fill in `allowed_domains` or `blocked_domains` at call time (the two are mutually exclusive). The tool performs **subdomain-aware** matching (`www.` is stripped, and `python.org` also matches `docs.python.org`). For Google, a single allowed domain takes the server-side `siteSearch` fast path, while multiple domains automatically fall back to client-side filtering
 - **URL normalization and deduplication**: `dedup_urls=True` (default) merges duplicate hits by a normalized scheme/host/path key, preventing the same source from appearing multiple times in the `Sources:` section. Set it to `False` to preserve the raw recall list for downstream re-rankers, diversified sampling, or offline evaluation
 - **Result truncation**: `results_num`, `snippet_len`, and `title_len` control the number of returned items and the character limits for each snippet and title. All parameters are clamped to `[1, _MAX_*]` to avoid misconfiguration that would exceed the context window. The LLM can further control the returned count at call time via the `count` parameter
 - **Mandatory citation policy**: during `process_request`, the tool automatically appends instructions to the LLM and **strictly requires** that: (1) the final answer must end with `Sources:` section listing the URLs returned by the tool in `[Title](URL)` format; (2) the Agent must not fabricate URLs; and (3) for "latest/recent" queries, the **current year and month** must be included in the search input to reduce stale-year hallucinations
-- **Provider-native parameter passthrough**: `ddg_extra_params` and `google_extra_params` let you pin provider-specific advanced parameters at the Agent level, such as Google CSE's `safe`, `dateRestrict`, `gl`, and `cr`, so they are automatically included in every tool invocation without exposing additional fields in the `FunctionDeclaration`
+- **Provider-native parameter passthrough**: `ddg_extra_params`, `google_extra_params`, `tavily_extra_params`, and `youcom_extra_params` let you pin provider-specific advanced parameters at the Agent level, such as Google CSE's `safe`, `dateRestrict`, `gl`, and `cr`, Tavily's `search_depth`, or You.com's `freshness` and `safesearch`, so they are automatically included in every tool invocation without exposing additional fields in the `FunctionDeclaration`
 - **Shared `httpx` connection pool**: by passing a prebuilt `httpx.AsyncClient` through the `http_client` constructor argument, you can reuse the connection pool across multiple Agents or multiple invocations. The caller is responsible for managing its lifecycle (the tool will not call `aclose`)
 - **Structured output**: always returns a `WebSearchResult` containing `query`, `provider`, `results: List[{title, url, snippet}]`, and `summary`, making it easier both for the LLM to compose citations and for downstream re-ranking or RAG pipelines
 
@@ -2554,13 +2556,13 @@ On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filte
 
 | Parameter | Type | Default | Description |
 |------|------|--------|------|
-| `provider` | `Literal["duckduckgo", "google"]` | `"duckduckgo"` | Search backend. `google` requires both `api_key` and `engine_id`; otherwise a not-configured message is returned at call time |
-| `api_key` | `Optional[str]` | `None` | Google CSE API key. If omitted, falls back to the `GOOGLE_CSE_API_KEY` environment variable |
+| `provider` | `Literal["duckduckgo", "google", "tavily", "youcom"]` | `"duckduckgo"` | Search backend. `google` requires both `api_key` and `engine_id`; `tavily` requires `api_key` (otherwise a not-configured message is returned at call time); `youcom` runs keyless by default (free profile) and switches to the authenticated endpoint when `YDC_API_KEY` is set |
+| `api_key` | `Optional[str]` | `None` | Provider API key. Google falls back to the `GOOGLE_CSE_API_KEY` environment variable; Tavily to `TAVILY_API_KEY`; You.com to `YDC_API_KEY` (optional) |
 | `engine_id` | `Optional[str]` | `None` | Google CSE engine ID (that is, `cx`). If omitted, falls back to the `GOOGLE_CSE_ENGINE_ID` environment variable |
 | `base_url` | `Optional[str]` | provider default | Override the provider's API base URL (mainly for testing or proxies) |
 | `user_agent` | `str` | `"trpc-agent-python-websearch/1.0"` | HTTP `User-Agent` header, used to help downstream systems distinguish request traffic in logs |
 | `proxy` | `Optional[str]` | `None` | Optional HTTP proxy URL, passed directly to `httpx` |
-| `lang` | `Optional[str]` | `None` | Default Google CSE language (maps to `hl`). Ignored by DDG. Can be overridden by the call-time `lang` parameter |
+| `lang` | `Optional[str]` | `None` | Default Google CSE language (maps to `hl`); You.com maps it to the inline `lang:` filter. Ignored by DDG. Can be overridden by the call-time `lang` parameter |
 | `http_client` | `Optional[httpx.AsyncClient]` | `None` | Optional prebuilt `httpx.AsyncClient` for connection-pool reuse (its lifecycle is managed by the caller) |
 | `results_num` | `int` | `5` | Default upper bound on returned results, clamped to `[1, 10]`; can be overridden by the call-time `count` parameter |
 | `snippet_len` | `int` | `300` | Character limit for each `snippet`, clamped to `[1, 1000]` |
@@ -2569,6 +2571,8 @@ On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filte
 | `dedup_urls` | `bool` | `True` | Whether to merge duplicate URLs by normalized key; if `False`, the original hit order is preserved |
 | `ddg_extra_params` | `Optional[dict]` | `None` | Additional query parameters passed through to DDG |
 | `google_extra_params` | `Optional[dict]` | `None` | Additional query parameters passed through to Google CSE, such as `{"safe": "active"}`, `{"dateRestrict": "m6"}`, or `{"gl": "us"}` |
+| `tavily_extra_params` | `Optional[dict]` | `None` | Additional JSON parameters passed through to Tavily Search, such as `{"search_depth": "advanced"}` or `{"include_answer": True}` |
+| `youcom_extra_params` | `Optional[dict]` | `None` | Additional parameters passed through to the You.com `you-search` tool, such as `{"freshness": "week"}` or `{"safesearch": "strict"}`. Per-call arguments `query` / `count` / `exclude_domains` / `lang` are reserved and cannot be pinned here (`lang` is an inline `lang:` operator inside the per-call query) |
 | `filters_name` | `Optional[List[str]]` | `None` | Names of associated filters, passed through to `BaseTool` |
 | `filters` | `Optional[List[BaseFilter]]` | `None` | Filter instances injected directly, passed through to `BaseTool` |
 
@@ -2580,14 +2584,14 @@ On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filte
 | `count` | `integer` | No | Upper bound on the number of results returned in this call, clamped to `1-10`; defaults to the tool-level `results_num` |
 | `allowed_domains` | `array[string]` | No | Domain allowlist (host only, subdomain-aware, with `www.` stripped automatically); mutually exclusive with `blocked_domains` |
 | `blocked_domains` | `array[string]` | No | Domain blocklist, using the same matching rules as `allowed_domains`; mutually exclusive with `allowed_domains` |
-| `lang` | `string` | No | Only effective for Google CSE (maps to `hl`). Ignored by DDG. Overrides the tool-level `lang` |
+| `lang` | `string` | No | Effective for Google CSE (maps to `hl`); You.com maps it to the inline `lang:` filter. Ignored by DDG. Overrides the tool-level `lang` |
 
 **`WebSearchResult` return fields**:
 
 | Field | Type | Description |
 |------|------|------|
 | `query` | `str` | Query term used for this search (echoed back verbatim) |
-| `provider` | `"duckduckgo" \| "google"` | Provider actually used |
+| `provider` | `"duckduckgo" \| "google" \| "tavily" \| "youcom"` | Provider actually used |
 | `results` | `List[SearchHit]` | Structured hit list, where each item contains `title`, `url`, and `snippet` |
 | `summary` | `str` | Aggregated summary from DDG instant answers / abstracts / definitions. For Google, this field is also populated when spelling correction or API errors occur |
 
@@ -2676,11 +2680,41 @@ def create_google_agent() -> LlmAgent:
     )
 ```
 
+**Switch to You.com (keyless)**: when you want real public web search results but do not want to sign up for any API keys, switch to `provider="youcom"`. By default it uses You.com's keyless free-profile MCP endpoint — the same zero-configuration story as DuckDuckGo, but returning real web hits. Setting `YDC_API_KEY` (optional) automatically switches requests to the authenticated endpoint:
+
+```python
+import os
+
+from trpc_agent_sdk.tools import WebSearchTool
+
+
+def create_youcom_agent() -> LlmAgent:
+    """Create a WebSearchTool Agent based on You.com (keyless by default)."""
+    web_search = WebSearchTool(
+        provider="youcom",
+        # api_key=os.getenv("YDC_API_KEY"),  # Optional: switches to the authenticated endpoint
+        results_num=5,
+        snippet_len=300,
+        title_len=100,
+        timeout=15.0,
+        youcom_extra_params={
+            "freshness": "week",  # Optional: keep only results from the last week
+        },
+    )
+    return LlmAgent(
+        name="youcom_research_assistant",
+        description="Web research assistant powered by You.com Search.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
 > **Note**:
 > - `allowed_domains` and `blocked_domains` are filled in by the **LLM in the call arguments** rather than the constructor. The LLM may decide whether to use them based on the user prompt. The two are mutually exclusive, and passing both returns `INVALID_ARGS`
 > - When an external `http_client` is provided, `WebSearchTool` will **not** call `aclose()` for you. The caller must explicitly close it in the **same event loop** to avoid `Unclosed client` warnings
 > - Even when an external client is reused, the tool still force-applies the constructor's `timeout` and `user_agent` on every `GET` request, ensuring that the Agent-level constraints always remain in effect
-> - Other commonly used Google CSE passthrough parameters include `gl` (geographic bias), `cr` (country restriction), `filter`, and `sort`. For DuckDuckGo, parameters such as `region` and `kl` can be passed through via `ddg_extra_params`
+> - Other commonly used Google CSE passthrough parameters include `gl` (geographic bias), `cr` (country restriction), `filter`, and `sort`. For DuckDuckGo, parameters such as `region` and `kl` can be passed through via `ddg_extra_params`; for Tavily, `search_depth` and `include_answer` via `tavily_extra_params`; for You.com, `freshness`, `safesearch`, and `extraction` via `youcom_extra_params`
 
 #### Drive the Agent and Print Tool Events
 
