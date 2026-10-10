@@ -38,8 +38,11 @@ from __future__ import annotations
 import pydantic.root_model  # noqa: F401
 
 import json
+import logging
+from contextlib import contextmanager
 from typing import Any
 from typing import Dict
+from typing import Iterator
 from unittest.mock import MagicMock
 
 import httpx
@@ -94,13 +97,20 @@ def _make_mock_client(responses: Dict[str, Dict[str, Any]], *, status: int = 200
     return client
 
 
-def _make_mock_sse_client(responses: Dict[str, str], *, status: int = 200) -> httpx.AsyncClient:
+def _make_mock_sse_client(
+    responses: Dict[str, str],
+    *,
+    status: int = 200,
+    client_headers: Dict[str, str] | None = None,
+) -> httpx.AsyncClient:
     """Build an ``httpx.AsyncClient`` backed by ``MockTransport`` for SSE bodies.
 
     The You.com MCP endpoint answers JSON-RPC POSTs with
     ``text/event-stream`` instead of a JSON document; ``responses`` maps
     request URL path (e.g. ``"/mcp"``) to the raw SSE text to return.
     All non-matching paths return 404 so test misses surface loudly.
+    ``client_headers`` configures client-level headers on the client, the
+    way a shared gateway client would carry its own credentials.
     The returned client captures the last request for assertions via
     ``client._captured``.
     """
@@ -120,7 +130,7 @@ def _make_mock_sse_client(responses: Dict[str, str], *, status: int = 200) -> ht
         )
 
     transport = httpx.MockTransport(handler)
-    client = httpx.AsyncClient(transport=transport)
+    client = httpx.AsyncClient(transport=transport, headers=client_headers or {})
     # Stash captures on the client so tests can introspect them.
     client._captured = captured  # type: ignore[attr-defined]
     return client
@@ -129,6 +139,35 @@ def _make_mock_sse_client(responses: Dict[str, str], *, status: int = 200) -> ht
 def _tool_ctx() -> InvocationContext:
     """Return a minimal fake ``InvocationContext`` — our tool does not touch it."""
     return MagicMock(spec=InvocationContext)
+
+
+class _SdkLogCapture(logging.Handler):
+    """Capture records from the framework's ``trpc_agent_sdk`` stdlib logger.
+
+    The framework's DefaultLogger attaches to ``logging.getLogger(
+    "trpc_agent_sdk")`` with ``propagate = False``, so pytest's root-logger
+    ``caplog`` fixture never sees its records; tests that assert on log
+    output attach this handler to the SDK logger directly.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.DEBUG)
+        self.messages: list[tuple[int, str]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append((record.levelno, record.getMessage()))
+
+
+@contextmanager
+def _capture_sdk_logs() -> Iterator[_SdkLogCapture]:
+    """Yield a handler attached to the SDK logger for the duration."""
+    handler = _SdkLogCapture()
+    sdk_logger = logging.getLogger("trpc_agent_sdk")
+    sdk_logger.addHandler(handler)
+    try:
+        yield handler
+    finally:
+        sdk_logger.removeHandler(handler)
 
 
 class TestSearchHitSchema:
@@ -1518,6 +1557,183 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_snippets_used_when_description_missing(self, monkeypatch):
+        # ``snippets`` is You.com's canonical summary field (a list of
+        # strings returned by default); news hits often carry it while
+        # ``description`` is empty or missing. Modeled on the official
+        # you-search response shape.
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        text = json.dumps({
+            "results": {
+                "web": [
+                    {
+                        "title": "What's new",
+                        "url": "https://docs.python.org/3/whatsnew/3.13.html",
+                        # A non-empty description still wins over snippets.
+                        "description": "Release notes for Python 3.13.",
+                        "snippets": ["shadows the canonical field"],
+                    },
+                    {
+                        "title": "PEP 720",
+                        "url": "https://peps.python.org/pep-0720/",
+                        "description": "",
+                        # First non-empty string entry wins; blank and
+                        # non-string entries are skipped.
+                        "snippets": ["", 42, "PEP title change summary", "second"],
+                    },
+                    {
+                        "title": "Bare snippet",
+                        "url": "https://peps.python.org/pep-0719/",
+                        "description": "",
+                        # A bare string instead of a list: no crash and no
+                        # bogus snippet, same guard as for highlights.
+                        "snippets": "not a list",
+                    },
+                ],
+                "news": [
+                    {
+                        "title": "Python 3.13.1 released",
+                        "url": "https://blog.python.org/python-3-13-1-released",
+                        # No description key at all — the canonical path for
+                        # news hits on the free profile.
+                        "snippets": ["The first maintenance release of Python 3.13."],
+                    },
+                ],
+            },
+        })
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(text)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert [h["snippet"] for h in res["results"]] == [
+            "Release notes for Python 3.13.",
+            "PEP title change summary",
+            "",
+            "The first maintenance release of Python 3.13.",
+        ]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_shared_client_credentials_not_forwarded(self, monkeypatch):
+        # A shared ``http_client`` carrying client-level credentials (e.g. a
+        # gateway bearer token or cookie jar) must not leak to the You.com
+        # endpoint: httpx merges client-level headers into ``client.post``
+        # requests, so the SSE request is built and sent as-is instead.
+        monkeypatch.delenv("YDC_API_KEY", raising=False)
+        client_headers = {
+            "Authorization": "Bearer gateway-secret",
+            "X-Api-Key": "gateway-key",
+            "Cookie": "session=gw",
+        }
+        client = _make_mock_sse_client(
+            {"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)},
+            client_headers=client_headers,
+        )
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        req = client._captured["last_request"]
+        assert res["provider"] == "youcom"
+        assert req.headers.get("authorization") is None
+        assert req.headers.get("x-api-key") is None
+        assert req.headers.get("cookie") is None
+        # The tool's own headers still reach the wire.
+        assert "text/event-stream" in req.headers.get("accept", "")
+        assert req.headers.get("user-agent")
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_shared_client_credentials_stripped_even_with_bearer(self):
+        # When the tool itself sends a bearer key, only that key goes out;
+        # client-level credentials are still not forwarded.
+        client = _make_mock_sse_client(
+            {"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)},
+            client_headers={"X-Api-Key": "gateway-key"},
+        )
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://api.you.com/mcp",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        req = client._captured["last_request"]
+        assert req.headers.get("authorization") == "Bearer ydc-test"
+        assert req.headers.get("x-api-key") is None
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_frame_ids_compared_as_strings(self):
+        # Some servers echo the JSON-RPC id back as a string ("1"); a strict
+        # int comparison would drop every reply frame and report an empty
+        # search.
+        result = {
+            "jsonrpc": "2.0",
+            "id": "1",
+            "result": {
+                "content": [{
+                    "type": "text",
+                    "text": _YOUCOM_TOOL_TEXT
+                }]
+            },
+        }
+        body = f"event: message\ndata: {json.dumps(result)}\n\n"
+        client = _make_mock_sse_client({"/mcp": body})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["summary"] == ""
+        assert len(res["results"]) == 3
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_superseded_error_frame_is_logged(self):
+        # A stray error frame overridden by a later result must stay
+        # observable in the logs, not be dropped silently.
+        error = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {
+                "code": -32000,
+                "message": "transient",
+            },
+        }
+        result = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [{
+                    "type": "text",
+                    "text": _YOUCOM_TOOL_TEXT
+                }]
+            },
+        }
+        body = (f"event: message\ndata: {json.dumps(error)}\n\n"
+                f"event: message\ndata: {json.dumps(result)}\n\n")
+        client = _make_mock_sse_client({"/mcp": body})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        with _capture_sdk_logs() as cap:
+            res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["summary"] == ""
+        assert len(res["results"]) == 3
+        warnings = [m for level, m in cap.messages if level >= logging.WARNING]
+        assert any("superseded" in m and "transient" in m for m in warnings)
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_lang_maps_to_inline_filter(self):
         client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
         t = WebSearchTool(
@@ -2030,6 +2246,21 @@ class TestYoucomProvider:
         text = '﻿data: {"result": {"x": 1}}\n\n'
         payloads = _parse_sse_payloads(text)
         assert payloads == [{"result": {"x": 1}}]
+
+    def test_parse_sse_payloads_keepalive_and_non_object_lines_are_quiet(self):
+        # Empty ``data:`` keep-alive lines and valid non-object JSON must
+        # not produce warning noise; only truly unparseable lines warn.
+        text = ('data: \n\n'
+                'data: 123\n\n'
+                'data: [1, 2]\n\n'
+                'data: not-json\n\n'
+                'data: {"result": {"x": 1}}\n\n')
+        with _capture_sdk_logs() as cap:
+            payloads = _parse_sse_payloads(text)
+        assert payloads == [{"result": {"x": 1}}]
+        warnings = [m for level, m in cap.messages if level >= logging.WARNING]
+        assert len(warnings) == 1
+        assert "not-json" in warnings[0]
 
 
 class TestHttpErrorHandling:

@@ -20,7 +20,8 @@ are supported, ``duckduckgo``, ``google search``, ``tavily``, and ``youcom``:
 4. ``youcom`` — You.com ``you-search`` MCP tool over streamable HTTP.
    Keyless through the free profile endpoint; ``YDC_API_KEY`` optionally
    switches requests to the authenticated endpoint. Returns web and news
-   hits with descriptions and query-relevant highlights.
+   hits whose snippets fall back from the hit description to You.com's
+   canonical ``snippets`` field and to query-relevant highlights.
 """
 
 from __future__ import annotations
@@ -310,6 +311,13 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
             return None
         return decoded if isinstance(decoded, dict) else None
 
+    def _is_json(raw: str) -> bool:
+        try:
+            json.loads(raw)
+            return True
+        except json.JSONDecodeError:
+            return False
+
     buffer: List[str] = []
 
     def _flush() -> None:
@@ -320,11 +328,23 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
             payloads.append(decoded)
         else:
             for piece in buffer:
-                decoded = _try_decode(piece)
-                if decoded is None:
-                    logger.warning("WebSearchTool: skipping unparseable SSE line: %.80s", piece)
+                raw = piece.strip()
+                if not raw:
+                    # Empty ``data:`` lines are keep-alives; skip silently
+                    # instead of logging noise for every one of them.
                     continue
-                payloads.append(decoded)
+                decoded = _try_decode(piece)
+                if decoded is not None:
+                    payloads.append(decoded)
+                    continue
+                # At this point the line is either unparseable or valid JSON
+                # that is not an object.
+                if _is_json(raw):
+                    # Valid JSON but not an object (``123``, ``[1]``) is
+                    # not a JSON-RPC frame; skip quietly, not as a warning.
+                    logger.debug("WebSearchTool: skipping non-object SSE data: %.80s", raw)
+                else:
+                    logger.warning("WebSearchTool: skipping unparseable SSE line: %.80s", raw)
         buffer.clear()
 
     for line in lines:
@@ -663,6 +683,13 @@ class WebSearchTool(BaseTool):
 
         Used for JSON-RPC endpoints that answer with ``text/event-stream``
         instead of a single JSON document (the You.com MCP endpoint).
+
+        The request is built explicitly and sent through ``client.send`` so
+        that only the headers assembled below reach the wire: httpx merges
+        client-level headers into ``client.post`` requests, which would
+        silently forward any credentials configured on a shared
+        ``http_client`` (a gateway bearer token, a cookie jar, ...) to this
+        third-party endpoint. A request sent as-is carries none of them.
         """
         client = self._get_client()
         close = self._http_client is None
@@ -674,13 +701,12 @@ class WebSearchTool(BaseTool):
         }
         if headers:
             request_headers.update(headers)
+        request = httpx.Request("POST", url, json=payload, headers=request_headers)
+        # send() falls back to the client timeout when the extension is
+        # absent; keep the per-call timeout semantics of the other providers.
+        request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
         try:
-            resp = await client.post(
-                url,
-                json=payload,
-                timeout=self._timeout,
-                headers=request_headers,
-            )
+            resp = await client.send(request)
             resp.raise_for_status()
             return _parse_sse_payloads(resp.text)
         finally:
@@ -809,6 +835,8 @@ class WebSearchTool(BaseTool):
         configured ``YDC_API_KEY`` upgrades requests to the authenticated
         endpoint. Blocked domains are excluded server-side; allowlists are
         enforced post-hoc by ``_is_blocked``, mirroring the other providers.
+        Hit snippets fall back from the hit ``description`` to the canonical
+        You.com ``snippets`` list, then to ``contents.highlights``.
         """
         arguments: dict[str, Any] = {"query": query, "count": n}
         if lang:
@@ -856,7 +884,10 @@ class WebSearchTool(BaseTool):
             frame_id = item.get("id")
             # Only frames replying to this request carry its id; frames
             # without one are notifications and carry no result/error.
-            if frame_id is not None and frame_id != payload["id"]:
+            # Compare the string forms: some servers echo the request id
+            # back as a string ("1"), and a strict typed comparison would
+            # drop every reply frame.
+            if frame_id is not None and str(frame_id) != str(payload["id"]):
                 continue
             if "error" in item:
                 # A JSON-RPC response carries either ``result`` or ``error``;
@@ -865,6 +896,11 @@ class WebSearchTool(BaseTool):
                 error_wins = True
             if "result" in item and "error" not in item:
                 # A later valid result supersedes an earlier stray error.
+                if error is not None:
+                    # Keep transient failures observable: a stray error frame
+                    # (e.g. a rate-limit notice) was overridden by a later
+                    # result frame; log it rather than dropping it silently.
+                    logger.warning("WebSearchTool: You.com error frame superseded by a later result: %.200s", error)
                 result = item["result"]
                 error_wins = False
         if error is not None and (error_wins or result is None):
@@ -964,6 +1000,16 @@ class WebSearchTool(BaseTool):
                     continue
                 seen.add(key)
             description = str(item.get("description") or "").strip()
+            if not description:
+                # ``snippets`` is You.com's canonical summary field (a list
+                # of strings returned by default); some hits — notably
+                # news — carry it while ``description`` is empty or absent.
+                snippets = item.get("snippets")
+                if isinstance(snippets, list):
+                    for snippet in snippets:
+                        if isinstance(snippet, str) and snippet.strip():
+                            description = snippet.strip()
+                            break
             if not description:
                 contents = item.get("contents")
                 highlights = contents.get("highlights") if isinstance(contents, dict) else None

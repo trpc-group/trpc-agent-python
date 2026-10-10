@@ -2589,7 +2589,7 @@ if __name__ == "__main__":
 - **`duckduckgo`（默认）**：DuckDuckGo Instant Answer API，**无需 API Key**。返回 DDG 精选的 instant answer / abstract / definition 摘要及相关主题，适合百科/定义/事实类查询；注意返回的并非完整的实时网页结果，而是 DDG 的 curated 结果集
 - **`google`**：Google Custom Search（CSE）JSON API，需要配置 `api_key` 与 `engine_id`（即 CSE 的 `cx`）；返回真实的公网搜索结果，支持 `siteSearch`、`hl`（语言）、`safe`（SafeSearch）、`dateRestrict`（时效性）等 CSE 原生参数
 - **`tavily`**：Tavily Search API，需要配置 `api_key`（或环境变量 `TAVILY_API_KEY`）；返回面向 LLM 的网页结果，并可选返回图片 URL（调用参数 `include_images=true`）
-- **`youcom`**：You.com `you-search` MCP 工具（streamable HTTP，无状态 JSON-RPC）。**默认走免密钥的 free profile 端点**（`https://api.you.com/mcp?profile=free`），与 DDG 同为零配置；配置 `YDC_API_KEY`（或构造参数 `api_key`）后会自动切换到认证端点。返回网页/新闻命中，含描述与查询相关的 highlights 摘要
+- **`youcom`**：You.com `you-search` MCP 工具（streamable HTTP，无状态 JSON-RPC）。**默认走免密钥的 free profile 端点**（`https://api.you.com/mcp?profile=free`），与 DDG 同为零配置；配置 `YDC_API_KEY`（或构造参数 `api_key`）后会自动切换到认证端点。返回网页/新闻命中，摘要依次取自命中 `description`、You.com 规范的 `snippets` 字段与查询相关的 `contents.highlights`。请求仅携带工具自身的头部，共享 `http_client` 上配置的凭据（网关令牌、Cookie 等）不会随请求转发给 You.com
 
 在此基础上，`WebSearchTool` 还内置了**域名白/黑名单过滤、URL 归一化去重、结果裁剪、引用规范强制注入、HTTP 连接池复用**等能力，帮助你在生产环境中稳定、可控地把联网检索接入 LLM Agent。
 
