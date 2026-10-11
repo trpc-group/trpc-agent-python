@@ -1844,6 +1844,69 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_youcom_overwritten_cookie_value_restored(self):
+        # Set-Cookie for a name that already existed in the jar overwrites
+        # its value mid-call; the rollback must restore the pre-call value
+        # — leaving the response's value in place would let the You.com
+        # session cookie masquerade as the pre-existing one and be
+        # replayed to other providers sharing the client.
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={
+                    "content-type": "text/event-stream",
+                    "set-cookie": "you_session=new; Path=/",
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client.cookies.set("you_session", "old", domain="api.you.com", path="/")
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"]
+        assert client.cookies.get("you_session") == "old"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_rollback_leaves_unrelated_domain_cookies(self):
+        # The rollback deletes only cookies that could plausibly have come
+        # from a You.com response (domain-matching the endpoint host every
+        # hop was validated to stay on). A cookie a concurrent provider
+        # call writes into the same shared jar — here a Tavily session,
+        # added while the You.com request is in flight — must survive the
+        # You.com rollback.
+        def handler(request: httpx.Request) -> httpx.Response:
+            # A concurrent Tavily call sharing this client finishes while
+            # the You.com request is in flight (after the snapshot).
+            client.cookies.set("tavily_session", "keepme", domain="api.tavily.com")
+            return httpx.Response(
+                302,
+                headers={
+                    "location": "https://collector.example.com/mcp",
+                    "set-cookie": "you_session=abc; Path=/",
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        # The You.com cookie (endpoint host) was rolled back...
+        assert client.cookies.get("you_session") is None
+        # ...while the concurrent call's cookie on another domain survives.
+        assert client.cookies.get("tavily_session") == "keepme"
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_youcom_plaintext_downgrade_after_upgrade_dropped(self):
         # Every hop is validated against the URL it redirects *from*: after
         # a same-host http->https upgrade, a further hop back down to
@@ -2655,6 +2718,27 @@ class TestYoucomProvider:
         text = 'data: {"a": 1}\ndata: {"b": 2}\n'
         payloads = _parse_sse_payloads(text)
         assert payloads == [{"a": 1}, {"b": 2}]
+
+    def test_parse_sse_payloads_string_split_without_separator_keeps_string_intact(self):
+        # A frame split inside a JSON string with no blank separator: the
+        # separator-less join is the faithful reassembly and must be
+        # adopted (the newline join would put a raw control character in
+        # the string); the payload must be restored with the exact string
+        # the server serialized, with no newline injected.
+        text = 'data: {"snippet": "ab\ndata: c"}\n'
+        payloads = _parse_sse_payloads(text)
+        assert payloads == [{"snippet": "abc"}]
+
+    def test_parse_sse_payloads_mixed_frames_without_separators_pin_tradeoff(self):
+        # Complete one-line frames and one pretty-printed multi-line frame
+        # concatenated without blank separators: the buffer-level joins
+        # cannot parse (several frames concatenated), so the per-line
+        # fallback keeps the complete frames and drops the multi-line one.
+        # Without separators the input is ambiguous; this pins that
+        # declared trade-off as stable behavior.
+        text = 'data: {"a": "x"}\ndata: {"b":\ndata: 2}\ndata: {"c": 3}\n'
+        payloads = _parse_sse_payloads(text)
+        assert payloads == [{"a": "x"}, {"c": 3}]
 
     def test_parse_sse_payloads_strips_leading_bom(self):
         text = '﻿data: {"result": {"x": 1}}\n\n'

@@ -291,14 +291,16 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
     A streamable-HTTP server answers a JSON-RPC request with one SSE body
     whose events carry one JSON object each (progress notifications
     followed by the final result). Per the SSE spec an event's data may
-    span several consecutive ``data:`` lines, so they are joined with
-    ``\\n`` before parsing, and a leading UTF-8 BOM is stripped. When the
-    joined chunk does not parse, the chunks are retried joined with no
-    separator (some servers split one JSON frame mid-string, where
-    re-inserted newlines are invalid JSON control characters) and then
-    each line is tried on its own so servers that omit blank-line event
-    separators still work. Anything that still fails is skipped so a
-    stray keep-alive or partial frame cannot break the search.
+    span several consecutive ``data:`` lines, and a leading UTF-8 BOM is
+    stripped. The lines are reassembled in the order that preserves the
+    server's bytes: joined with no separator first (a server may split one
+    JSON frame across ``data:`` lines at any boundary, including inside a
+    JSON string, where a re-inserted newline is either an invalid JSON
+    control character or a silent corruption of the string contents), then
+    joined with ``\\n`` (for servers that emit literal newlines between
+    JSON tokens), and finally each line on its own so servers that omit
+    blank-line event separators still work. Anything that still fails is
+    skipped so a stray keep-alive or partial frame cannot break the search.
     """
     payloads: List[dict[str, Any]] = []
     lines = (text or "").splitlines()
@@ -330,16 +332,21 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
     def _flush() -> None:
         if not buffer:
             return
-        decoded = _try_decode("\n".join(buffer))
+        # Prefer the separator-less join: a server may chunk one JSON frame
+        # across several ``data:`` lines at any boundary, including inside
+        # a JSON string. Re-inserting a newline between the chunks there
+        # either puts a raw control character in the string (strict
+        # ``json.loads`` rejects it and the whole event would degrade to a
+        # silently dropped frame) or lands somewhere json.loads happens to
+        # accept, silently corrupting the string contents. The chunks are
+        # the server's bytes split at arbitrary points, so reassembling
+        # them with nothing in between is the faithful reconstruction.
+        decoded = _try_decode("".join(buffer))
         if decoded is None and len(buffer) > 1:
-            # A server may chunk one JSON frame across several ``data:``
-            # lines without regard for JSON token boundaries. Re-inserting
-            # newlines between the chunks (the SSE join above) puts raw
-            # control characters inside the serialized JSON, which strict
-            # ``json.loads`` always rejects; the whole event would then
-            # degrade to a silently dropped frame. Try the chunks joined
-            # with no separator before falling back to per-line parsing.
-            decoded = _try_decode("".join(buffer))
+            # Fall back to the newline join only for servers that emit
+            # literal newlines between JSON tokens (pretty-printed frames
+            # without blank event separators).
+            decoded = _try_decode("\n".join(buffer))
         if decoded is not None:
             payloads.append(decoded)
         else:
@@ -753,12 +760,17 @@ class WebSearchTool(BaseTool):
           next provider call.
 
         Finally, the shared client's cookie jar is snapshotted before the
-        first request and any ``Set-Cookie`` the You.com responses (followed
-        or unfollowed, including the skipped 3xx hops) write into it is
-        rolled back in the same ``finally`` block, so it cannot be replayed
-        to other providers (e.g. Tavily) through the same ``http_client`` —
-        no matter whether the call returns normally, bails out on a
-        cross-origin redirect, or dies mid-request.
+        first request (with values) and anything the You.com responses
+        (followed or unfollowed, including the skipped 3xx hops) write
+        into it is rolled back in the same ``finally`` block — cookies the
+        call added are deleted and cookies whose value the call overwrote
+        are restored — so it cannot be replayed to other providers (e.g.
+        Tavily) through the same ``http_client``, no matter whether the
+        call returns normally, bails out on a cross-origin redirect, or
+        dies mid-request. Deletions are scoped to the endpoint host (every
+        hop was validated to stay on it), so a cookie some concurrent call
+        wrote into the same shared jar for an unrelated domain is left
+        alone.
         """
         client = self._get_client()
         close = self._http_client is None
@@ -770,9 +782,14 @@ class WebSearchTool(BaseTool):
         }
         if headers:
             request_headers.update(headers)
-        # Snapshot the jar before any request goes out; the rollback in the
-        # finally block below relies on it covering every You.com response.
-        known_cookies = {(cookie.name, cookie.domain, cookie.path) for cookie in client.cookies.jar}
+        # Snapshot the jar (with values) before any request goes out; the
+        # rollback in the finally block below relies on it covering every
+        # You.com response.
+        cookie_snapshot = {
+            (cookie.name, cookie.domain, cookie.path): cookie.value
+            for cookie in client.cookies.jar
+        }
+        endpoint_host = httpx.URL(url).host
         resp: Optional[httpx.Response] = None
         try:
             current_url = url
@@ -844,15 +861,31 @@ class WebSearchTool(BaseTool):
             resp.raise_for_status()
             return _parse_sse_payloads(resp.text)
         finally:
-            # Roll back any Set-Cookie the You.com responses (followed or
+            # Roll back anything the You.com responses (followed or
             # unfollowed, including skipped 3xx hops) wrote into the shared
             # client's jar, so it cannot be replayed to other providers
             # (e.g. Tavily) through the same http_client. Running here — not
             # on the happy path — guarantees the rollback also happens on
             # the cross-origin early return, the redirect-budget break, and
-            # any exception raised mid-loop.
+            # any exception raised mid-loop. Both shapes are rolled back:
+            # a cookie the call added, and a cookie whose value the call
+            # overwrote with a Set-Cookie on a name that already existed.
+            # Deletes are scoped to cookies that could plausibly have come
+            # from one of this call's responses (domain-matching the
+            # endpoint host, which every hop was validated to stay on), so
+            # a cookie a concurrent call wrote for an unrelated domain is
+            # not caught in this rollback.
             for cookie in list(client.cookies.jar):
-                if (cookie.name, cookie.domain, cookie.path) not in known_cookies:
+                key = (cookie.name, cookie.domain, cookie.path)
+                if key in cookie_snapshot:
+                    if cookie.value != cookie_snapshot[key]:
+                        # The call overwrote a pre-existing cookie: restore
+                        # the pre-call value in place so every other
+                        # attribute (expiry, secure, ...) survives.
+                        cookie.value = cookie_snapshot[key]
+                    continue
+                domain = cookie.domain.lstrip(".")
+                if endpoint_host == domain or endpoint_host.endswith("." + domain):
                     client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
             # Release the response and its pooled connection even when the
             # body read dies mid-stream (e.g. a read timeout): an abandoned
@@ -1208,10 +1241,18 @@ class WebSearchTool(BaseTool):
             if not description:
                 contents = item.get("contents")
                 highlights = contents.get("highlights") if isinstance(contents, dict) else None
-                # Only a list of strings is a usable fallback; anything else
-                # (a bare string, a dict, ...) must not crash the whole search.
-                if isinstance(highlights, list) and highlights and isinstance(highlights[0], str):
-                    description = highlights[0].strip()
+                # Only a list is a usable fallback. Some variants mix objects
+                # and strings in the list, so the first string element wins
+                # (mirroring the ``snippets`` traversal above) instead of
+                # checking only ``highlights[0]`` — a non-string first
+                # element must not disable the fallback for the strings
+                # behind it. Anything else (a bare string, a dict, ...) must
+                # not crash the whole search.
+                if isinstance(highlights, list):
+                    for highlight in highlights:
+                        if isinstance(highlight, str) and highlight.strip():
+                            description = highlight.strip()
+                            break
             raw_title = item.get("title")
             title = raw_title if isinstance(raw_title, str) else ""
             hits.append(
