@@ -1844,12 +1844,12 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
-    async def test_youcom_overwritten_cookie_value_restored(self):
+    async def test_youcom_overwritten_cookie_value_left_as_is(self):
         # Set-Cookie for a name that already existed in the jar overwrites
-        # its value mid-call; the rollback must restore the pre-call value
-        # — leaving the response's value in place would let the You.com
-        # session cookie masquerade as the pre-existing one and be
-        # replayed to other providers sharing the client.
+        # its value mid-call; the rollback no longer restores the pre-call
+        # value — doing so would silently clobber a concurrent call that
+        # updated the same cookie after our snapshot. The You.com response
+        # value is left in place; only cookies the call *added* are deleted.
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(
                 200,
@@ -1869,7 +1869,8 @@ class TestYoucomProvider:
         )
         res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
         assert res["results"]
-        assert client.cookies.get("you_session") == "old"
+        # The response's Set-Cookie value is left in place, not restored.
+        assert client.cookies.get("you_session") == "new"
         await client.aclose()
 
     @pytest.mark.asyncio
@@ -2759,6 +2760,96 @@ class TestYoucomProvider:
         warnings = [m for level, m in cap.messages if level >= logging.WARNING]
         assert len(warnings) == 1
         assert "not-json" in warnings[0]
+
+    @pytest.mark.asyncio
+    async def test_result_frame_before_error_frame_result_wins(self):
+        # A result frame followed by a stray error frame must not discard the
+        # valid result: result takes precedence regardless of frame order.
+        result = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [{
+                    "type": "text",
+                    "text": _YOUCOM_TOOL_TEXT,
+                }],
+            },
+        }
+        error = {"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "late transient"}}
+        body = (f"event: message\ndata: {json.dumps(result)}\n\n"
+                f"event: message\ndata: {json.dumps(error)}\n\n")
+        client = _make_mock_sse_client({"/mcp": body})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["summary"] == ""
+        assert len(res["results"]) == 3
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_empty_location_redirect_breaks(self):
+        # A redirect with an empty or whitespace-only Location must not loop
+        # back to the same URL; it breaks out after a single request.
+        captured: Dict[str, Any] = {"count": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["count"] += 1
+            return httpx.Response(302, headers={"location": ""})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert captured["count"] == 1
+        assert "error" in res
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_redirect_budget_limits_to_three(self):
+        # The redirect budget is _SSE_MAX_REDIRECTS (3), so the 4th redirect
+        # response (the 5th request) is the one that breaks the loop — not
+        # the 5th redirect (6th request) as in the old off-by-one code.
+        captured: Dict[str, Any] = {"count": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["count"] += 1
+            return httpx.Response(302, headers={"location": "https://api.you.com/mcp"})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # 1 initial POST + 3 redirect follows = 4 total requests; the 4th
+        # redirect response breaks the loop without a 5th request.
+        assert captured["count"] == 4
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_lang_operator_already_in_query_not_duplicated(self):
+        # When the query already contains a ``lang:`` operator, the lang
+        # parameter must not append a second one (``python lang:ja lang:ja``).
+        client = _make_mock_sse_client({"/mcp": _youcom_sse_body(_YOUCOM_TOOL_TEXT)})
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        await t._run_async_impl(
+            tool_context=_tool_ctx(),
+            args={"query": "python lang:ja", "lang": "ja"},
+        )
+        payload = json.loads(client._captured["last_request"].content)
+        assert payload["params"]["arguments"]["query"] == "python lang:ja"
+        await client.aclose()
 
 
 class TestSameOrigin:

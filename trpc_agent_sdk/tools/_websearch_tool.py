@@ -754,23 +754,20 @@ class WebSearchTool(BaseTool):
           ``profile`` query parameter (``URL.join`` drops it), so a keyless
           free-profile call does not get redirected onto the authenticated
           endpoint.
-        * each response is closed in a ``finally`` block — a read that dies
-          mid-stream (e.g. a read timeout on a keep-alive-heavy body) must
+        * cookies the You.com responses write into the shared client's jar
+          are rolled back: cookies this call *added* are deleted (scoped to
+          the endpoint host, which every hop was validated to stay on) so
+          they cannot be replayed to other providers through the same
+          ``http_client``. Pre-existing cookies whose *values* were
+          overwritten by a You.com ``Set-Cookie`` are left as-is rather
+          than restored to the snapshot value — restoring them would
+          silently clobber a concurrent call that updated the same cookie
+          after our snapshot.
+        * each response is closed: intermediate 3xx hop responses are
+          closed before the next hop is issued, and the final response is
+          closed in a ``finally`` block — a read that dies mid-stream must
           not leave a broken connection in the shared client's pool for the
           next provider call.
-
-        Finally, the shared client's cookie jar is snapshotted before the
-        first request (with values) and anything the You.com responses
-        (followed or unfollowed, including the skipped 3xx hops) write
-        into it is rolled back in the same ``finally`` block — cookies the
-        call added are deleted and cookies whose value the call overwrote
-        are restored — so it cannot be replayed to other providers (e.g.
-        Tavily) through the same ``http_client``, no matter whether the
-        call returns normally, bails out on a cross-origin redirect, or
-        dies mid-request. Deletions are scoped to the endpoint host (every
-        hop was validated to stay on it), so a cookie some concurrent call
-        wrote into the same shared jar for an unrelated domain is left
-        alone.
         """
         client = self._get_client()
         close = self._http_client is None
@@ -802,15 +799,29 @@ class WebSearchTool(BaseTool):
                 resp = await client.send(request, auth=None, follow_redirects=False)
                 if not resp.has_redirect_location:
                     break
-                redirects += 1
-                if redirects > _SSE_MAX_REDIRECTS:
+                if redirects >= _SSE_MAX_REDIRECTS:
                     logger.warning(
                         "WebSearchTool: You.com endpoint exceeded %d redirects; "
                         "search may return no results.",
                         _SSE_MAX_REDIRECTS,
                     )
                     break
-                location = resp.headers.get("location", "")
+                redirects += 1
+                location = resp.headers.get("location", "").strip()
+                if not location:
+                    logger.warning(
+                        "WebSearchTool: You.com endpoint returned a redirect "
+                        "(%d) with an empty Location; search may return no "
+                        "results.",
+                        resp.status_code,
+                    )
+                    break
+                # Close the 3xx response before issuing the next hop: the
+                # body of a redirect response is short or empty, but leaving
+                # it open ties up a pooled connection for every intermediate
+                # hop until the loop exits.  ``aclose`` is idempotent, so the
+                # finally-block close on the final response is still safe.
+                await resp.aclose()
                 try:
                     next_obj = httpx.URL(current_url).join(location)
                     # URL.join follows urljoin semantics, so a relative
@@ -867,22 +878,23 @@ class WebSearchTool(BaseTool):
             # (e.g. Tavily) through the same http_client. Running here — not
             # on the happy path — guarantees the rollback also happens on
             # the cross-origin early return, the redirect-budget break, and
-            # any exception raised mid-loop. Both shapes are rolled back:
-            # a cookie the call added, and a cookie whose value the call
-            # overwrote with a Set-Cookie on a name that already existed.
-            # Deletes are scoped to cookies that could plausibly have come
-            # from one of this call's responses (domain-matching the
-            # endpoint host, which every hop was validated to stay on), so
-            # a cookie a concurrent call wrote for an unrelated domain is
-            # not caught in this rollback.
+            # any exception raised mid-loop. Only cookies the call *added*
+            # (absent from the snapshot) are deleted; pre-existing cookies
+            # whose values were overwritten are left as-is to avoid clobbering
+            # concurrent calls. Deletes are scoped to cookies that could
+            # plausibly have come from one of this call's responses
+            # (domain-matching the endpoint host, which every hop was
+            # validated to stay on), so a cookie a concurrent call wrote for
+            # an unrelated domain is not caught in this rollback.
             for cookie in list(client.cookies.jar):
                 key = (cookie.name, cookie.domain, cookie.path)
                 if key in cookie_snapshot:
-                    if cookie.value != cookie_snapshot[key]:
-                        # The call overwrote a pre-existing cookie: restore
-                        # the pre-call value in place so every other
-                        # attribute (expiry, secure, ...) survives.
-                        cookie.value = cookie_snapshot[key]
+                    # A pre-existing cookie was in the jar before this call.
+                    # Don't restore its snapshot value: a concurrent call on
+                    # the same shared client may have updated it after our
+                    # snapshot, and restoring the old value would silently
+                    # overwrite that concurrent update.  Only cookies this
+                    # call added (absent from the snapshot) are cleaned up.
                     continue
                 domain = cookie.domain.lstrip(".")
                 if endpoint_host == domain or endpoint_host.endswith("." + domain):
@@ -1030,7 +1042,11 @@ class WebSearchTool(BaseTool):
             lang_value = str(lang).strip()
             while lang_value[:5].lower() == "lang:":
                 lang_value = lang_value[5:].strip()
-            if lang_value:
+            if lang_value and "lang:" not in query.lower():
+                # Guard against the model already embedding a ``lang:``
+                # operator in the query text (the schema description
+                # encourages that form): appending a second one would
+                # produce a duplicated filter like ``python lang:ja lang:ja``.
                 arguments["query"] = f"{query} lang:{lang_value}"
         if blocked:
             arguments["exclude_domains"] = blocked
@@ -1065,7 +1081,6 @@ class WebSearchTool(BaseTool):
 
         result: Optional[dict[str, Any]] = None
         error: Optional[dict[str, Any]] = None
-        error_wins = False
         for item in payloads:
             if not isinstance(item, dict):
                 continue
@@ -1081,17 +1096,19 @@ class WebSearchTool(BaseTool):
                 # A JSON-RPC response carries either ``result`` or ``error``;
                 # a frame carrying both is treated as an error.
                 error = item["error"]
-                error_wins = True
             if "result" in item and "error" not in item:
-                # A later valid result supersedes an earlier stray error.
+                # A valid result always wins, regardless of frame order: a
+                # stray error frame that arrived before the result is logged
+                # but does not discard the valid response.  An error frame
+                # that arrives *after* the result is also logged rather than
+                # silently overwriting it.
                 if error is not None:
-                    # Keep transient failures observable: a stray error frame
-                    # (e.g. a rate-limit notice) was overridden by a later
-                    # result frame; log it rather than dropping it silently.
-                    logger.warning("WebSearchTool: You.com error frame superseded by a later result: %.200s", error)
+                    logger.warning(
+                        "WebSearchTool: You.com error frame superseded by a "
+                        "result (or vice versa): %.200s", error,
+                    )
                 result = item["result"]
-                error_wins = False
-        if error is not None and (error_wins or result is None):
+        if error is not None and result is None:
             message = error.get("message") if isinstance(error, dict) else str(error)
             return WebSearchResult(
                 query=query,
