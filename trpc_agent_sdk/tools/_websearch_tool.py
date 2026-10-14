@@ -787,6 +787,7 @@ class WebSearchTool(BaseTool):
             for cookie in client.cookies.jar
         }
         endpoint_host = httpx.URL(url).host
+        cookies_added_by_call: dict[tuple[str, str, str], str] = {}
         resp: Optional[httpx.Response] = None
         try:
             current_url = url
@@ -797,6 +798,13 @@ class WebSearchTool(BaseTool):
                 # absent; keep the per-call timeout semantics of the other providers.
                 request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
                 resp = await client.send(request, auth=None, follow_redirects=False)
+                # Record cookies this response added to the jar, so the
+                # finally-block rollback can distinguish them from cookies
+                # a concurrent call wrote to the same shared client.
+                for _c in client.cookies.jar:
+                    _ck = (_c.name, _c.domain, _c.path)
+                    if _ck not in cookie_snapshot:
+                        cookies_added_by_call[_ck] = _c.value or ""
                 if not resp.has_redirect_location:
                     break
                 if redirects >= _SSE_MAX_REDIRECTS:
@@ -841,6 +849,19 @@ class WebSearchTool(BaseTool):
                         ex,
                     )
                     break
+                # A redirect whose Location resolves to the same URL as the
+                # current request is a server-side loop (load balancer or
+                # session fault); re-POSTing the same body N times wastes
+                # the redirect budget and repeats the credential payload
+                # needlessly.
+                if next_url == current_url:
+                    logger.warning(
+                        "WebSearchTool: You.com endpoint returned a redirect "
+                        "(%d) whose Location resolves to the current URL; "
+                        "search may return no results.",
+                        resp.status_code,
+                    )
+                    break
                 # Validate each hop on its own: the request (and the tool's
                 # Authorization header) travels to current_url's origin, so
                 # the hop must be same-origin with the *previous* URL — not
@@ -870,6 +891,19 @@ class WebSearchTool(BaseTool):
                     resp.status_code,
                 )
             resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "")
+            if "text/event-stream" not in content_type:
+                # A non-SSE response (e.g. application/json carrying a
+                # JSON-RPC error frame for a parameter-validation failure
+                # or rate-limit) has no ``data:`` lines, so the SSE
+                # parser returns [] and the error is silently swallowed.
+                # Parse it as JSON so the error-handling branch in
+                # _search_youcom can surface the real failure reason.
+                try:
+                    frame = json.loads(resp.text)
+                    return frame if isinstance(frame, list) else [frame]
+                except (json.JSONDecodeError, ValueError):
+                    pass
             return _parse_sse_payloads(resp.text)
         finally:
             # Roll back anything the You.com responses (followed or
@@ -879,22 +913,24 @@ class WebSearchTool(BaseTool):
             # on the happy path — guarantees the rollback also happens on
             # the cross-origin early return, the redirect-budget break, and
             # any exception raised mid-loop. Only cookies the call *added*
-            # (absent from the snapshot) are deleted; pre-existing cookies
-            # whose values were overwritten are left as-is to avoid clobbering
-            # concurrent calls. Deletes are scoped to cookies that could
-            # plausibly have come from one of this call's responses
-            # (domain-matching the endpoint host, which every hop was
-            # validated to stay on), so a cookie a concurrent call wrote for
-            # an unrelated domain is not caught in this rollback.
+            # (tracked in cookies_added_by_call) are deleted, and only if
+            # their current value still matches what this call's response
+            # set — a concurrent call on the same shared client may have
+            # updated them since, and deleting those would silently drop
+            # the concurrent call's session. Deletes are scoped to cookies
+            # that could plausibly have come from one of this call's
+            # responses (domain-matching the endpoint host, which every
+            # hop was validated to stay on), so a cookie a concurrent call
+            # wrote for an unrelated domain is not caught in this rollback.
             for cookie in list(client.cookies.jar):
                 key = (cookie.name, cookie.domain, cookie.path)
-                if key in cookie_snapshot:
-                    # A pre-existing cookie was in the jar before this call.
-                    # Don't restore its snapshot value: a concurrent call on
-                    # the same shared client may have updated it after our
-                    # snapshot, and restoring the old value would silently
-                    # overwrite that concurrent update.  Only cookies this
-                    # call added (absent from the snapshot) are cleaned up.
+                if key not in cookies_added_by_call:
+                    # Not added by this call (either pre-existing or
+                    # written by a concurrent call on the shared client).
+                    continue
+                # Only delete if the value hasn't changed since this call
+                # set it — a concurrent call may have updated it since.
+                if (cookie.value or "") != cookies_added_by_call[key]:
                     continue
                 domain = cookie.domain.lstrip(".")
                 if endpoint_host == domain or endpoint_host.endswith("." + domain):

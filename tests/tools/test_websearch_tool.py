@@ -2812,14 +2812,17 @@ class TestYoucomProvider:
 
     @pytest.mark.asyncio
     async def test_redirect_budget_limits_to_three(self):
-        # The redirect budget is _SSE_MAX_REDIRECTS (3), so the 4th redirect
-        # response (the 5th request) is the one that breaks the loop — not
-        # the 5th redirect (6th request) as in the old off-by-one code.
+        # The redirect budget is _SSE_MAX_REDIRECTS (3); each redirect goes
+        # to a *different* path so the same-URL self-redirect guard does
+        # not fire — only the budget stops the loop.
         captured: Dict[str, Any] = {"count": 0}
 
         def handler(request: httpx.Request) -> httpx.Response:
             captured["count"] += 1
-            return httpx.Response(302, headers={"location": "https://api.you.com/mcp"})
+            return httpx.Response(
+                307,
+                headers={"location": f"https://api.you.com/mcp-{captured['count']}"},
+            )
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         t = WebSearchTool(
@@ -2849,6 +2852,93 @@ class TestYoucomProvider:
         )
         payload = json.loads(client._captured["last_request"].content)
         assert payload["params"]["arguments"]["query"] == "python lang:ja"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_non_sse_json_error_surfaced(self):
+        # A non-SSE response (application/json) carrying a JSON-RPC error
+        # frame must be parsed as JSON so the error message reaches the
+        # summary — not silently swallowed as an empty SSE body.
+        error = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {
+                "code": -32602,
+                "message": "Invalid language filter",
+            },
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                text=json.dumps(error),
+                headers={"content-type": "application/json"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"] == []
+        assert "Invalid language filter" in res["summary"]
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_same_url_self_redirect_breaks_immediately(self):
+        # A 307 redirect whose Location resolves to the same URL must
+        # break on the first redirect (1 request) rather than repeating
+        # the POST N times until the redirect budget runs out.
+        captured: Dict[str, Any] = {"count": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["count"] += 1
+            return httpx.Response(
+                307,
+                headers={"location": str(request.url)},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert captured["count"] == 1
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_domain_cookie_value_change_not_deleted(self):
+        # A cookie this call added (recorded in cookies_added_by_call)
+        # whose value was subsequently changed by a concurrent call must
+        # not be deleted — the value-aware rollback skips it because the
+        # current value no longer matches what this call's response set.
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={
+                    "content-type": "text/event-stream",
+                    "set-cookie": "you_session=ours; Path=/; Domain=api.you.com",
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+
+        # Wrap _post_sse so that after it returns (cookies rolled back),
+        # we can verify the rollback worked. Then run a second call where
+        # a "concurrent" cookie overwrites the value mid-flight.
+        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # This call's cookie was rolled back.
+        assert client.cookies.get("you_session") is None
         await client.aclose()
 
 
