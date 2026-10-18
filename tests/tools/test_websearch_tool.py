@@ -1812,6 +1812,36 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
+    async def test_youcom_redirect_with_userinfo_dropped(self):
+        # A same-origin redirect whose Location carries userinfo (e.g.
+        # ``https://tracker:tx@api.you.com/mcp``) would let httpx construct
+        # BasicAuth from the URL on the next hop, overriding the tool's
+        # Bearer header. A legitimate You.com redirect never carries
+        # userinfo; treat it as non-same-origin and drop it.
+        captured: Dict[str, Any] = {"all_requests": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["all_requests"].append(request)
+            return httpx.Response(
+                302,
+                headers={"location": "https://tracker:tx@api.you.com/mcp"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        t = WebSearchTool(
+            provider="youcom",
+            api_key="ydc-test",
+            http_client=client,
+            base_url="https://api.you.com/mcp",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # Only the original request went out; the userinfo redirect was not followed.
+        assert len(captured["all_requests"]) == 1
+        assert captured["all_requests"][0].url.host == "api.you.com"
+        assert res["results"] == []
+        await client.aclose()
+
+    @pytest.mark.asyncio
     async def test_youcom_cross_origin_redirect_rolls_back_cookies(self):
         # The cross-origin bail-out returns before the tool parses a body,
         # but httpx has already written the dropped 3xx's Set-Cookie into
@@ -1844,12 +1874,13 @@ class TestYoucomProvider:
         await client.aclose()
 
     @pytest.mark.asyncio
-    async def test_youcom_overwritten_cookie_value_left_as_is(self):
+    async def test_youcom_overwritten_cookie_value_restored(self):
         # Set-Cookie for a name that already existed in the jar overwrites
-        # its value mid-call; the rollback no longer restores the pre-call
-        # value — doing so would silently clobber a concurrent call that
-        # updated the same cookie after our snapshot. The You.com response
-        # value is left in place; only cookies the call *added* are deleted.
+        # its value mid-call; the rollback restores the pre-call snapshot
+        # value so the You.com response value does not leak to subsequent
+        # calls on the shared client (e.g. to Tavily/Google). The restore
+        # is scoped to the endpoint host so an unrelated-domain cookie a
+        # concurrent call updated is not touched.
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(
                 200,
@@ -1869,8 +1900,9 @@ class TestYoucomProvider:
         )
         res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
         assert res["results"]
-        # The response's Set-Cookie value is left in place, not restored.
-        assert client.cookies.get("you_session") == "new"
+        # The pre-existing value is restored; the You.com response value
+        # does not persist in the shared jar.
+        assert client.cookies.get("you_session") == "old"
         await client.aclose()
 
     @pytest.mark.asyncio
@@ -2730,6 +2762,19 @@ class TestYoucomProvider:
         payloads = _parse_sse_payloads(text)
         assert payloads == [{"snippet": "abc"}]
 
+    def test_parse_sse_payloads_preserves_whitespace_at_split_boundary(self):
+        # A frame split inside a JSON string where the second ``data:``
+        # line carries a space that is part of the string value (the SSE
+        # separator is the single leading space after ``data:``, so the
+        # data itself starts with the second space). Stripping per-fragment
+        # whitespace corrupts the reassembled string; only the separator
+        # space is removed, preserving the string's internal whitespace.
+        # Input: ``{"snippet": "ab cd"}`` split at the space so the space
+        # lives at the start of the second fragment's data.
+        text = 'data: {"snippet": "ab\ndata:  cd"}\n'
+        payloads = _parse_sse_payloads(text)
+        assert payloads == [{"snippet": "ab cd"}]
+
     def test_parse_sse_payloads_mixed_frames_without_separators_pin_tradeoff(self):
         # Complete one-line frames and one pretty-printed multi-line frame
         # concatenated without blank separators: the buffer-level joins
@@ -2933,12 +2978,30 @@ class TestYoucomProvider:
             base_url="https://api.you.com/mcp?profile=free",
         )
 
-        # Wrap _post_sse so that after it returns (cookies rolled back),
-        # we can verify the rollback worked. Then run a second call where
-        # a "concurrent" cookie overwrites the value mid-flight.
-        await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
-        # This call's cookie was rolled back.
-        assert client.cookies.get("you_session") is None
+        # Inject a concurrent cookie update between the recording loop
+        # (which records you_session=ours) and the finally-block rollback,
+        # by spying on the SSE parser that _post_sse calls on the return
+        # path — _parse_sse_payloads(resp.text) runs after the recording
+        # but before the finally block, so the jar mutation lands in the
+        # window the value-aware rollback must defend against.
+        import trpc_agent_sdk.tools._websearch_tool as _wst
+        real_parse = _wst._parse_sse_payloads
+
+        def spy_parse(text):
+            client.cookies.set(
+                "you_session", "concurrent-value", domain="api.you.com", path="/"
+            )
+            return real_parse(text)
+
+        _wst._parse_sse_payloads = spy_parse
+        try:
+            await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        finally:
+            _wst._parse_sse_payloads = real_parse
+
+        # The concurrent value survives: the value-aware rollback skipped
+        # deletion because the current value no longer matched the recorded one.
+        assert client.cookies.get("you_session") == "concurrent-value"
         await client.aclose()
 
 

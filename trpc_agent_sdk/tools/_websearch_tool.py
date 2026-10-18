@@ -372,7 +372,15 @@ def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
 
     for line in lines:
         if line.startswith("data:"):
-            buffer.append(line[len("data:"):].strip())
+            # SSE spec: strip only the single optional space after "data:",
+            # not trailing whitespace. A server may split one JSON frame at
+            # any boundary (including inside a JSON string), and stripping
+            # per-fragment whitespace silently corrupts the reassembled
+            # string value — e.g. ``data: {"s":"ab `` + ``data:  cd"}``
+            # must rebuild to ``{"s":"ab cd"}``, not ``{"s":"abcd"}``. The
+            # whole-buffer strip still happens in ``_try_decode`` before
+            # ``json.loads``, which is JSON-safe.
+            buffer.append(line[len("data:"):].removeprefix(" "))
         elif not line.strip():
             # A blank line dispatches the event per the SSE spec.
             _flush()
@@ -759,10 +767,10 @@ class WebSearchTool(BaseTool):
           the endpoint host, which every hop was validated to stay on) so
           they cannot be replayed to other providers through the same
           ``http_client``. Pre-existing cookies whose *values* were
-          overwritten by a You.com ``Set-Cookie`` are left as-is rather
-          than restored to the snapshot value — restoring them would
-          silently clobber a concurrent call that updated the same cookie
-          after our snapshot.
+          overwritten by a You.com ``Set-Cookie`` are restored to the
+          snapshot value so the You.com value does not leak to subsequent
+          calls on the shared client; the restore is host-scoped so a
+          concurrent call's cookie on an unrelated domain is untouched.
         * each response is closed: intermediate 3xx hop responses are
           closed before the next hop is issued, and the final response is
           closed in a ``finally`` block — a read that dies mid-stream must
@@ -862,6 +870,18 @@ class WebSearchTool(BaseTool):
                         resp.status_code,
                     )
                     break
+                # A Location carrying userinfo (e.g.
+                # ``https://tracker:tx@api.you.com/mcp``) would let httpx
+                # construct BasicAuth from the URL, overriding this tool's
+                # Bearer header on the next hop. A legitimate You.com
+                # redirect never carries userinfo; treat it as non-same-origin.
+                if next_obj.userinfo:
+                    logger.warning(
+                        "WebSearchTool: dropping redirect from the You.com endpoint to "
+                        "URL %r (Location carries userinfo); search may return no results.",
+                        next_url,
+                    )
+                    return []
                 # Validate each hop on its own: the request (and the tool's
                 # Authorization header) travels to current_url's origin, so
                 # the hop must be same-origin with the *previous* URL — not
@@ -935,6 +955,30 @@ class WebSearchTool(BaseTool):
                 domain = cookie.domain.lstrip(".")
                 if endpoint_host == domain or endpoint_host.endswith("." + domain):
                     client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
+            # Restore pre-existing cookies this call overwrote: a You.com
+            # Set-Cookie can clobber a same-named cookie the caller had
+            # pinned on the shared client (e.g. a session value for
+            # api.you.com), and only deleting newly-added cookies leaves
+            # the polluted You.com value in the jar — exactly the
+            # cross-provider leak the rollback is meant to prevent. For
+            # any cookie present in the snapshot whose current value
+            # differs from the snapshot, restore the snapshot value.
+            # Scoped to the endpoint host so a concurrent call's cookie
+            # on an unrelated domain is never touched. (A concurrent
+            # You.com call that updated the same cookie during this
+            # call's window would have its value reverted — an
+            # acceptable trade for the call-granularity case, since the
+            # alternative is leaving You.com's polluted value in place.)
+            for cookie in list(client.cookies.jar):
+                key = (cookie.name, cookie.domain, cookie.path)
+                if key not in cookie_snapshot:
+                    continue
+                snap_value = cookie_snapshot[key] or ""
+                if (cookie.value or "") == snap_value:
+                    continue
+                domain = cookie.domain.lstrip(".")
+                if endpoint_host == domain or endpoint_host.endswith("." + domain):
+                    client.cookies.set(cookie.name, snap_value, domain=cookie.domain, path=cookie.path)
             # Release the response and its pooled connection even when the
             # body read dies mid-stream (e.g. a read timeout): an abandoned
             # half-read response would otherwise leave a broken connection
