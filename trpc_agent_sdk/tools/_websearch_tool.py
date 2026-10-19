@@ -797,6 +797,18 @@ class WebSearchTool(BaseTool):
         endpoint_host = httpx.URL(url).host
         cookies_added_by_call: dict[tuple[str, str, str], str] = {}
         resp: Optional[httpx.Response] = None
+
+        def _record_added_cookies() -> None:
+            # Record cookies this call's responses have added to the jar
+            # (present now but absent from the pre-call snapshot), so the
+            # finally-block rollback can distinguish them from cookies a
+            # concurrent call wrote to the same shared client. Called on
+            # both the send-success path and the send-exception path below.
+            for _c in client.cookies.jar:
+                _ck = (_c.name, _c.domain, _c.path)
+                if _ck not in cookie_snapshot:
+                    cookies_added_by_call[_ck] = _c.value or ""
+
         try:
             current_url = url
             redirects = 0
@@ -805,14 +817,25 @@ class WebSearchTool(BaseTool):
                 # send() falls back to the client timeout when the extension is
                 # absent; keep the per-call timeout semantics of the other providers.
                 request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
-                resp = await client.send(request, auth=None, follow_redirects=False)
+                try:
+                    resp = await client.send(request, auth=None, follow_redirects=False)
+                except BaseException:
+                    # httpx extracts Set-Cookie headers in
+                    # _send_single_request before the response body is
+                    # read, so a mid-stream read timeout (or any transport
+                    # error raised after headers arrive) still leaves
+                    # You.com's cookies in the shared jar even though
+                    # send() raised. Record them now — not after a
+                    # successful return — so the finally-block rollback
+                    # deletes them; otherwise they leak to other providers
+                    # (e.g. Tavily) through the same http_client. Re-raise
+                    # so callers see the original error.
+                    _record_added_cookies()
+                    raise
                 # Record cookies this response added to the jar, so the
                 # finally-block rollback can distinguish them from cookies
                 # a concurrent call wrote to the same shared client.
-                for _c in client.cookies.jar:
-                    _ck = (_c.name, _c.domain, _c.path)
-                    if _ck not in cookie_snapshot:
-                        cookies_added_by_call[_ck] = _c.value or ""
+                _record_added_cookies()
                 if not resp.has_redirect_location:
                     break
                 if redirects >= _SSE_MAX_REDIRECTS:
@@ -955,30 +978,32 @@ class WebSearchTool(BaseTool):
                 domain = cookie.domain.lstrip(".")
                 if endpoint_host == domain or endpoint_host.endswith("." + domain):
                     client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
-            # Restore pre-existing cookies this call overwrote: a You.com
-            # Set-Cookie can clobber a same-named cookie the caller had
-            # pinned on the shared client (e.g. a session value for
-            # api.you.com), and only deleting newly-added cookies leaves
-            # the polluted You.com value in the jar — exactly the
-            # cross-provider leak the rollback is meant to prevent. For
-            # any cookie present in the snapshot whose current value
-            # differs from the snapshot, restore the snapshot value.
-            # Scoped to the endpoint host so a concurrent call's cookie
-            # on an unrelated domain is never touched. (A concurrent
-            # You.com call that updated the same cookie during this
+            # Restore pre-existing cookies this call overwrote or deleted.
+            # A You.com Set-Cookie can clobber a same-named cookie the
+            # caller had pinned on the shared client (overwrite), or
+            # delete it via Max-Age=0 / expired Expires (removal). In the
+            # deletion case the cookie is gone from the jar, so
+            # iterating the jar (as an earlier version did) never sees
+            # it and the snapshot value is never restored — leaving the
+            # caller's session missing for subsequent calls on the
+            # shared client. Iterate the snapshot instead: for any
+            # cookie the snapshot had whose current value differs or is
+            # missing, restore the snapshot value. Scoped to the
+            # endpoint host so a concurrent call's cookie on an
+            # unrelated domain is never touched. (A concurrent You.com
+            # call that updated or deleted the same cookie during this
             # call's window would have its value reverted — an
             # acceptable trade for the call-granularity case, since the
-            # alternative is leaving You.com's polluted value in place.)
-            for cookie in list(client.cookies.jar):
-                key = (cookie.name, cookie.domain, cookie.path)
-                if key not in cookie_snapshot:
+            # alternative is leaving You.com's polluted or missing
+            # value in place.)
+            jar_cookies = {(c.name, c.domain, c.path): c.value for c in client.cookies.jar}
+            for (c_name, c_domain, c_path), snap_value in cookie_snapshot.items():
+                current = jar_cookies.get((c_name, c_domain, c_path))
+                if current is not None and (current or "") == (snap_value or ""):
                     continue
-                snap_value = cookie_snapshot[key] or ""
-                if (cookie.value or "") == snap_value:
-                    continue
-                domain = cookie.domain.lstrip(".")
+                domain = c_domain.lstrip(".")
                 if endpoint_host == domain or endpoint_host.endswith("." + domain):
-                    client.cookies.set(cookie.name, snap_value, domain=cookie.domain, path=cookie.path)
+                    client.cookies.set(c_name, snap_value or "", domain=c_domain, path=c_path)
             # Release the response and its pooled connection even when the
             # body read dies mid-stream (e.g. a read timeout): an abandoned
             # half-read response would otherwise leave a broken connection

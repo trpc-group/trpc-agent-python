@@ -3004,6 +3004,68 @@ class TestYoucomProvider:
         assert client.cookies.get("you_session") == "concurrent-value"
         await client.aclose()
 
+    @pytest.mark.asyncio
+    async def test_youcom_send_exception_still_rolls_back_cookies(self):
+        # httpx extracts Set-Cookie headers in _send_single_request
+        # before the response body is read, so a mid-stream ReadTimeout
+        # leaves You.com's cookies in the shared jar even though send()
+        # raised. The rollback must still delete them on the exception
+        # path, or they leak to other providers via the shared client.
+        # The handler simulates the post-extraction-exception state by
+        # writing the cookie to the jar (as httpx would) before raising.
+        def handler(request: httpx.Request) -> httpx.Response:
+            client.cookies.set("you_session", "abc", domain="api.you.com", path="/")
+            raise httpx.ReadTimeout("simulated mid-stream read timeout")
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client.cookies.set("gw_session", "keepme", domain="gateway.internal")
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        # The timeout surfaced as an error result (caught by _run_async_impl)...
+        assert "error" in res
+        # ...but the You.com cookie was still rolled back despite the exception.
+        assert client.cookies.get("you_session") is None
+        # Pre-existing cookies on the shared client survive.
+        assert client.cookies.get("gw_session") == "keepme"
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_youcom_deleted_cookie_value_restored(self):
+        # A You.com Set-Cookie with Max-Age=0 (or an expired Expires) can
+        # delete a same-named cookie the caller had pinned on the shared
+        # client (reproduced on httpx 0.27.2; the exact deletion behaviour
+        # varies by httpx release). The rollback must restore the pre-call
+        # snapshot value; iterating only the jar (as an earlier version
+        # did) never sees the deleted cookie and leaves it missing,
+        # dropping the caller's session for subsequent calls on the
+        # shared client. The handler simulates the post-extraction
+        # deletion state by removing the cookie from the jar (as httpx
+        # would) before returning.
+        def handler(request: httpx.Request) -> httpx.Response:
+            client.cookies.delete("you_session", domain="api.you.com", path="/")
+            return httpx.Response(
+                200,
+                text=_youcom_sse_body(_YOUCOM_TOOL_TEXT),
+                headers={"content-type": "text/event-stream"},
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client.cookies.set("you_session", "old", domain="api.you.com", path="/")
+        t = WebSearchTool(
+            provider="youcom",
+            http_client=client,
+            base_url="https://api.you.com/mcp?profile=free",
+        )
+        res = await t._run_async_impl(tool_context=_tool_ctx(), args={"query": "python"})
+        assert res["results"]
+        # The deleted cookie is restored to its pre-call snapshot value.
+        assert client.cookies.get("you_session") == "old"
+        await client.aclose()
+
 
 class TestSameOrigin:
     """Redirect-target policy for the You.com SSE call."""
