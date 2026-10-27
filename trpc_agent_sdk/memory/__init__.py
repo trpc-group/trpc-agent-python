@@ -20,6 +20,10 @@ from ._redis_cluster_memory_service import RedisClusterMemoryService
 from ._sql_memory_service import MemStorageData
 from ._sql_memory_service import MemStorageEvent
 from ._sql_memory_service import SqlMemoryService
+from .hy_memory_service import get_hy_memory_options
+from .hy_memory_service import HyMemoryService
+from .hy_memory_service import HyMemoryServiceConfig
+from .hy_memory_service import set_hy_memory_options
 from ._utils import extract_words_lower
 from ._utils import format_timestamp
 
@@ -33,6 +37,10 @@ __all__ = [
     "MemStorageData",
     "MemStorageEvent",
     "SqlMemoryService",
+    "HyMemoryService",
+    "HyMemoryServiceConfig",
+    "get_hy_memory_options",
+    "set_hy_memory_options",
     "extract_words_lower",
     "format_timestamp",
 ]
