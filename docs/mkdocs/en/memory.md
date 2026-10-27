@@ -30,6 +30,7 @@ Based on the implementation in [trpc_agent_sdk/memory/](../../../trpc_agent_sdk/
 - **SqlMemoryService**: Stored in the `mem_events` table in MySQL/PostgreSQL
 - **MempalaceMemoryService**: Stored as MemPalace drawers in a local ChromaDB-backed palace
 - **TencentDBMemoryService**: Sent to TencentDB Agent Memory as L0 conversations and asynchronously extracted memories
+- **HyMemoryService**: Uses the Hy-Memory SDK for Chat, Working, and Coding memory
 
 **Code Example**:
 ```python
@@ -164,6 +165,255 @@ _session_events = {
     }
 }
 ```
+
+---
+
+## HyMemoryService
+
+`HyMemoryService` adapts the
+[Hy-Memory](https://github.com/Tencent-Hunyuan/Hy-Memory) SDK to the framework
+`MemoryService` interface. The Runner incrementally stores new Events after
+each turn, while `load_memory` and `preload_memory` continue to recall through
+the common `search_memory()` interface.
+
+Install the optional dependency:
+
+```bash
+pip install "trpc-agent-py[hy-memory]"
+```
+
+By default, Hy-Memory reads its LLM, embedding, and storage configuration from
+environment variables:
+
+```bash
+MEMORY_MODE=pro
+MEMORY_LLM_MODEL=your-memory-model
+MEMORY_LLM_API_KEY=your-memory-model-api-key
+MEMORY_LLM_BASE_URL=https://your-memory-model-endpoint/v1
+MEMORY_EMBEDDER_MODEL=your-embedding-model
+MEMORY_EMBEDDER_API_KEY=your-embedding-api-key
+MEMORY_EMBEDDER_BASE_URL=https://your-embedding-endpoint/v1
+MEMORY_EMBEDDING_DIMS=1024
+```
+
+These `MEMORY_*` variables configure the Hy-Memory SDK; they are not read
+directly by the `HyMemoryService` adapter. `MEMORY_LLM_API_KEY` is loaded into
+Hy-Memory's `LLMConfig` and ultimately passed to its OpenAI-compatible client
+as `api_key`. It authenticates memory extraction, summarization, conflict
+reconciliation, and query routing when `search_mode="agentic"` is used. The
+fallback order is `MEMORY_LLM_API_KEY`, `LLM_API_KEY`, then `OPENAI_API_KEY`.
+
+The complete example groups its environment variables by responsibility:
+
+- `TRPC_AGENT_API_KEY`, `TRPC_AGENT_BASE_URL`, and
+  `TRPC_AGENT_MODEL_NAME` configure the example Agent.
+- `MEMORY_LLM_API_KEY`, `MEMORY_LLM_BASE_URL`, and `MEMORY_LLM_MODEL`
+  configure the LLM used by Hy-Memory. They may reuse `${TRPC_AGENT_*}` when
+  the Agent and Hy-Memory use the same OpenAI-compatible endpoint and account.
+- `EMBEDDING_SERVICE_*` variables are read by the example's
+  `custom_embedder.py`. They configure the remote embedding endpoint, Cookie
+  credentials, vector dimensions, and retry behavior; they are not native
+  Hy-Memory environment variables. The `MEMORY_EMBEDDER_*` variables above
+  are not needed when this custom embedder is used.
+- `HY_MEMORY_SCENE`, `HY_MEMORY_DEMO_USER_ID`, `HY_MEMORY_WORKSPACE_ID`, and
+  `HY_MEMORY_BRANCH` are read by the framework example or adapter rather than
+  by the Hy-Memory SDK.
+
+### Create HyMemoryClient from environment variables
+
+The complete example explicitly loads the `.env` file beside the script
+instead of relying on the process working directory:
+
+```python
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).with_name(".env"))
+```
+
+The configuration can let the Agent and Hy-Memory share the same
+OpenAI-compatible model:
+
+```bash
+# Used by the example Agent
+TRPC_AGENT_API_KEY=your-agent-model-api-key
+TRPC_AGENT_BASE_URL=https://your-agent-model-endpoint/v1
+TRPC_AGENT_MODEL_NAME=your-agent-model
+
+# Used by Hy-Memory for extraction, summarization, and reconciliation
+MEMORY_MODE=pro
+MEMORY_LLM_API_KEY=${TRPC_AGENT_API_KEY}
+MEMORY_LLM_BASE_URL=${TRPC_AGENT_BASE_URL}
+MEMORY_LLM_MODEL=${TRPC_AGENT_MODEL_NAME}
+
+# Custom remote embedding service provided by the example
+EMBEDDING_SERVICE_ENDPOINT=your-embedding-endpoint
+EMBEDDING_SERVICE_X_CLIENT_SSID=your-client-ssid
+EMBEDDING_SERVICE_X_HOST_KEY_ACCESS=your-host-key-access
+EMBEDDING_SERVICE_DIMS=1024
+EMBEDDING_SERVICE_MAX_RETRIES=2
+EMBEDDING_SERVICE_RETRY_DELAY=2
+EMBEDDING_SERVICE_TIMEOUT=60
+```
+
+The example uses `_required_env()` to validate required values, then passes
+the LLM configuration and custom embedding implementation explicitly to
+`HyMemoryClient`:
+
+```python
+import os
+from typing import Optional
+
+from hy_memory import HyMemoryClient
+from hy_memory.config import LLMConfig
+from hy_memory.config import MemoryConfig
+
+from custom_embedder import BgeM3RemoteEmbeddingService
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise ValueError(f"{name} must be set")
+    return value
+
+
+def create_hy_memory_client(
+    memory_config: Optional[MemoryConfig] = None,
+) -> HyMemoryClient:
+    if memory_config is None:
+        memory_config = MemoryConfig(
+            llm=LLMConfig(
+                api_key=_required_env("MEMORY_LLM_API_KEY"),
+                base_url=_required_env("MEMORY_LLM_BASE_URL"),
+                model=_required_env("MEMORY_LLM_MODEL"),
+            )
+        )
+
+    return HyMemoryClient(
+        config=memory_config,
+        mode=os.getenv("MEMORY_MODE", "pro"),
+        embedding_service=BgeM3RemoteEmbeddingService.from_env(),
+    )
+```
+
+The parameters serve the following purposes:
+
+- `config.llm` supplies the API key, endpoint, and model for Hy-Memory's
+  internal LLM. The current SDK field is named `llm`, not `llm_config`.
+- `mode` selects the Hy-Memory processing mode and defaults to `pro` when
+  `MEMORY_MODE` is not set.
+- `embedding_service` injects an implementation of Hy-Memory's
+  `EmbeddingService` protocol. `BgeM3RemoteEmbeddingService.from_env()` reads
+  all `EMBEDDING_SERVICE_*` variables.
+- `memory_config` lets callers provide a complete `MemoryConfig`, which is
+  useful for tests or code-based storage and recall configuration. When it is
+  supplied, the function does not rebuild the LLM configuration from the
+  three `MEMORY_LLM_*` variables above.
+
+After creating the client, inject it into `HyMemoryService`:
+
+```python
+import os
+
+from trpc_agent_sdk.memory import HyMemoryService
+from trpc_agent_sdk.memory import HyMemoryServiceConfig
+
+hy_memory_client = create_hy_memory_client()
+
+memory_service = HyMemoryService(
+    HyMemoryServiceConfig(
+        enabled=True,
+        mode=os.getenv("MEMORY_MODE", "pro"),
+        scene=os.getenv("HY_MEMORY_SCENE", "chat").strip() or None,
+        source="trpc-agent-example",
+        workspace_id=os.getenv("HY_MEMORY_WORKSPACE_ID") or None,
+        branch=os.getenv("HY_MEMORY_BRANCH") or None,
+    ),
+    client=hy_memory_client,
+)
+```
+
+`HyMemoryService` then handles framework Event conversion, incremental writes,
+and recall-result conversion. The injected `HyMemoryClient` performs the
+actual LLM, embedding, and storage operations. `HY_MEMORY_DEMO_USER_ID` is
+used only by the example to decide whether to reuse the same test user across
+process runs; it is not passed to the Hy-Memory SDK.
+
+If no custom `HyMemoryClient` or embedding implementation is required, create
+only the adapter and let it construct a default client from Hy-Memory's native
+environment variables:
+
+```python
+from trpc_agent_sdk.memory import HyMemoryService
+from trpc_agent_sdk.memory import HyMemoryServiceConfig
+
+memory_service = HyMemoryService(
+    HyMemoryServiceConfig(
+        enabled=True,
+        mode="pro",
+        scene="chat",
+        source="my-agent",
+    )
+)
+
+runner = Runner(
+    app_name="my_app",
+    agent=agent,
+    session_service=session_service,
+    memory_service=memory_service,
+)
+```
+
+`scene` defaults to `chat`, matching the default `search_mode="default"` and
+avoiding an additional routing decision for general conversational memory.
+Automatic write classification is enabled only when `scene=None` is set
+explicitly. In that case, also use `search_mode="agentic"` so recall follows
+the same automatic routing strategy.
+
+Three scenes are supported:
+
+- `chat`: User preferences, profiles, and general cross-session memory.
+- `working`: Facts and reusable experiences from documents, research, office
+  tasks, and other productivity workflows.
+- `coding`: Coding, debugging, testing, and build tasks, optionally with
+  version-evolution context.
+- `None`: Hy-Memory classifies writes containing tool traces; plain text uses
+  the Chat pipeline directly. Set `search_mode="agentic"` to classify the
+  scene during recall as well; a single query with the default
+  `search_mode="default"` searches Chat memory only.
+
+Working and Coding writes require tool-call traces. The adapter preserves
+framework `FunctionCall` and `FunctionResponse` Events as OpenAI-format
+`tool_calls` and `role="tool"` messages. Hy-Memory falls back to Chat when no
+tool trace is present.
+
+You can also set `scene`, `workspace_id`, and `branch` per request:
+
+```python
+from trpc_agent_sdk.context import AgentContext
+from trpc_agent_sdk.memory import set_hy_memory_options
+
+agent_context = AgentContext()
+set_hy_memory_options(
+    agent_context,
+    {
+        "scene": "coding",
+        "workspace_id": "github.com/example/service",
+        "branch": "fix/timeout",
+    },
+)
+```
+
+Use the same `scene`, `workspace_id`, and `branch` for writes and searches.
+`branch` is effective only when `workspace_id` is set. Framework TTL does not
+delete Hy-Memory data; configure retention in Hy-Memory itself.
+
+See the complete
+[Hy-Memory example](../../../examples/memory_service_with_hy_memory/README.md)
+and the
+[Hy-Memory usage guide](https://github.com/Tencent-Hunyuan/Hy-Memory/blob/main/docs/usage.md).
 
 ---
 
