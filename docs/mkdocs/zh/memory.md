@@ -29,6 +29,7 @@
 - **RedisMemoryService**：存储在 Redis List 中（JSON 格式）
 - **SqlMemoryService**：存储在 MySQL/PostgreSQL 的 `mem_events` 表中
 - **TencentDBMemoryService**：写入 TencentDB Agent Memory L0 对话，并由服务端异步提取长期记忆
+- **HyMemoryService**：通过 Hy-Memory SDK 提供 Chat、Working 和 Coding 三类记忆
 
 **代码示例**：
 ```python
@@ -161,6 +162,239 @@ _session_events = {
     }
 }
 ```
+
+---
+
+## HyMemoryService
+
+`HyMemoryService` 将
+[Hy-Memory](https://github.com/Tencent-Hunyuan/Hy-Memory) SDK 适配到
+框架的 `MemoryService` 接口。Runner 每轮结束后自动增量写入新 Event；
+`load_memory` 和 `preload_memory` 仍通过统一的 `search_memory()` 接口召回。
+
+安装可选依赖：
+
+```bash
+pip install "trpc-agent-py[hy-memory]"
+```
+
+Hy-Memory 默认从环境变量读取 LLM、Embedding 和存储配置：
+
+```bash
+MEMORY_MODE=pro
+MEMORY_LLM_MODEL=your-memory-model
+MEMORY_LLM_API_KEY=your-memory-model-api-key
+MEMORY_LLM_BASE_URL=https://your-memory-model-endpoint/v1
+MEMORY_EMBEDDER_MODEL=your-embedding-model
+MEMORY_EMBEDDER_API_KEY=your-embedding-api-key
+MEMORY_EMBEDDER_BASE_URL=https://your-embedding-endpoint/v1
+MEMORY_EMBEDDING_DIMS=1024
+```
+
+上述 `MEMORY_*` 变量属于 Hy-Memory SDK 配置，不是
+`HyMemoryService` 适配器自行读取的配置。其中 `MEMORY_LLM_API_KEY` 会进入
+Hy-Memory 的 `LLMConfig`，最终作为 OpenAI 兼容客户端的 `api_key`，用于记忆
+提取、归纳、冲突合并，以及 `search_mode="agentic"` 时的查询路由。它的回退
+顺序为 `MEMORY_LLM_API_KEY`、`LLM_API_KEY`、`OPENAI_API_KEY`。
+
+完整示例的环境变量按用途分为：
+
+- `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL` 和
+  `TRPC_AGENT_MODEL_NAME`：由示例 Agent 使用。
+- `MEMORY_LLM_API_KEY`、`MEMORY_LLM_BASE_URL` 和
+  `MEMORY_LLM_MODEL`：由 Hy-Memory 的 LLM 使用。若 Agent 与 Hy-Memory
+  使用同一个 OpenAI 兼容服务和账号，可以通过 `${TRPC_AGENT_*}` 复用。
+- `EMBEDDING_SERVICE_*`：由示例中的 `custom_embedder.py` 使用，包括远程
+  Embedding 地址、Cookie 凭据、向量维度和重试参数；它们不是 Hy-Memory
+  SDK 原生环境变量。使用该自定义 Embedder 时，无需配置上面的
+  `MEMORY_EMBEDDER_*`。
+- `HY_MEMORY_SCENE`、`HY_MEMORY_DEMO_USER_ID`、
+  `HY_MEMORY_WORKSPACE_ID` 和 `HY_MEMORY_BRANCH`：由框架示例或适配层读取，
+  不是 Hy-Memory SDK 原生环境变量。
+
+### 使用环境变量创建 HyMemoryClient
+
+完整示例会显式加载示例目录下的 `.env`，而不是依赖进程的当前工作目录：
+
+```python
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).with_name(".env"))
+```
+
+配置文件可以让 Agent 和 Hy-Memory 共用同一个 OpenAI 兼容模型：
+
+```bash
+# 示例 Agent 使用
+TRPC_AGENT_API_KEY=your-agent-model-api-key
+TRPC_AGENT_BASE_URL=https://your-agent-model-endpoint/v1
+TRPC_AGENT_MODEL_NAME=your-agent-model
+
+# Hy-Memory 的提取、归纳和冲突合并模型
+MEMORY_MODE=pro
+MEMORY_LLM_API_KEY=${TRPC_AGENT_API_KEY}
+MEMORY_LLM_BASE_URL=${TRPC_AGENT_BASE_URL}
+MEMORY_LLM_MODEL=${TRPC_AGENT_MODEL_NAME}
+
+# 示例提供的自定义远程 Embedding 服务
+EMBEDDING_SERVICE_ENDPOINT=your-embedding-endpoint
+EMBEDDING_SERVICE_X_CLIENT_SSID=your-client-ssid
+EMBEDDING_SERVICE_X_HOST_KEY_ACCESS=your-host-key-access
+EMBEDDING_SERVICE_DIMS=1024
+EMBEDDING_SERVICE_MAX_RETRIES=2
+EMBEDDING_SERVICE_RETRY_DELAY=2
+EMBEDDING_SERVICE_TIMEOUT=60
+```
+
+示例使用 `_required_env()` 检查必要变量，并将 LLM 配置和自定义 Embedding
+实现显式传给 `HyMemoryClient`：
+
+```python
+import os
+from typing import Optional
+
+from hy_memory import HyMemoryClient
+from hy_memory.config import LLMConfig
+from hy_memory.config import MemoryConfig
+
+from custom_embedder import BgeM3RemoteEmbeddingService
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise ValueError(f"{name} must be set")
+    return value
+
+
+def create_hy_memory_client(
+    memory_config: Optional[MemoryConfig] = None,
+) -> HyMemoryClient:
+    if memory_config is None:
+        memory_config = MemoryConfig(
+            llm=LLMConfig(
+                api_key=_required_env("MEMORY_LLM_API_KEY"),
+                base_url=_required_env("MEMORY_LLM_BASE_URL"),
+                model=_required_env("MEMORY_LLM_MODEL"),
+            )
+        )
+
+    return HyMemoryClient(
+        config=memory_config,
+        mode=os.getenv("MEMORY_MODE", "pro"),
+        embedding_service=BgeM3RemoteEmbeddingService.from_env(),
+    )
+```
+
+这里各参数的作用是：
+
+- `config.llm`：传递 Hy-Memory 内部 LLM 的密钥、地址和模型。当前 SDK 的
+  `MemoryConfig` 字段名是 `llm`，不是 `llm_config`。
+- `mode`：控制 Hy-Memory 的处理模式，未配置 `MEMORY_MODE` 时使用 `pro`。
+- `embedding_service`：注入实现 Hy-Memory `EmbeddingService` 协议的自定义
+  Embedding 客户端。`BgeM3RemoteEmbeddingService.from_env()` 负责读取全部
+  `EMBEDDING_SERVICE_*` 变量。
+- `memory_config`：允许调用方直接传入完整的 `MemoryConfig`，适合测试或需要
+  通过代码配置存储、召回等高级选项的场景；传入后不会重新根据上述三个
+  `MEMORY_LLM_*` 变量构造 LLM 配置。
+
+创建客户端后，将它注入 `HyMemoryService`：
+
+```python
+import os
+
+from trpc_agent_sdk.memory import HyMemoryService
+from trpc_agent_sdk.memory import HyMemoryServiceConfig
+
+hy_memory_client = create_hy_memory_client()
+
+memory_service = HyMemoryService(
+    HyMemoryServiceConfig(
+        enabled=True,
+        mode=os.getenv("MEMORY_MODE", "pro"),
+        scene=os.getenv("HY_MEMORY_SCENE", "chat").strip() or None,
+        source="trpc-agent-example",
+        workspace_id=os.getenv("HY_MEMORY_WORKSPACE_ID") or None,
+        branch=os.getenv("HY_MEMORY_BRANCH") or None,
+    ),
+    client=hy_memory_client,
+)
+```
+
+此时 `HyMemoryService` 负责框架 Event 与 Hy-Memory 消息之间的转换、增量写入
+和召回结果转换；实际的 LLM、Embedding 和存储操作由注入的
+`HyMemoryClient` 完成。`HY_MEMORY_DEMO_USER_ID` 只用于示例决定是否跨进程
+复用同一个测试用户，不会传给 Hy-Memory SDK。
+
+如果不需要自定义 `HyMemoryClient` 或 Embedding 实现，也可以只创建适配器，
+让它根据 Hy-Memory SDK 的原生环境变量创建默认客户端：
+
+```python
+from trpc_agent_sdk.memory import HyMemoryService
+from trpc_agent_sdk.memory import HyMemoryServiceConfig
+
+memory_service = HyMemoryService(
+    HyMemoryServiceConfig(
+        enabled=True,
+        mode="pro",
+        scene="chat",
+        source="my-agent",
+    )
+)
+
+runner = Runner(
+    app_name="my_app",
+    agent=agent,
+    session_service=session_service,
+    memory_service=memory_service,
+)
+```
+
+`scene` 默认为 `chat`，与默认的 `search_mode="default"` 保持一致，适合无需
+额外路由判断的通用对话记忆。只有显式设置 `scene=None` 时，才会启用
+Hy-Memory 自动写入分类；此时建议同时设置 `search_mode="agentic"`，确保检索
+使用相同的自动路由策略。
+
+支持三种 Scene：
+
+- `chat`：用户偏好、画像和一般跨会话记忆。
+- `working`：文档、研究、办公和其他生产力任务的事实与经验。
+- `coding`：编码、调试、测试和构建任务，并可维护版本演进上下文。
+- `None`：写入包含工具轨迹时由 Hy-Memory 判断 Scene；普通文本直接走 Chat。
+  自动判断检索 Scene 时还需设置 `search_mode="agentic"`；默认
+  `search_mode="default"` 的单查询固定检索 Chat。
+
+Working/Coding 写入需要工具调用轨迹。适配器会将框架 Event 中的
+`FunctionCall`、`FunctionResponse` 保留为 OpenAI 格式的 `tool_calls` 和
+`role="tool"` 消息。没有工具轨迹时，Hy-Memory 会回退到 Chat 链路。
+
+`scene`、`workspace_id` 和 `branch` 也可以按请求设置：
+
+```python
+from trpc_agent_sdk.context import AgentContext
+from trpc_agent_sdk.memory import set_hy_memory_options
+
+agent_context = AgentContext()
+set_hy_memory_options(
+    agent_context,
+    {
+        "scene": "coding",
+        "workspace_id": "github.com/example/service",
+        "branch": "fix/timeout",
+    },
+)
+```
+
+写入和检索应使用相同的 `scene`、`workspace_id` 和 `branch`。`branch` 只有在
+设置了 `workspace_id` 时生效。框架 TTL 不会自动删除 Hy-Memory 数据，保留策略
+应在 Hy-Memory 中配置。
+
+完整示例：
+[examples/memory_service_with_hy_memory](../../../examples/memory_service_with_hy_memory/README.md)。
+更多 SDK 配置参见
+[Hy-Memory 使用指南](https://github.com/Tencent-Hunyuan/Hy-Memory/blob/main/docs/usage.md)。
 
 ---
 
