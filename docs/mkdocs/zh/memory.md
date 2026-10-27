@@ -29,6 +29,7 @@
 - **RedisMemoryService**：存储在 Redis List 中（JSON 格式）
 - **SqlMemoryService**：存储在 MySQL/PostgreSQL 的 `mem_events` 表中
 - **TencentDBMemoryService**：写入 TencentDB Agent Memory L0 对话，并由服务端异步提取长期记忆
+- **HyMemoryService**：通过 Hy-Memory SDK 提供 Chat、Working 和 Coding 三类记忆
 
 **代码示例**：
 ```python
@@ -161,6 +162,101 @@ _session_events = {
     }
 }
 ```
+
+---
+
+## HyMemoryService
+
+`HyMemoryService` 将
+[Hy-Memory](https://github.com/Tencent-Hunyuan/Hy-Memory) SDK 适配到
+框架的 `MemoryService` 接口。Runner 每轮结束后自动增量写入新 Event；
+`load_memory` 和 `preload_memory` 仍通过统一的 `search_memory()` 接口召回。
+
+安装可选依赖：
+
+```bash
+pip install "trpc-agent-py[hy-memory]"
+```
+
+Hy-Memory 默认从环境变量读取 LLM、Embedding 和存储配置：
+
+```bash
+MEMORY_MODE=pro
+MEMORY_LLM_MODEL=your-memory-model
+MEMORY_LLM_API_KEY=your-memory-model-api-key
+MEMORY_LLM_BASE_URL=https://your-memory-model-endpoint/v1
+MEMORY_EMBEDDER_MODEL=your-embedding-model
+MEMORY_EMBEDDER_API_KEY=your-embedding-api-key
+MEMORY_EMBEDDER_BASE_URL=https://your-embedding-endpoint/v1
+MEMORY_EMBEDDING_DIMS=1024
+```
+
+创建服务：
+
+```python
+from trpc_agent_sdk.memory import HyMemoryService
+from trpc_agent_sdk.memory import HyMemoryServiceConfig
+
+memory_service = HyMemoryService(
+    HyMemoryServiceConfig(
+        enabled=True,
+        mode="pro",
+        scene="chat",
+        source="my-agent",
+    )
+)
+
+runner = Runner(
+    app_name="my_app",
+    agent=agent,
+    session_service=session_service,
+    memory_service=memory_service,
+)
+```
+
+`scene` 默认为 `chat`，与默认的 `search_mode="default"` 保持一致，适合无需
+额外路由判断的通用对话记忆。只有显式设置 `scene=None` 时，才会启用
+Hy-Memory 自动写入分类；此时建议同时设置 `search_mode="agentic"`，确保检索
+使用相同的自动路由策略。
+
+支持三种 Scene：
+
+- `chat`：用户偏好、画像和一般跨会话记忆。
+- `working`：文档、研究、办公和其他生产力任务的事实与经验。
+- `coding`：编码、调试、测试和构建任务，并可维护版本演进上下文。
+- `None`：写入包含工具轨迹时由 Hy-Memory 判断 Scene；普通文本直接走 Chat。
+  自动判断检索 Scene 时还需设置 `search_mode="agentic"`；默认
+  `search_mode="default"` 的单查询固定检索 Chat。
+
+Working/Coding 写入需要工具调用轨迹。适配器会将框架 Event 中的
+`FunctionCall`、`FunctionResponse` 保留为 OpenAI 格式的 `tool_calls` 和
+`role="tool"` 消息。没有工具轨迹时，Hy-Memory 会回退到 Chat 链路。
+
+`scene`、`workspace_id` 和 `branch` 也可以按请求设置：
+
+```python
+from trpc_agent_sdk.context import AgentContext
+from trpc_agent_sdk.memory import set_hy_memory_options
+
+agent_context = AgentContext()
+set_hy_memory_options(
+    agent_context,
+    {
+        "scene": "coding",
+        "workspace_id": "github.com/example/service",
+        "branch": "fix/timeout",
+    },
+)
+```
+
+写入和检索应使用相同的 `scene`、`workspace_id` 和 `branch`。`branch` 只有在
+设置了 `workspace_id` 时生效。框架 TTL 不会自动删除 Hy-Memory 数据，保留策略
+应在 Hy-Memory 中配置。
+
+完整示例：
+[examples/memory_service_with_hy_memory](../../../examples/memory_service_with_hy_memory/README.md)。
+更多 SDK 配置参见
+[Hy-Memory 使用指南](https://github.com/Tencent-Hunyuan/Hy-Memory/blob/main/docs/usage.md)。
 
 ---
 

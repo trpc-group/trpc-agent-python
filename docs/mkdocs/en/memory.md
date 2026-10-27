@@ -30,6 +30,7 @@ Based on the implementation in [trpc_agent_sdk/memory/](../../../trpc_agent_sdk/
 - **SqlMemoryService**: Stored in the `mem_events` table in MySQL/PostgreSQL
 - **MempalaceMemoryService**: Stored as MemPalace drawers in a local ChromaDB-backed palace
 - **TencentDBMemoryService**: Sent to TencentDB Agent Memory as L0 conversations and asynchronously extracted memories
+- **HyMemoryService**: Uses the Hy-Memory SDK for Chat, Working, and Coding memory
 
 **Code Example**:
 ```python
@@ -164,6 +165,108 @@ _session_events = {
     }
 }
 ```
+
+---
+
+## HyMemoryService
+
+`HyMemoryService` adapts the
+[Hy-Memory](https://github.com/Tencent-Hunyuan/Hy-Memory) SDK to the framework
+`MemoryService` interface. The Runner incrementally stores new Events after
+each turn, while `load_memory` and `preload_memory` continue to recall through
+the common `search_memory()` interface.
+
+Install the optional dependency:
+
+```bash
+pip install "trpc-agent-py[hy-memory]"
+```
+
+By default, Hy-Memory reads its LLM, embedding, and storage configuration from
+environment variables:
+
+```bash
+MEMORY_MODE=pro
+MEMORY_LLM_MODEL=your-memory-model
+MEMORY_LLM_API_KEY=your-memory-model-api-key
+MEMORY_LLM_BASE_URL=https://your-memory-model-endpoint/v1
+MEMORY_EMBEDDER_MODEL=your-embedding-model
+MEMORY_EMBEDDER_API_KEY=your-embedding-api-key
+MEMORY_EMBEDDER_BASE_URL=https://your-embedding-endpoint/v1
+MEMORY_EMBEDDING_DIMS=1024
+```
+
+Create the service:
+
+```python
+from trpc_agent_sdk.memory import HyMemoryService
+from trpc_agent_sdk.memory import HyMemoryServiceConfig
+
+memory_service = HyMemoryService(
+    HyMemoryServiceConfig(
+        enabled=True,
+        mode="pro",
+        scene="chat",
+        source="my-agent",
+    )
+)
+
+runner = Runner(
+    app_name="my_app",
+    agent=agent,
+    session_service=session_service,
+    memory_service=memory_service,
+)
+```
+
+`scene` defaults to `chat`, matching the default `search_mode="default"` and
+avoiding an additional routing decision for general conversational memory.
+Automatic write classification is enabled only when `scene=None` is set
+explicitly. In that case, also use `search_mode="agentic"` so recall follows
+the same automatic routing strategy.
+
+Three scenes are supported:
+
+- `chat`: User preferences, profiles, and general cross-session memory.
+- `working`: Facts and reusable experiences from documents, research, office
+  tasks, and other productivity workflows.
+- `coding`: Coding, debugging, testing, and build tasks, optionally with
+  version-evolution context.
+- `None`: Hy-Memory classifies writes containing tool traces; plain text uses
+  the Chat pipeline directly. Set `search_mode="agentic"` to classify the
+  scene during recall as well; a single query with the default
+  `search_mode="default"` searches Chat memory only.
+
+Working and Coding writes require tool-call traces. The adapter preserves
+framework `FunctionCall` and `FunctionResponse` Events as OpenAI-format
+`tool_calls` and `role="tool"` messages. Hy-Memory falls back to Chat when no
+tool trace is present.
+
+You can also set `scene`, `workspace_id`, and `branch` per request:
+
+```python
+from trpc_agent_sdk.context import AgentContext
+from trpc_agent_sdk.memory import set_hy_memory_options
+
+agent_context = AgentContext()
+set_hy_memory_options(
+    agent_context,
+    {
+        "scene": "coding",
+        "workspace_id": "github.com/example/service",
+        "branch": "fix/timeout",
+    },
+)
+```
+
+Use the same `scene`, `workspace_id`, and `branch` for writes and searches.
+`branch` is effective only when `workspace_id` is set. Framework TTL does not
+delete Hy-Memory data; configure retention in Hy-Memory itself.
+
+See the complete
+[Hy-Memory example](../../../examples/memory_service_with_hy_memory/README.md)
+and the
+[Hy-Memory usage guide](https://github.com/Tencent-Hunyuan/Hy-Memory/blob/main/docs/usage.md).
 
 ---
 

@@ -39,7 +39,7 @@ dependencies = [
     "tzlocal",
     "PyMySQL",
     "aiomysql",
-    "SQLAlchemy",
+    "SQLAlchemy[asyncio]",
     "redis>=6.2.0",
     "docker",
     "anthropic>=0.72.1",
@@ -132,6 +132,10 @@ mempalace = [
     "mempalace>=3.3.3",
 ]
 
+hy-memory = [
+    "hy-memory>=2.0.6,<3.0.0",
+]
+
 langchain_tool = [
     "langchain_tavily",
     "langchain-core>=0.3.27",
@@ -164,6 +168,7 @@ all = [
     "anfs>=0.0.3",
     "mem0ai>=1.0.3",
     "mempalace>=3.3.3",
+    "hy-memory>=2.0.6,<3.0.0",
     "typer>=0.9.0",
     "nanobot-ai>=0.1.4.post6; python_full_version >= '3.11'",
     "aiofiles",
