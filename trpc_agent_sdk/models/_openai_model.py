@@ -1118,7 +1118,7 @@ class OpenAIModel(LLMModel):
     def _process_chunk_without_content(
         self, chunk_dict: dict, accumulated_tool_calls: list[dict]
     ) -> tuple[Optional[FinishReason], Optional[GenerateContentResponseUsageMetadata], dict[int, str]]:
-        """Process a chunk that doesn't contain content.
+        """Process tool calls and usage, including chunks that also contain text.
 
         Args:
             chunk_dict (`dict`): The chunk dictionary to process
@@ -1149,7 +1149,7 @@ class OpenAIModel(LLMModel):
         # Handle usage
         usage = self._process_usage(chunk_dict)
 
-        # Handle tool calls in chunks without content (this is where streaming tool calls happen)
+        # Handle tool calls independently of text content.
         tool_calls_data = delta.get(const.TOOL_CALLS)
 
         # Track delta arguments from this chunk
@@ -2519,30 +2519,36 @@ class OpenAIModel(LLMModel):
                     # We can log them but don't need to yield them as content
                     continue
 
-                # Verify if the chunk contains valid text content
+                # Tool deltas and text can coexist in the same chunk.
+                _, usage, delta_arguments = self._process_chunk_without_content(chunk_dict, accumulated_tool_calls)
+
+                if usage:
+                    last_usage = usage
+
+                # Emit text before tool events from the same chunk for streaming consumers.
+                streaming_event = None
+                # If streaming tool call arguments is enabled, prepare partial tool call events
+                # delta_arguments being non-empty means tool calls were processed
+                if streaming_tool_names and delta_arguments and accumulated_tool_calls:
+                    # Yield streaming tool call event with delta arguments
+                    # Only for tools in streaming_tool_names
+                    streaming_event = self._create_streaming_tool_call_response(accumulated_tool_calls,
+                                                                                delta_arguments,
+                                                                                streaming_tool_names)
+                    if streaming_event:
+                        streaming_event.response_id = response_id
+                        streaming_event.custom_metadata = {const.CHUNK: chunk_dict, const.TOOL_STREAMING: True}
+
                 if not self._verify_text_content_in_delta_response(chunk_dict):
-                    # Process chunk without content (this is where tool calls are streamed)
-                    _, usage, delta_arguments = self._process_chunk_without_content(chunk_dict, accumulated_tool_calls)
-
-                    if usage:
-                        last_usage = usage
-
-                    # If streaming tool call arguments is enabled, yield partial tool call events
-                    # delta_arguments being non-empty means tool calls were processed
-                    if streaming_tool_names and delta_arguments and accumulated_tool_calls:
-                        # Yield streaming tool call event with delta arguments
-                        # Only for tools in streaming_tool_names
-                        streaming_event = self._create_streaming_tool_call_response(accumulated_tool_calls,
-                                                                                    delta_arguments,
-                                                                                    streaming_tool_names)
-                        if streaming_event:
-                            yield streaming_event
-
+                    if streaming_event:
+                        yield streaming_event
                     continue
 
                 # Process chunk with valid content
                 choices = chunk_dict.get(const.CHOICES, [])
                 if not choices:
+                    if streaming_event:
+                        yield streaming_event
                     continue  # Skip if no choices available
                 choice: dict[str, dict] = choices[0]
                 delta = choice[const.DELTA]
@@ -2558,6 +2564,8 @@ class OpenAIModel(LLMModel):
                             partial_text = self._adapter.filter_streaming_text(reasoning_content,
                                                                                reasoning_filter_state)
                         if not partial_text:
+                            if streaming_event:
+                                yield streaming_event
                             continue
 
                         # Reasoning content is always thinking content
@@ -2589,6 +2597,8 @@ class OpenAIModel(LLMModel):
                             content_filter_state = streaming_text_filter_state["content"]
                             partial_text = self._adapter.filter_streaming_text(content, content_filter_state)
                         if not partial_text:
+                            if streaming_event:
+                                yield streaming_event
                             continue
                         if not is_thinking:
                             visible_content += partial_text
@@ -2604,11 +2614,8 @@ class OpenAIModel(LLMModel):
                             response_id=response_id,
                             custom_metadata={const.CHUNK: chunk_dict},
                         )
-
-                # Handle usage
-                usage = self._process_usage(chunk_dict)
-                if usage:
-                    last_usage = usage
+                if streaming_event:
+                    yield streaming_event
 
             if tool_prompt and streaming_text_filter_state is not None:
                 if self._adapter.should_filter_reasoning_text():

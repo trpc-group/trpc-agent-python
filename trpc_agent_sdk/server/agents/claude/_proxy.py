@@ -705,6 +705,9 @@ class AnthropicProxyApp:
         Yields:
             Server-sent events in Anthropic format
         """
+        text_block_closed = True
+        text_block_index = 0
+        streaming_tool_calls: Dict[str, Dict[str, Any]] = {}
         try:
             # Send message_start event
             message_id = f"msg_{uuid.uuid4().hex[:24]}"
@@ -746,10 +749,10 @@ class AnthropicProxyApp:
 
             # Track state
             text_block_closed = False
+            text_block_index = 0
             last_usage = None
             # Track streaming tool calls: {tool_id: {"index": int, "name": str, "started": bool}}
-            streaming_tool_calls: Dict[str, Dict[str, Any]] = {}
-            next_tool_index = 0  # Next available tool block index (0 is text block)
+            next_tool_index = 0  # Shared index allocator for text and tool blocks
 
             # Call model with streaming
             response_generator = model.generate_async(llm_request, stream=True)
@@ -778,8 +781,9 @@ class AnthropicProxyApp:
                             # Close text block if not already closed
                             if not text_block_closed:
                                 text_block_closed = True
+                                text_stop_event = {"type": "content_block_stop", "index": text_block_index}
                                 yield ("event: content_block_stop\n"
-                                       f'data: {json.dumps({"type": "content_block_stop", "index": 0})}\n\n')
+                                       f"data: {json.dumps(text_stop_event)}\n\n")
 
                             # Check if we need to start a new tool block
                             if tool_id not in streaming_tool_calls:
@@ -822,11 +826,23 @@ class AnthropicProxyApp:
                 # Handle partial responses (streaming text only)
                 elif llm_response.partial and llm_response.content:
                     for part in llm_response.content.parts:
-                        if part.text and not text_block_closed:
+                        if part.text:
+                            if text_block_closed:
+                                # A model may emit more text after starting a tool call.
+                                next_tool_index += 1
+                                text_block_index = next_tool_index
+                                text_block_closed = False
+                                text_start_event = {
+                                    "type": "content_block_start",
+                                    "index": text_block_index,
+                                    "content_block": {"type": "text", "text": ""},
+                                }
+                                yield ("event: content_block_start\n"
+                                       f"data: {json.dumps(text_start_event)}\n\n")
                             # Stream text deltas
                             text_delta_event = {
                                 "type": "content_block_delta",
-                                "index": 0,
+                                "index": text_block_index,
                                 "delta": {
                                     "type": "text_delta",
                                     "text": part.text
@@ -841,7 +857,7 @@ class AnthropicProxyApp:
                     if not text_block_closed:
                         text_block_closed = True
                         yield ("event: content_block_stop\n"
-                               f'data: {json.dumps({"type": "content_block_stop", "index": 0})}\n\n')
+                               f'data: {json.dumps({"type": "content_block_stop", "index": text_block_index})}\n\n')
 
                     # Close any streaming tool blocks that were started
                     for tool_id, tool_info in streaming_tool_calls.items():
@@ -938,6 +954,18 @@ class AnthropicProxyApp:
 
         except Exception as ex:  # pylint: disable=broad-except
             self.logger.error("Error in streaming: %s", str(ex))
+            # Close started blocks before terminating the interrupted message.
+            open_indices = []
+            if not text_block_closed:
+                open_indices.append(text_block_index)
+                text_block_closed = True
+            for tool_info in streaming_tool_calls.values():
+                if tool_info.get("started") and not tool_info.get("closed"):
+                    open_indices.append(tool_info["index"])
+                    tool_info["closed"] = True
+            for index in sorted(open_indices):
+                stop_event = {"type": "content_block_stop", "index": index}
+                yield f"event: content_block_stop\ndata: {json.dumps(stop_event)}\n\n"
             # Send error response to client
             error_data = {
                 "type": "message_delta",
