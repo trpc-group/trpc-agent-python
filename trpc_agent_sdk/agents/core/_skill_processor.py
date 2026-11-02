@@ -542,13 +542,11 @@ class SkillsRequestProcessor:
         else:
             tool_prompt = _normalize_custom_guidance(self._tooling_guidance)
         if self._tool_flags.has_select_tools():
-            tool_prompt += """
-                - Use the skill_select_tools tool to select tools for the current task only when user asks for it."
-            """
+            tool_prompt += ("- Use the skill_select_tools tool to select tools for the current task"
+                            " only when user asks for it.\n")
         if self._tool_flags.list_skills:
-            tool_prompt += """
-                - Use the skill_list_skills tool to list skills for the current task only when user asks for it."
-            """
+            tool_prompt += ("- Use the skill_list_skills tool to list skills for the current task"
+                            " only when user asks for it.\n")
         return tool_prompt
 
     def _capability_guidance_text(self) -> str:
