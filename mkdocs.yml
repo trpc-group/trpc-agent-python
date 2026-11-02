@@ -106,6 +106,7 @@ nav:
       - 评测与优化:
           - Evaluation: zh/evaluation.md
           - Optimization: zh/optimization.md
+          - 压测: zh/bench.md
       - 集成:
           - A2A: zh/a2a.md
           - AG-UI: zh/agui.md

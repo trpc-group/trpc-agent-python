@@ -1,0 +1,52 @@
+"""Agent construction with a benchmark-owned five-tool factory."""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+
+from ...core import teardown
+from ...core import setup
+from ...core import PerformanceEval
+from ...core import get_iterations
+from ...core import run_benchmarks
+from ...core import TextBlock
+from ._tool_fixtures import make_tools
+
+DESCRIPTION = ("只调用 target.instantiate() 构造一个带 5 个工具的 agent，不执行 turn。"
+               "指标：p50/p95 = 单次构造耗时；memory = 构造过程中的 tracemalloc 峰值。")
+TURN_SCRIPT = [[TextBlock()]]
+
+
+async def _run() -> None:
+    box = await setup(TURN_SCRIPT)
+
+    async def make_agent():
+        agent = await box.target.instantiate(
+            box.prepared,
+            tools_factory=make_tools,
+        )
+        if agent is None:
+            raise RuntimeError("target.instantiate returned None")
+        return agent
+
+    try:
+        await run_benchmarks([
+            PerformanceEval(
+                name="instantiate_agent_with_tools",
+                func=make_agent,
+                num_iterations=get_iterations(),
+                warmup_runs=10,
+            ),
+        ], )
+    finally:
+        await teardown(box)
+
+
+def main() -> int:
+    asyncio.run(_run())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

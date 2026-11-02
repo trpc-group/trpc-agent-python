@@ -31,3 +31,6 @@ pyrightconfig.json
 .spec-workflow
 
 site/*
+
+# benchmark artifacts
+bench/results/
