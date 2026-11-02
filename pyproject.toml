@@ -114,6 +114,10 @@ eval = [
     "tabulate",
 ]
 
+bench = [
+    "fastapi>=0.95.0",
+]
+
 optimize = [
     "gepa>=0.0.7",
     "rich>=13.0.0",
@@ -179,7 +183,7 @@ trpc_agent_cmd = "trpc_agent_sdk._cli:main"
 
 # 使用 include 保证三个包都包含进来
 [tool.hatch.build.targets.wheel]
-packages = ["trpc_agent_sdk"]
+packages = ["trpc_agent_sdk", "trpc_agent_bench"]
 
 [project.urls]
 Homepage = "https://github.com/trpc-group/trpc-agent-python.git"

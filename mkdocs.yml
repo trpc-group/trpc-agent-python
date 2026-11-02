@@ -67,6 +67,8 @@ nav:
           - Human in the Loop: en/human_in_the_loop.md
           - Plan Mode: en/plan.md
           - Cancellation: en/cancel.md
+      - Benchmark:
+          - Framework cost bench: en/bench.md
   - 中文:
       - 概览: zh/index.md
       - Agent:
@@ -115,3 +117,5 @@ nav:
           - Human in the Loop: zh/human_in_the_loop.md
           - Plan Mode: zh/plan.md
           - Cancellation: zh/cancel.md
+      - 性能测试:
+          - 框架性能压测: zh/bench.md
