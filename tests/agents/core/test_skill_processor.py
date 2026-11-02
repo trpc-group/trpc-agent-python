@@ -8,6 +8,8 @@ import json
 from copy import deepcopy
 from unittest.mock import Mock
 
+import pytest
+
 import trpc_agent_sdk.skills as _skills_pkg
 
 if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
@@ -73,6 +75,38 @@ def _build_ctx(state: dict, *, agent_name: str = "demo-agent", load_mode: str = 
 
 
 class TestSkillsRequestProcessor:
+
+    @pytest.mark.parametrize("tooling_guidance", [None, "Custom guidance."])
+    @pytest.mark.parametrize("select_tools,list_skills", [(True, True), (True, False), (False, True), (False, False)])
+    async def test_tool_guidance_formatting(self, tooling_guidance, select_tools, list_skills):
+        repo = _build_repo({"demo-skill": _build_skill("demo-skill")})
+        ctx = _build_ctx({})
+        request = LlmRequest(contents=[], tools_dict={})
+        forbidden_tools = []
+        if not select_tools:
+            forbidden_tools.append("skill_select_tools")
+        if not list_skills:
+            forbidden_tools.append("skill_list_skills")
+        processor = SkillsRequestProcessor(repo, tooling_guidance=tooling_guidance, forbidden_tools=forbidden_tools)
+
+        await processor.process_llm_request(ctx, request)
+
+        text = request.config.system_instruction
+        expected_lines = []
+        if select_tools:
+            expected_lines.append(
+                "- Use the skill_select_tools tool to select tools for the current task only when user asks for it.")
+        if list_skills:
+            expected_lines.append(
+                "- Use the skill_list_skills tool to list skills for the current task only when user asks for it.")
+        actual_lines = [line for line in text.splitlines() if "only when user asks for it" in line]
+        assert actual_lines == expected_lines
+        assert text.endswith("\n")
+        assert all(line == line.rstrip() for line in text.splitlines())
+        if tooling_guidance is not None:
+            assert "\nCustom guidance.\n" in text
+        else:
+            assert "Tooling and workspace guidance:" in text
 
     async def test_injects_overview_and_loaded_content(self):
         skill = _build_skill("demo-skill")
