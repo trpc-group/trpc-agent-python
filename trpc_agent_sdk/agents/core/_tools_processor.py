@@ -136,6 +136,8 @@ class ToolsProcessor:
     ) -> Event:
         # Find the appropriate tool
         tool = await self._find_tool(tool_call, resolved_tools)
+        if tool is None:
+            tool = await self._find_unresolved_tool(tool_call, context)
         result_event = None
         if not tool:
             logger.warning("No tool found for tool call: %s", tool_call.name)
@@ -322,7 +324,10 @@ class ToolsProcessor:
         resolved_tools = await convert_toolunion_to_tool_list(self.tools, context)
 
         # Find the tool using the private method
-        return await self._find_tool(tool_call, resolved_tools)
+        tool = await self._find_tool(tool_call, resolved_tools)
+        if tool is not None:
+            return tool
+        return await self._find_unresolved_tool(tool_call, context)
 
     async def _find_tool(self, tool_call: FunctionCall, resolved_tools: List[BaseTool]) -> Optional[BaseTool]:
         """Find the appropriate tool for a tool call.
@@ -338,6 +343,23 @@ class ToolsProcessor:
             if isinstance(tool, BaseTool):
                 if tool.name == tool_call.name:
                     return tool
+        return None
+
+    async def _find_unresolved_tool(
+        self,
+        tool_call: FunctionCall,
+        context: InvocationContext,
+    ) -> Optional[BaseTool]:
+        """Ask dynamic toolsets for a declaration-free fallback tool."""
+        for configured in self.tools:
+            if not isinstance(configured, BaseToolSet):
+                continue
+            get_unresolved_tool = getattr(configured, "get_unresolved_tool", None)
+            if get_unresolved_tool is None:
+                continue
+            fallback = await get_unresolved_tool(tool_call.name, context)
+            if fallback is not None:
+                return fallback
         return None
 
     async def _execute_tool(self, tool_call: FunctionCall, tool: BaseTool, context: InvocationContext) -> Event:
