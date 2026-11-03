@@ -76,6 +76,18 @@ from .task_tools import TaskToolSet
 from .task_tools import TaskUpdateTool
 from .task_tools import get_task_store
 from .task_tools import render_task_list
+from .tool_search import InvocationMode as ToolSearchInvocationMode
+from .tool_search import InMemoryToolSearchVectorStore
+from .tool_search import MCPToolbox as ToolSearchMCPToolbox
+from .tool_search import SemanticToolIndex
+from .tool_search import Toolbox as ToolSearchToolbox
+from .tool_search import ToolSearchEmbeddingUsage
+from .tool_search import ToolSearchOptions
+from .tool_search import ToolSearchToolSet
+from .tool_search import ToolSearchVectorStore
+from .tool_search import TOOL_SEARCH_PLACEHOLDER
+from .tool_search import TOOL_SEARCH_TOOL_NAME
+from .tool_search import CALL_TOOL_NAME
 from .goal_tools import GoalOptions
 from .goal_tools import GoalRecord
 from .goal_tools import GoalStatus
@@ -183,6 +195,18 @@ __all__ = [
     "get_task_store",
     "render_task_list",
     "DEFAULT_TASK_PROMPT",
+    "InMemoryToolSearchVectorStore",
+    "ToolSearchInvocationMode",
+    "ToolSearchMCPToolbox",
+    "ToolSearchEmbeddingUsage",
+    "ToolSearchOptions",
+    "ToolSearchToolbox",
+    "ToolSearchToolSet",
+    "ToolSearchVectorStore",
+    "SemanticToolIndex",
+    "TOOL_SEARCH_PLACEHOLDER",
+    "TOOL_SEARCH_TOOL_NAME",
+    "CALL_TOOL_NAME",
     "GoalStatus",
     "GoalRecord",
     "GoalToolSet",
