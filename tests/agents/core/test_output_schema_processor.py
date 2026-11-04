@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 from typing import List
 from unittest.mock import Mock
 
@@ -24,9 +25,11 @@ from trpc_agent_sdk.agents.core._output_schema_processor import (
 from trpc_agent_sdk.context import InvocationContext, create_agent_context
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
+from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.tools import TOOL_NAME as SET_MODEL_RESPONSE_TOOL_NAME
-from trpc_agent_sdk.types import Content, FunctionResponse, Part
+from trpc_agent_sdk.types import Content, FunctionCall, FunctionResponse, Part
 
 
 class MockLLMModel(LLMModel):
@@ -36,6 +39,40 @@ class MockLLMModel(LLMModel):
 
     async def _generate_async_impl(self, request, stream=False, ctx=None):
         yield LlmResponse(content=None)
+
+    def validate_request(self, request):
+        pass
+
+
+class ScriptedToolCallModel(LLMModel):
+    """Model test double that returns scripted function calls."""
+
+    def __init__(self, responses: list[dict[str, Any]]):
+        super().__init__(model_name="scripted-output-model")
+        self.responses = responses
+        self.calls = 0
+
+    @classmethod
+    def supported_models(cls) -> List[str]:
+        return [r"scripted-output-model"]
+
+    async def _generate_async_impl(self, request, stream=False, ctx=None):
+        args = self.responses[self.calls]
+        self.calls += 1
+        yield LlmResponse(
+            content=Content(
+                role="model",
+                parts=[
+                    Part(
+                        function_call=FunctionCall(
+                            id=f"set-response-{self.calls}",
+                            name=SET_MODEL_RESPONSE_TOOL_NAME,
+                            args=args,
+                        )
+                    )
+                ],
+            )
+        )
 
     def validate_request(self, request):
         pass
@@ -108,7 +145,11 @@ class TestGetStructuredModelResponse:
         assert get_structured_model_response(None) is None
 
     def test_returns_none_for_no_function_responses(self):
-        event = Event(invocation_id="inv-1", author="agent", content=Content(parts=[Part(text="text")]))
+        event = Event(
+            invocation_id="inv-1",
+            author="agent",
+            content=Content(parts=[Part(text="text")]),
+        )
         assert get_structured_model_response(event) is None
 
     def test_returns_none_for_non_set_model_response(self):
@@ -133,6 +174,108 @@ class TestGetStructuredModelResponse:
         parsed = json.loads(result)
         assert parsed["answer"] == "42"
         assert parsed["confidence"] == 0.95
+
+    def test_returns_none_for_failed_set_model_response(self):
+        fr = FunctionResponse(
+            name=SET_MODEL_RESPONSE_TOOL_NAME,
+            response={
+                "error": "tool_execution_error",
+                "message": "validation failed",
+                "status": "failed",
+            },
+        )
+        event = Event(
+            invocation_id="inv-1",
+            author="agent",
+            content=Content(parts=[Part(function_response=fr)]),
+            error_code="tool_execution_error",
+            error_message="validation failed",
+        )
+
+        assert get_structured_model_response(event) is None
+
+    def test_returns_none_for_failed_response_in_merged_event(self):
+        """Parallel merging drops child error_code but retains its response."""
+        success = FunctionResponse(
+            id="other-call",
+            name="other_tool",
+            response={"result": "ok"},
+        )
+        failed = FunctionResponse(
+            id="set-response",
+            name=SET_MODEL_RESPONSE_TOOL_NAME,
+            response={
+                "error": "tool_execution_error",
+                "message": "validation failed",
+                "status": "failed",
+            },
+        )
+        event = Event(
+            invocation_id="inv-1",
+            author="agent",
+            content=Content(
+                parts=[
+                    Part(function_response=success),
+                    Part(function_response=failed),
+                ]
+            ),
+        )
+
+        assert get_structured_model_response(event) is None
+
+
+@pytest.mark.asyncio
+async def test_invalid_set_model_response_retries_until_valid():
+    model = ScriptedToolCallModel(
+        [
+            {"answer": "missing confidence"},
+            {"answer": "42", "confidence": 0.95},
+        ]
+    )
+
+    def dummy_tool() -> str:
+        """Keep the agent on the output-schema-plus-tools code path."""
+        return "ok"
+
+    from trpc_agent_sdk.agents import LlmAgent
+
+    agent = LlmAgent(
+        name="retry_output_agent",
+        model=model,
+        output_schema=SampleOutputSchema,
+        tools=[FunctionTool(dummy_tool)],
+    )
+    session_service = InMemorySessionService()
+    await session_service.create_session(
+        app_name="test",
+        user_id="u1",
+        session_id="retry",
+    )
+    runner = Runner(
+        app_name="test",
+        agent=agent,
+        session_service=session_service,
+    )
+
+    events = [
+        event
+        async for event in runner.run_async(
+            user_id="u1",
+            session_id="retry",
+            new_message=Content(
+                role="user",
+                parts=[Part(text="Return a structured answer")],
+            ),
+        )
+    ]
+
+    assert model.calls == 2
+    assert any(event.error_code == "tool_execution_error" for event in events)
+    final_event = events[-1]
+    assert json.loads(final_event.get_text()) == {
+        "answer": "42",
+        "confidence": 0.95,
+    }
 
 
 # ---------------------------------------------------------------------------
