@@ -100,7 +100,18 @@ def get_structured_model_response(function_response_event: Event) -> str | None:
 
     for func_response in function_response_event.get_function_responses():
         if func_response.name == SET_MODEL_RESPONSE_TOOL_NAME:
+            # Tool failures are returned as function responses so that the
+            # model can inspect the validation error and retry. Do not treat
+            # that error envelope as the final structured response. Checking
+            # the payload also covers errors inside merged parallel-tool
+            # events, where the child Event.error_code is not preserved.
+            response = func_response.response
+            if function_response_event.error_code or (isinstance(response, dict) and response.get("status") == "failed"
+                                                      and "error" in response and "message" in response):
+                logger.debug("set_model_response failed; continuing the agent loop for retry")
+                return None
+
             # Convert dict to JSON string
-            return json.dumps(func_response.response, ensure_ascii=False)
+            return json.dumps(response, ensure_ascii=False)
 
     return None
