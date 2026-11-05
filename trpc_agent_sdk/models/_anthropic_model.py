@@ -29,6 +29,7 @@ from anthropic import types as anthropic_types
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import GenerateContentResponseUsageMetadata
 from trpc_agent_sdk.types import Part
@@ -90,6 +91,26 @@ class _FinishReason(str, Enum):
     MAX_TOKENS = "max_tokens"
     ERROR = "error"
     TOOL_USE = "tool_use"
+
+
+# Mapping of Anthropic stop_reason strings to google-genai FinishReason values.
+# Keep this aligned with ADK's `_STOP_REASON_MAPPING` in
+# reference/adk-python/src/google/adk/models/anthropic_llm.py.
+_ANTHROPIC_STOP_REASON_TO_GENAI = {
+    "end_turn": GenaiFinishReason.STOP,
+    "stop_sequence": GenaiFinishReason.STOP,
+    "tool_use": GenaiFinishReason.STOP,
+    "pause_turn": GenaiFinishReason.STOP,
+    "max_tokens": GenaiFinishReason.MAX_TOKENS,
+    "refusal": GenaiFinishReason.SAFETY,
+}
+
+
+def _to_genai_finish_reason(stop_reason: Optional[str]) -> Optional[GenaiFinishReason]:
+    """Map an Anthropic stop_reason to google-genai's enum."""
+    if not stop_reason:
+        return None
+    return _ANTHROPIC_STOP_REASON_TO_GENAI.get(stop_reason, GenaiFinishReason.FINISH_REASON_UNSPECIFIED)
 
 
 class _ApiParamsKey(str, Enum):
@@ -488,6 +509,8 @@ class AnthropicModel(LLMModel):
                 parts=[self._content_block_to_part(cb) for cb in message.content],
             ),
             usage_metadata=self._build_usage_metadata(message.usage),
+            finish_reason=_to_genai_finish_reason(getattr(message, "stop_reason", None)),
+            finish_reason_raw=getattr(message, "stop_reason", None),
         )
 
     def _merge_configs(self, request_config: Optional[GenerateContentConfig]) -> GenerateContentConfig:
@@ -690,6 +713,8 @@ class AnthropicModel(LLMModel):
             yield LlmResponse(content=final_content,
                               usage_metadata=final_usage,
                               partial=False,
+                              finish_reason=_to_genai_finish_reason(getattr(final_message, "stop_reason", None)),
+                              finish_reason_raw=getattr(final_message, "stop_reason", None),
                               custom_metadata={"stream_complete": True})
 
         except Exception:

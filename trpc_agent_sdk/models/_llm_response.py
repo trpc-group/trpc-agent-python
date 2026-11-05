@@ -22,9 +22,12 @@
 # limitations under the License.
 """LLM response class for TRPC Agent framework."""
 
+from typing import Optional
+
 from typing_extensions import override
 
 from trpc_agent_sdk.abc import ResponseABC
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 from trpc_agent_sdk.types import GenerateContentResponse
 
 
@@ -47,7 +50,15 @@ class LlmResponse(ResponseABC):
       interrupted: Flag indicating that LLM was interrupted when generating the
         content. Usually it's due to user interruption during a bidi streaming.
       custom_metadata: The custom metadata of the LlmResponse.
+      finish_reason: The normalized finish reason, aligned with google-genai.
+      finish_reason_raw: The raw finish reason returned by the provider.
     """
+
+    finish_reason: Optional[GenaiFinishReason] = None
+    """The normalized finish reason, aligned with google-genai."""
+
+    finish_reason_raw: Optional[str] = None
+    """The raw finish reason returned by the provider."""
 
     def has_content(self) -> bool:
         """Returns whether the response carries user-visible content (text or function call).

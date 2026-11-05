@@ -16,6 +16,7 @@ from anthropic import types as anthropic_types
 from trpc_agent_sdk.models import AnthropicModel
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import Part
@@ -437,6 +438,7 @@ class TestAnthropicModelStreaming:
             cache_creation_input_tokens=None,
         )
         mock_final_message.content = [anthropic_types.TextBlock(text="Hello world!", type="text")]
+        mock_final_message.stop_reason = "end_turn"
         mock_stream.get_final_message = AsyncMock(return_value=mock_final_message)
 
         mock_client = AsyncMock()
@@ -463,6 +465,8 @@ class TestAnthropicModelStreaming:
             assert final_response.usage_metadata is not None
             assert final_response.usage_metadata.prompt_token_count == 5
             assert final_response.usage_metadata.candidates_token_count == 3
+            assert final_response.finish_reason_raw == "end_turn"
+            assert final_response.finish_reason == GenaiFinishReason.STOP
 
 
 class TestAnthropicInjectCacheControl:

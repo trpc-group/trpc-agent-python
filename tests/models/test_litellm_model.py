@@ -22,6 +22,7 @@ from trpc_agent_sdk.models import TOOL_CALLS
 from trpc_agent_sdk.models._litellm_model import _build_response_format_for_litellm
 from trpc_agent_sdk.models._litellm_model import _is_litellm_gemini_model
 from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import Part
 
@@ -136,6 +137,8 @@ class TestCreateResponseWithContent:
         assert r.content.parts[0].text == "Hi there"
         assert getattr(r.content.parts[0], "thought", None) is False
         assert r.usage_metadata.prompt_token_count == 10
+        assert r.finish_reason == GenaiFinishReason.STOP
+        assert r.finish_reason_raw == "stop"
 
     def test_finish_reason_not_stop_sets_error_code(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
@@ -157,6 +160,8 @@ class TestCreateResponseWithContent:
         assert r.error_code == "length"
         assert r.content is not None
         assert r.content.parts[0].text == "x"
+        assert r.finish_reason == GenaiFinishReason.MAX_TOKENS
+        assert r.finish_reason_raw == "length"
 
     def test_tool_calls_from_message(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
@@ -490,7 +495,9 @@ class TestGenerateAsyncStream:
         }
         chunk3 = Mock()
         chunk3.model_dump.return_value = {
-            CHOICES: [],
+            CHOICES: [{
+                FINISH_REASON: "length"
+            }],
             USAGE: {
                 "prompt_tokens": 1,
                 "completion_tokens": 2,
@@ -526,6 +533,8 @@ class TestGenerateAsyncStream:
                 assert "Hello " in finals[0].content.parts[0].text or "world" in finals[0].content.parts[0].text
                 assert finals[0].usage_metadata is not None
                 assert finals[0].usage_metadata.total_token_count == 3
+                assert finals[0].finish_reason == GenaiFinishReason.MAX_TOKENS
+                assert finals[0].finish_reason_raw == "length"
 
     @pytest.mark.asyncio
     async def test_generate_async_stream_includes_stream_options_in_api_params(self):
@@ -947,7 +956,8 @@ class TestLiteLLMRetryHooks:
     def test_x_should_retry_header_has_priority(self):
         model = self._model()
         assert model._get_model_retry_info(_LiteLLMRetryTestError(400, {"x-should-retry": "true"})).should_retry is True
-        assert model._get_model_retry_info(_LiteLLMRetryTestError(500, {"x-should-retry": "false"})).should_retry is False
+        assert model._get_model_retry_info(_LiteLLMRetryTestError(500,
+                                                                  {"x-should-retry": "false"})).should_retry is False
 
     @pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503])
     def test_retryable_status_codes(self, status_code):

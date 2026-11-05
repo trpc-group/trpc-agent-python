@@ -29,6 +29,7 @@ from trpc_agent_sdk.telemetry._custom_trace import (
     CustomTraceReporter,
     _SyntheticTool,
 )
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,6 +79,8 @@ def _make_event(
     error_code=None,
     error_message=None,
     custom_metadata=None,
+    finish_reason=None,
+    finish_reason_raw=None,
 ):
     event = MagicMock()
     event.partial = partial
@@ -86,6 +89,8 @@ def _make_event(
     event.error_code = error_code
     event.error_message = error_message
     event.custom_metadata = custom_metadata
+    event.finish_reason = finish_reason
+    event.finish_reason_raw = finish_reason_raw
     event.is_error = MagicMock(return_value=error_code is not None)
     event.get_function_calls = MagicMock(return_value=function_calls or [])
     event.get_function_responses = MagicMock(return_value=function_responses or [])
@@ -215,6 +220,8 @@ class TestCreateSyntheticLlmResponse:
             error_code="REMOTE_ERROR",
             error_message="err",
             custom_metadata={"error_type": "RemoteError"},
+            finish_reason=None,
+            finish_reason_raw=None,
         )
 
     @patch("trpc_agent_sdk.telemetry._custom_trace.LlmResponse")
@@ -229,6 +236,28 @@ class TestCreateSyntheticLlmResponse:
             error_code=None,
             error_message=None,
             custom_metadata=None,
+            finish_reason=None,
+            finish_reason_raw=None,
+        )
+
+    @patch("trpc_agent_sdk.telemetry._custom_trace.LlmResponse")
+    def test_forwards_finish_reason(self, MockLlmResponse):
+        reporter = CustomTraceReporter(agent_name="a")
+        event = _make_event(
+            content="content_obj",
+            finish_reason=GenaiFinishReason.STOP,
+            finish_reason_raw="end_turn",
+        )
+
+        reporter._create_synthetic_llm_response(event)
+
+        MockLlmResponse.assert_called_once_with(
+            content="content_obj",
+            error_code=None,
+            error_message=None,
+            custom_metadata=None,
+            finish_reason=GenaiFinishReason.STOP,
+            finish_reason_raw="end_turn",
         )
 
 
