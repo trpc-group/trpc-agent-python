@@ -20,6 +20,7 @@ from typing_extensions import override
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import GenerateContentResponseUsageMetadata
 from trpc_agent_sdk.types import Part
@@ -153,6 +154,26 @@ class _LiteLLMApiParamsKey(str, Enum):
     PROMPT_CACHE_KEY = "prompt_cache_key"
     PROMPT_CACHE_RETENTION = "prompt_cache_retention"
     CACHE_CONTROL_INJECTION_POINTS = "cache_control_injection_points"
+
+
+# Mapping of LiteLLM finish_reason strings to google-genai FinishReason values.
+# Keep this aligned with ADK's `_FINISH_REASON_MAPPING` in
+# reference/adk-python/src/google/adk/models/lite_llm.py, where unknown values
+# fall back to OTHER (unlike the OpenAI adapter, which uses UNSPECIFIED).
+_LITELLM_FINISH_REASON_TO_GENAI = {
+    "stop": GenaiFinishReason.STOP,
+    "tool_calls": GenaiFinishReason.STOP,
+    "function_call": GenaiFinishReason.STOP,
+    "length": GenaiFinishReason.MAX_TOKENS,
+    "content_filter": GenaiFinishReason.SAFETY,
+}
+
+
+def _to_genai_finish_reason(raw: Optional[str]) -> Optional[GenaiFinishReason]:
+    """Map a LiteLLM finish reason to google-genai's enum."""
+    if not raw:
+        return None
+    return _LITELLM_FINISH_REASON_TO_GENAI.get(str(raw).lower(), GenaiFinishReason.OTHER)
 
 
 @register_model(model_name="LiteLLMModel", supported_models=_LITELLM_SUPPORTED_MODELS)
@@ -393,7 +414,14 @@ class LiteLLMModel(OpenAIModel):
         finish_reason = first_choice.get(const.FINISH_REASON)
         if finish_reason and finish_reason != FinishReason.STOP.value:
             error_code = finish_reason
-        return LlmResponse(content=content, usage_metadata=usage_meta, partial=partial, error_code=error_code)
+        return LlmResponse(
+            content=content,
+            usage_metadata=usage_meta,
+            partial=partial,
+            error_code=error_code,
+            finish_reason=_to_genai_finish_reason(finish_reason),
+            finish_reason_raw=finish_reason,
+        )
 
     @override
     def _log_unsupported_config_options(self, config: GenerateContentConfig) -> None:
@@ -524,6 +552,7 @@ class LiteLLMModel(OpenAIModel):
             accumulated_content = ""
             accumulated_tool_calls: List[Dict[str, Any]] = []
             usage_meta: Optional[GenerateContentResponseUsageMetadata] = None
+            final_finish_reason_raw: Optional[str] = None
 
             async for chunk in stream_handle:
                 if chunk is None:
@@ -532,6 +561,10 @@ class LiteLLMModel(OpenAIModel):
                 choices = chunk_dict.get(const.CHOICES) or []
                 if choices:
                     choice = choices[0] or {}
+                    chunk_finish_reason = (choice.get(const.FINISH_REASON) if isinstance(choice, dict) else getattr(
+                        choice, "finish_reason", None))
+                    if chunk_finish_reason:
+                        final_finish_reason_raw = chunk_finish_reason
                     delta = (choice.get(const.DELTA)
                              if isinstance(choice, dict) else getattr(choice, "delta", None)) or {}
                     content_delta = (delta.get(const.CONTENT) if isinstance(delta, dict) else getattr(
@@ -573,6 +606,8 @@ class LiteLLMModel(OpenAIModel):
                 content=final_content,
                 usage_metadata=usage_meta,
                 partial=False,
+                finish_reason=_to_genai_finish_reason(final_finish_reason_raw),
+                finish_reason_raw=final_finish_reason_raw,
                 custom_metadata={"stream_complete": True},
             )
         except Exception:

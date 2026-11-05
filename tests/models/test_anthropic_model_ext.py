@@ -17,6 +17,7 @@ from trpc_agent_sdk.models import AnthropicModel, LlmRequest, LlmResponse
 from trpc_agent_sdk.models._anthropic_model import _FinishReason
 from trpc_agent_sdk.types import (
     Content,
+    FinishReason as GenaiFinishReason,
     FunctionDeclaration,
     GenerateContentConfig,
     Part,
@@ -25,10 +26,10 @@ from trpc_agent_sdk.types import (
     Type,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _model(**kwargs):
     defaults = dict(model_name="claude-3-5-sonnet-20241022", api_key="test-key")
@@ -42,6 +43,7 @@ def _model(**kwargs):
 
 
 class TestToClaudeRole:
+
     def test_model_role_maps_to_assistant(self):
         """'model' role is converted to 'assistant'."""
         model = _model()
@@ -74,6 +76,7 @@ class TestToClaudeRole:
 
 
 class TestIsImagePart:
+
     def test_image_part_detected(self):
         """Image inline data is recognised as image."""
         model = _model()
@@ -99,6 +102,7 @@ class TestIsImagePart:
 
 
 class TestPartToMessageBlock:
+
     def test_text_part(self):
         """Text part converts to TextBlockParam."""
         model = _model()
@@ -122,7 +126,13 @@ class TestPartToMessageBlock:
         model = _model()
         part = Part.from_function_response(
             name="fn",
-            response={"content": [{"type": "text", "text": "ok"}, {"type": "other", "data": 1}]},
+            response={"content": [{
+                "type": "text",
+                "text": "ok"
+            }, {
+                "type": "other",
+                "data": 1
+            }]},
         )
         part.function_response.id = "id1"
         block = model._part_to_message_block(part)
@@ -174,6 +184,7 @@ class TestPartToMessageBlock:
 
 
 class TestParseFinishReason:
+
     def test_end_turn_maps_to_stop(self):
         """'end_turn' maps to STOP."""
         model = _model()
@@ -205,12 +216,59 @@ class TestParseFinishReason:
         assert model._parse_finish_reason(None) == _FinishReason.ERROR
 
 
+class TestLlmResponseFinishReason:
+    """finish_reason / finish_reason_raw on Anthropic responses."""
+
+    @staticmethod
+    def _message(stop_reason):
+        return anthropic_types.Message(
+            id="msg_1",
+            type="message",
+            role="assistant",
+            content=[anthropic_types.TextBlock(text="hi", type="text")],
+            model="claude-3-5-sonnet-20241022",
+            stop_reason=stop_reason,
+            stop_sequence=None,
+            usage=anthropic_types.Usage(input_tokens=1, output_tokens=2),
+        )
+
+    def test_max_tokens_is_carried(self):
+        model = _model()
+        result = model._message_to_llm_response(self._message("max_tokens"))
+        assert result.finish_reason_raw == "max_tokens"
+        assert result.finish_reason == GenaiFinishReason.MAX_TOKENS
+
+    def test_end_turn_raw_is_preserved(self):
+        model = _model()
+        result = model._message_to_llm_response(self._message("end_turn"))
+        assert result.finish_reason_raw == "end_turn"
+        assert result.finish_reason == GenaiFinishReason.STOP
+
+    def test_tool_use_raw_is_preserved(self):
+        model = _model()
+        result = model._message_to_llm_response(self._message("tool_use"))
+        assert result.finish_reason_raw == "tool_use"
+        assert result.finish_reason == GenaiFinishReason.STOP
+
+    def test_unknown_stop_reason_maps_to_unspecified(self):
+        model = _model()
+        message = MagicMock()
+        message.content = [anthropic_types.TextBlock(text="hi", type="text")]
+        message.usage = anthropic_types.Usage(input_tokens=1, output_tokens=2)
+        message.stop_reason = "something_else"
+        message.model_dump_json = MagicMock(return_value="{}")
+        result = model._message_to_llm_response(message)
+        assert result.finish_reason_raw == "something_else"
+        assert result.finish_reason == GenaiFinishReason.FINISH_REASON_UNSPECIFIED
+
+
 # ---------------------------------------------------------------------------
 # _update_type_string
 # ---------------------------------------------------------------------------
 
 
 class TestUpdateTypeString:
+
     def test_lowercases_type_field(self):
         """Type field is lowered."""
         model = _model()
@@ -233,7 +291,9 @@ class TestUpdateTypeString:
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "name": {"type": "STRING"},
+                    "name": {
+                        "type": "STRING"
+                    },
                 },
             },
         }
@@ -247,6 +307,7 @@ class TestUpdateTypeString:
 
 
 class TestFunctionDeclarationToToolParam:
+
     def test_with_parameters_json_schema(self):
         """Uses parameters_json_schema when available."""
         model = _model()
@@ -290,6 +351,7 @@ class TestFunctionDeclarationToToolParam:
 
 
 class TestContentBlockToPart:
+
     def test_text_block(self):
         """TextBlock converts to text Part."""
         model = _model()
@@ -336,6 +398,7 @@ class TestContentBlockToPart:
 
 
 class TestFormatMessagesEdgeCases:
+
     def test_image_in_assistant_turn_skipped(self):
         """Image data in assistant turn is skipped with warning."""
         model = _model()
@@ -359,6 +422,7 @@ class TestFormatMessagesEdgeCases:
 
 
 class TestCreateStreamingToolCallResponse:
+
     def test_returns_none_when_no_tool_uses(self):
         """Returns None with empty accumulated_tool_uses."""
         model = _model()
@@ -368,7 +432,11 @@ class TestCreateStreamingToolCallResponse:
         """Returns None when current tool has no name."""
         model = _model()
         result = model._create_streaming_tool_call_response(
-            [{"id": "id1", "name": "", "accumulated_input": ""}],
+            [{
+                "id": "id1",
+                "name": "",
+                "accumulated_input": ""
+            }],
             '{"x":1}',
         )
         assert result is None
@@ -377,7 +445,11 @@ class TestCreateStreamingToolCallResponse:
         """Returns None when tool name is not in streaming_tool_names."""
         model = _model()
         result = model._create_streaming_tool_call_response(
-            [{"id": "id1", "name": "my_tool", "accumulated_input": "{}"}],
+            [{
+                "id": "id1",
+                "name": "my_tool",
+                "accumulated_input": "{}"
+            }],
             '{"x":1}',
             streaming_tool_names={"other_tool"},
         )
@@ -387,7 +459,11 @@ class TestCreateStreamingToolCallResponse:
         """Returns LlmResponse when tool name is in streaming_tool_names."""
         model = _model()
         result = model._create_streaming_tool_call_response(
-            [{"id": "id1", "name": "my_tool", "accumulated_input": '{"x":'}],
+            [{
+                "id": "id1",
+                "name": "my_tool",
+                "accumulated_input": '{"x":'
+            }],
             '1}',
             streaming_tool_names={"my_tool"},
         )
@@ -399,7 +475,11 @@ class TestCreateStreamingToolCallResponse:
         """Returns response for any tool when streaming_tool_names is None."""
         model = _model()
         result = model._create_streaming_tool_call_response(
-            [{"id": "id1", "name": "any_tool", "accumulated_input": ""}],
+            [{
+                "id": "id1",
+                "name": "any_tool",
+                "accumulated_input": ""
+            }],
             '{}',
             streaming_tool_names=None,
         )
@@ -412,6 +492,7 @@ class TestCreateStreamingToolCallResponse:
 
 
 class TestMergeConfigsExtended:
+
     def test_no_request_no_default_returns_empty(self):
         """No request config and no default yields empty GenerateContentConfig."""
         model = _model()
@@ -435,6 +516,7 @@ class TestMergeConfigsExtended:
 
 
 class TestLogUnsupportedConfigOptions:
+
     def test_logs_warning_for_unsupported_options(self):
         """Logs warnings for every unsupported config option."""
         model = _model()
@@ -466,6 +548,7 @@ class TestLogUnsupportedConfigOptions:
 
 
 class TestGenerateSingleError:
+
     @pytest.mark.asyncio
     async def test_api_error_raises_and_closes_client(self):
         """API error during single generation is raised to the retry layer."""
@@ -485,6 +568,7 @@ class TestGenerateSingleError:
 
 
 class TestCreateAsyncClient:
+
     def test_client_created_with_api_key(self):
         """Client is created with the model's api_key."""
         model = _model(api_key="sk-test", base_url="https://example.com")
@@ -511,12 +595,14 @@ class TestCreateAsyncClient:
 
 
 class TestValidateRequestExtended:
+
     def test_part_with_inline_data_is_valid(self):
         """Part with inline_data passes validation."""
         model = _model()
         part = Part(inline_data=Blob(mime_type="image/png", data=b"img"))
         request = LlmRequest(contents=[Content(parts=[part], role="user")])
         model.validate_request(request)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

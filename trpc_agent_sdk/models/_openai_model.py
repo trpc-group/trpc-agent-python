@@ -35,6 +35,7 @@ from trpc_agent_sdk.common import check_enum
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 from trpc_agent_sdk.types import FunctionResponse
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import GenerateContentResponseUsageMetadata
@@ -286,6 +287,25 @@ class FinishReason(str, Enum):
     LENGTH = "length"
     ERROR = "error"
     TOOL_CALLS = const.TOOL_CALLS
+
+
+# Mapping of OpenAI finish_reason strings to google-genai FinishReason values.
+# Keep this aligned with ADK's `map_finish_reason` in
+# reference/adk-python/src/google/adk/labs/openai/_openai_common.py.
+_OPENAI_FINISH_REASON_TO_GENAI = {
+    "stop": GenaiFinishReason.STOP,
+    "tool_calls": GenaiFinishReason.STOP,
+    "function_call": GenaiFinishReason.STOP,
+    "length": GenaiFinishReason.MAX_TOKENS,
+    "content_filter": GenaiFinishReason.SAFETY,
+}
+
+
+def _to_genai_finish_reason(raw: Optional[str]) -> Optional[GenaiFinishReason]:
+    """Map an OpenAI-style finish reason to google-genai's enum."""
+    if not raw:
+        return None
+    return _OPENAI_FINISH_REASON_TO_GENAI.get(str(raw).lower(), GenaiFinishReason.FINISH_REASON_UNSPECIFIED)
 
 
 class ToolKey(str, Enum):
@@ -1427,16 +1447,22 @@ class OpenAIModel(LLMModel):
 
         # Get finish reason
         choices: list[dict] = response_dict.get(const.CHOICES, [{}])
+        finish_reason_raw = choices[0].get(const.FINISH_REASON) if choices else None
         error_code = None
-        if choices and choices[0].get(const.FINISH_REASON):
-            finish_reason_value = choices[0][const.FINISH_REASON]
-            if finish_reason_value != FinishReason.STOP.value:
-                error_code = finish_reason_value
+        if finish_reason_raw and finish_reason_raw != FinishReason.STOP.value:
+            error_code = finish_reason_raw
 
         # Get response ID
         response_id = response_dict.get("id")
 
-        return LlmResponse(content=None, usage_metadata=usage, error_code=error_code, response_id=response_id)
+        return LlmResponse(
+            content=None,
+            usage_metadata=usage,
+            error_code=error_code,
+            finish_reason=_to_genai_finish_reason(finish_reason_raw),
+            finish_reason_raw=finish_reason_raw,
+            response_id=response_id,
+        )
 
     def _create_response_with_content(self, response_dict: dict) -> LlmResponse:
         """Create a LlmResponse with text content."""
@@ -1506,14 +1532,22 @@ class OpenAIModel(LLMModel):
         usage = self._process_usage_from_response(response_dict)
 
         # Get finish reason for error handling
+        finish_reason_raw = choice.get(const.FINISH_REASON)
         error_code = None
-        if choice.get(const.FINISH_REASON) and choice[const.FINISH_REASON] != FinishReason.STOP.value:
-            error_code = choice[const.FINISH_REASON]
+        if finish_reason_raw and finish_reason_raw != FinishReason.STOP.value:
+            error_code = finish_reason_raw
 
         # Get response ID
         response_id = response_dict.get("id")
 
-        return LlmResponse(content=content, usage_metadata=usage, error_code=error_code, response_id=response_id)
+        return LlmResponse(
+            content=content,
+            usage_metadata=usage,
+            error_code=error_code,
+            finish_reason=_to_genai_finish_reason(finish_reason_raw),
+            finish_reason_raw=finish_reason_raw,
+            response_id=response_id,
+        )
 
     @staticmethod
     def _model_dump(value: Any) -> dict:
@@ -1743,6 +1777,26 @@ class OpenAIModel(LLMModel):
             return str(error.get("code") or status), str(error.get("message") or error.get("reason") or status)
         return str(status), str(error)
 
+    @staticmethod
+    def _responses_finish_reason(response_dict: dict) -> tuple[Optional[str], Optional[GenaiFinishReason]]:
+        """Derive the raw and normalized finish reason from a Responses payload."""
+        status = response_dict.get("status")
+        details = response_dict.get("incomplete_details") or {}
+        reason = details.get("reason") if isinstance(details, dict) else None
+
+        if status == "completed":
+            return "completed", GenaiFinishReason.STOP
+        if status == "incomplete":
+            raw = str(reason) if reason else "incomplete"
+            if reason == "max_output_tokens":
+                return raw, GenaiFinishReason.MAX_TOKENS
+            if reason == "content_filter":
+                return raw, GenaiFinishReason.SAFETY
+            return raw, GenaiFinishReason.OTHER
+        if status in {"failed", "cancelled"}:
+            return str(status), GenaiFinishReason.OTHER
+        return None, None
+
     def _create_responses_response(self, response_dict: dict) -> LlmResponse:
         """Convert a completed Responses payload into ``LlmResponse``."""
         parts = []
@@ -1782,11 +1836,14 @@ class OpenAIModel(LLMModel):
         content = Content(parts=parts, role=const.MODEL) if parts else None
         usage = self._process_responses_usage(response_dict)
         error_code, error_message = self._responses_error(response_dict)
+        finish_reason_raw, finish_reason = self._responses_finish_reason(response_dict)
         return LlmResponse(
             content=content,
             usage_metadata=usage,
             error_code=error_code,
             error_message=error_message,
+            finish_reason=finish_reason,
+            finish_reason_raw=finish_reason_raw,
             response_id=response_dict.get("id"),
         )
 
@@ -2465,6 +2522,7 @@ class OpenAIModel(LLMModel):
         accumulated_tool_calls: list[dict] = []
         is_thinking = False  # Track whether we're currently in thinking mode
         response_id: str | None = None  # Track response ID from API
+        final_finish_reason_raw: str | None = None  # Terminal chunk's finish_reason
 
         # For streaming tool call arguments - get the set of tool names that should stream
         streaming_tool_names = getattr(request, "streaming_tool_names", None) or set()
@@ -2521,6 +2579,14 @@ class OpenAIModel(LLMModel):
 
                 # Verify if the chunk contains valid text content
                 if not self._verify_text_content_in_delta_response(chunk_dict):
+                    # Read the raw value directly so unknown provider reasons are
+                    # not collapsed to FinishReason.ERROR by the parser below.
+                    chunk_choices = chunk_dict.get(const.CHOICES) or []
+                    if chunk_choices and isinstance(chunk_choices[0], dict):
+                        chunk_finish_reason = chunk_choices[0].get(const.FINISH_REASON)
+                        if chunk_finish_reason:
+                            final_finish_reason_raw = chunk_finish_reason
+
                     # Process chunk without content (this is where tool calls are streamed)
                     _, usage, delta_arguments = self._process_chunk_without_content(chunk_dict, accumulated_tool_calls)
 
@@ -2545,6 +2611,9 @@ class OpenAIModel(LLMModel):
                 if not choices:
                     continue  # Skip if no choices available
                 choice: dict[str, dict] = choices[0]
+                chunk_finish_reason = choice.get(const.FINISH_REASON)
+                if chunk_finish_reason:
+                    final_finish_reason_raw = chunk_finish_reason
                 delta = choice[const.DELTA]
 
                 # Handle reasoning content (thinking content) first
@@ -2703,6 +2772,8 @@ class OpenAIModel(LLMModel):
                 content=final_content,
                 usage_metadata=final_usage,
                 partial=False,
+                finish_reason=_to_genai_finish_reason(final_finish_reason_raw),
+                finish_reason_raw=final_finish_reason_raw,
                 response_id=response_id,
                 custom_metadata={"stream_complete": True},
             )

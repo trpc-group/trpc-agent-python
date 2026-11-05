@@ -21,6 +21,7 @@ from trpc_agent_sdk.models._openai_model import (
 )
 from trpc_agent_sdk.types import (
     Content,
+    FinishReason as GenaiFinishReason,
     FunctionCall,
     FunctionDeclaration,
     FunctionResponse,
@@ -524,6 +525,8 @@ class TestCreateResponseHelpers:
         result = model._create_response_without_content(resp)
         assert result.content is None
         assert result.error_code is None
+        assert result.finish_reason == GenaiFinishReason.STOP
+        assert result.finish_reason_raw == "stop"
         assert result.response_id == "resp_1"
 
     def test_without_content_length(self):
@@ -532,6 +535,8 @@ class TestCreateResponseHelpers:
         resp = {"id": "r2", "choices": [{"finish_reason": "length"}]}
         result = model._create_response_without_content(resp)
         assert result.error_code == "length"
+        assert result.finish_reason == GenaiFinishReason.MAX_TOKENS
+        assert result.finish_reason_raw == "length"
 
     def test_with_content_text_only(self):
         """Text content response has text part."""
@@ -576,6 +581,53 @@ class TestCreateResponseHelpers:
         fc_parts = [p for p in result.content.parts if p.function_call]
         assert len(fc_parts) == 1
         assert fc_parts[0].function_call.name == "search"
+        assert result.finish_reason == GenaiFinishReason.STOP
+        assert result.finish_reason_raw == "tool_calls"
+
+    def test_with_content_content_filter(self):
+        """content_filter maps to SAFETY while the raw value is preserved."""
+        model = _model()
+        resp = {
+            "choices": [{
+                "message": {
+                    "content": "partial",
+                    "role": "assistant"
+                },
+                "finish_reason": "content_filter"
+            }],
+        }
+        result = model._create_response_with_content(resp)
+        assert result.error_code == "content_filter"
+        assert result.finish_reason == GenaiFinishReason.SAFETY
+        assert result.finish_reason_raw == "content_filter"
+
+    def test_responses_finish_reason_completed(self):
+        """Responses API 'completed' maps to STOP."""
+        raw, normalized = OpenAIModel._responses_finish_reason({"status": "completed"})
+        assert raw == "completed"
+        assert normalized == GenaiFinishReason.STOP
+
+    def test_responses_finish_reason_incomplete_max_tokens(self):
+        """Responses API 'incomplete' + max_output_tokens maps to MAX_TOKENS."""
+        raw, normalized = OpenAIModel._responses_finish_reason({
+            "status": "incomplete",
+            "incomplete_details": {
+                "reason": "max_output_tokens"
+            },
+        })
+        assert raw == "max_output_tokens"
+        assert normalized == GenaiFinishReason.MAX_TOKENS
+
+    def test_responses_response_carries_finish_reason(self):
+        """_create_responses_response writes both fields."""
+        model = _model()
+        result = model._create_responses_response({
+            "id": "r1",
+            "status": "completed",
+            "output": [],
+        })
+        assert result.finish_reason == GenaiFinishReason.STOP
+        assert result.finish_reason_raw == "completed"
 
     def test_with_content_empty_fallback(self):
         """Response with no text and no tool calls produces empty text part."""
@@ -1559,7 +1611,8 @@ class TestGenerateAsyncEdgeCases:
                 },
                 "finish_reason": "stop",
             }],
-            "usage": None,
+            "usage":
+            None,
         }
 
         with patch.object(model, "_create_async_client") as mock_factory:
@@ -1646,6 +1699,55 @@ class TestGenerateAsyncEdgeCases:
         partial_responses = [r for r in responses if r.partial]
         thought_partials = [r for r in partial_responses if r.content and r.content.parts[0].thought]
         assert len(thought_partials) >= 1
+
+    @pytest.mark.asyncio
+    async def test_streaming_reports_finish_reason(self):
+        """The terminal chunk's finish_reason reaches the final response."""
+        model = _model()
+        request = _request([Content(parts=[Part.from_text(text="hi")], role="user")])
+
+        content_chunk = Mock()
+        content_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [{
+                "delta": {
+                    "content": "hello"
+                },
+                "finish_reason": None
+            }],
+            "usage": None,
+        }
+        finish_chunk = Mock()
+        finish_chunk.model_dump.return_value = {
+            "id": "resp_1",
+            "choices": [{
+                "delta": {},
+                "finish_reason": "length"
+            }],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 2,
+                "total_tokens": 3
+            },
+        }
+
+        async def mock_stream():
+            yield content_chunk
+            yield finish_chunk
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_factory.return_value = mock_client
+
+            responses = []
+            async for r in model.generate_async(request, stream=True):
+                responses.append(r)
+
+        final = [r for r in responses if not r.partial][-1]
+        assert final.finish_reason == GenaiFinishReason.MAX_TOKENS
+        assert final.finish_reason_raw == "length"
 
     @pytest.mark.asyncio
     async def test_streaming_extracts_provider_metadata_from_first_chunk(self):
@@ -1801,8 +1903,10 @@ class TestGenerateAsyncEdgeCases:
             yield {
                 "type": "response.completed",
                 "response": {
-                    "id": "resp_meta",
-                    "status": "completed",
+                    "id":
+                    "resp_meta",
+                    "status":
+                    "completed",
                     "output": [{
                         "type": "message",
                         "role": "assistant",
