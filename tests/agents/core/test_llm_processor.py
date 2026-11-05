@@ -21,6 +21,7 @@ from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
+from trpc_agent_sdk.types import FinishReason as GenaiFinishReason
 
 
 class _StubAgent(BaseAgent):
@@ -112,6 +113,18 @@ class TestCreateEventFromResponse:
         event = proc._create_event_from_response(invocation_context, "evt-2", response)
         assert event.error_code == "validation_error"
         assert event.error_message == "Bad request"
+
+    def test_preserves_finish_reason(self, model, invocation_context):
+        proc = LlmProcessor(model)
+        response = LlmResponse(
+            content=None,
+            partial=False,
+            finish_reason=GenaiFinishReason.STOP,
+            finish_reason_raw="end_turn",
+        )
+        event = proc._create_event_from_response(invocation_context, "evt-3", response)
+        assert event.finish_reason == GenaiFinishReason.STOP
+        assert event.finish_reason_raw == "end_turn"
 
 
 # ---------------------------------------------------------------------------

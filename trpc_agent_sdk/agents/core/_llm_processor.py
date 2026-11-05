@@ -271,6 +271,8 @@ class LlmProcessor:
             custom_metadata=response.custom_metadata,
             usage_metadata=response.usage_metadata,
             response_id=response.response_id,
+            finish_reason=response.finish_reason,
+            finish_reason_raw=response.finish_reason_raw,
             # Event-specific fields extracted from context
             id=event_id,
             invocation_id=ctx.invocation_id,

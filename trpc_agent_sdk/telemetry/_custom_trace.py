@@ -144,11 +144,17 @@ class CustomTraceReporter:
         Returns:
             A synthetic LlmResponse for tracing purposes.
         """
+        finish_reason = event.finish_reason if event else None
+        finish_reason_raw = event.finish_reason_raw if event else None
         return LlmResponse(
             content=event.content if event else None,
             error_code=event.error_code if event else None,
             error_message=event.error_message if event else None,
             custom_metadata=event.custom_metadata if event else None,
+            # Guard against MagicMock events used in tests: only pass real
+            # string-like values through to the pydantic model.
+            finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+            finish_reason_raw=finish_reason_raw if isinstance(finish_reason_raw, str) else None,
         )
 
     def _trace_function_call(self, event: Event) -> None:
