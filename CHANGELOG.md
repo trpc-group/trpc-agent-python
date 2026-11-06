@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.2.1](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.2.1) (2026-11-06)
+
+### Features
+
+* Memory: Added `TencentDBMemoryService` for the TencentDB Agent Memory V3 HTTP API, with incremental conversation writes, service/team/agent/user/session isolation, and concurrent L1 atomic, L2 scenario, and L3 core recall that falls back to L0 conversation search. Added local and Tencent Cloud configuration examples and regression coverage. ([#347](https://github.com/trpc-group/trpc-agent-python/pull/347), [#355](https://github.com/trpc-group/trpc-agent-python/pull/355))
+* Memory: Added `HyMemoryService` for Hy-Memory Chat, Working, and Coding memory, including incremental event storage, tool-call trace conversion, cross-session recall, request-level routing and isolation, default or agentic search, optional dependency support, and a remote BGE-M3 embedder example. ([#362](https://github.com/trpc-group/trpc-agent-python/pull/362))
+* Tools: Added `ToolSearchToolSet` for on-demand tool discovery and loading, with keyword and semantic retrieval, Native and Dispatch invocation, Namespace routing, Session State, permission filtering, dynamic MCP refresh and declaration cleanup, configurable validation tolerance, embedding usage reporting, and pluggable vector storage. ([#368](https://github.com/trpc-group/trpc-agent-python/pull/368))
+* Model: Added normalized `finish_reason` and provider-native `finish_reason_raw` fields to `LlmResponse` for OpenAI, Anthropic, and LiteLLM responses, and included them in telemetry traces. ([#370](https://github.com/trpc-group/trpc-agent-python/pull/370))
+* Benchmark: Added the `trpc_agent_bench` framework benchmark suite, using a mock OpenAI server to measure import, construction, single- and multi-turn Agent loops, sequential and parallel tool execution, concurrency, and memory without real model latency. ([#366](https://github.com/trpc-group/trpc-agent-python/pull/366))
+
+### Bug Fixes
+
+* Agent: Fixed failed `set_model_response` schema validation being mistaken for a final structured response; validation errors now return to the model so it can retry within the configured run limits. ([#369](https://github.com/trpc-group/trpc-agent-python/pull/369))
+* Skill: Fixed quoted strings in Skill shell commands being interpreted as executable command tokens and incorrectly rejected by the command safety check. ([#349](https://github.com/trpc-group/trpc-agent-python/pull/349))
+* Skill: Preserved files produced by `skill_exec` as artifacts and added a runnable Skill execution example covering stdin and generated output. ([#356](https://github.com/trpc-group/trpc-agent-python/pull/356))
+* Skill: Restored `SkillToolSet.tool_filter` application when tools are retrieved so request-specific tool selection remains effective. ([#357](https://github.com/trpc-group/trpc-agent-python/pull/357))
+* Skill: Applied repository-provided Skill environment variables consistently to both `skill_run` and `skill_exec`, while preserving explicit and non-empty host environment precedence. ([#360](https://github.com/trpc-group/trpc-agent-python/pull/360))
+* Skill: Removed unintended quotation marks and template indentation from Skill selection and listing guidance injected into system instructions. ([#367](https://github.com/trpc-group/trpc-agent-python/pull/367))
+
+### Docs
+
+* Added English and Chinese guides, configuration references, and runnable examples for TencentDB Agent Memory, Hy-Memory, Tool Search, framework benchmarking, and Skill execution.
+
+### Internal
+
+* Expanded regression coverage for memory adapters and layered recall, Tool Search modes and dynamic MCP behavior, benchmark infrastructure, finish-reason normalization, Skill filtering and execution, and structured-output retries.
+
 ## [1.2.0](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.2.0) (2026-09-23)
 
 ### Features
