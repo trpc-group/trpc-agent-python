@@ -140,6 +140,10 @@ hy-memory = [
     "hy-memory>=2.0.6,<3.0.0",
 ]
 
+typesafe = [
+    "typesafe-sdk>=0.7.5",
+]
+
 langchain_tool = [
     "langchain_tavily",
     "langchain-core>=0.3.27",
@@ -181,6 +185,7 @@ all = [
     "e2b-code-interpreter>=2.0.0",
     "gepa>=0.0.7",
     "rich>=13.0.0",
+    "typesafe-sdk>=0.7.5",
 ]
 
 [project.scripts]
