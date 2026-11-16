@@ -33,8 +33,8 @@ As shown in the architecture below:
     - During Agent execution, within the `_run_async_impl` implementation, `ctx.raise_if_cancelled` is used at various checkpoints (after LLM streaming output chunks, after tool calls, etc.) to check whether the current execution has been cancelled. If `runner.cancel_run_async` has been called, the Agent's execution is marked as cancelled, and `raise_if_cancelled` throws a `RunCancelledException`
     - Common checkpoint locations include: during LLM streaming output, after tool calls. Cancellation during tool call execution is not currently supported
 - Agent services automatically invoke `runner.cancel_run_async` through their interfaces and obtain cancellation details via the AgentCancelledEvent returned by the Runner
-    - For AG-UI services, the protocol does not natively support cancellation. The client cancels Agent execution by disconnecting the connection. The Agent service detects the disconnection exception and automatically calls `runner.cancel_run_async` to support this capability
-    - For A2A services, the protocol natively supports cancellation via the `cancel_task` interface. The framework already supports this interface and adapts it to `runner.cancel_run_async`, but it requires hash-based routing. In multi-node deployment scenarios, configuring hash-based routing can be cumbersome. A simpler approach, similar to AG-UI, would be for the Agent service to automatically detect connection disconnection and call `runner.cancel_run_async`. However, due to the current underlying implementation of the a2a-sdk, the Agent continues to execute after disconnection, so hash-based routing is temporarily required to complete the cancel operation.
+    - For AG-UI services, the protocol does not natively support cancellation. The client cancels Agent execution by disconnecting the connection. The Agent service detects the disconnection exception and automatically calls `runner.cancel_run_async` to support this capability. In a multi-worker deployment, disconnect cancellation naturally lands on the worker that owns the connection; to cancel from another request/worker, enable `enable_distributed_cancel`.
+    - For A2A services, the protocol natively supports cancellation via the `cancel_task` interface. The framework already supports this interface and adapts it to `runner.cancel_run_async`. In a multi-node deployment, if the Runner enables `enable_distributed_cancel` and shares a SessionService, a cancel request landing on any node can notify the owner through `__trpc_agent_cancel`; otherwise hash-based routing is required to reach the running node (the A2A V1 ecosystem integration exposes this option).
     - For custom services, it is recommended to implement Agent cancellation logic triggered by connection disconnection. This approach has very low implementation cost, does not require hash-based routing, and the client simply disconnects from the remote Agent.
 
 <p align="center">
@@ -52,19 +52,6 @@ When an Agent is cancelled, different session management strategies are applied 
 **Scenario 2: Cancellation during tool execution**
 - Session management: For scenarios where the Agent needs to call multiple tools, e.g., tool 1 and tool 2, if the user cancels Agent execution while tool 1 is being called, the system waits for tool 1 to complete, then skips tool 2 and terminates. The call information for tool 2 in this turn is removed from the session history, as if the Agent never executed tool 2 in this turn. Similarly, after tool 1's call response, a message "User cancel the agent execution." is appended to make the Agent aware of the cancellation event
 - Effect: In the next conversation turn, the Agent can perceive that tool 2 was not called and may proceed to call tool 2.
-
-### Limitations
-
-> **⚠️ The current Cancel mechanism only supports single-node scenarios**
-
-`_RunCancellationManager` uses in-process storage (`Dict`) to track active runs. This means:
-
-1. **Cancel requests must be sent to the same node running the Agent**
-2. **Cross-node cancellation is not supported**
-3. **Applicable scenarios**:
-   - Single-node deployment
-   - Client communicates with the Agent through the same connection (WebSocket, SSE)
-   - Cancellation is automatically triggered upon connection disconnection
 
 ## Basic Usage
 
@@ -130,6 +117,43 @@ async def main():
     await runner2.close()
 
 asyncio.run(main())
+```
+
+### Multi-node Cancellation
+
+In a multi-node deployment, the running and cancelling Runners use the same remote-storage SessionService and both enable `enable_distributed_cancel`:
+
+```python
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import RedisSessionService
+
+session_service = RedisSessionService(
+    db_url="redis://127.0.0.1:6379/0",
+    is_async=True,
+)
+
+# Node A: run normally
+runner = Runner(
+    app_name="my_app",
+    agent=my_agent,
+    session_service=session_service,  # shared Redis/SQL
+    enable_distributed_cancel=True,
+    cancel_poll_interval=1.0,  # polling interval for the shared flag; must be > 0
+)
+task = asyncio.create_task(run_agent(runner))
+
+# Node B: cancel without knowing which node owns the run
+cancel_runner = Runner(
+    app_name="my_app",
+    agent=my_agent,
+    session_service=session_service,
+    enable_distributed_cancel=True,
+    cancel_poll_interval=1.0,
+)
+accepted = await cancel_runner.cancel_run_async(
+    user_id=user_id,
+    session_id=session_id,
+)
 ```
 
 ### Agent Custom Service Examples

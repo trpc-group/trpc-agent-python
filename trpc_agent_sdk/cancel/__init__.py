@@ -10,8 +10,11 @@ from ._cancel import cancel_run
 from ._cancel import cleanup_run
 from ._cancel import get_cancel_event
 from ._cancel import is_run_cancelled
+from ._cancel import mark_cancelled
 from ._cancel import raise_if_cancelled
 from ._cancel import register_run
+from ._distributed import request_distributed_cancel
+from ._distributed import start_distributed_cancel
 from ._session_utils import cleanup_incomplete_function_calls
 from ._session_utils import handle_cancellation_session_cleanup
 
@@ -21,8 +24,11 @@ __all__ = [
     "cleanup_run",
     "get_cancel_event",
     "is_run_cancelled",
+    "mark_cancelled",
     "raise_if_cancelled",
     "register_run",
+    "request_distributed_cancel",
+    "start_distributed_cancel",
     "cleanup_incomplete_function_calls",
     "handle_cancellation_session_cleanup",
 ]

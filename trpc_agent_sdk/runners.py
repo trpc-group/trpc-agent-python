@@ -24,6 +24,8 @@ from opentelemetry import trace
 from trpc_agent_sdk import cancel
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.artifacts import BaseArtifactService
+from trpc_agent_sdk.cancel._distributed import _TRPC_AGENT_CANCEL_KEY
+from trpc_agent_sdk.cancel._distributed import _DistributedCancelWatcher
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.context import InvocationContext
@@ -200,6 +202,8 @@ class Runner:
         post_turn_queue_maxsize: int = 256,
         close_session_service_on_close: bool = True,
         close_memory_service_on_close: bool = True,
+        enable_distributed_cancel: bool = False,
+        cancel_poll_interval: float = 1.0,
     ):
         """Initializes the Runner.
 
@@ -222,7 +226,16 @@ class Runner:
             close_memory_service_on_close: Whether :meth:`close` should close
                 the memory service. Set to False when the service is managed
                 outside the runner.
+            enable_distributed_cancel: Whether to publish a shared cancel flag
+                in session state and start a watchdog that polls it. Requires
+                a SessionService shared by all nodes (for example Redis or
+                SQL), and should be enabled on both the running and cancelling
+                Runners.
+            cancel_poll_interval: Seconds between shared cancel flag polls.
+                Must be greater than 0 when distributed cancellation is on.
         """
+        if enable_distributed_cancel and cancel_poll_interval <= 0:
+            raise ValueError("cancel_poll_interval must be greater than 0")
         self.app_name = app_name
         self.agent = agent
         self.artifact_service = artifact_service
@@ -234,6 +247,8 @@ class Runner:
         self._post_turn_queue_maxsize = max(1, int(post_turn_queue_maxsize))
         self._close_session_service_on_close = close_session_service_on_close
         self._close_memory_service_on_close = close_memory_service_on_close
+        self._enable_distributed_cancel = enable_distributed_cancel
+        self._cancel_poll_interval = float(cancel_poll_interval)
 
     async def _run_post_turn_processing(
         self,
@@ -313,14 +328,15 @@ class Runner:
         Args:
             user_id: The user ID of the session to cancel.
             session_id: The session ID to cancel.
-            timeout: Timeout in seconds to wait for cancellation to complete.
-                This method will wait until the run is cleaned up
-                (i.e., AgentCancelledEvent is processed) or the timeout is reached.
-                Default is 1.0 seconds.
+            timeout: Timeout in seconds for the local fast path. It is ignored
+                when the cancellation is delivered through the shared state;
+                that path returns after publishing the request. Callers should
+                observe ``AgentCancelledEvent`` or run completion to know when
+                the run actually stopped.
 
         Returns:
-            True if an active run was found and marked for cancellation,
-            False if no active run found for this session.
+            True if an active run was marked locally or the shared cancel
+            request was published; False if no active run was found.
 
         Example:
             runner = Runner(app_name="my_app", agent=agent, ...)
@@ -345,22 +361,33 @@ class Runner:
             )
             print(f"Cancellation requested: {success}")
         """
-        # cancel_run returns an asyncio.Event that will be set when cleanup_run is called,
-        # or None if no active run found
+        # Fast path: the cancel request landed on the node that owns the run.
+        # cancel_run returns an asyncio.Event that will be set when
+        # cleanup_run is called, or None if no active run was found locally.
         cleanup_event = await cancel.cancel_run(self.app_name, user_id, session_id)
 
-        if cleanup_event is None:
+        if cleanup_event is not None:
+            try:
+                await asyncio.wait_for(cleanup_event.wait(), timeout=timeout)
+                logger.info("Cancel completed for user_id %s, session %s", user_id, session_id)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Cancel wait timeout (%ss) reached for user_id %s, session %s. The execution may still be running.",
+                    timeout, user_id, session_id)
+            return True
+
+        if not self._enable_distributed_cancel:
             return False
 
-        try:
-            await asyncio.wait_for(cleanup_event.wait(), timeout=timeout)
-            logger.info("Cancel completed for user_id %s, session %s", user_id, session_id)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Cancel wait timeout (%ss) reached for user_id %s, session %s. The execution may still be running.",
-                timeout, user_id, session_id)
-
-        return True
+        # Distributed path: the run lives on another node. The helper publishes
+        # the request and returns. The owner's watchdog performs the actual
+        # cancellation.
+        return await cancel.request_distributed_cancel(
+            session_service=self.session_service,
+            app_name=self.app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
 
     async def run_async(
         self,
@@ -415,6 +442,7 @@ class Runner:
                 f"[trpc-agent]: {self.app_name}/{self.agent.name}",
             )
 
+            distributed_tracker: Optional[_DistributedCancelWatcher] = None
             try:
                 # Create default agent context if not provided
                 if agent_context is None:
@@ -436,6 +464,7 @@ class Runner:
 
                 # Capture state before runner execution
                 state_begin = dict(session.state)
+                state_begin.pop(_TRPC_AGENT_CANCEL_KEY, None)
 
                 session.conversation_count += 1
                 history_content: Content | None = None
@@ -476,6 +505,17 @@ class Runner:
 
                 # Store session_key in invocation_context for use by agents
                 invocation_context.session_key = session_key
+
+                # Publish the shared run flag and start the watchdog. The
+                # helper never raises: a distributed-cancel setup failure must
+                # not break the local run.
+                if self._enable_distributed_cancel:
+                    distributed_tracker = await cancel.start_distributed_cancel(
+                        session_service=self.session_service,
+                        session=session,
+                        session_key=session_key,
+                        poll_interval=self._cancel_poll_interval,
+                    )
             except Exception as ex:
                 # Initialization failed before the main try/finally block
                 # below was reached, so there is no InvocationContext/Session
@@ -644,6 +684,7 @@ class Runner:
 
                 # Capture partial state at cancellation point
                 state_partial = dict(session.state)
+                state_partial.pop(_TRPC_AGENT_CANCEL_KEY, None)
                 temp_text = "".join(temp_text_parts)
 
                 # Handle session cleanup for cancellation (two scenarios: streaming vs non-streaming)
@@ -708,6 +749,7 @@ class Runner:
             finally:
                 if not runner_trace_recorded:
                     state_end = dict(session.state)
+                    state_end.pop(_TRPC_AGENT_CANCEL_KEY, None)
                     if (last_non_streaming_event and last_non_streaming_event.actions
                             and last_non_streaming_event.actions.state_delta):
                         state_end.update(last_non_streaming_event.actions.state_delta)
@@ -726,6 +768,11 @@ class Runner:
                             error_message=trace_error_message,
                             partial_text=trace_partial_text,
                         )
+
+                # Stop the watchdog and clear the shared flag before waking
+                # local cleanup waiters.
+                if distributed_tracker is not None:
+                    await distributed_tracker.aclose()
 
                 # Always cleanup cancellation tracking
                 await cancel.cleanup_run(

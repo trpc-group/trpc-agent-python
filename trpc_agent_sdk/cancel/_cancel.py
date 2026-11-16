@@ -26,6 +26,13 @@ class SessionKey:
     session_id: str
 
 
+@dataclass
+class _RunState:
+    """Local cancellation state for one active run."""
+    cancel_event: asyncio.Event
+    cleanup_event: Optional[asyncio.Event] = None
+
+
 class _RunCancellationManager(SingletonBase):
     """Manages cancellation state for agent runs.
 
@@ -35,10 +42,8 @@ class _RunCancellationManager(SingletonBase):
 
     def __init__(self):
         super().__init__()
-        # Maps session key to cancellation event
-        self._cancelled: Dict[SessionKey, asyncio.Event] = {}
-        # Maps session key to cleanup completion event (for cancel_run_async to wait on)
-        self._cleanup_events: Dict[SessionKey, asyncio.Event] = {}
+        # Maps session key to the active run's cancellation state
+        self._cancelled: Dict[SessionKey, _RunState] = {}
         self._lock = asyncio.Lock()
 
     async def register_run(
@@ -59,8 +64,7 @@ class _RunCancellationManager(SingletonBase):
         """
         session_key = SessionKey(app_name, user_id, session_id)
         async with self._lock:
-            # Create cancellation event for this run
-            self._cancelled[session_key] = asyncio.Event()
+            self._cancelled[session_key] = _RunState(cancel_event=asyncio.Event())
             logger.debug("Registered run for session (%s, %s, %s)", app_name, user_id, session_id)
         return session_key
 
@@ -85,17 +89,17 @@ class _RunCancellationManager(SingletonBase):
         """
         session_key = SessionKey(app_name, user_id, session_id)
         async with self._lock:
-            if session_key in self._cancelled:
-                self._cancelled[session_key].set()
-                # Create cleanup event for waiting
-                cleanup_event = asyncio.Event()
-                self._cleanup_events[session_key] = cleanup_event
-                logger.info("Run marked for cancellation (app_name: %s)(user: %s)(session: %s)", app_name, user_id,
-                            session_id)
-                return cleanup_event
-            else:
+            state = self._cancelled.get(session_key)
+            if state is None:
                 logger.debug("No active run found for session (%s, %s, %s)", app_name, user_id, session_id)
                 return None
+
+            state.cancel_event.set()
+            # Create cleanup event for waiting
+            state.cleanup_event = asyncio.Event()
+            logger.info("Run marked for cancellation (app_name: %s)(user: %s)(session: %s)", app_name, user_id,
+                        session_id)
+            return state.cleanup_event
 
     async def is_cancelled(self, session_key: SessionKey) -> bool:
         """Check if a run is cancelled.
@@ -110,9 +114,8 @@ class _RunCancellationManager(SingletonBase):
             True if cancelled, False otherwise.
         """
         async with self._lock:
-            event = self._cancelled.get(session_key)
-            cancel_flag = event.is_set() if event else False
-            return cancel_flag
+            state = self._cancelled.get(session_key)
+            return state.cancel_event.is_set() if state else False
 
     async def cleanup_run(
         self,
@@ -131,12 +134,11 @@ class _RunCancellationManager(SingletonBase):
         """
         session_key = SessionKey(app_name, user_id, session_id)
         async with self._lock:
-            if session_key in self._cancelled:
-                del self._cancelled[session_key]
-            # Signal cleanup completion to any waiters
-            if session_key in self._cleanup_events:
-                self._cleanup_events[session_key].set()
-                del self._cleanup_events[session_key]
+            state = self._cancelled.pop(session_key, None)
+            # Signal cleanup completion to any waiter. The waiter holds its own
+            # reference, so it still wakes after the state is removed.
+            if state is not None and state.cleanup_event is not None:
+                state.cleanup_event.set()
             logger.debug("Cleaned up run from cancellation tracking (session: %s)", session_id)
 
     def get_active_sessions(self) -> Dict[tuple[str, str, str], bool]:
@@ -145,7 +147,7 @@ class _RunCancellationManager(SingletonBase):
         Returns:
             Dict mapping (app_name, user_id, session_id) to is_cancelled status.
         """
-        return {(k.app_name, k.user_id, k.session_id): v.is_set() for k, v in self._cancelled.items()}
+        return {(k.app_name, k.user_id, k.session_id): v.cancel_event.is_set() for k, v in self._cancelled.items()}
 
     async def get_cancel_event(self, session_key: SessionKey) -> Optional[asyncio.Event]:
         """Get the cancellation event for a session.
@@ -158,8 +160,35 @@ class _RunCancellationManager(SingletonBase):
             or None if the session is not registered.
         """
         async with self._lock:
-            event = self._cancelled.get(session_key)
-            return event if event else None
+            state = self._cancelled.get(session_key)
+            return state.cancel_event if state else None
+
+    async def mark_cancelled(self, session_key: SessionKey) -> bool:
+        """Set the cancellation event for an already registered run.
+
+        Unlike :meth:`cancel_run`, this does not create a cleanup waiter. It is
+        used by the distributed cancel watchdog, which only needs to wake up
+        the local run; the run's own ``finally`` block performs the cleanup.
+
+        Args:
+            session_key: The session key to mark.
+
+        Returns:
+            True if an active local run was marked, False if the run has
+            already been cleaned up.
+        """
+        async with self._lock:
+            state = self._cancelled.get(session_key)
+            if state is None:
+                return False
+            state.cancel_event.set()
+            logger.info(
+                "Run marked for cancellation by distributed flag (app_name: %s)(user: %s)(session: %s)",
+                session_key.app_name,
+                session_key.user_id,
+                session_key.session_id,
+            )
+            return True
 
 
 # Module-level singleton
@@ -187,6 +216,19 @@ async def cancel_run(
         or None if no active run found for this session.
     """
     return await _manager.cancel_run(app_name, user_id, session_id)
+
+
+async def mark_cancelled(session_key: SessionKey) -> bool:
+    """Mark an already registered local run as cancelled.
+
+    This is the distributed-cancel bridge: the shared flag is observed by a
+    watchdog, which calls this function to wake the local run. No cleanup
+    waiter is created because the caller is not waiting on this process.
+
+    Returns:
+        True if an active local run was marked, False otherwise.
+    """
+    return await _manager.mark_cancelled(session_key)
 
 
 async def is_run_cancelled(session_key: SessionKey) -> bool:

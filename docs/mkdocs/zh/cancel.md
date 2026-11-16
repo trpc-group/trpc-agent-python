@@ -33,8 +33,8 @@ Agent 在执行过程中，有的时候输出不满足用户的要求，这个�
     - 在 Agent 的执行过程中，通过在 `_run_async_impl` 实现中，使用 `ctx.raise_if_cancelled` 在各个检查点（LLM流式输出chunk后、工具调用后等）检查当前的执行是否被取消，如果 `runner.cancel_run_async` 被调用过，则Agent的执行会被标记为取消，raise_if_cancelled执行会抛出 `RunCancelledException` 的异常
     - 一般来说，常见的检查点有这些：LLM流式输出过程中，工具调用之后，工具调用过程中取消暂时不支持
 - Agent服务，通过接口自动调用 `runner.cancel_run_async`，通过Runner返回的AgentCancelledEvent事件获取取消的细节
-    - 对AG-UI服务，其协议未原生支持取消，客户端通过断开连接来取消Agent的执行，Agent服务通过感知到连接断开的异常，自动调用了 `runner.cancel_run_async` 以支持此能力
-    - 对A2A服务，其协议原生支持取消，通过调用接口 `cancel_task` 来取消，框架已经支持了此接口，适配了 `runner.cancel_run_async`，但需要配合hash寻址来使用。在多节点部署场景，配比hash寻址比较麻烦，一个更简单的方法是类似AG-UI一样，Agent服务自动感知到连接断开，调用 `runner.cancel_run_async`，但受限于目前 a2a-sdk 的底层实现，连接断开后，Agent仍然会继续执行，暂时需要使用hash寻址来完成取消操作。
+    - 对AG-UI服务，其协议未原生支持取消，客户端通过断开连接来取消Agent的执行，Agent服务通过感知到连接断开的异常，自动调用了 `runner.cancel_run_async` 以支持此能力。多 worker 下断连取消天然落在连接所在节点；如果还需要从其他请求/worker 发起取消，可以开启 `enable_distributed_cancel`。
+    - 对A2A服务，其协议原生支持取消，通过调用接口 `cancel_task` 来取消，框架已经支持了此接口，适配了 `runner.cancel_run_async`。多节点部署时，如果 Runner 开启了 `enable_distributed_cancel` 并共享 SessionService，cancel 请求落到任意节点都可以通过 `__trpc_agent_cancel` 通知 owner；否则需要 hash 寻址把请求发到运行节点（A2A V1 生态集成已透出该配置）。
     - 对自定义服务，推荐实现基于连接断开触发Agent取消执行的逻辑，这种方式实现成本很低，不需要依赖hash寻址，客户端直接断开与远程Agent的连接即可。
 
 <p align="center">
@@ -52,19 +52,6 @@ Agent被Cancel时，将会根据场景进行不同的会话管理：
 **场景 2：工具执行期间取消**
 - 会话管理：针对Agent需要调用多个工具的场景，比如需要调用工具1和工具2，在调用工具1时，用户取消Agent执行，在等到工具1调用结束后，将会跳过工具2的调用而结束，本轮工具2的调用信息将会从历史会话中移除，就像Agent本轮从未执行过工具2一样，同样，在工具1的调用响应后，将会追加一个消息 "User cancel the agent execution." 让Agent感知到取消事件的发生
 - 效果：下一轮对话，Agent能够感知到工具2没有调用，可能会调用工具2。
-
-### 限制
-
-> **⚠️ 当前 Cancel 机制仅支持单节点场景**
-
-`_RunCancellationManager` 使用进程内存储（`Dict`）来追踪活跃的运行。这意味着：
-
-1. **Cancel 请求必须发送到运行 Agent 的同一节点**
-2. **不支持跨节点取消**
-3. **适用场景**：
-   - 单节点部署
-   - 客户端通过同一连接（WebSocket、SSE）与 Agent 通信
-   - 连接断开时自动触发取消
 
 ## 简单用法
 
@@ -130,6 +117,43 @@ async def main():
     await runner2.close()
 
 asyncio.run(main())
+```
+
+### 多节点取消
+
+注意，多节点部署时，运行侧和取消侧使用同一个远程存储 SessionService，并都打开 `enable_distributed_cancel`：
+
+```python
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import RedisSessionService
+
+session_service = RedisSessionService(
+    db_url="redis://127.0.0.1:6379/0",
+    is_async=True,
+)
+
+# Node A：正常执行
+runner = Runner(
+    app_name="my_app",
+    agent=my_agent,
+    session_service=session_service,  # 共享 Redis/SQL
+    enable_distributed_cancel=True,
+    cancel_poll_interval=1.0,  # owner 轮询共享 flag 的间隔，必须大于 0
+)
+task = asyncio.create_task(run_agent(runner))
+
+# Node B：取消，不需要知道 run 在哪个节点
+cancel_runner = Runner(
+    app_name="my_app",
+    agent=my_agent,
+    session_service=session_service,
+    enable_distributed_cancel=True,
+    cancel_poll_interval=1.0,
+)
+accepted = await cancel_runner.cancel_run_async(
+    user_id=user_id,
+    session_id=session_id,
+)
 ```
 
 ### Agent自定义服务示例

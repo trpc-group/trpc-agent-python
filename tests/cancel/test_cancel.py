@@ -25,6 +25,7 @@ from trpc_agent_sdk.cancel._cancel import (
     cleanup_run,
     get_cancel_event,
     is_run_cancelled,
+    mark_cancelled,
     raise_if_cancelled,
     register_run,
 )
@@ -36,11 +37,9 @@ async def _reset_manager():
     """Reset the singleton manager state before each test."""
     async with _manager._lock:
         _manager._cancelled.clear()
-        _manager._cleanup_events.clear()
     yield
     async with _manager._lock:
         _manager._cancelled.clear()
-        _manager._cleanup_events.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -96,14 +95,14 @@ class TestRunCancellationManager:
     async def test_register_run_creates_unset_cancel_event(self):
         key = await _manager.register_run("app", "u1", "s1")
         assert key in _manager._cancelled
-        assert not _manager._cancelled[key].is_set()
+        assert not _manager._cancelled[key].cancel_event.is_set()
 
     async def test_cancel_run_sets_event(self):
         await _manager.register_run("app", "u1", "s1")
         cleanup_event = await _manager.cancel_run("app", "u1", "s1")
         assert cleanup_event is not None
         key = SessionKey("app", "u1", "s1")
-        assert _manager._cancelled[key].is_set()
+        assert _manager._cancelled[key].cancel_event.is_set()
 
     async def test_cancel_run_returns_cleanup_event(self):
         await _manager.register_run("app", "u1", "s1")
@@ -140,12 +139,13 @@ class TestRunCancellationManager:
         await _manager.cleanup_run("app", "u1", "s1")
         assert cleanup_event.is_set()
 
-    async def test_cleanup_run_removes_cleanup_event(self):
+    async def test_cleanup_run_removes_state_after_signal(self):
         await _manager.register_run("app", "u1", "s1")
-        await _manager.cancel_run("app", "u1", "s1")
+        cleanup_event = await _manager.cancel_run("app", "u1", "s1")
         key = SessionKey("app", "u1", "s1")
         await _manager.cleanup_run("app", "u1", "s1")
-        assert key not in _manager._cleanup_events
+        assert cleanup_event.is_set()
+        assert key not in _manager._cancelled
 
     async def test_cleanup_run_noop_for_unknown_session(self):
         await _manager.cleanup_run("app", "u1", "nonexistent")
@@ -192,6 +192,17 @@ class TestRunCancellationManager:
         event = await _manager.get_cancel_event(key)
         assert event is not None
         assert event.is_set()
+
+    async def test_mark_cancelled_sets_event_without_cleanup_waiter(self):
+        key = await _manager.register_run("app", "u1", "s1")
+        assert await _manager.mark_cancelled(key) is True
+        assert await _manager.is_cancelled(key) is True
+        assert _manager._cancelled[key].cleanup_event is None
+
+    async def test_mark_cancelled_unknown_session_is_noop(self):
+        key = SessionKey("app", "u1", "unknown")
+        assert await _manager.mark_cancelled(key) is False
+        assert key not in _manager._cancelled
 
     async def test_re_register_overwrites_previous(self):
         key = await _manager.register_run("app", "u1", "s1")
@@ -244,6 +255,15 @@ class TestModuleLevelFunctions:
         key = SessionKey("app", "u1", "unknown")
         event = await get_cancel_event(key)
         assert event is None
+
+    async def test_mark_cancelled(self):
+        key = await register_run("app", "u1", "s1")
+        assert await mark_cancelled(key) is True
+        assert await is_run_cancelled(key) is True
+
+    async def test_mark_cancelled_unknown_session(self):
+        key = SessionKey("app", "u1", "unknown")
+        assert await mark_cancelled(key) is False
 
 
 class TestRaiseIfCancelled:
