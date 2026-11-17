@@ -27,6 +27,7 @@ from opentelemetry import trace
 
 from trpc_agent_sdk.telemetry._trace import (
     _build_llm_request_for_trace,
+    _filter_state_for_trace,
     _safe_json_serialize,
     get_trpc_agent_span_name,
     set_trpc_agent_span_name,
@@ -1275,3 +1276,155 @@ class TestBuildLlmRequestForTrace:
         result = _build_llm_request_for_trace(req)
 
         assert result["contents"] == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: internal state filtering
+# ---------------------------------------------------------------------------
+
+_INTERNAL_STATE = {
+    "user_key": "keep",
+    "app:shared": "keep",
+    "user:pref": "keep",
+    "todos:root": ["keep"],
+    "temp:skill:docs:demo": "keep",
+    "_trpc_graph_checkpoints": {
+        "thread-1": "blob"
+    },
+    "_trpc_graph_pending_interrupt": True,
+    "_trpc_agent:summary": {
+        "title": "internal"
+    },
+    "__trpc_agent_cancel": False,
+}
+_VISIBLE_STATE = {key: value for key, value in _INTERNAL_STATE.items() if not key.startswith("_")}
+
+
+def _state_attribute(span, suffix):
+    """Return the parsed JSON payload of a ``state.*`` span attribute."""
+    name = f"trpc.python.agent.{suffix}"
+    for call in span.set_attribute.call_args_list:
+        if call.args[0] == name:
+            return json.loads(call.args[1])
+    raise AssertionError(f"{name} was not set on the span")
+
+
+class TestFilterStateForTrace:
+
+    def test_drops_underscore_keys(self):
+        assert _filter_state_for_trace(_INTERNAL_STATE) == _VISIBLE_STATE
+
+    def test_keeps_user_scoped_keys(self):
+        filtered = _filter_state_for_trace(_INTERNAL_STATE)
+
+        assert filtered["user_key"] == "keep"
+        assert filtered["app:shared"] == "keep"
+        assert filtered["user:pref"] == "keep"
+        assert filtered["todos:root"] == ["keep"]
+        assert filtered["temp:skill:docs:demo"] == "keep"
+
+    def test_none_passthrough(self):
+        assert _filter_state_for_trace(None) is None
+
+    def test_empty_state(self):
+        assert _filter_state_for_trace({}) == {}
+
+    def test_nested_underscore_keys_untouched(self):
+        state = {"user_key": {"_trpc_graph_x": 1, "_nested": 2}}
+
+        assert _filter_state_for_trace(state) == state
+
+    def test_non_string_keys_kept(self):
+        state = {1: "keep", None: "keep"}
+
+        assert _filter_state_for_trace(state) == state
+
+
+class TestTraceStateFiltering:
+
+    def setup_method(self):
+        set_trpc_agent_span_name("trpc.python.agent")
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_trace_runner_filters_state(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        trace_runner("app", "u", "s", ctx, state_begin=_INTERNAL_STATE, state_end=_INTERNAL_STATE)
+
+        assert _state_attribute(span, "state.begin") == _VISIBLE_STATE
+        assert _state_attribute(span, "state.end") == _VISIBLE_STATE
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_trace_cancellation_filters_state(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        trace_cancellation(
+            "app",
+            "u",
+            "s",
+            ctx,
+            reason="cancel",
+            state_begin=_INTERNAL_STATE,
+            state_partial=_INTERNAL_STATE,
+        )
+
+        assert _state_attribute(span, "state.begin") == _VISIBLE_STATE
+        assert _state_attribute(span, "state.partial") == _VISIBLE_STATE
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_trace_agent_filters_state(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        trace_agent(ctx, state_begin=_INTERNAL_STATE, state_end=_INTERNAL_STATE)
+
+        assert _state_attribute(span, "state.begin") == _VISIBLE_STATE
+        assert _state_attribute(span, "state.end") == _VISIBLE_STATE
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_trace_tool_call_filters_state(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        tool = MagicMock()
+        tool.name = "my_tool"
+        tool.description = "A test tool"
+        func_resp = _make_function_response()
+        event = _make_event(content=_make_content(parts=[_make_part(function_response=func_resp)]))
+
+        trace_tool_call(
+            tool=tool,
+            args={},
+            function_response_event=event,
+            state_begin=_INTERNAL_STATE,
+            state_end=_INTERNAL_STATE,
+        )
+
+        assert _state_attribute(span, "state.begin") == _VISIBLE_STATE
+        assert _state_attribute(span, "state.end") == _VISIBLE_STATE
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_trace_merged_tool_calls_filters_state(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        event = MagicMock()
+        event.model_dumps_json = MagicMock(return_value="{}")
+
+        trace_merged_tool_calls(
+            response_event_id="re-1",
+            function_response_event=event,
+            state_begin=_INTERNAL_STATE,
+            state_end=_INTERNAL_STATE,
+        )
+
+        assert _state_attribute(span, "state.begin") == _VISIBLE_STATE
+        assert _state_attribute(span, "state.end") == _VISIBLE_STATE
+
+    def teardown_method(self):
+        set_trpc_agent_span_name("trpc.python.agent")
