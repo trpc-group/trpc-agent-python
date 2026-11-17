@@ -106,6 +106,10 @@ agent-claude = [
     "fastapi>=0.95.0",
 ]
 
+dsh = [
+    "deepseek-harness-sdk>=0.2.1rc2",
+]
+
 eval = [
     "pytest",
     "pytest-asyncio",
@@ -164,6 +168,7 @@ all = [
     "langchain_tavily",
     "ag-ui-protocol>=0.1.8",
     "claude-agent-sdk>=0.1.3,<0.1.64",
+    "deepseek-harness-sdk>=0.2.1rc2",
     "pytest",
     "pytest-asyncio",
     "rouge-score",

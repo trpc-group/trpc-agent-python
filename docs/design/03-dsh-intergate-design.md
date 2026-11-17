@@ -94,8 +94,8 @@ DSH 目前还是 developer preview，插件和协议仍在快速迭代。DSHAgen
                 │                              │
                 │ session/trpc-prompt          │ read/write
                 │   sessionId + contentBlocks  │ dsh jsonl
-                │   + jsonl + version          │
-                │   + model + metadata         ▼
+                │   + jsonl + version + cwd    │
+                │   + model + meta             ▼
                 │                          ┌──────────────────────────────┐
                 │                          │ SessionService               │
                 │                          │                              │
@@ -109,12 +109,13 @@ DSH 目前还是 developer preview，插件和协议仍在快速迭代。DSHAgen
 │ DSHProcess                                                   │
 │                                                              │
 │ trpc-jsonrpc-server                                          │
-│   ├── session/trpc-prompt   载入 jsonl，执行一轮             │
+│   ├── session/trpc-prompt   首轮 create / 后续 resume        │
 │   ├── session/trpc-cancel   中断当前轮                       │
 │   └── 通知：assistant.delta / event / status                 │
 │                                                              │
 │ trpc-session-backend                                         │
-│   ├── 从请求 jsonl 构建 session                              │
+│   ├── 首轮 create：接收 DSH header                           │
+│   ├── 后续轮从请求 jsonl 构建 session                        │
 │   ├── append 更新内存                                        │
 │   └── flush 导出 jsonl                                       │
 │                                                              │
@@ -143,19 +144,22 @@ DSH 目前还是 developer preview，插件和协议仍在快速迭代。DSHAgen
    │                     │                     │                         │
    │                     │ get_state(sessionId)│                         │
    │                     ├────────────────────►│                         │
-   │                     │◄── {jsonl,version} ─┤                         │
+   │                     │◄── {jsonl,version} ─┤  （首轮 jsonl 为空）     │
    │                     │                     │                         │
    │                     │ session/trpc-prompt │                         │
    │                     │ { sessionId,        │                         │
    │                     │   contentBlocks,    │                         │
    │                     │   jsonl, version,   │                         │
-   │                     │   model, metadata } │                         │
+   │                     │   cwd?, model,      │                         │
+   │                     │   meta }            │                         │
    │                     ├─────────────────────┼────────────────────────►│
-   │                     │                     │                         ├── backend 载入 jsonl
-   │                     │                     │                         ├── resume / 复用 agent
+   │                     │                     │                         ├── jsonl 为空?
+   │                     │                     │                         │   ├─ create
+   │                     │                     │                         │   └─ seed + resume
    │                     │                     │                         ├── agent.model.select(model)
    │                     │                     │                         ├── agent.followup(input)
-   │                     │◄── {messageId} ─────┼─────────────────────────┤ receipt
+   │                     │◄── {messageId, ─────┼─────────────────────────┤ receipt
+   │                     │    jsonl?, version?}│                         │
    │                     │◄── session.assistant.delta ───────────────────┤  流式 chunk
    │◄── tRPC Event ──────┤                     │                         │
    │                     │◄── session.event(tool/call) ──────────────────┤
@@ -213,106 +217,216 @@ $DSH_HOME/profiles/my-agent/
 
 `--from-default-profile` 是破坏性重置：目标 profile 已存在时会被重建，第一次创建时用即可。
 
-**创建 DSHAgent。**
+**快速示例。**
 
-把 profile 目录传给 `DSHAgent`：
+模型和 profile 一起放在 `DSHConfig` 里：
 
 ```python
-from trpc_agent_sdk.agents import DSHAgent
-from trpc_agent_sdk.configs import DSHConfig
-from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.server.agents.dsh import DSHAgent
+from trpc_agent_sdk.server.agents.dsh import DSHConfig
+from trpc_agent_sdk.server.agents.dsh import DSHModel
 
 agent = DSHAgent(
     name="my_agent",
-    dsh_config=DSHConfig(
-        profile_dir="dsh-home/profiles/my-agent",
-        env={"OPENAI_API_KEY": "..."},
+    dsh_conf=DSHConfig(
+        profile="my-agent",
+        dsh_home="dsh-home",
+        model=DSHModel(
+            provider="openai",
+            model="deepseek-chat",
+            base_url="https://gateway.example/v1",
+            api_key="...",
+        ),
     ),
-    model=OpenAIModel(model_name="deepseek-chat"),
 )
 ```
 
-`profile_dir` 支持绝对路径和相对路径；相对路径按 **Python 进程的 cwd** 解析，默认 `DSHConfig()` 使用相对路径 `"profiles/sdk"`。`dsh_home`、`cwd` 同样支持相对路径；不填 `dsh_home` 时会从 `profile_dir` 推导，不填 `cwd` 时用 Python 进程 cwd。`DSHRuntime` 从 profile 路径推导 profile 名，启动 `dsh --profile <name>`。
+**配置 DSHConfig。**
 
-**模型怎么选。**
+`DSHConfig` 分三组：启动参数、工作目录、模型。字段按需填写，常用字段如下：
 
-`model` 支持三种写法：
+| 字段 | 作用 | 说明 / 示例 |
+|---|---|---|
+| `dsh_home` | DSH 的 home 根目录 | `profiles/`、`attachments/`、`storages/` 都在下面；不填时用 `DSH_HOME` |
+| `profile` | profile 名字，不是路径 | `profile="my-agent"` 对应 `<dsh_home>/profiles/my-agent` |
+| `dsh_bin` | 自定义 dsh 可执行文件 | 不填时用 SDK 自带的 runtime |
+| `patches` | 额外的 DSH patch 文件 | 例如 `patches=("my.patch.yml",)` |
+| `env` | 给 dsh 子进程的额外环境变量 | 例如代理、自定义凭据 |
+| `runtime_cwd` | dsh 进程的工作目录，也是新会话的默认 cwd | 不填时用 Python 进程 cwd |
+| `initialize_timeout_seconds` | 启动握手的超时时间 | 秒 |
+| `request_timeout_seconds` | 单次请求等待 DSH 响应的超时时间 | 秒；`None` 表示不设上限 |
+| `shutdown_timeout_seconds` | 关闭 DSH 进程的超时时间 | 秒 |
+| `model` | 模型和网关配置 | `DSHModel(...)`；`None` 表示由 DSH profile 决定 |
 
-| 写法 | 行为 |
+`DSHModel` 的字段：
+
+| 字段 | 作用 |
 |---|---|
-| `model=OpenAIModel(...)` | DSHAgent 把它转成 `DSHModelSpec`，随每轮 `session/trpc-prompt` 发给 dsh，覆盖 profile 默认模型 |
-| `model=model_factory` | 每次 run 用 `RunConfig.custom_data` 调回调，动态决定模型 |
-| `model=None` | 不覆盖，使用 DSH profile / cordis 里配置的默认模型 |
+| `provider` / `model` | DSH 的 provider id 和模型 id，例如 `provider="openai"`、`model="deepseek-chat"` |
+| `reasoning_effort` / `max_tokens` | 可选的推理强度和输出 token 上限 |
+| `base_url` / `api_key` | 网关地址和凭据；profile 或 `DSHConfig.env` 已经提供时可以省略 |
 
-如果模型已经在 profile 的 `cordis.yml` 或 `cordis.patch.yml` 里配好了，就把 `model` 设为 `None`：
+一个完整例子：
 
 ```python
-agent = DSHAgent(
-    name="my_agent",
-    dsh_config=DSHConfig(
-        profile_dir="dsh-home/profiles/my-agent",
+DSHConfig(
+    profile="my-agent",
+    dsh_home="/data/dsh-home",
+    runtime_cwd="/workspace/shared",
+    env={"HTTP_PROXY": "http://proxy:8080"},
+    model=DSHModel(
+        provider="openai",
+        model="deepseek-chat",
+        base_url="https://gateway.example/v1",
+        api_key=os.environ["GATEWAY_API_KEY"],
     ),
-    model=None,
 )
 ```
 
-回调形式：
+`dsh_home` 的目录结构：
+
+```text
+/data/dsh-home/                    ← DSHConfig.dsh_home
+├── profiles/
+│   └── my-agent/                  ← DSHConfig.profile="my-agent"
+│       ├── package.json           # bundle 列表
+│       ├── cordis.yml             # profile 的插件组合
+│       └── cordis.patch.yml       # 业务自己的 patch / 插件
+├── attachments/                   # DSH runtime 写入的图片/文件附件
+└── storages/                      # DSH runtime 的派生缓存（例如会话标题）
+```
+
+- `profiles/<name>/` 是用户主要编辑的目录。
+- `attachments/`、`storages/` 由 DSH runtime 自己维护，不需要手工改，也不建议提交到 git。
+- 一般把整个 `dsh-home/` 加进 `.gitignore`。
+
+`runtime_cwd` 和 `DSHRunInput.cwd` 的区别：
+
+- `runtime_cwd`：所有新会话的默认 cwd。
+- `DSHRunInput.cwd`：在 `custom_dsh_input` 里按用户或请求覆盖；只对新建会话生效。
+- `cwd` 必须是已存在的绝对路径。
+
+`model=None` 时不强制指定模型，由 DSH profile 的默认配置决定；需要固定模型时填 `DSHModel`。
+
+**单轮定制：custom_dsh_input。**
+
+`custom_dsh_input` 是每轮开始前的可选回调，用来按用户或按请求调整这一轮的运行参数。常见用法是给每个用户设置独立 workspace；默认 model 来自 `DSHConfig.model`，也可以在这里做单轮覆盖。
 
 ```python
-async def model_factory(custom_data):
-    return OpenAIModel(
-        model_name=custom_data.get("model", "deepseek-chat"),
-    )
+import json
+from dataclasses import asdict
+from dataclasses import dataclass
+
+from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.server.agents.dsh import DSHRunInput
+
+
+@dataclass
+class TenantContext:
+    tenant_id: str
+    trace_id: str
+
+
+async def custom_dsh_input(
+    ctx: InvocationContext,
+    run_input: DSHRunInput,
+) -> DSHRunInput:
+    # 按 user 隔离；要按 session 隔离就把 user_id 换成 session.id
+    cwd = WORKSPACE_ROOT / ctx.user_id
+    cwd.mkdir(parents=True, exist_ok=True)
+    run_input.cwd = str(cwd)
+
+    # 业务对象先序列化成 JSON 字符串；插件侧再 JSON.parse
+    tenant = TenantContext(tenant_id=ctx.user_id, trace_id=ctx.invocation_id)
+    run_input.meta["tenant"] = json.dumps(asdict(tenant), ensure_ascii=False)
+    return run_input
+
 
 agent = DSHAgent(
     name="my_agent",
-    dsh_config=DSHConfig(
-        profile_dir="dsh-home/profiles/my-agent",
-        env={"OPENAI_API_KEY": "..."},
+    dsh_conf=DSHConfig(
+        profile="my-agent",
+        dsh_home="dsh-home",
+        model=DSHModel(provider="openai", model="deepseek-chat"),
     ),
-    model=model_factory,
+    custom_dsh_input=custom_dsh_input,
 )
 ```
 
-> `OpenAIModel` 的转换只带 `provider` / `model` 选择；`api_key` / `base_url` 不通过 stdio JSON-RPC 传输，DSH 侧的 provider 认证仍由 profile/cordis 或环境变量提供。模型名和 provider 要能在 DSH profile 里解析；`OpenAIModel` 默认映射到 `openai` provider，profile 里要挂对应的 provider 插件和凭据。
+`run_input.meta` 是 `dict[str, Any]`；如果值是业务对象，先 `json.dumps` 成字符串放进 `meta`，插件里再 `JSON.parse` 取出来。回调必须返回一个 `DSHRunInput`；即使只改字段，也要 `return run_input`。
+
+`run_input` 是 `DSHRunInput`，可以按需修改这些字段：
+
+| 字段 | 作用 | 常见场景 |
+|---|---|---|
+| `session_id` | DSH 会话 id | 一般不用改；改的话要保证和 JSONL header 的 `id` 一致 |
+| `content_blocks` | 本轮发给 DSH 的内容块 | 处理 `file_data` URI，或追加已有的 attachment |
+| `cwd` | 新会话的工作目录 | 按 user / 租户隔离 workspace；只对首轮生效 |
+| `jsonl` | 会话快照 | 默认已从 state 填好；首轮是空字符串，后续轮是上一轮快照。业务要接管时直接赋值 |
+| `version` | 会话快照的格式版本 | 默认已填好；如果换了 `jsonl`，框架以新 header 为准 |
+| `model` | 单轮模型覆盖 | 某个请求临时换模型 |
+| `meta` | 透传给业务插件的元数据 | 业务对象先 `json.dumps` 成字符串，JS 插件里 `JSON.parse` |
+
+框架会自动处理 `Content` 里的内容，用户通常只需要关心哪些 part 能直接用：
+
+| Content part | 用户需要做什么 |
+|---|---|
+| `Part.text` | 不用处理 |
+| `Part.inline_data`（图片/文件） | 不用处理；框架会自动处理图片/文件的传递和存储 |
+| `Part.file_data`（URI） | 在 `custom_dsh_input` 里自己读文件并构造 content block；没有 callback 时会报错 |
 
 **在 profile 里开发插件。**
 
-用户可以直接在 profile 目录里加自己的 DSH 插件：
+用户可以直接在 profile 目录里加自己的 DSH 插件。下面这个 policy 插件从 `trpcRequestContext` 读取 `custom_dsh_input` 写入的 `meta`，反序列化后做 tenant 校验：
 
 ```text
 $DSH_HOME/profiles/my-agent/
 ├── cordis.patch.yml
 └── plugins/
-    └── tenant-tool.js
+    └── tenant-policy.js
 ```
 
 ```yaml
 # cordis.patch.yml
 - insert:
-    - id: tenant-tool
-      name: './plugins/tenant-tool.js'
+    - id: tenant-policy
+      name: './plugins/tenant-policy.js'
 ```
-
-插件可以通过 `trpcRequestContext` 拿到 trpc-agent 传入的 `custom_data`：
 
 ```js
-// 在 tool 的 execute(args, exec) 里
-const sessionId = String(exec.agent?.session.id ?? '')
-const metadata = ctx.get('trpcRequestContext')?.get(sessionId)?.metadata
+// plugins/tenant-policy.js
+export const name = 'tenant-policy'
+export const inject = ['tools', 'trpcRequestContext']
+
+export function apply(ctx) {
+  ctx.on('tools/pre-execute', (exec) => {
+    const sessionId = String(exec.agent?.session.id ?? '')
+
+    // 按 sessionId 从 side store 取出本轮 meta
+    const meta = ctx.get('trpcRequestContext')?.get(sessionId)?.meta
+
+    // meta.tenant 是 Python 侧 json.dumps 的字符串，这里反序列化
+    const tenant = JSON.parse(meta?.tenant ?? '{}')
+
+    if (tenant.tenant_id !== 'tenant-a') {
+      return { kind: 'deny', reason: 'tenant mismatch' }
+    }
+    return { kind: 'allow' }
+  })
+}
 ```
 
-完整的插件写法和 policy 例子见 `### trpc-request-context`。
+更多实现细节见 `### trpc-request-context`。
 
 **启动、运行和退出。**
 
 ```python
 import asyncio
 
-from trpc_agent_sdk.agents import DSHAgent
-from trpc_agent_sdk.configs import DSHConfig
+from trpc_agent_sdk.server.agents.dsh import DSHAgent
+from trpc_agent_sdk.server.agents.dsh import DSHConfig
+from trpc_agent_sdk.server.agents.dsh import DSHModel
 from trpc_agent_sdk.configs import RunConfig
-from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
@@ -322,11 +436,16 @@ from trpc_agent_sdk.types import Part
 async def main():
     agent = DSHAgent(
         name="my_agent",
-        dsh_config=DSHConfig(
-            profile_dir="dsh-home/profiles/my-agent",
-            env={"OPENAI_API_KEY": "..."},
+        dsh_conf=DSHConfig(
+            profile="my-agent",
+            dsh_home="dsh-home",
+            model=DSHModel(
+                provider="openai",
+                model="deepseek-chat",
+                base_url="https://gateway.example/v1",
+                api_key="...",
+            ),
         ),
-        model=OpenAIModel(model_name="deepseek-chat"),
     )
 
     # 进程启动：拉起 dsh、完成 initialize
@@ -372,57 +491,75 @@ DSHAgent 把一次 tRPC invocation 转成一轮 DSH run，再把 DSH 的输出�
 class DSHAgent(BaseAgent):
     name: str
     description: str
-    dsh_config: DSHConfig
-    model: LLMModel | ModelFactory | None
+    dsh_conf: DSHConfig                  # 框架层配置，SDK 细节不暴露
+    custom_dsh_input: Callable[
+        [InvocationContext, DSHRunInput],
+        Awaitable[DSHRunInput],
+    ] | None
     _runtime: DSHRuntime
-    _state_store: DshSessionStateStore
 
     def __init__(
         self,
         name: str,
-        dsh_config: DSHConfig | None = None,
-        model: LLMModel | ModelFactory | None = None,
+        dsh_conf: DSHConfig,
         *,
         description: str = '',
+        custom_dsh_input: Callable[
+            [InvocationContext, DSHRunInput],
+            Awaitable[DSHRunInput],
+        ] | None = None,
     ) -> None:
-        super().__init__(name=name, description=description)
-        self.dsh_config = dsh_config or DSHConfig()
-        self.model = model
-        self._runtime = DSHRuntime(self.dsh_config)
-        self._state_store = DshSessionStateStore()
+        super().__init__(name=name, description=description,
+                         dsh_conf=dsh_conf,
+                         custom_dsh_input=custom_dsh_input)
+        self._runtime = DSHRuntime(self.dsh_conf)
 
     async def init(self) -> None:
-        # 拉起 dsh 子进程，完成 initialize 握手
-        # 静态 LLMModel 转成默认 route；ModelFactory 等每轮再解析
-        await self._runtime.init(default_model=...)
+        # 拉起 dsh 子进程，完成 initialize 握手。
+        # 模型来自 DSHConfig.model；为 None 时由 DSH profile 决定。
+        await self._runtime.init()
 
     async def destroy(self) -> None:
         # shutdown，回收子进程
         await self._runtime.destroy()
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        state = self._state_store.load(ctx.session)  # 上一轮 JSONL
-        req = ...  # TrpcPromptRequest：本轮输入 + JSONL + model + custom_data
+        state, run_input = await self._prepare_run(ctx)
 
         cancel_event = await ctx.get_cancel_event()
+        state_event: Event | None = None
         try:
-            async for frame in self._runtime.run(req, cancel_event=cancel_event):
+            async for frame in self._runtime.run(run_input, cancel_event=cancel_event):
+                if frame.kind == 'snapshot':
+                    state.replace(frame.data['jsonl'], frame.data['version'])
+                    continue
                 if frame.kind == 'event':
-                    self._state_store.append_event(state, frame.data)  # session.event → 本地 JSONL
+                    state.append_event(frame.data)  # session.event → 本地 JSONL
                 event = to_trpc_event(frame)
                 if event is not None:
                     yield event  # delta / event → tRPC Event
         finally:
             # 正常结束和被取消都写回；取消时包含 partial 输出
-            ctx.actions.state_delta[DSH_SESSION_STATE_KEY] = self._state_store.state_delta(state)
+            state_event = state.to_session(ctx, author=self.name)
 
+        # 非 partial、不可见的 Event 把 state_delta 带进 SessionService
+        if state_event is not None:
+            yield state_event
         await ctx.raise_if_cancelled()
+
+    async def _prepare_run(self, ctx: InvocationContext) -> tuple[DSHState, DSHRunInput]:
+        state = DSHState.from_session(ctx.session)
+        run_input = self._default_run_input(ctx, state)  # 所有字段就绪
+        run_input = await self._apply_custom_dsh_input(ctx, run_input)
+        state.sync_run_input(run_input)  # callback 改过 jsonl 时以新 header 为准
+        _validate_content_blocks(run_input.content_blocks)
+        return state, run_input
 
     # 不定义 cancel：取消统一走 Runner.cancel_run_async()，
     # _run_async_impl 把 ctx 的 cancel event 交给 DSHRuntime。
 ```
 
-`init()` / `destroy()` 是应用生命周期，不是每轮调用。`_run_async_impl` 只做编排：从 `SessionService` 取上一轮 JSONL，组装本轮 `TrpcPromptRequest`，消费 `DSHRuntime.run()` 的 frame，再把新的 JSONL 写回 `state_delta`。`session.event` 的 JSONL append 由 `DshSessionStateStore` 负责，模型解析和 `custom_data` 填充都在组装请求时完成。
+`init()` / `destroy()` 是应用生命周期，不是每轮调用。`_run_async_impl` 只做编排：`_prepare_run()` 先用 `DSHState.from_session()` 建好本轮 state，再构造所有字段就绪的 `DSHRunInput`，然后交给可选的 `custom_dsh_input`，最后用 `state.sync_run_input()` 对齐；`state.to_session()` 统一负责写回 `ctx.state` 并返回不可见的 state Event。`DSHRunInput` 本身就是 `session/trpc-prompt` 的请求对象，不再额外定义 `TrpcPromptRequest`；`session.event` 的 JSONL append 由每轮的 `DSHState` 负责。
 
 取消走 `Runner.cancel_run_async()`：它置位当前 invocation 的 cancel event，`_run_async_impl` 通过 `ctx.get_cancel_event()` 拿到后交给 `DSHRuntime.run()`。runtime 发现置位就发 `session/trpc-cancel`，并继续读到 `status idle`，所以中断产生的 partial 输出仍会通过 `session.event` 回来。写回 state 之后 `ctx.raise_if_cancelled()` 抛出 `RunCancelledException`，Runner 按正常取消流程补发 `AgentCancelledEvent` 并做 session 清理。
 
@@ -442,16 +579,16 @@ class DSHAgent(BaseAgent):
 │ └── plugins/             │      │ │ 用户 Profile + 框架 patch              │ │      │     │ ├── session.assistant.delta                        │         │
 │                          │      │ │ 构造 trpc-cordis.patch.yaml（覆盖）    │ │      │     │ │   ← agent/assistant-stream                       │         │
 └──────────────────────────┘      │ └────────────────────────────────────────┘ │      │     │                                                    │         │
-                                  │ run(req)      ── session/trpc-prompt       ├──────┼────►│ ├── session/trpc-prompt ← DSHRuntime.run           │         │
+                                  │ run(run_input) ── session/trpc-prompt     ├──────┼────►│ ├── session/trpc-prompt ← DSHRuntime.run           │         │
                                   │ cancel(sessionId) ── session/trpc-cancel   ├──────┼────►│ ├── session/trpc-cancel ← DSHRuntime.cancel        │         │
                                   │ destroy()     ── shutdown                  ├──────┼────►│ └── shutdown          ← DSHRuntime.destroy         │         │
                                   │                                            │      │     └────────────────────────────────────────────────────┘         │
                                   │ 内部：                                     │      │                   ▲ 被使用                       ▲ 被使用          │
                                   │ ├── dsh 子进程         spawn / stop        │      │     ┌────────────────────────────┐ ┌────────────────────────────┐  │
-                                  │ ├── JsonRpcClient request() / subscribe()  │      │     │ trpc-session-backend 插件  │ │ trpc-request-context 插件  │  │
+                                  │ ├── DshClient request() / subscribe()     │      │     │ trpc-session-backend 插件  │ │ trpc-request-context 插件  │  │
                                   │ └── sessionId → Queue（client 内部）       │      │     │                            │ │                            │  │
                                   │                                            │      │     └────────────────────────────┘ └────────────────────────────┘  │
-                                  └────────────────────────────────────────────┘      │                                                  ▼ metadata        │
+                                  └────────────────────────────────────────────┘      │                                                  ▼ meta            │
                                                                                       │                                    ┌────────────────────────────┐  │
                                                                                       │                                    │ 用户插件                   │  │
                                                                                       │                                    │ business tools             │  │
@@ -470,7 +607,7 @@ Python 侧的 `DSHRuntime` 是 DSHAgent 内部的运行时层，只负责和 JS 
 |---|---|---|
 | `init()` | `initialize` | 拉起 runtime，握手 |
 | `destroy()` | `shutdown` | 停止 runtime，回收进程 |
-| `run(req, cancel_event)` | `session/trpc-prompt` / `session/trpc-cancel` | 提交一轮请求；cancel_event 置位时发取消通知，读到 idle 再返回 |
+| `run(run_input, cancel_event)` | `session/trpc-prompt` / `session/trpc-cancel` | 提交一轮请求；cancel_event 置位时发取消通知，读到 idle 再返回 |
 | `cancel(sessionId)` | `session/trpc-cancel` | 单向通知，`run()` 内部在取消时调用 |
 
 `session.assistant.delta` 是 server → client 的推送，不是 Python 方法；它是唯一新增的通知，`session.event` / `session.status` 复用官方。
@@ -485,15 +622,19 @@ DSHRuntime (Python)            DSHProcess                          DSH AgentLoop
    │ rpc.subscribe(sessionId)     │                                      │
    │ session/trpc-prompt          │                                      │
    │ { sessionId, contentBlocks,  │                                      │
-   │   jsonl, version, model,     │                                      │
-   │   metadata }                 │                                      │
+   │   jsonl, version, cwd,       │                                      │
+   │   model, meta }              │                                      │
    ├─────────────────────────────►│                                      │
    │                              │ RunManager.start(sessionId)          │
-   │                              │ backend.seed(jsonl, version)         │
-   │                              │ agents.resume(agentOptions)          │
+   │                              │ jsonl 为空?                          │
+   │                              │  ├─ 是 → agents.create(              │
+   │                              │  │        { meta: { cwd } })         │
+   │                              │  └─ 否 → backend.seed(jsonl, version)│
+   │                              │           + agents.resume(...)       │
    │                              │ subscribe assistant-stream           │
    │                              │ agent.followup(userMessage)          │
-   │◄── receipt {messageId} ──────┤                                      │
+   │◄── receipt {messageId,       │                                      │
+   │    jsonl?, version?} ────────┤                                      │
    │                              │◄── assistant-stream chunk ───────────┤
    │◄── session.assistant.delta ──┤                                      │
    │                              │◄── session/event ────────────────────┤
@@ -507,7 +648,7 @@ DSHRuntime (Python)            DSHProcess                          DSH AgentLoop
    ├── append events → jsonl      │                                      │
 ```
 
-`run()` 先 `rpc.subscribe(sessionId)` 再发 prompt，收到 `status idle` 后退出订阅；这样 receipt 之后紧接着到达的通知不会落在没有队列的 session 上。`session.event` 的 `event` 直接 append 到本地 JSONL，`turn/end` 之后用 `status idle` 收尾。
+`run()` 先 `rpc.subscribe(sessionId)` 再发 prompt，收到 `status idle` 后退出订阅；这样 receipt 之后紧接着到达的通知不会落在没有队列的 session 上。首轮 `jsonl` 为空，`agents.create()` 由 DSH 建 header；后续轮 `backend.seed()` + `agents.resume()` 恢复。`session.event` 的 `event` 直接 append 到本地 JSONL，`turn/end` 之后用 `status idle` 收尾。
 
 取消：
 
@@ -532,7 +673,7 @@ Runner.cancel_run_async         DSHRuntime (Python)           DSHProcess        
 
 `session/trpc-cancel` 之后 runtime 不立刻返回，而是继续消费通知直到 `status idle`，把中断产生的 `session.event` 一并 append 到本地 JSONL，然后再写回 state。之后 `ctx.raise_if_cancelled()` 让 Runner 走正常的取消收尾。
 
-一个 session 同一时刻只允许一轮：`RunManager` 维护 `sessionId → RunSession`，重复的 `session/trpc-prompt` 直接回 `session busy`，一轮结束（`status idle`）后再从 map 里删掉。不同 session 各自有 `RunSession`，可以并发；`JsonRpcClient` 内部按 `sessionId` 把通知分发到各自的队列。这样 `sessionId` 本身就是 run 的路由键，不需要额外的 `runId`。
+一个 session 同一时刻只允许一轮：`RunManager` 维护 `sessionId → RunSession`，重复的 `session/trpc-prompt` 直接回 `session busy`，一轮结束（`status idle`）后再从 map 里删掉。不同 session 各自有 `RunSession`，可以并发；`DshClient` 的 notification 分发线程按 `sessionId` 把通知投递到各自的 asyncio 队列。这样 `sessionId` 本身就是 run 的路由键，不需要额外的 `runId`。
 
 **类与接口。**
 
@@ -541,71 +682,106 @@ Runner.cancel_run_async         DSHRuntime (Python)           DSHProcess        
 ```text
 DSHAgent
 ├── DSHRuntime
-│   └── JsonRpcClient
-├── DshSessionStateStore
+│   └── DshClient
+├── DSHState（每轮局部对象）
 └── to_trpc_event()
 ```
 
 `DSHAgent` 的类定义见本节开头；下面是它依赖的类型和 runtime 接口。
 
 ```python
-ModelFactory = Callable[[dict[str, Any]], Awaitable[LLMModel]]
-
-@dataclass(frozen=True)
-class DSHConfig:
-    profile_dir: str = 'profiles/sdk'
-    dsh_home: str | None = None
-    cwd: str | None = None
-    dsh_bin: str = 'dsh'
-    env: dict[str, str] = field(default_factory=dict)
-    patches: tuple[str, ...] = ()
-
-@dataclass(frozen=True)
-class DSHModelSpec:
+@dataclass
+class DSHModel:
     provider: str
     model: str
     reasoning_effort: str | None = None
     max_tokens: int | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+
+    def to_spec(self) -> DSHModelSpec: ...
 
 @dataclass
-class DshSessionState:
-    jsonl: str
-    version: int
+class DSHConfig:
+    dsh_bin: str | None = None
+    profile: str = 'sdk'
+    patches: tuple[str, ...] = ()
+    dsh_home: str | None = None
+    env: dict[str, str] = field(default_factory=dict)
+    initialize_timeout_seconds: float = 30.0
+    request_timeout_seconds: float | None = None
+    shutdown_timeout_seconds: float | None = 1.0
+    runtime_cwd: str | None = None
+    model: DSHModel | None = None
 
-@dataclass(frozen=True)
-class Notification:
-    method: str
-    params: dict[str, Any]
+class DSHModelSpec(TypedDict):
+    provider: str
+    model: str
+    reasoningEffort: NotRequired[str]
+    maxTokens: NotRequired[int]
+
+@dataclass
+class DSHRunInput:
+    session_id: str
+    content_blocks: list[JsonObject]
+    cwd: str | None = None
+    jsonl: str | None = None
+    version: int | None = None
+    model: DSHModelSpec | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
+
+    def to_params(self) -> dict[str, object]: ...
+
+@dataclass
+class DSHState:
+    jsonl: str = ''
+    version: int = 4
+    event_count: int = field(init=False, repr=False)
+
+    def __post_init__(self) -> None: ...
+    @classmethod
+    def from_session(cls, session: Session) -> DSHState: ...
+    @classmethod
+    def from_jsonl(cls, jsonl: str, version: int) -> DSHState: ...
+    def sync_run_input(self, run_input: DSHRunInput) -> None: ...
+    def append_event(self, event: dict) -> None: ...
+    def replace(self, jsonl: str, version: int) -> None: ...
+    def to_session(self, ctx: InvocationContext, *, author: str) -> Event: ...
+
+# Notification 直接用 deepseek_harness.Notification（method + payload）
+Notification = HarnessNotification
 
 @dataclass(frozen=True)
 class Frame:
-    kind: Literal['delta', 'event', 'status']
+    kind: Literal['delta', 'event', 'status', 'snapshot']
     data: dict[str, Any]
 
 class DSHRuntime:
-    def __init__(self, config: DSHConfig) -> None: ...
-    async def init(self, default_model: DSHModelSpec | None = None) -> None: ...
+    def __init__(self, dsh_conf: DSHConfig) -> None: ...
+    async def init(self) -> None: ...
     async def destroy(self) -> None: ...
     async def run(
         self,
-        req: TrpcPromptRequest,
+        run_input: DSHRunInput,
         *,
         cancel_event: asyncio.Event | None = None,
     ) -> AsyncIterator[Frame]: ...
     async def cancel(self, session_id: str) -> None: ...
 
-class JsonRpcClient:
-    def __init__(self, stdin, stdout) -> None: ...
-    async def request(self, method: str, params: dict) -> dict: ...
+class DshClient:
+    def __init__(self, config: HarnessConfig) -> None: ...
+    async def start(self) -> None: ...
+    async def request(self, method: str, params: dict, *, response_model: type[BaseModel],
+                      timeout_seconds: float | None = None) -> Any: ...
+    def notify(self, method: str, params: dict | None = None) -> None: ...
+    async def initialize(self, *, cwd: str, model: dict | None,
+                         timeout_seconds: float) -> InitializeResponse: ...
     @asynccontextmanager
     async def subscribe(self, session_id: str) -> AsyncIterator[asyncio.Queue[Notification]]: ...
+    async def close(self) -> None: ...
 
-class DshSessionStateStore:
-    def load(self, session: Session) -> DshSessionState: ...
-    def append_event(self, state: DshSessionState, event: dict) -> None: ...
-    def state_delta(self, state: DshSessionState) -> dict: ...
-
-def to_trpc_event(frame: Frame) -> Event | None: ...
+def to_trpc_event(frame: Frame, *, invocation_id: str, author: str, branch: str | None,
+                  call_names: dict[str, str]) -> Event | None: ...
 ```
 
 `DSHAgent` 的构造参数：
@@ -613,51 +789,74 @@ def to_trpc_event(frame: Frame) -> Event | None: ...
 | 参数 | 类型 | 说明 |
 |---|---|---|
 | `name` | `str` | Agent 名称，传给 `BaseAgent` |
-| `dsh_config` | `DSHConfig \| None` | DSH runtime 配置；不传时用 `DSHConfig()` |
-| `model` | `LLMModel \| ModelFactory \| None` | 模型选择；`None` 表示用 profile 默认 |
+| `dsh_conf` | `DSHConfig` | 启动、workspace 和模型配置；必填 |
 | `description` | `str` | Agent 描述，可选 |
+| `custom_dsh_input` | `Callable[[InvocationContext, DSHRunInput], Awaitable[DSHRunInput]] \| None` | 单轮回调；必须返回 `DSHRunInput`，可改 cwd / model / jsonl / meta |
 
-`DSHConfig` 的字段：
+`DSHConfig` 的字段分三组：
 
-| 字段 | 默认值 | 说明 |
-|---|---|---|
-| `profile_dir` | `"profiles/sdk"` | profile 目录；支持绝对路径和相对路径 |
-| `dsh_home` | `None` | 不传时从 `profile_dir` 推导；支持绝对/相对路径 |
-| `cwd` | `None` | 写进 DSH session header 的工作目录；不传时用 Python 进程 cwd |
-| `dsh_bin` | `"dsh"` | dsh 可执行文件 |
-| `env` | `{}` | 传给 dsh 子进程的环境变量，例如 provider 的 API key |
-| `patches` | `()` | 额外的 DSH patch 文件，按 cwd 解析 |
+| 字段 | 用途 |
+|---|---|
+| `dsh_bin` / `profile` / `patches` / `dsh_home` / `env` / 三个 timeout | 原样映射到 `HarnessConfig` |
+| `runtime_cwd` | dsh 子进程的工作目录，也是新会话的默认 cwd；不填时用 Python 进程 cwd |
+| `model` | `DSHModel \| None`；模型和网关配置。`None` 表示由 DSH profile 决定，不生成 route |
 
-`profile_dir`、`dsh_home`、`cwd` 的相对路径都按 **Python 进程的 cwd** 解析；`profile_dir` 默认 `"profiles/sdk"`，即默认使用相对路径。`dsh_home` 不传时取 `profile_dir` 的 `parent.parent`，所以 `profiles/sdk` 对应的 `dsh_home` 就是 Python 进程 cwd。
+`DSHConfig` 和 `DSHRunInput` 都是普通 dataclass，不是 frozen；`DSHConfig` 允许构造后调整，`DSHRunInput` 允许 callback 原地改。`DSHConfig` 的调整要在构造 `DSHAgent` 之前完成；运行中改字段不会重启子进程。`DSHModel.api_key` 不出现在 `repr` 里，`DSHAgent.dsh_conf` 也设为 `exclude=True`。
 
-对应 DSH SDK 的 `DeepSeekHarnessConfig`：`dsh_home` / `cwd` / `dsh_bin` / `env` / `patches` 透传；`profile_dir` 拆成 `profile` 名和 `DSH_HOME`；`model` 不放进 config，由 DSHAgent 每轮通过 `session/trpc-prompt` 传。
+`dsh_home` 是 DSH 的 home 根目录，`profile` 只是 profile 的名字，两者按 DSH 的目录约定拼出真正的 profile 目录：
+
+```text
+profile_dir = <dsh_home>/profiles/<profile>
+```
+
+例如：
+
+```python
+DSHConfig(
+    dsh_home="/workspace/work/trpc-agent-python/examples/dsh_agent/dsh-home",
+    profile="custom",
+)
+```
+
+对应的目录结构：
+
+```text
+examples/dsh_agent/
+└── dsh-home/                         ← dsh_home
+    ├── profiles/
+    │   └── custom/                   ← profile_dir
+    │       ├── package.json
+    │       ├── cordis.yml
+    │       └── cordis.patch.yml
+    ├── attachments/
+    └── storages/
+```
+
+`profile` 不要写成路径；写成 `profile="dsh-home/profiles/custom"` 会拼成 `dsh-home/profiles/dsh-home/profiles/custom`。`profile_dir` 必须提前存在，否则 `DSHRuntime.init()` 会抛 `FileNotFoundError`。
+
+`dsh_home` 不填时读取环境变量 `DSH_HOME`；两者都没有就直接 `ValueError`。`dsh_home` 的相对路径按 **Python 进程的 cwd** 解析。`runtime_cwd` 会 `expanduser/resolve`；`DSHRunInput.cwd` 可能是远端 sandbox 路径，原样交给 DSH 的 `meta.cwd`，由 DSH 写进 header，不做本地 `Path.resolve()`。
 
 `DSHAgent` 的方法职责：
 
 | 方法 | 职责 |
 |---|---|
-| `__init__` | 保存 `dsh_config` / `model`，创建 `DSHRuntime` 和 `DshSessionStateStore` |
-| `init()` | 转调 `DSHRuntime.init()`，拉起 dsh、完成握手；幂等 |
+| `__init__` | 保存 `dsh_conf` / `custom_dsh_input`，创建 `DSHRuntime` |
+| `init()` | 转调 `DSHRuntime.init()`，拉起 dsh、完成握手；模型来自 `DSHConfig.model`；幂等 |
 | `destroy()` | 转调 `DSHRuntime.destroy()`，shutdown、回收子进程；幂等 |
-| `_run_async_impl(ctx)` | 组装 `TrpcPromptRequest`、消费 `Frame`、yield tRPC Event、写回 JSONL state |
+| `_default_run_input(ctx, state)` | 用 state 的 `jsonl` / `version` 组装所有字段就绪的 `DSHRunInput` |
+| `_prepare_run(ctx)` | 建 state → 默认 input → `custom_dsh_input` → `sync_run_input` → 校验 content blocks |
+| `_run_async_impl(ctx)` | 消费 `Frame`、yield tRPC Event；结束时 `state.to_session()` 写回并返回 state Event |
 
-`DSHAgent.init()` / `destroy()` 分别转调 `DSHRuntime.init()` / `destroy()`，并且是幂等的；应用进程启动时调 `init()`，退出前调 `destroy()`。
+`DSHRuntime.init()` 负责发 `initialize`。模型来自 `DSHConfig.model`：
 
-`DSHRuntime.init(default_model=None)` 负责发 `initialize`：`default_model` 是启动时的默认 route；传 `None` 时由 DSH profile / cordis 的默认模型决定。`DSHAgent` 只有在 `model` 是静态 `LLMModel` 时才把它转成 `DSHModelSpec` 传给 `init()`；`ModelFactory` 要等每轮拿到 `custom_data` 才能解析，所以 init 阶段不解析它。
+- `DSHConfig.model` 的 provider 是 `openai` / `anthropic` 时，`DSHRuntime` 生成对应的 `llm-pi-ai` route，`models` 里放模型 id，`baseURL` / `apiKeyEnv` 来自 `DSHModel.base_url` / `api_key`。
+- provider 不在 `openai` / `anthropic`，或 `DSHConfig.model=None` 时，route 由用户 profile 提供。
 
-`model` 支持三种形式：
+`DSHModel.to_spec()` 生成 `DSHModelSpec`，同时用于 `initialize.model` 和每轮 `DSHRunInput.model` 的默认值；`custom_dsh_input` 可以单轮覆盖 `DSHRunInput.model`。`base_url` / `api_key` 不通过 JSON-RPC 传，而是注入 DSH 子进程的 `DEEPSEEK_BASE_URL` / `DEEPSEEK_API_KEY`，供生成的 route 使用。
 
-| 传入 | 行为 |
-|---|---|
-| `None` | 返回 `None`，`session/trpc-prompt` 不带 `model`，使用 DSH profile / cordis 里的默认模型 |
-| `LLMModel`（例如 `OpenAIModel`） | 转成 `DSHModelSpec`，随本轮 prompt 发送，DSH 侧按轮选择模型 |
-| `ModelFactory` | 每次 run 用 `ctx.run_config.custom_data` 调用回调，拿到 `LLMModel` 后再转成 `DSHModelSpec` |
+`Notification` 是 `{ method, payload }`；`DshClient` 从 `payload["sessionId"]` 取路由键。`Frame` 是内部归一化类型：`delta`（助手流）、`event`（`session.event`）、`status`（`session.status`）、`snapshot`（JSONL 对账）；不再有 `done` / `error` frame。`DSHState.append_event()` 把 `session.event` 里的 `event` 按 `seq` append 到本地 JSONL，`to_session()` 把 `{ jsonl, version }` 写回 `SessionService` 并返回 state Event。`DSHState.sync_run_input()` 用于 callback 直接替换 `jsonl` 后的状态对齐。
 
-v1 的 `OpenAIModel` 转换只映射 `provider='openai'` 和 `model=model.name`；`api_key` / `base_url` 不通过 JSON-RPC 传，仍由 DSH profile 的 provider 配置或 `DSHConfig.env` 提供（`env` 会注入 dsh 子进程）。
-
-`Notification` 是 `{ method, params }`；`JsonRpcClient` 从 `params.sessionId` 取路由键。`Frame` 是内部归一化类型：`delta`（助手流）、`event`（`session.event`）、`status`（`session.status`）；不再有 `done` / `error` frame。`DshSessionStateStore.append_event()` 把 `session.event` 里的 `event` 按 `seq` append 到本地 JSONL，`state_delta()` 输出 `{ jsonl, version }` 写回 `SessionService`。
-
-关系：`DSHAgent` 持有 `DSHRuntime` 和 `DshSessionStateStore`；`DSHRuntime` 自己负责 spawn/stop dsh 子进程，并持有 `JsonRpcClient`。`JsonRpcClient.subscribe(session_id)` 是唯一的长驻通知入口：内部按 `sessionId` 维护队列，进入时注册、退出时注销。`DSHRuntime.run()` 用 `async with rpc.subscribe(session_id) as queue` 订阅本 session，再发 `session/trpc-prompt`，之后从 `queue` 持续取 `Notification` 并 yield `Frame`，直到 `session.status idle`。`to_trpc_event()` 和 `DshSessionStateStore` 放在 Agent 层，不塞进 `DSHRuntime`。
+关系：`DSHAgent` 持有 `DSHRuntime`；每轮在 `_run_async_impl` 里创建 `DSHState`。`DSHRuntime` 自己负责 spawn/stop dsh 子进程，并持有 `DshClient`。`DshClient` 用官方 `HarnessClient` 启动进程、走 `session/trpc-prompt`；它额外起一个 notification 分发线程，从 `HarnessClient.next_notification()` 读取通知，按 `sessionId` 投递到 asyncio 队列。`DSHRuntime.run(run_input)` 用 `async with client.subscribe(run_input.session_id) as queue` 订阅本 session，再通过 `asyncio.to_thread` 发 `session/trpc-prompt`（参数由 `run_input.to_params()` 生成），之后从 `queue` 持续取通知并 yield `Frame`，直到 `session.status idle`。`to_trpc_event()` 和 `DSHState` 放在 Agent 层，不塞进 `DSHRuntime`。
 
 ### trpc-jsonrpc-server
 
@@ -681,9 +880,11 @@ v1 的 `OpenAIModel` 转换只映射 `provider='openai'` 和 `model=model.name`�
 所以需要我们自己扩展接口：
 
 ```text
-session/trpc-prompt   带 metadata + model + jsonl 进来，同步返回 receipt；
-                      输出走通知：session.assistant.delta / session.event / session.status
-session/trpc-cancel   单向通知，中断当前轮
+session/trpc-prompt    带 meta + model + jsonl + cwd 进来，同步返回 receipt；
+                       receipt 可带 create/resume 后的 jsonl/version 快照
+                       输出走通知：session.assistant.delta / session.event / session.status
+session/trpc-cancel    单向通知，中断当前轮
+session/trpc-snapshot  返回当前 session 的权威 JSONL 快照，用于对账
 ```
 
 **扩展官方实现。**
@@ -692,9 +893,9 @@ session/trpc-cancel   单向通知，中断当前轮
 
 - transport 复用 `JsonRpcLineTransport` 的 stdio 按行分帧
 - 不复用 `HarnessSdkJsonRpcServer`。它的构造函数绑定 notification 语义和一次性 `initialize` 的 session 管理；我们需要每轮指定模型参数、由请求携带 JSONL 快照，继承会把这些不需要的行为一起带进来，还会让同一个 session 同时挂在官方的 `sessions` map 和我们的 `RunManager` 上
-- 按官方 server 的 handle 分发方式写出 `TrpcJsonRpcServer`，只保留自己的 `initialize` / `shutdown`，新增 `session/trpc-prompt` / `session/trpc-cancel`
+- 按官方 server 的 handle 分发方式写出 `TrpcJsonRpcServer`，只保留自己的 `initialize` / `shutdown`，新增 `session/trpc-prompt` / `session/trpc-cancel` / `session/trpc-snapshot`
 - 复用官方 `session.event` / `session.status` 通知；额外订阅 `agent/assistant-stream`，转成 `session.assistant.delta`
-- response 保持“一个 id 一个 response”：`session/trpc-prompt` 只回 `{ messageId }`，一轮的输出和结束都走通知，不再扩展出多帧 response
+- response 保持“一个 id 一个 response”：`session/trpc-prompt` 只回 receipt，一轮的输出和结束都走通知，不再扩展出多帧 response
 
 DSHAgent 走 `session/trpc-prompt` / `session/trpc-cancel`；`session.event` / `session.status` 继续使用。官方其余方法不暴露。
 
@@ -713,25 +914,27 @@ class TrpcJsonRpcServer {
 }
 
 class RunManager {
-  start(req: TrpcPromptRequest): Promise<RunSession>
+  start(params: TrpcPromptParams): Promise<RunSession>
   cancel(sessionId: string): void
 }
 
 class RunSession {
-  start(): Promise<{ messageId: string }>
+  start(): Promise<{ messageId: string; jsonl?: string; version?: number }>
   cancel(): void
   dispose(): void
 }
 
 interface TrpcSessionBackend {
   seed(sessionId: string, jsonl: string, version: number): void
-  snapshot(sessionId: string): { jsonl: string; version: number }
+  has(sessionId: string): boolean
+  eventCount(sessionId: string): number
+  snapshot(sessionId: string): { jsonl: string; version: number } | undefined
   drop(sessionId: string): void
 }
 
 interface RunContext {
   sessionId: string
-  metadata: Record<string, unknown>
+  meta: Record<string, unknown>
 }
 
 class TrpcRequestContext {
@@ -741,24 +944,33 @@ class TrpcRequestContext {
 }
 ```
 
-关系：`TrpcJsonRpcServer` 持有 `RunManager`；`RunManager` 的 map 是 `sessionId → RunSession`，重复 prompt 直接抛 `session busy`。`RunSession.start()` 先 `backend.seed(sessionId, jsonl, version)`，再带 `agentOptions` 调 `ctx.agents.resume({ resumeSessionId: sessionId, agentOptions })`；AgentLoop 通过 `sessionPersistence.open()` 拿到内存 handle。拿到 agent 后订阅 `agent/assistant-stream`、调用 `agent.followup()`，然后返回 `{ messageId }`。assistant-stream 的 chunk 由 `RunSession` 过滤到当前 agent，维护 `seq`，直接写 `transport.notify('session.assistant.delta', ...)`；`session.event` / `session.status` 仍由 `TrpcJsonRpcServer` 的全局监听转发。`TrpcJsonRpcServer` 收到 `status idle` 后调 `RunSession.dispose()`，`RunManager` 再把它从 map 里移除。
+关系：`TrpcJsonRpcServer` 持有 `RunManager`；`RunManager` 的 map 是 `sessionId → RunSession`，重复 prompt 直接抛 `session busy`。`RunSession.start()` 先判断 `jsonl`：为空时走 `ctx.agents.create({ sessionId, meta: { cwd }, agentOptions })`，由 DSH 建 header；非空时先 `backend.seed(sessionId, jsonl, version)`，再 `ctx.agents.resume({ resumeSessionId: sessionId, agentOptions })`。如果本轮 `selection` 不是初始化时的默认模型，先调 `ctx.llm.resolveCallConfig(selection)` 校验 provider/model route。AgentLoop 通过 `sessionPersistence.create()` / `open()` 拿到内存 handle。拿到 agent 后订阅 `agent/assistant-stream`、调用 `agent.followup()`，然后返回 `{ messageId, jsonl?, version? }`。assistant-stream 的 chunk 由 `RunSession` 过滤到当前 agent，维护 `seq`，直接写 `transport.notify('session.assistant.delta', ...)`；`session.event` / `session.status` 仍由 `TrpcJsonRpcServer` 的全局监听转发。`TrpcJsonRpcServer` 收到 `status idle` 后调 `RunSession.dispose()`，`RunManager` 再把它从 map 里移除。
 
-`RunSession` 开始时把 `{ sessionId, metadata }` 写进 `TrpcRequestContext`，结束时清掉；业务工具和 policy 插件通过 `ctx.get('trpcRequestContext')` 按 `sessionId` 读取。`TrpcRequestContext` 单独做成插件，工具只依赖这个 service，不依赖 `trpc-jsonrpc-server`。
+`RunSession` 开始时把 `{ sessionId, meta }` 写进 `TrpcRequestContext`，结束时清掉；业务工具和 policy 插件通过 `ctx.get('trpcRequestContext')` 按 `sessionId` 读取。`TrpcRequestContext` 单独做成插件，工具只依赖这个 service，不依赖 `trpc-jsonrpc-server`。
 
 协议侧的类型：
 
 ```ts
-interface TrpcPromptRequest {
+interface TrpcPromptParams {
   sessionId: string
   contentBlocks: ContentBlock[]
   jsonl: string
   version: number
+  cwd?: string
   model?: { provider: string; model: string; reasoningEffort?: string; maxTokens?: number }
-  metadata: Record<string, unknown>
+  meta: Record<string, unknown>
 }
 
 interface TrpcPromptResult {
   messageId: string
+  /** create/resume 后、followup 前的快照；补齐 seed marker 等 persistence-only event */
+  jsonl?: string
+  version?: number
+}
+
+interface TrpcSnapshotResult {
+  jsonl: string
+  version: number
 }
 
 interface AssistantDelta {
@@ -798,8 +1010,8 @@ agent-loop.resume()
 `trpc-session-backend` 实现同一个 `SessionPersistence` seam（继承 `@deepseek-ai/dsh-session-persistence` 的 `SessionPersistence`），存储换成请求级内存：
 
 - 不写磁盘，不依赖 `$DSH_HOME`
-- `seed()` 从请求 JSONL 建内存 session
-- AgentLoop 照常 `ctx.agents.resume()`
+- 首轮 `create()` 接收 DSH 构造的 header，AgentLoop 照常 `ctx.agents.create()`
+- 后续轮 `seed()` 从请求 JSONL 重建内存 session，AgentLoop 照常 `ctx.agents.resume()`
 - 一轮结束 `drop()`，下一轮再从客户端快照重建
 
 ```text
@@ -831,19 +1043,22 @@ agent-loop.resume()
 
 否则两个 `SessionPersistence` provider 会冲突。
 
+> 0.2.1 的 runtime 只对 **profile 目录下** 的插件文件解析 `@deepseek-ai/*` 内置包；放在仓库目录里的 `file://` 插件会报 `ERR_MODULE_NOT_FOUND`。所以 `DSHRuntime.init()` 会把包内的三个 `.mjs` 复制到 `<profile_dir>/.trpc-agent-XXXX/plugins/`，patch 也写在这个临时目录，`destroy()` 时删掉。用户 profile 不改。
+
 **一轮的生命周期。**
 
 ```text
 RunSession.start()
    │
-   ├── backend.seed(sessionId, jsonl, version)
-   │      ├── jsonl 为空 → 新建 header
-   │      └── jsonl 非空 → scanLog(jsonl) → header + events
+   ├── jsonl 为空?
+   │    ├── 是 → ctx.agents.create({ sessionId, meta: { cwd } })
+   │    │         └── AgentLoop → sessionPersistence.create(header)
+   │    │                └── DSH 构造 header + 初始事件
+   │    └── 否 → backend.seed(sessionId, jsonl, version)
+   │              └── ctx.agents.resume({ resumeSessionId: sessionId })
+   │                     └── AgentLoop → sessionPersistence.open(id, 'write')
    │
-   ├── ctx.agents.resume({ resumeSessionId: sessionId })
-   │      └── AgentLoop → sessionPersistence.open(id, 'write')
-   │             └── MemorySessionHandle
-   │
+   ├── receipt { messageId, jsonl, version }   （create/resume 后的快照）
    ├── agent.followup(...)
    └── status idle
           ├── RunSession.dispose()          （退订 + 关 agent handle）
@@ -856,28 +1071,24 @@ RunSession.start()
 ```text
 seed(sessionId, jsonl, version):
   if jsonl == "":
-      header = {
-        id: sessionId, version, createdAt: now,
-        isSeeded: false, delegationDepth: 0,
-        ...cwd 可选
-      }
-      events = []
-      inheritedEventCount = 0
-  else:
-      scan = scanLog(Buffer.from(jsonl))
-      if scan.meta.version != version: throw
-      header = scan.meta
-      events = scan.events
-      inheritedEventCount = scan.inheritedEventCount
+      throw   // 首轮走 ctx.agents.create()，Python 不再构造 header
 
-  sessions.set(sessionId, { header, events, inheritedEventCount })
+  lines = jsonl.split('\n')
+  header = JSON.parse(lines[0])
+  if header.version != version: throw
+  events = lines[1:].map(JSON.parse)
+  if any(events[i].seq != i): throw
+
+  sessions.set(sessionId, { header, events, inheritedEventCount: 0 })
 ```
 
-- 直接复用官方 JSONL format 的 `scanLog()`，不再写一套 JSONL parser。`scanLog` / `toHeaderLine` / `eventLines` 都来自 `@deepseek-ai/dsh-session-persistence-jsonl/format`。
+- 实际的 `trpc-session-backend.mjs` 用一个最小 JSONL parser：首行是 header，后续每行一个 event，校验 `seq` 从 0 连续、`version` 和 `header.id` 匹配。`scanLog` / `toHeaderLine` / `eventLines` 在 0.2.1 的 package exports 里不能稳定深引用，所以不依赖它们。
 - `version` 必须和 header 里的版本一致；不一致直接拒绝，不做隐式迁移。
 - `inheritedEventCount` 原样保留，fork / subagent 的 lineage 不会丢。
-- 空 JSONL 表示第一轮，新建 header；非空表示 resume，事件必须从 seq 0 连续。
+- 空 JSONL 表示首轮，server 走 `ctx.agents.create()`，由 DSH 建 header；`seed()` 只接受非空快照，事件必须从 seq 0 连续。
+- `has()` / `eventCount()` 用于首轮前清掉上次残留的 in-memory session、以及决定是否回退到默认模型。
 - `seed` 时如果这个 session 还有未关闭的 writer，直接拒绝，不覆盖。
+- 除了 `SessionPersistence` 本身，插件还要注册 live routing：`session/event` 把事件 append 到当前 writer，`session/flush` 调 `handle.flush()`，`session/disposed` 调 `handle.close()`。否则 AgentLoop 的事件只会留在 live Session，不会进内存 handle。
 
 **SessionHandle。**
 
@@ -887,22 +1098,23 @@ seed(sessionId, jsonl, version):
 |---|---|
 | `read(offset, length)` | 返回 `{ eventState, events }`，`events` 是连续前缀 |
 | `append(events)` | 校验 `events[0].seq == session.events.length`，然后 push |
-| `flush()` | 用 `toHeaderLine()` + `eventLines()` 序列化成 JSONL，存到 `snapshot` |
+| `flush()` | 把内存 events 序列化成 JSONL，存到 `snapshot` |
 | `close()` | 释放 writer，保留快照直到 `drop()` |
 
 `open(id, 'write')` 时如果已经有 writer，抛 `SessionAlreadyOwnedError`。`RunManager` 已经保证一个 session 同时只有一轮，这里是第二道保险。
 
 **snapshot 和 drop。**
 
-- `snapshot(sessionId)` 返回 `{ jsonl, version }`，主要给 `RunSession` 做自检、日志和测试对账。
-- 客户端状态仍然由 `session.event` 增量重建，不依赖 `snapshot` 回传，所以主链路没有大 payload。
+- `snapshot(sessionId)` 返回 `{ jsonl, version }`。除了自检/日志，它还用于主链路对账：`session/trpc-prompt` 的 receipt 带上 create/resume 后的快照（补齐不会作为 `session.event` 推送的 seed marker），`session/trpc-snapshot` 在 `status idle` 后再对一次账，避免 live notification 漏掉 persistence-only event。
+- 客户端仍然以 `session.event` 增量重建为主，只在快照帧到达时整体替换本地 JSONL。
 - `drop(sessionId)` 在 `status idle` 或异常路径的 `finally` 里调用，避免内存 Map 越积越大。
 
 **边界。**
 
 | | 官方 JSONL backend | trpc-session-backend |
 |---|---|---|
-| 输入 | 从 `$DSH_HOME` 读 | 请求里的 `jsonl` |
+| 建会话 | 在 `$DSH_HOME` 落文件 | 首轮 `ctx.agents.create()`，由 DSH 建 header |
+| 输入 | 从 `$DSH_HOME` 读 | 后续轮请求里的 `jsonl` |
 | 存储 | 本地文件 | 内存 Map |
 | 输出 | 文件 | `snapshot()` |
 | 生命周期 | 跨进程 | 一轮 |
@@ -911,6 +1123,8 @@ seed(sessionId, jsonl, version):
 第一版刻意不做磁盘、压缩、迁移和跨进程 lease。JSONL 每轮全量传一次，简单但 payload 会随会话变长；后面要做增量，可以在 `session/trpc-prompt` 上加 `baseSeq` + 增量事件，backend 和 client 一起演进。
 
 和 `trpc-request-context` 一样，这个插件由框架 patch 注入，用户 profile 不需要手动挂。
+
+`session-projection-cache` 保持启用：它会往 `$DSH_HOME/storages/session_projcache/` 写标题等派生缓存，这是 DSH 自己的缓存，不是 session 权威日志，和 `trpc-session-backend` 的职责不冲突。权威快照仍然只在 `SessionService.state["_trpc_dsh_session"]`。
 
 ### trpc-request-context
 
@@ -923,8 +1137,8 @@ seed(sessionId, jsonl, version):
 │ runner.run_async(                            │
 │   run_config=RunConfig(                      │
 │     custom_data={                            │
-│       "tenant_id": "tenant-a",               │
-│       "trace_id": "trace-123",               │
+│       "tenant": "<json string>",             │
+│       "user_token": "token-...",             │
 │     }))                                      │
 └──────────────────────┬───────────────────────┘
                        │
@@ -932,16 +1146,16 @@ seed(sessionId, jsonl, version):
 ┌──────────────────────────────────────────────┐
 │ DSHAgent                                     │
 │                                              │
-│ metadata = ctx.run_config.custom_data        │
+│ meta = ctx.run_config.custom_data            │
 └──────────────────────┬───────────────────────┘
                        │ session/trpc-prompt
-                       │ {sessionId, metadata, ...}
+                       │ {sessionId, meta, ...}
                        ▼
 ┌──────────────────────────────────────────────┐
 │ RunSession.start()                           │
 │                                              │
 │ trpcRequestContext.set({                     │
-│   sessionId, metadata                        │
+│   sessionId, meta                            │
 │ })                                           │
 └──────────────────────┬───────────────────────┘
                        │
@@ -951,19 +1165,33 @@ seed(sessionId, jsonl, version):
 │                                              │
 │ sessionId = exec.agent.session.id            │
 │ ctx.get('trpcRequestContext')                │
-│    .get(sessionId).metadata                  │
+│    .get(sessionId).meta                      │
 └──────────────────────────────────────────────┘
 ```
 
 **Python 侧怎么传。**
 
 ```python
+import json
+from dataclasses import asdict
+from dataclasses import dataclass
+
 from trpc_agent_sdk.configs import RunConfig
+
+
+@dataclass
+class TenantContext:
+    tenant_id: str
+    trace_id: str
+
 
 run_config = RunConfig(
     custom_data={
-        "tenant_id": "tenant-a",
-        "trace_id": "trace-123",
+        # 业务对象先序列化成 JSON 字符串，插件里再 JSON.parse
+        "tenant": json.dumps(
+            asdict(TenantContext(tenant_id="tenant-a", trace_id="trace-123")),
+            ensure_ascii=False,
+        ),
         "user_token": "token-...",
     },
 )
@@ -977,7 +1205,9 @@ async for event in runner.run_async(
     ...
 ```
 
-DSHAgent 在 `_run_async_impl(ctx)` 里把 `ctx.run_config.custom_data` 原样放进 `session/trpc-prompt` 的 `metadata`，不解释 key，只负责搬运。只要求它是可 JSON 序列化的值。
+DSHAgent 在 `_run_async_impl(ctx)` 里把 `ctx.run_config.custom_data` 原样放进 `session/trpc-prompt` 的 `meta`，不解释 key，只负责搬运。只要求它是可 JSON 序列化的值。
+
+如果默认的 `custom_data` 不够，也可以像 2.2 的例子那样在 `custom_dsh_input` 里直接写 `run_input.meta`，覆盖或补充这里的值。
 
 **JS 侧插件怎么提供。**
 
@@ -990,8 +1220,8 @@ export function apply(ctx) {
   const contexts = new Map()
 
   ctx.provide('trpcRequestContext', {
-    set({ sessionId, metadata }) {
-      contexts.set(sessionId, { sessionId, metadata })
+    set({ sessionId, meta }) {
+      contexts.set(sessionId, { sessionId, meta })
     },
     get(sessionId) {
       return contexts.get(sessionId)
@@ -1030,10 +1260,12 @@ export function apply(ctx) {
     },
     async execute(args, exec) {
       const sessionId = String(exec.agent?.session.id ?? '')
+      // 按 sessionId 从 side store 取出本轮 meta
       const request = ctx.get('trpcRequestContext')?.get(sessionId)
       if (!request) throw new Error(`missing request context for ${sessionId}`)
 
-      const { tenant_id, trace_id } = request.metadata
+      // meta.tenant 是 Python 侧 json.dumps 的字符串，这里反序列化
+      const { tenant_id, trace_id } = JSON.parse(request.meta.tenant ?? '{}')
       return `${tenant_id}/${trace_id}: ${args.key}`
     },
   }))
@@ -1049,9 +1281,12 @@ export const inject = ['tools', 'trpcRequestContext']
 export function apply(ctx) {
   ctx.on('tools/pre-execute', (exec) => {
     const sessionId = String(exec.agent?.session.id ?? '')
-    const metadata = ctx.get('trpcRequestContext')?.get(sessionId)?.metadata
+    // 按 sessionId 从 side store 取出本轮 meta
+    const meta = ctx.get('trpcRequestContext')?.get(sessionId)?.meta
+    // meta.tenant 是 Python 侧 json.dumps 的字符串，这里反序列化
+    const tenant = JSON.parse(meta?.tenant ?? '{}')
 
-    if (metadata?.tenant_id !== 'tenant-a') {
+    if (tenant.tenant_id !== 'tenant-a') {
       return { kind: 'deny', reason: 'tenant mismatch' }
     }
     return { kind: 'allow' }
@@ -1070,10 +1305,10 @@ tool("s2") ── get("s2") ──► "b"
 ```
 
 - 不要用全局变量或 `process.env` 存 per-session 信息；同一个 dsh 进程里可能同时跑多个 session。
-- `TrpcRequestContext` 只保存 `{sessionId, metadata}`，不保存 JSONL、模型、agent 等 runtime 状态；runtime 状态由 `RunSession` 自己持有。
+- `TrpcRequestContext` 只保存 `{sessionId, meta}`，不保存 JSONL、模型、agent 等 runtime 状态；runtime 状态由 `RunSession` 自己持有。
 - 一个 session 同时只有一轮，`set/clear` 不会和同一 session 的另一轮打架；不同 session 的 key 不同，互不覆盖。
-- 缺 context 时用户插件应该 fail closed；尤其是 policy 插件，不要在拿不到 metadata 时默认放行。
-- metadata 可能包含 token 等敏感信息，不要打日志；它只存在内存里，run 结束就 `clear`。
+- 缺 context 时用户插件应该 fail closed；尤其是 policy 插件，不要在拿不到 meta 时默认放行。
+- meta 可能包含 token 等敏感信息，不要打日志；它只存在内存里，run 结束就 `clear`。
 
 这个机制对应第 5 章的通道 C/D：不是把 metadata 塞进 prompt 或 sessionId，而是用自定义 server 把 per-run `custom_data` 带到 dsh，再按 `sessionId` 放进框架侧的 side store。区别是这里的 store 只在内存里活一轮，不跨进程。
 
@@ -1149,7 +1384,7 @@ Python SDK                                      dsh runtime
 initialize(cwd, provider, model, effort, maxTokens,
            approvalRequests, capabilities.userQuestions)
     │
-    ├─ cwd ──────────────────────────────► 新 session 的 header.cwd
+    ├─ cwd（initialize / trpc-prompt.cwd）──► 新 session 的 header.cwd
     │                                         └─► sandbox workspaceRoot
     │
     ├─ provider / model / effort / maxTokens ──► 进程级 model route
@@ -1169,7 +1404,7 @@ initialize(cwd, provider, model, effort, maxTokens,
 │                                                                              │
 │  DSH_HOME   profile   credentials   settings   env / API key                 │
 │  provider / model / effort / maxTokens                                       │
-│  initialize.cwd ──► session.header.cwd ──► sandbox workspaceRoot             │
+│  initialize.cwd / trpc-prompt.cwd ──► session.header.cwd ──► sandbox root    │
 │  plugin / tool / skill / sandbox policy                                      │
 │                                                                              │
 │   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐         │
@@ -2139,7 +2374,7 @@ session/working-directory/get|set(sessionId, path?)
 
 没有 `metadata`、`user_id`、`tenant_id`、`trace_id` 这类字段。`session/query` 会拒绝除 `sessionId` / `contentBlocks` 之外的 key；`initialize` 的额外字段即使发过去，service 也只读已知字段，不会转给 plugin。
 
-注意 `DeepSeekHarnessConfig.cwd` 和 `runtime_cwd` 不是一回事：前者作为 `initialize.cwd` 写进 `session.header.cwd`，后者只改 dsh 子进程的工作目录。
+注意 `DeepSeekHarnessConfig.cwd` 和 `runtime_cwd` 不是一回事：前者作为 `initialize.cwd` 写进 `session.header.cwd`，后者只改 dsh 子进程的工作目录。这一段是 SDK 原生配置的调研背景；框架层已经把 `cwd` 收敛掉了：`DSHConfig` 只暴露 `runtime_cwd`，单次会话 cwd 通过 `DSHRunInput.cwd` 控制。
 
 ### 通道 A：环境变量 / profile（runtime 级）
 
