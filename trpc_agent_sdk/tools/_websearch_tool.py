@@ -6,8 +6,8 @@
 """Web search tool for TRPC Agent framework.
 
 Provides a client-side :class:`WebSearchTool` that lets LLMs search the
-public web for up-to-date information. Three pluggable provider backends
-are supported, ``duckduckgo``, ``google search``, and ``tavily``:
+public web for up-to-date information. Four pluggable provider backends
+are supported, ``duckduckgo``, ``google search``, ``tavily``, and ``youcom``:
 
 1. ``duckduckgo`` — DuckDuckGo(DDG) Instant Answer API. Keyless, good for
    factual/encyclopedic/definition lookups. Returns curated instant
@@ -17,11 +17,17 @@ are supported, ``duckduckgo``, ``google search``, and ``tavily``:
    filtering and language targeting.
 3. ``tavily`` — Tavily Search API. Requires ``api_key``; returns LLM-ready
    web results and optionally direct image URLs.
+4. ``youcom`` — You.com ``you-search`` MCP tool over streamable HTTP.
+   Keyless through the free profile endpoint; ``YDC_API_KEY`` optionally
+   switches requests to the authenticated endpoint. Returns web and news
+   hits whose snippets fall back from the hit description to You.com's
+   canonical ``snippets`` field and to query-relevant highlights.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 from typing import Any
 from typing import List
@@ -68,6 +74,12 @@ _DDG_BASE_URL = "https://api.duckduckgo.com"
 _GOOGLE_BASE_URL = "https://www.googleapis.com/customsearch/v1"
 # Tavily Search base URL
 _TAVILY_BASE_URL = "https://api.tavily.com/search"
+# You.com MCP streamable-HTTP endpoints. The free profile is keyless and
+# exposes the ``you-search`` tool; YDC_API_KEY switches to the authenticated endpoint.
+_YOUCOM_BASE_URL = "https://api.you.com/mcp?profile=free"
+_YOUCOM_AUTH_BASE_URL = "https://api.you.com/mcp"
+# Maximum redirects the SSE POST follows manually before giving up.
+_SSE_MAX_REDIRECTS = 3
 # Description shown to the LLM as part of the tool schema.
 _BASE_DESCRIPTION = """\
 Search the public web and use the results to inform responses.
@@ -95,7 +107,7 @@ Usage notes:
     for the required 'Sources:' format.\
 """
 
-ProviderType = Literal["duckduckgo", "google", "tavily"]
+ProviderType = Literal["duckduckgo", "google", "tavily", "youcom"]
 
 
 class SearchHit(BaseModel):
@@ -273,11 +285,133 @@ def _extract_desc_from_pagemap(pagemap: dict[str, Any]) -> str:
         return ""
 
 
+def _parse_sse_payloads(text: str) -> List[dict[str, Any]]:
+    """Parse the ``data:`` payloads of a streamable-HTTP SSE body.
+
+    A streamable-HTTP server answers a JSON-RPC request with one SSE body
+    whose events carry one JSON object each (progress notifications
+    followed by the final result). Per the SSE spec an event's data may
+    span several consecutive ``data:`` lines, and a leading UTF-8 BOM is
+    stripped. The lines are reassembled in the order that preserves the
+    server's bytes: joined with no separator first (a server may split one
+    JSON frame across ``data:`` lines at any boundary, including inside a
+    JSON string, where a re-inserted newline is either an invalid JSON
+    control character or a silent corruption of the string contents), then
+    joined with ``\\n`` (for servers that emit literal newlines between
+    JSON tokens), and finally each line on its own so servers that omit
+    blank-line event separators still work. Anything that still fails is
+    skipped so a stray keep-alive or partial frame cannot break the search.
+    """
+    payloads: List[dict[str, Any]] = []
+    lines = (text or "").splitlines()
+    if lines and lines[0].startswith("\ufeff"):
+        lines[0] = lines[0].lstrip("\ufeff")
+        if not lines[0]:
+            # A BOM-only first line is a framing artifact, not a data line.
+            lines = lines[1:]
+
+    def _try_decode(raw: str) -> Optional[dict[str, Any]]:
+        raw = raw.strip()
+        if not raw:
+            return None
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return decoded if isinstance(decoded, dict) else None
+
+    def _is_json(raw: str) -> bool:
+        try:
+            json.loads(raw)
+            return True
+        except json.JSONDecodeError:
+            return False
+
+    buffer: List[str] = []
+
+    def _flush() -> None:
+        if not buffer:
+            return
+        # Prefer the separator-less join: a server may chunk one JSON frame
+        # across several ``data:`` lines at any boundary, including inside
+        # a JSON string. Re-inserting a newline between the chunks there
+        # either puts a raw control character in the string (strict
+        # ``json.loads`` rejects it and the whole event would degrade to a
+        # silently dropped frame) or lands somewhere json.loads happens to
+        # accept, silently corrupting the string contents. The chunks are
+        # the server's bytes split at arbitrary points, so reassembling
+        # them with nothing in between is the faithful reconstruction.
+        decoded = _try_decode("".join(buffer))
+        if decoded is None and len(buffer) > 1:
+            # Fall back to the newline join only for servers that emit
+            # literal newlines between JSON tokens (pretty-printed frames
+            # without blank event separators).
+            decoded = _try_decode("\n".join(buffer))
+        if decoded is not None:
+            payloads.append(decoded)
+        else:
+            for piece in buffer:
+                raw = piece.strip()
+                if not raw:
+                    # Empty ``data:`` lines are keep-alives; skip silently
+                    # instead of logging noise for every one of them.
+                    continue
+                decoded = _try_decode(piece)
+                if decoded is not None:
+                    payloads.append(decoded)
+                    continue
+                # At this point the line is either unparseable or valid JSON
+                # that is not an object.
+                if _is_json(raw):
+                    # Valid JSON but not an object (``123``, ``[1]``) is
+                    # not a JSON-RPC frame; skip quietly, not as a warning.
+                    logger.debug("WebSearchTool: skipping non-object SSE data: %.80s", raw)
+                else:
+                    logger.warning("WebSearchTool: skipping unparseable SSE line: %.80s", raw)
+        buffer.clear()
+
+    for line in lines:
+        if line.startswith("data:"):
+            # SSE spec: strip only the single optional space after "data:",
+            # not trailing whitespace. A server may split one JSON frame at
+            # any boundary (including inside a JSON string), and stripping
+            # per-fragment whitespace silently corrupts the reassembled
+            # string value — e.g. ``data: {"s":"ab `` + ``data:  cd"}``
+            # must rebuild to ``{"s":"ab cd"}``, not ``{"s":"abcd"}``. The
+            # whole-buffer strip still happens in ``_try_decode`` before
+            # ``json.loads``, which is JSON-safe.
+            buffer.append(line[len("data:"):].removeprefix(" "))
+        elif not line.strip():
+            # A blank line dispatches the event per the SSE spec.
+            _flush()
+    _flush()
+    return payloads
+
+
+def _same_origin(left: str, right: str) -> bool:
+    """Whether ``right`` is a same-origin target for a redirect from ``left``.
+
+    Same scheme, host, and port qualifies, as does a same-host upgrade from
+    ``http`` to ``https`` — the two cases where httpx keeps ``Authorization``
+    on an automatically followed redirect. Anything else (different host or
+    port, or a scheme downgrade) does not: a redirect there would carry the
+    tool's bearer header to a third party.
+    """
+    try:
+        lhs, rhs = httpx.URL(left), httpx.URL(right)
+        if (lhs.host, lhs.port) != (rhs.host, rhs.port):
+            return False
+        return lhs.scheme == rhs.scheme or rhs.scheme == "https"
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
 class WebSearchTool(BaseTool):
     """LLM tool that searches the public web.
 
     The WebSearchTool enables LLM agents to search the public web using major search engines
-    such as DuckDuckGo (default, no API key required), Google Custom Search, and Tavily.
+    such as DuckDuckGo (default, no API key required), Google Custom Search, Tavily,
+    and You.com (keyless through its free MCP profile).
     It retrieves up-to-date information including titles, URLs, and content snippets, and also
     provides instant-answer summaries when available (e.g., via DuckDuckGo). This tool is best
     used for queries about recent events, new releases, factual lookups, or definitions that benefit
@@ -286,9 +420,11 @@ class WebSearchTool(BaseTool):
     sources as Markdown hyperlinks in the final output.
 
     Args:
-        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``, or ``"tavily"``.
+        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``,
+            ``"tavily"``, or ``"youcom"``.
         api_key: Provider API key. Falls back to ``GOOGLE_CSE_API_KEY`` for
-            Google or ``TAVILY_API_KEY`` for Tavily.
+            Google, ``TAVILY_API_KEY`` for Tavily, or ``YDC_API_KEY`` for
+            You.com (optional; the free profile is keyless).
         engine_id: Google CSE engine id (``cx``); falls back to ``GOOGLE_CSE_ENGINE_ID``.
         results_num: Default result count, clamped to ``[1, _MAX_COUNT]``.
         snippet_len: Max snippet length, clamped to ``[1, _MAX_SNIPPET_LEN]``.
@@ -322,6 +458,7 @@ class WebSearchTool(BaseTool):
         ddg_extra_params: Optional[dict[str, Any]] = None,
         google_extra_params: Optional[dict[str, Any]] = None,
         tavily_extra_params: Optional[dict[str, Any]] = None,
+        youcom_extra_params: Optional[dict[str, Any]] = None,
         filters_name: Optional[List[str]] = None,
         filters: Optional[List[BaseFilter]] = None,
     ) -> None:
@@ -333,13 +470,17 @@ class WebSearchTool(BaseTool):
             filters=filters,
         )
 
-        if provider not in ("duckduckgo", "google", "tavily"):
+        if provider not in ("duckduckgo", "google", "tavily", "youcom"):
             raise ValueError(f"Unsupported web search provider: {provider!r}")
         self._provider: ProviderType = provider
         if provider == "google":
             self._api_key = api_key or os.environ.get("GOOGLE_CSE_API_KEY", "")
         elif provider == "tavily":
             self._api_key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        elif provider == "youcom":
+            # You.com is keyless via the free MCP profile; a YDC_API_KEY
+            # switches requests to the authenticated endpoint.
+            self._api_key = api_key or os.environ.get("YDC_API_KEY", "")
         else:
             self._api_key = api_key or ""
         self._engine_id = engine_id or os.environ.get("GOOGLE_CSE_ENGINE_ID", "")
@@ -351,6 +492,7 @@ class WebSearchTool(BaseTool):
             "duckduckgo": _DDG_BASE_URL,
             "google": _GOOGLE_BASE_URL,
             "tavily": _TAVILY_BASE_URL,
+            "youcom": _YOUCOM_AUTH_BASE_URL if self._api_key else _YOUCOM_BASE_URL,
         }
         self._base_url = base_url or default_base_urls[provider]
         self._user_agent = user_agent
@@ -361,6 +503,7 @@ class WebSearchTool(BaseTool):
         self._ddg_extra_params = ddg_extra_params or {}
         self._google_extra_params = google_extra_params or {}
         self._tavily_extra_params = tavily_extra_params or {}
+        self._youcom_extra_params = youcom_extra_params or {}
 
         if provider == "google" and not (self._api_key and self._engine_id):
             logger.warning("WebSearchTool: provider='google' but api_key or "
@@ -409,7 +552,8 @@ class WebSearchTool(BaseTool):
             "lang":
             Schema(
                 type=Type.STRING,
-                description=("Optional. Language hint for the provider (Google CSE 'hl'); "
+                description=("Optional. Language hint for the provider (Google CSE 'hl'; "
+                             "You.com maps it to the inline `lang:` filter); "
                              "ignored by DuckDuckGo and Tavily. Default: tool-level lang or unset. "
                              "Example: 'en', 'zh-CN', 'ja'."),
             ),
@@ -510,6 +654,8 @@ class WebSearchTool(BaseTool):
                     blocked,
                     include_images,
                 )
+            elif self._provider == "youcom":
+                result = await self._search_youcom(query, n, allowed, blocked, lang)
             else:
                 result = await self._search_google(query, n, allowed, blocked, lang)
         except httpx.HTTPError as e:
@@ -572,6 +718,298 @@ class WebSearchTool(BaseTool):
             resp.raise_for_status()
             return resp.json()
         finally:
+            if close:
+                await client.aclose()
+
+    async def _post_sse(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        *,
+        headers: Optional[dict[str, str]] = None,
+    ) -> List[dict[str, Any]]:
+        """Issue a POST and decode the SSE ``data:`` payloads in the body.
+
+        Used for JSON-RPC endpoints that answer with ``text/event-stream``
+        instead of a single JSON document (the You.com MCP endpoint).
+
+        The request is built explicitly and sent through ``client.send`` so
+        that only the headers assembled below reach the wire: httpx merges
+        client-level headers into ``client.post`` requests, which would
+        silently forward any credentials configured on a shared
+        ``http_client`` (a gateway bearer token, a cookie jar, ...) to this
+        third-party endpoint. Three further client-level settings are
+        handled per call so a shared client cannot leak into this request
+        either:
+
+        * ``auth=None`` — ``client.send`` applies the client-level ``auth``
+          (Basic/Bearer/custom auth flows) even to a bare request, so it is
+          suppressed per call.
+        * redirects are followed manually, one request at a time. Every hop
+          is checked against the URL it redirects *from* and must stay
+          same-origin with it (a same-host http-to-https upgrade still
+          qualifies), and no hop may land on a plaintext ``http`` target
+          unless the endpoint itself was configured that way (same-origin
+          with the original URL). httpx's automatic redirect handling keeps
+          ``Authorization`` on same-origin/same-host-upgrade redirects and
+          re-attaches cookie-jar cookies to every redirect request, so a 3xx
+          naming another origin — or downgrading an upgraded hop back to
+          plaintext http — is dropped with a warning instead of followed:
+          the ``YDC_API_KEY`` bearer header must never leave the You.com
+          origin, and never travel over plaintext http. An unfollowed
+          residual 3xx also warns rather than parsing an empty body as a
+          silent 0-hit search. A relative ``Location`` keeps the original
+          ``profile`` query parameter (``URL.join`` drops it), so a keyless
+          free-profile call does not get redirected onto the authenticated
+          endpoint.
+        * cookies the You.com responses write into the shared client's jar
+          are rolled back: cookies this call *added* are deleted (scoped to
+          the endpoint host, which every hop was validated to stay on) so
+          they cannot be replayed to other providers through the same
+          ``http_client``. Pre-existing cookies whose *values* were
+          overwritten by a You.com ``Set-Cookie`` are restored to the
+          snapshot value so the You.com value does not leak to subsequent
+          calls on the shared client; the restore is host-scoped so a
+          concurrent call's cookie on an unrelated domain is untouched.
+        * each response is closed: intermediate 3xx hop responses are
+          closed before the next hop is issued, and the final response is
+          closed in a ``finally`` block — a read that dies mid-stream must
+          not leave a broken connection in the shared client's pool for the
+          next provider call.
+        """
+        client = self._get_client()
+        close = self._http_client is None
+        request_headers = {
+            "User-Agent": self._user_agent,
+            # The streamable-HTTP server rejects JSON-only Accept headers
+            # with 406 Not Acceptable, so SSE must be listed here.
+            "Accept": "application/json, text/event-stream",
+        }
+        if headers:
+            request_headers.update(headers)
+        # Snapshot the jar (with values) before any request goes out; the
+        # rollback in the finally block below relies on it covering every
+        # You.com response.
+        cookie_snapshot = {
+            (cookie.name, cookie.domain, cookie.path): cookie.value
+            for cookie in client.cookies.jar
+        }
+        endpoint_host = httpx.URL(url).host
+        cookies_added_by_call: dict[tuple[str, str, str], str] = {}
+        resp: Optional[httpx.Response] = None
+
+        def _record_added_cookies() -> None:
+            # Record cookies this call's responses have added to the jar
+            # (present now but absent from the pre-call snapshot), so the
+            # finally-block rollback can distinguish them from cookies a
+            # concurrent call wrote to the same shared client. Called on
+            # both the send-success path and the send-exception path below.
+            for _c in client.cookies.jar:
+                _ck = (_c.name, _c.domain, _c.path)
+                if _ck not in cookie_snapshot:
+                    cookies_added_by_call[_ck] = _c.value or ""
+
+        try:
+            current_url = url
+            redirects = 0
+            while True:
+                request = httpx.Request("POST", current_url, json=payload, headers=request_headers)
+                # send() falls back to the client timeout when the extension is
+                # absent; keep the per-call timeout semantics of the other providers.
+                request.extensions["timeout"] = httpx.Timeout(self._timeout).as_dict()
+                try:
+                    resp = await client.send(request, auth=None, follow_redirects=False)
+                except BaseException:
+                    # httpx extracts Set-Cookie headers in
+                    # _send_single_request before the response body is
+                    # read, so a mid-stream read timeout (or any transport
+                    # error raised after headers arrive) still leaves
+                    # You.com's cookies in the shared jar even though
+                    # send() raised. Record them now — not after a
+                    # successful return — so the finally-block rollback
+                    # deletes them; otherwise they leak to other providers
+                    # (e.g. Tavily) through the same http_client. Re-raise
+                    # so callers see the original error.
+                    _record_added_cookies()
+                    raise
+                # Record cookies this response added to the jar, so the
+                # finally-block rollback can distinguish them from cookies
+                # a concurrent call wrote to the same shared client.
+                _record_added_cookies()
+                if not resp.has_redirect_location:
+                    break
+                if redirects >= _SSE_MAX_REDIRECTS:
+                    logger.warning(
+                        "WebSearchTool: You.com endpoint exceeded %d redirects; "
+                        "search may return no results.",
+                        _SSE_MAX_REDIRECTS,
+                    )
+                    break
+                redirects += 1
+                location = resp.headers.get("location", "").strip()
+                if not location:
+                    logger.warning(
+                        "WebSearchTool: You.com endpoint returned a redirect "
+                        "(%d) with an empty Location; search may return no "
+                        "results.",
+                        resp.status_code,
+                    )
+                    break
+                # Close the 3xx response before issuing the next hop: the
+                # body of a redirect response is short or empty, but leaving
+                # it open ties up a pooled connection for every intermediate
+                # hop until the loop exits.  ``aclose`` is idempotent, so the
+                # finally-block close on the final response is still safe.
+                await resp.aclose()
+                try:
+                    next_obj = httpx.URL(current_url).join(location)
+                    # URL.join follows urljoin semantics, so a relative
+                    # Location drops the original query string: a keyless
+                    # "?profile=free" call would silently land on the
+                    # authenticated endpoint after the redirect. Re-attach
+                    # the profile param, keeping any the Location carries.
+                    origin_profile = httpx.URL(url).params.get("profile")
+                    if origin_profile is not None and next_obj.params.get("profile") is None:
+                        next_obj = next_obj.copy_with(params=next_obj.params.merge({"profile": origin_profile}))
+                    next_url = str(next_obj)
+                except Exception as ex:  # pylint: disable=broad-except
+                    logger.warning(
+                        "WebSearchTool: You.com redirect target %r is not a valid URL (%s); "
+                        "search may return no results.",
+                        location,
+                        ex,
+                    )
+                    break
+                # A redirect whose Location resolves to the same URL as the
+                # current request is a server-side loop (load balancer or
+                # session fault); re-POSTing the same body N times wastes
+                # the redirect budget and repeats the credential payload
+                # needlessly.
+                if next_url == current_url:
+                    logger.warning(
+                        "WebSearchTool: You.com endpoint returned a redirect "
+                        "(%d) whose Location resolves to the current URL; "
+                        "search may return no results.",
+                        resp.status_code,
+                    )
+                    break
+                # A Location carrying userinfo (e.g.
+                # ``https://tracker:tx@api.you.com/mcp``) would let httpx
+                # construct BasicAuth from the URL, overriding this tool's
+                # Bearer header on the next hop. A legitimate You.com
+                # redirect never carries userinfo; treat it as non-same-origin.
+                if next_obj.userinfo:
+                    logger.warning(
+                        "WebSearchTool: dropping redirect from the You.com endpoint to "
+                        "URL %r (Location carries userinfo); search may return no results.",
+                        next_url,
+                    )
+                    return []
+                # Validate each hop on its own: the request (and the tool's
+                # Authorization header) travels to current_url's origin, so
+                # the hop must be same-origin with the *previous* URL — not
+                # merely with the first one — and it may not downgrade to
+                # plaintext http unless the endpoint was configured that way
+                # (same-origin with the original URL). Otherwise the bearer
+                # header (and any cookies httpx re-attaches to redirect
+                # requests) would travel to whatever host or plaintext hop
+                # the 3xx names.
+                if not (_same_origin(current_url, next_url) and
+                        (_same_origin(url, next_url) or httpx.URL(next_url).scheme == "https")):
+                    logger.warning(
+                        "WebSearchTool: dropping redirect from the You.com endpoint to "
+                        "URL %r (not same-origin with the previous hop or plaintext http); "
+                        "search may return no results.",
+                        next_url,
+                    )
+                    return []
+                current_url = next_url
+            if 300 <= resp.status_code < 400:
+                # Defensive: a 3xx that was not followed (missing/invalid
+                # location, or the redirect budget ran out) must not read
+                # downstream as a normal empty search.
+                logger.warning(
+                    "WebSearchTool: You.com endpoint responded %d without "
+                    "following the redirect; search may return no results.",
+                    resp.status_code,
+                )
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "")
+            if "text/event-stream" not in content_type:
+                # A non-SSE response (e.g. application/json carrying a
+                # JSON-RPC error frame for a parameter-validation failure
+                # or rate-limit) has no ``data:`` lines, so the SSE
+                # parser returns [] and the error is silently swallowed.
+                # Parse it as JSON so the error-handling branch in
+                # _search_youcom can surface the real failure reason.
+                try:
+                    frame = json.loads(resp.text)
+                    return frame if isinstance(frame, list) else [frame]
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            return _parse_sse_payloads(resp.text)
+        finally:
+            # Roll back anything the You.com responses (followed or
+            # unfollowed, including skipped 3xx hops) wrote into the shared
+            # client's jar, so it cannot be replayed to other providers
+            # (e.g. Tavily) through the same http_client. Running here — not
+            # on the happy path — guarantees the rollback also happens on
+            # the cross-origin early return, the redirect-budget break, and
+            # any exception raised mid-loop. Only cookies the call *added*
+            # (tracked in cookies_added_by_call) are deleted, and only if
+            # their current value still matches what this call's response
+            # set — a concurrent call on the same shared client may have
+            # updated them since, and deleting those would silently drop
+            # the concurrent call's session. Deletes are scoped to cookies
+            # that could plausibly have come from one of this call's
+            # responses (domain-matching the endpoint host, which every
+            # hop was validated to stay on), so a cookie a concurrent call
+            # wrote for an unrelated domain is not caught in this rollback.
+            for cookie in list(client.cookies.jar):
+                key = (cookie.name, cookie.domain, cookie.path)
+                if key not in cookies_added_by_call:
+                    # Not added by this call (either pre-existing or
+                    # written by a concurrent call on the shared client).
+                    continue
+                # Only delete if the value hasn't changed since this call
+                # set it — a concurrent call may have updated it since.
+                if (cookie.value or "") != cookies_added_by_call[key]:
+                    continue
+                domain = cookie.domain.lstrip(".")
+                if endpoint_host == domain or endpoint_host.endswith("." + domain):
+                    client.cookies.delete(cookie.name, domain=cookie.domain, path=cookie.path)
+            # Restore pre-existing cookies this call overwrote or deleted.
+            # A You.com Set-Cookie can clobber a same-named cookie the
+            # caller had pinned on the shared client (overwrite), or
+            # delete it via Max-Age=0 / expired Expires (removal). In the
+            # deletion case the cookie is gone from the jar, so
+            # iterating the jar (as an earlier version did) never sees
+            # it and the snapshot value is never restored — leaving the
+            # caller's session missing for subsequent calls on the
+            # shared client. Iterate the snapshot instead: for any
+            # cookie the snapshot had whose current value differs or is
+            # missing, restore the snapshot value. Scoped to the
+            # endpoint host so a concurrent call's cookie on an
+            # unrelated domain is never touched. (A concurrent You.com
+            # call that updated or deleted the same cookie during this
+            # call's window would have its value reverted — an
+            # acceptable trade for the call-granularity case, since the
+            # alternative is leaving You.com's polluted or missing
+            # value in place.)
+            jar_cookies = {(c.name, c.domain, c.path): c.value for c in client.cookies.jar}
+            for (c_name, c_domain, c_path), snap_value in cookie_snapshot.items():
+                current = jar_cookies.get((c_name, c_domain, c_path))
+                if current is not None and (current or "") == (snap_value or ""):
+                    continue
+                domain = c_domain.lstrip(".")
+                if endpoint_host == domain or endpoint_host.endswith("." + domain):
+                    client.cookies.set(c_name, snap_value or "", domain=c_domain, path=c_path)
+            # Release the response and its pooled connection even when the
+            # body read dies mid-stream (e.g. a read timeout): an abandoned
+            # half-read response would otherwise leave a broken connection
+            # in the shared client's pool for the next provider call.
+            if resp is not None:
+                await resp.aclose()
             if close:
                 await client.aclose()
 
@@ -679,6 +1117,280 @@ class WebSearchTool(BaseTool):
             results=hits,
             summary=_truncate(answer, self._snippet_len),
             images=images,
+        )
+
+    async def _search_youcom(
+        self,
+        query: str,
+        n: int,
+        allowed: Optional[List[str]],
+        blocked: Optional[List[str]],
+        lang: Optional[str],
+    ) -> WebSearchResult:
+        """Search the public web through the You.com ``you-search`` MCP tool.
+
+        The endpoint is stateless JSON-RPC over streamable HTTP: a single
+        ``tools/call`` POST is answered by one SSE body whose ``data:`` lines
+        carry the tool result. The free profile works without an API key; a
+        configured ``YDC_API_KEY`` upgrades requests to the authenticated
+        endpoint. Blocked domains are excluded server-side; allowlists are
+        enforced post-hoc by ``_is_blocked``, mirroring the other providers.
+        Hit snippets fall back from the hit ``description`` to the canonical
+        You.com ``snippets`` list, then to ``contents.highlights``.
+        """
+        arguments: dict[str, Any] = {"query": query, "count": n}
+        if lang:
+            # You.com maps an inline ``lang:`` operator to a language filter.
+            # Guard against the model passing the operator form verbatim
+            # (``lang:ja``, possibly with stray whitespace or casing) after
+            # reading the schema description.
+            lang_value = str(lang).strip()
+            while lang_value[:5].lower() == "lang:":
+                lang_value = lang_value[5:].strip()
+            if lang_value and "lang:" not in query.lower():
+                # Guard against the model already embedding a ``lang:``
+                # operator in the query text (the schema description
+                # encourages that form): appending a second one would
+                # produce a duplicated filter like ``python lang:ja lang:ja``.
+                arguments["query"] = f"{query} lang:{lang_value}"
+        if blocked:
+            arguments["exclude_domains"] = blocked
+        for key, value in self._youcom_extra_params.items():
+            if key in ("query", "count", "exclude_domains", "lang", "lang:"):
+                # These are built per call; a pinned value would silently
+                # override every search the model issues. ``lang`` belongs
+                # here too: the language filter is an inline ``lang:``
+                # operator inside the per-call query, so a standalone
+                # ``lang`` argument would conflict with it instead of
+                # pinning the language.
+                logger.warning(
+                    "WebSearchTool: ignoring youcom_extra_params key %r; "
+                    "it would override per-call arguments", key)
+                continue
+            arguments[key] = value
+
+        payload: dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "you-search",
+                "arguments": arguments,
+            },
+        }
+        headers: Optional[dict[str, str]] = None
+        if self._api_key:
+            headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        payloads = await self._post_sse(self._base_url, payload, headers=headers)
+
+        result: Optional[dict[str, Any]] = None
+        error: Optional[dict[str, Any]] = None
+        for item in payloads:
+            if not isinstance(item, dict):
+                continue
+            frame_id = item.get("id")
+            # Only frames replying to this request carry its id; frames
+            # without one are notifications and carry no result/error.
+            # Compare the string forms: some servers echo the request id
+            # back as a string ("1"), and a strict typed comparison would
+            # drop every reply frame.
+            if frame_id is not None and str(frame_id) != str(payload["id"]):
+                continue
+            if "error" in item:
+                # A JSON-RPC response carries either ``result`` or ``error``;
+                # a frame carrying both is treated as an error.
+                error = item["error"]
+            if "result" in item and "error" not in item:
+                # A valid result always wins, regardless of frame order: a
+                # stray error frame that arrived before the result is logged
+                # but does not discard the valid response.  An error frame
+                # that arrives *after* the result is also logged rather than
+                # silently overwriting it.
+                if error is not None:
+                    logger.warning(
+                        "WebSearchTool: You.com error frame superseded by a "
+                        "result (or vice versa): %.200s", error,
+                    )
+                result = item["result"]
+        if error is not None and result is None:
+            message = error.get("message") if isinstance(error, dict) else str(error)
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary=_truncate(f"You.com search error: {message}", self._snippet_len),
+            )
+        if not isinstance(result, dict):
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary="You.com search returned no result payload.",
+            )
+
+        text = ""
+        for content in result.get("content") or []:
+            if isinstance(content, dict) and content.get("type") == "text":
+                text = str(content.get("text") or "")
+                break
+        if result.get("isError"):
+            # Flag the error whatever the text content looks like: MCP servers
+            # may mark ``isError`` without any text, keeping details only in
+            # ``structuredContent``; either way the call failed and the summary
+            # must say so instead of falling through to payload parsing.
+            detail = text
+            if not detail:
+                structured = result.get("structuredContent")
+                if isinstance(structured, dict):
+                    try:
+                        detail = json.dumps(structured, ensure_ascii=False)
+                    except (TypeError, ValueError):
+                        detail = ""
+            if not detail:
+                detail = "no detail returned"
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary=_truncate(f"You.com search error: {detail}", self._snippet_len),
+            )
+
+        data: Any = None
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+        if not isinstance(data, dict):
+            # Some MCP servers put the structured payload in
+            # ``structuredContent`` and keep the text human-readable.
+            structured = result.get("structuredContent")
+            if isinstance(structured, dict):
+                data = structured
+        if not isinstance(data, dict):
+            return WebSearchResult(
+                query=query,
+                provider="youcom",
+                results=[],
+                summary="You.com search returned an unexpected payload.",
+            )
+
+        sections = data.get("results")
+        if isinstance(sections, list):
+            # Shape drift upstream: some You.com variants return a flat list
+            # of hits instead of ``{"web": [...], "news": [...]}`` sections.
+            # Route the parseable entries through the same section loop
+            # instead of dropping every hit — merging (not replacing) any
+            # real section lists that sit next to ``results``, so a genuine
+            # ``web``/``news`` section is never clobbered by the fallback.
+            flat = sections
+            sections = {}
+            for section in ("web", "news"):
+                sibling = data.get(section)
+                if isinstance(sibling, list):
+                    sections[section] = sibling
+            sections["web"] = sections.get("web", []) + flat
+        if not isinstance(sections, dict):
+            if sections:
+                # A non-empty, non-dict, non-list ``results`` is a shape
+                # change upstream, not an empty search; surface it instead
+                # of reporting 0 hits.
+                return WebSearchResult(
+                    query=query,
+                    provider="youcom",
+                    results=[],
+                    summary=_truncate(
+                        "You.com search returned an unexpected results shape "
+                        f"({type(sections).__name__}); no hits parsed.",
+                        self._snippet_len,
+                    ),
+                )
+            sections = {}
+        items: List[dict[str, Any]] = []
+        for section in ("web", "news"):
+            section_items = sections.get(section)
+            if not isinstance(section_items, list):
+                if section_items:
+                    logger.warning("WebSearchTool: ignoring non-list %r section in You.com results", section)
+                continue
+            for item in section_items:
+                if isinstance(item, dict):
+                    items.append(item)
+
+        hits: List[SearchHit] = []
+        seen: set[str] = set()
+        for item in items:
+            # Type-guard every field instead of str()-coercing: a dict or
+            # list value would become its Python repr — a repr "url" then
+            # fails the blocklist check and silently drops a legitimate
+            # hit, and a repr title/description leaks stray text like
+            # "{'kind': 'web', ...}" into the results.
+            raw_url = item.get("url")
+            url = ""
+            if isinstance(raw_url, str):
+                url = raw_url.strip()
+            elif isinstance(raw_url, dict):
+                # Shape drift: some variants wrap the URL in an object;
+                # take the standard ``href`` field if it is a string.
+                href = raw_url.get("href")
+                if isinstance(href, str):
+                    url = href.strip()
+            if not url:
+                logger.debug(
+                    "WebSearchTool: skipping You.com hit without a usable url field (%r)",
+                    raw_url,
+                )
+                continue
+            if _is_blocked(url, allowed, blocked):
+                continue
+            if self._dedup_urls:
+                key = _dedup_key(url)
+                if key in seen:
+                    continue
+                seen.add(key)
+            raw_description = item.get("description")
+            description = raw_description.strip() if isinstance(raw_description, str) else ""
+            if not description:
+                # ``snippets`` is You.com's canonical summary field (a list
+                # of strings returned by default); some hits — notably
+                # news — carry it while ``description`` is empty or absent.
+                snippets = item.get("snippets")
+                if isinstance(snippets, list):
+                    for snippet in snippets:
+                        if isinstance(snippet, str) and snippet.strip():
+                            description = snippet.strip()
+                            break
+            if not description:
+                contents = item.get("contents")
+                highlights = contents.get("highlights") if isinstance(contents, dict) else None
+                # Only a list is a usable fallback. Some variants mix objects
+                # and strings in the list, so the first string element wins
+                # (mirroring the ``snippets`` traversal above) instead of
+                # checking only ``highlights[0]`` — a non-string first
+                # element must not disable the fallback for the strings
+                # behind it. Anything else (a bare string, a dict, ...) must
+                # not crash the whole search.
+                if isinstance(highlights, list):
+                    for highlight in highlights:
+                        if isinstance(highlight, str) and highlight.strip():
+                            description = highlight.strip()
+                            break
+            raw_title = item.get("title")
+            title = raw_title if isinstance(raw_title, str) else ""
+            hits.append(
+                SearchHit(
+                    title=_truncate(title, self._title_len),
+                    url=url,
+                    snippet=_truncate(description, self._snippet_len),
+                ))
+            if len(hits) >= n:
+                break
+
+        return WebSearchResult(
+            query=query,
+            provider="youcom",
+            results=hits,
+            summary="",
         )
 
     async def _search_duckduckgo(
