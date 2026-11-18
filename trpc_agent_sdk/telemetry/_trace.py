@@ -103,6 +103,30 @@ def _safe_json_serialize(obj) -> str:
         return "<not serializable>"
 
 
+def _filter_state_for_trace(state: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Drop framework-internal keys from a session-state snapshot.
+
+    Internal state keys are identified by the leading underscore convention
+    (for example ``_trpc_graph_checkpoints`` or ``__trpc_agent_cancel``).
+    They are bookkeeping/continuation data that trace consumers cannot use,
+    and some of them (graph checkpoints, skill caches) can be large enough to
+    bloat every span that snapshots the state.
+
+    Only top-level keys are filtered: values nested under a user state key
+    are user data and are left untouched. ``None`` is passed through so
+    callers can keep "state not captured" distinct from "empty state".
+
+    Args:
+        state: The session-state snapshot to filter.
+
+    Returns:
+        A filtered copy of the snapshot, or ``None`` when ``state`` is ``None``.
+    """
+    if state is None:
+        return None
+    return {key: value for key, value in state.items() if not (isinstance(key, str) and key.startswith("_"))}
+
+
 def trace_runner(
     app_name: str,
     user_id: str,
@@ -171,10 +195,12 @@ def trace_runner(
 
     # Set state attributes for begin and end
     if state_begin is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.begin", _safe_json_serialize(state_begin))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.begin",
+                           _safe_json_serialize(_filter_state_for_trace(state_begin)))
 
     if state_end is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.end",
+                           _safe_json_serialize(_filter_state_for_trace(state_end)))
 
     if error_type:
         span.set_status(trace.StatusCode.ERROR, error_message or error_type)
@@ -250,9 +276,11 @@ def trace_cancellation(
 
     # State attributes
     if state_begin is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.begin", _safe_json_serialize(state_begin))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.begin",
+                           _safe_json_serialize(_filter_state_for_trace(state_begin)))
     if state_partial is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.partial", _safe_json_serialize(state_partial))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.partial",
+                           _safe_json_serialize(_filter_state_for_trace(state_partial)))
 
 
 def trace_agent(
@@ -313,10 +341,12 @@ def trace_agent(
 
     # Set state attributes for begin and end
     if state_begin is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.begin", _safe_json_serialize(state_begin))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.begin",
+                           _safe_json_serialize(_filter_state_for_trace(state_begin)))
 
     if state_end is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.end",
+                           _safe_json_serialize(_filter_state_for_trace(state_end)))
 
     if error_type:
         span.set_status(trace.StatusCode.ERROR, error_message or error_type)
@@ -385,10 +415,12 @@ def trace_tool_call(
 
     # Set state attributes for begin and end
     if state_begin is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.begin", _safe_json_serialize(state_begin))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.begin",
+                           _safe_json_serialize(_filter_state_for_trace(state_begin)))
 
     if state_end is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.end",
+                           _safe_json_serialize(_filter_state_for_trace(state_end)))
 
     if error_type:
         span.set_status(trace.StatusCode.ERROR, error_message or error_type)
@@ -440,10 +472,12 @@ def trace_merged_tool_calls(
 
     # Set state attributes for begin and end
     if state_begin is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.begin", _safe_json_serialize(state_begin))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.begin",
+                           _safe_json_serialize(_filter_state_for_trace(state_begin)))
 
     if state_end is not None:
-        span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
+        span.set_attribute(f"{_trpc_agent_span_name}.state.end",
+                           _safe_json_serialize(_filter_state_for_trace(state_end)))
 
 
 def trace_call_llm(
