@@ -79,7 +79,11 @@ source .venv/bin/activate
 ```bash
 cd examples/llmagent_with_cancel
 python3 run_agent.py
+python3 run_agent_multi_worker.py
 ```
+
+`run_agent_multi_worker.py` 用 `fork` 启动两个 worker：worker A 跑 Agent，worker B
+通过 Unix socket 控制面取消同一个 session，用来验证跨进程取消。
 
 ## 运行结果（实测）
 
@@ -142,8 +146,6 @@ python3 run_agent.py
 [2026-04-01 17:38:56][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:369][1881658] Run for session ebf25584-4598-4dc8-849e-28bbb10da22c was cancelled
 
 ❌ Run was cancelled: Run for session ebf25584-4598-4dc8-849e-28bbb10da22c was cancelled
-
-💡 Result: Incomplete function calls were cleaned up from session
 
 📝 User Query 2: what happens?
 
