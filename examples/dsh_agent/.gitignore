@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+dsh-home/
+dsh-workspace/
