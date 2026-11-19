@@ -162,11 +162,10 @@ class InvocationContext(BaseModel):
     """
 
     session_key: Optional[Any] = None
-    """Session key for cancellation tracking. Set by Runner.
+    """Session identity used by the cancel and steering module. Set by Runner.
 
-    This field stores the SessionKey used to track cancellation state
-    for the current run. It is set by Runner.run_async() and used by
-    agents to check for cancellation at checkpoints.
+    The value is a ``trpc_agent_sdk.cancel.SessionKey``. The cancel module owns
+    the active run handle; agents only need the stable key at checkpoints.
     """
 
     @property
@@ -389,22 +388,33 @@ class InvocationContext(BaseModel):
         if self.session_key is None:
             return
         from trpc_agent_sdk.cancel import raise_if_cancelled
+
         await raise_if_cancelled(self.session_key)
 
     async def get_cancel_event(self) -> Optional[asyncio.Event]:
         """Get the cancellation event for this invocation.
 
-        This returns the asyncio.Event that will be set when cancellation
-        is requested for the current run. Useful for concurrent cancel
-        detection in streaming scenarios.
+        Useful for concurrent cancel detection in streaming scenarios. In
+        shared-memory mode, the first call starts a per-run watcher that
+        mirrors cross-worker cancel requests into the local event.
 
         Returns:
-            The asyncio.Event for cancellation, or None if cancel is not requested.
+            The asyncio.Event that is set when cancellation is requested, or
+            None when this process does not own the active run.
         """
         if self.session_key is None:
             return None
         from trpc_agent_sdk.cancel import get_cancel_event
+
         return await get_cancel_event(self.session_key)
+
+    async def consume_steering(self) -> Optional[Content]:
+        """Take all pending steering messages and merge them into one Content."""
+        if self.session_key is None:
+            return None
+        from trpc_agent_sdk.cancel import consume_steering
+
+        return await consume_steering(self.session_key)
 
 
 def new_invocation_context_id() -> str:

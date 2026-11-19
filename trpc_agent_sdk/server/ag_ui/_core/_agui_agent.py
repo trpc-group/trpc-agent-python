@@ -40,10 +40,10 @@ from ag_ui.core import SystemMessage
 from ag_ui.core import ToolCallEndEvent
 from ag_ui.core import ToolCallResultEvent
 from starlette.requests import Request
-from trpc_agent_sdk import cancel
 from trpc_agent_sdk import types
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.configs import RunConfig as TRPCRunConfig
+from trpc_agent_sdk.events import AgentCancelledEvent
 from trpc_agent_sdk.events import EventTranslatorBase
 from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.exceptions import RunLimitException
@@ -464,6 +464,12 @@ class AgUiAgent:
     ) -> bool:
         """Cancel an ongoing run for the specified session.
 
+        Cancellation is cooperative: the signal is delivered through
+        ``Runner.cancel_run_async`` and the background task is allowed to
+        observe ``AgentCancelledEvent`` and finish. The task is not cancelled
+        directly, so the runner generator can close in the context that owns
+        its OpenTelemetry span.
+
         Called when the SSE connection is closed by the client.
 
         Args:
@@ -475,27 +481,27 @@ class AgUiAgent:
             True if cancellation was triggered successfully
         """
 
-        # Use configured cancel_wait_timeout
-        timeout = self._cancel_wait_timeout
-
         logger.debug("Cancelling run for session %s", session_id)
 
-        # Cancel the TRPC run using the existing mechanism
-        cleanup_event = await cancel.cancel_run(app_name, user_id, session_id)
+        runner = self._create_runner(
+            agent=self._trpc_agent,
+            user_id=user_id,
+            app_name=app_name,
+        )
+        success = await runner.cancel_run_async(
+            user_id=user_id,
+            session_id=session_id,
+            timeout=self._cancel_wait_timeout,
+        )
 
-        if cleanup_event is None:
+        if not success:
             # No active run found - might have already completed
             logger.debug("No active run to cancel for session %s", session_id)
             return False
 
-        try:
-            # Wait for cleanup to complete
-            await asyncio.wait_for(cleanup_event.wait(), timeout=timeout)
-            logger.info("Cancel completed for session %s", session_id)
-        except asyncio.TimeoutError:
-            logger.warning("Cancel timeout for session %s", session_id)
-
-        # Clear pending tool calls from session state
+        # Clear pending tool calls from session state. The execution state
+        # itself is owned by _start_new_execution() and removed by its finally
+        # block after the run stream is closed.
         try:
             await self._session_manager.set_state_value(
                 session_id=session_id,
@@ -507,14 +513,6 @@ class AgUiAgent:
             logger.debug("Cleared pending tool calls for session %s", session_id)
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Failed to clear pending tool calls: %s", ex)
-
-        # Also cancel the ExecutionState task if still running
-        async with self._execution_lock:
-            if session_id in self._active_executions:
-                execution = self._active_executions[session_id]
-                await execution.cancel()
-                del self._active_executions[session_id]
-                logger.debug("Cancelled and removed execution state for session %s", session_id)
 
         return True
 
@@ -1252,7 +1250,8 @@ class AgUiAgent:
                                                      session_id=input.thread_id,
                                                      new_message=new_message,
                                                      run_config=run_config):
-                last_event_is_error = trpc_event.is_error() and not trpc_event.get_function_responses()
+                last_event_is_error = (trpc_event.is_error() and not isinstance(trpc_event, AgentCancelledEvent)
+                                       and not trpc_event.get_function_responses())
                 if not isinstance(trpc_event, LongRunningEvent):
                     # Check if custom translator should handle this event
                     if self._custom_event_translator and self._custom_event_translator.need_translate(trpc_event):

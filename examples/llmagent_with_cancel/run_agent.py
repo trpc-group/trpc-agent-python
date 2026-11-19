@@ -63,7 +63,9 @@ async def run_agent(
             # Check for cancellation using AgentCancelledEvent
             if isinstance(event, AgentCancelledEvent):
                 print(f"\n❌ Run was cancelled: {event.error_message}")
-                break
+                # Keep consuming until the SDK generator ends so its spans close in
+                # this task's context instead of being finalized in another one.
+                continue
 
             if not event.content or not event.content.parts:
                 continue
@@ -249,10 +251,6 @@ async def scenario_2_cancel_during_tool_execution() -> None:
 
     # Wait for task to complete
     await task
-
-    print()
-    print("💡 Result: Incomplete function calls were cleaned up from session")
-    print()
 
     # Query 2: Ask "what happens?" to verify session state
     query2 = "what happens?"
