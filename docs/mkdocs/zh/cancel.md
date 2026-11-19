@@ -1,10 +1,10 @@
 # Agent Cancel 机制
 
-Agent 在执行过程中，有的时候输出不满足用户的要求，这个时候用户常常会中断 Agent 执行，给出部分信息之后（对中断前哪些输出不满意，后面应该怎么做），再让 Agent 继续执行。
+Agent 执行到一半时，用户可能发现输出不符合预期，想先打断，补充一些要求（比如哪里不满意、接下来应该怎么做），再让 Agent 继续。
 
-对于此场景，trpc-agent 框架提供了 Cancel 机制，允许取消 Agent 正在执行的操作，保存部分内容（LLM正在流式输出的内容、正在执行的工具内容等）。该机制基于检查点（checkpoint）设计，各 Agent 在实现中，会在检查点处（LLM流式输出chunk、一个工具调用结束后等）检查当前 Agent 是否应该终止，如果终止，则会抛出异常，框架会记录并保存部分信息到会话历史中。
+trpc-agent 为此提供了 Cancel 机制。Agent 在几个检查点检查有没有收到取消请求：LLM 正在流式输出时、一个工具调用结束之后等。检查到取消，就停下当前执行，把已经产生的部分内容（流式文本、已完成的工具结果等）写进会话历史。
 
-当前已经在框架提供的所有 Agent 中接入了此能力，其他业务自己实现的 CustomAgent 也可轻松接入进来。
+框架自带的 Agent 都已经接入了这项能力；业务自己实现的 CustomAgent 也可以按同样的方式接入。
 
 | 模块类型 | 模块名称 | Cancel 支持 | 说明 |
 |---------|---------|-------------|------|
@@ -24,47 +24,74 @@ Agent 在执行过程中，有的时候输出不满足用户的要求，这个�
 
 ### 架构设计
 
-如下架构所示：
-- 框架启动时，将会创建一个 `_RunCancellationManager` 的全局对象，用于管理Agent的取消信号
-- 用户通过Runner来运行、打断Agent执行
-    - 用户通过 `run_async` 执行 Agent，Runner会在执行Agent执行前，通过 `register_run` 注册本次执行的信息到 Manager，SessionKey 是 (app_name, user_id, session_id) 的三元组
-    - 用户通过 `cancel_run_async` 取消 Agent 的执行，Runner 收到 Agent 抛出的 `RunCancelledException`，完成Cancel的后置处理（注入部分流式消息、部分工具调用的内容到Agent的会话中），在处理后，由 Runner 生成 `AgentCancelledEvent` 传递终止信息，可以通过其 error_message 字段获得中断的原因
-- Agent在执行过程中，埋入检查点，以接入Cancel的能力
-    - 在 Agent 的执行过程中，通过在 `_run_async_impl` 实现中，使用 `ctx.raise_if_cancelled` 在各个检查点（LLM流式输出chunk后、工具调用后等）检查当前的执行是否被取消，如果 `runner.cancel_run_async` 被调用过，则Agent的执行会被标记为取消，raise_if_cancelled执行会抛出 `RunCancelledException` 的异常
-    - 一般来说，常见的检查点有这些：LLM流式输出过程中，工具调用之后，工具调用过程中取消暂时不支持
-- Agent服务，通过接口自动调用 `runner.cancel_run_async`，通过Runner返回的AgentCancelledEvent事件获取取消的细节
-    - 对AG-UI服务，其协议未原生支持取消，客户端通过断开连接来取消Agent的执行，Agent服务通过感知到连接断开的异常，自动调用了 `runner.cancel_run_async` 以支持此能力
-    - 对A2A服务，其协议原生支持取消，通过调用接口 `cancel_task` 来取消，框架已经支持了此接口，适配了 `runner.cancel_run_async`，但需要配合hash寻址来使用。在多节点部署场景，配比hash寻址比较麻烦，一个更简单的方法是类似AG-UI一样，Agent服务自动感知到连接断开，调用 `runner.cancel_run_async`，但受限于目前 a2a-sdk 的底层实现，连接断开后，Agent仍然会继续执行，暂时需要使用hash寻址来完成取消操作。
-    - 对自定义服务，推荐实现基于连接断开触发Agent取消执行的逻辑，这种方式实现成本很低，不需要依赖hash寻址，客户端直接断开与远程Agent的连接即可。
+从使用方式看，接入 Cancel 只需要和 Runner 打交道：用 `run_async()` 运行 Agent，用 `cancel_run_async()` 发起取消。Runner 负责登记本次 run、驱动 Agent 执行，并在取消时做收尾；Agent 只负责在 checkpoint 检查取消信号。
 
-<p align="center">
-  <img src="../assets/imgs/agent_cancel.png" alt="Agent Cancel" />
-</p>
+整体架构：
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                           接入层：用户代码 / A2A / AG-UI / 自定义服务                            │
+│                                                                                                  │
+│  run_async()                     cancel_run_async()                  send_steering()             │
+└─────────────────────────────────────────────────┬────────────────────────────────────────────────┘
+                                                  │ 调用 Runner
+                                                  ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                  │
+│  ┌────────────────────────────────────────┐        ┌──────────────────────────────────────────┐  │
+│  │                 Runner                 │        │                Agent 执行                │  │
+│  │  register_run(SessionKey)              │驱动 ──►│  checkpoint：                            │  │
+│  │  append_event / unregister_run         │        │    - raise_if_cancelled()                │  │
+│  │  写 cancel flag / steering queue       │        │    - consume_steering()                  │  │
+│  └────────────────────────────────────────┘        └──────────────────────────────────────────┘  │
+│                                                                                                  │
+└─────────────────────────────────────────────────┬────────────────────────────────────────────────┘
+                                                  │ 写 / 读控制状态
+                                                  ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                  │
+│  ┌──────────────────────────────────────┐          ┌──────────────────────────────────────────┐  │
+│  │ 单 worker：_CancelManager            │          │ 多 worker：_CancelManager + 共享表       │  │
+│  │ runs: dict[SessionKey, _Run]         │          │ /dev/shm/trpc-agent-py/cancel            │  │
+│  │  └─ _Run                             │          │ entry[hash(SessionKey)]                  │  │
+│  │      ├─ cancel_requested: bool       │          │  ├─ cancel flag                          │  │
+│  │      └─ steering: deque[Content]     │          │  └─ steering slots + count               │  │
+│  └──────────────────────────────────────┘          └──────────────────────────────────────────┘  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Cancel 和 Steering 都通过 Runner 接入。调用 `run_async()` 后，Runner 会登记本次执行，用 `(app_name, user_id, session_id)` 标识这个 run。
+
+**Cancel 机制**
+
+调用 `cancel_run_async()` 后，Runner 设置该次 run 的取消信号。单 worker 下，取消信号在进程内存里；多 worker 部署时，master 先调用 `init_shared_mem()`，各 worker 共享同一个取消信号。Agent 在 checkpoint 读到取消信号后抛出 `RunCancelledException`；Runner 接住后，把已经输出的文本、已经完成的工具结果写进 session，给没执行的工具补一条 skipped 结果，最后返回 `AgentCancelledEvent`。
+
+**Steering 机制**
+
+调用 `send_steering()` 后，消息进入该次 run 的 steering 队列。Agent 在下一轮 LLM 请求前取走队列里的所有消息，把消息作为一条不可见的 user 事件写进 session，模型下一轮就能看到。cancel 优先：这一轮已经取消时，队列里的消息随 run 一起释放。
+
+**接入服务端机制**
+
+- **A2A**：客户端调用 `cancel_task` 取消，框架会转成 `runner.cancel_run_async()`；需要 steering 时用 A2A 集成提供的 `POST /steering`。多 worker 部署时，收到请求的 worker 会把 cancel 和 steering 写到共享内存，运行该 run 的 worker 在 checkpoint 读到。
+- **AG-UI**：客户端断开 SSE 连接，服务端检测到断连后调用 `runner.cancel_run_async()`；steering 走 `AgUiService` 提供的 `POST /steering`。多 worker 部署时，`AgUiAgent` 创建的 Runner 会自动使用共享内存。
+- **业务自定义 Server**：推荐在连接断开时调用 `runner.cancel_run_async()`；需要 steering 时直接调用 `runner.send_steering()`。调用过 `init_shared_mem()` 后，多 worker 也不需要 hash 寻址。
 
 ### 会话管理
 
-Agent被Cancel时，将会根据场景进行不同的会话管理：
+**LLM 流式输出时取消**
 
-**场景 1：LLM 流式输出期间取消**
-- 会话管理：LLM回复开始到被打断区间的消息，均会被保留，这部分的流式文本后，将会追加一个消息 "User cancel the agent execution." 让Agent感知到取消事件的发生
-- 效果：下一轮对话，用户能指出哪些文本不合理，Agent将会纠正输出
+已经输出的部分文本会保留，后面再补一句取消提示，让模型知道这一轮被打断了。下一轮用户可以指出哪里不满意，让 Agent 改正。
 
-**场景 2：工具执行期间取消**
-- 会话管理：针对Agent需要调用多个工具的场景，比如需要调用工具1和工具2，在调用工具1时，用户取消Agent执行，在等到工具1调用结束后，将会跳过工具2的调用而结束，本轮工具2的调用信息将会从历史会话中移除，就像Agent本轮从未执行过工具2一样，同样，在工具1的调用响应后，将会追加一个消息 "User cancel the agent execution." 让Agent感知到取消事件的发生
-- 效果：下一轮对话，Agent能够感知到工具2没有调用，可能会调用工具2。
+**工具执行时取消**
 
-### 限制
+假设模型一次要调工具 1 和工具 2，工具 1 执行期间用户取消：
 
-> **⚠️ 当前 Cancel 机制仅支持单节点场景**
+- 工具 1 会跑完，结果保留；
+- 工具 2 不再执行，但会话里会保留它的调用记录，并补一条 `status=cancelled` 的 skipped 结果。这样 tool_call 和 tool_response 仍然配对，下一轮请求不会因为缺结果而非法；
+- 最后同样补一句取消提示。
 
-`_RunCancellationManager` 使用进程内存储（`Dict`）来追踪活跃的运行。这意味着：
-
-1. **Cancel 请求必须发送到运行 Agent 的同一节点**
-2. **不支持跨节点取消**
-3. **适用场景**：
-   - 单节点部署
-   - 客户端通过同一连接（WebSocket、SSE）与 Agent 通信
-   - 连接断开时自动触发取消
+下一轮模型能看到工具 2 被跳过，可以重新调用它。
 
 ## 简单用法
 
@@ -121,7 +148,6 @@ async def main():
     success = await runner2.cancel_run_async(
         user_id=user_id,
         session_id=session_id,
-        timeout=3.0,  # 等待Agent取消动作完成的超时时间
     )
     print(f"\n取消请求结果: {success}")
 
@@ -131,6 +157,45 @@ async def main():
 
 asyncio.run(main())
 ```
+
+### 多 worker 取消
+
+单 worker 不需要额外配置，Runner 直接用进程内的取消信号。
+
+多 worker（同一台机器）部署时，master 在启动 worker 之前调用 `init_shared_mem()`，所有 worker 自动共享同一个取消信号；`server.serve()` 结束后调用 `destroy_shared_mem()`。跨机器的 worker 不在这个共享范围内。
+
+```python
+from trpc_agent_sdk.cancel import SharedMemoryConfig
+from trpc_agent_sdk.cancel import destroy_shared_mem
+from trpc_agent_sdk.cancel import init_shared_mem
+
+init_shared_mem(
+    SharedMemoryConfig(
+        max_active_runs=256,
+        steering_queue_size=4,
+        max_steering_bytes=1024,
+        cancel_poll_interval=0.1,
+    ))
+try:
+    server.serve()
+finally:
+    destroy_shared_mem()
+```
+
+`init_shared_mem()` 不传参数时就用上面的默认值。worker 会自动共享同一个取消信号，Runner 不需要额外开关。任意 worker 都可以发起取消：
+
+```python
+await runner.cancel_run_async(user_id=user_id, session_id=session_id)
+```
+
+| 配置项 | 默认值 | 说明 |
+|-------|--------|------|
+| `max_active_runs` | 256 | 本机同时跟踪的活跃 run 上限；超过后新的 run 会启动失败，需要调大 |
+| `steering_queue_size` | 4 | 每个 run 最多积压多少条 steering 消息；满了之后新消息会被拒绝，返回 `QUEUE_FULL` |
+| `max_steering_bytes` | 1024 | 单条 steering 消息的最大字节数；超过后返回 `MESSAGE_TOO_LARGE` |
+| `cancel_poll_interval` | 0.1 | per-run cancel watcher 的轮询周期（秒）；仅多 worker 模式、且调用 `get_cancel_event()` 时生效 |
+
+`destroy_shared_mem()` 放在 `finally` 里。master 下次启动时会重新创建这块共享内存，不会带着上一次的取消信号。
 
 ### Agent自定义服务示例
 
@@ -149,16 +214,12 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
-from trpc_agent_sdk import cancel
 
 app = FastAPI()
 
 # 创建 Agent 和 Session Service
 agent = LlmAgent(name="my_agent", model=model, instruction="你是一个智能助手")
 session_service = InMemorySessionService()
-
-# Cancel 等待超时配置
-CANCEL_WAIT_TIMEOUT = 3.0
 
 
 @app.post("/chat/{user_id}/{session_id}")
@@ -197,16 +258,9 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
             # 连接被客户端关闭
             raise
         finally:
-            # 无论正常结束还是连接断开，都触发取消操作
-            # 这确保了 Agent 执行被正确终止，部分结果被保存
-            cleanup_event = await cancel.cancel_run(app_name, user_id, session_id)
-
-            if cleanup_event is not None:
-                try:
-                    # 等待取消操作完成
-                    await asyncio.wait_for(cleanup_event.wait(), timeout=CANCEL_WAIT_TIMEOUT)
-                except asyncio.TimeoutError:
-                    pass  # 超时后继续，Agent 可能仍在运行
+            # 无论正常结束还是连接断开，都写入取消信号
+            # run 在下一个 checkpoint 停止，并保存部分结果
+            await runner.cancel_run_async(user_id, session_id)
 
     return StreamingResponse(
         event_generator(),
@@ -244,7 +298,6 @@ async def cancel_session_run(user_id: str, session_id: str):
     success = await runner.cancel_run_async(
         user_id=user_id,
         session_id=session_id,
-        timeout=3.0,
     )
     if success:
         return {"status": "cancellation_requested"}
@@ -255,7 +308,34 @@ async def cancel_session_run(user_id: str, session_id: str):
         )
 ```
 
-**注意**：此方式要求取消请求必须发送到运行 Agent 的同一节点，在多节点部署场景下需要配合 hash 路由使用，确保cancel请求发到执行Agent的节点上。
+**注意**：`cancel_run_async` 先在本地进程查找活跃 run。多 worker 部署且没有调用 `init_shared_mem()` 时，需要用 hash 路由把取消请求发到运行节点；调用过 `init_shared_mem()` 后，任意 worker 都可以写共享 entry 通知 owner，不再需要 hash 路由。
+
+## Steering
+
+Steering 用来在 run 执行过程中补充用户输入。`send_steering()` 把消息放进当前 run 的队列；`LlmAgent` 在下一次 LLM 请求前取走队列，把它作为一条不可见的 user 消息写进 session。模型在本轮就能看到新的指示，客户端的事件流里看不到它。
+
+```python
+from trpc_agent_sdk.cancel import SteeringStatus
+from trpc_agent_sdk.types import Content, Part
+
+status = await runner.send_steering(
+    user_id=user_id,
+    session_id=session_id,
+    content=Content(role="user", parts=[Part(text="顺便查一下北京")]),
+)
+if status is SteeringStatus.ACCEPTED:
+    print("steering queued")
+```
+
+| 状态 | 含义 |
+|------|------|
+| `ACCEPTED` | 消息已进入活跃 run 的队列 |
+| `NO_ACTIVE_RUN` | 该 session 当前没有活跃 run |
+| `QUEUE_FULL` | 单条 run 的队列已满（`steering_queue_size`） |
+| `MESSAGE_TOO_LARGE` | 消息超过 `max_steering_bytes` |
+| `UNSUPPORTED_CONTENT` | 消息不是纯文本 |
+
+消息必须是纯文本。多 worker 部署时，任意 worker 都可以写；运行该 run 的 worker 会在下一个 checkpoint 取走。
 
 ## Agent Cancel 指引
 
@@ -525,7 +605,7 @@ load_dotenv()
 
 HOST = "127.0.0.1"
 PORT = 18082
-# 等待 Agent 取消完成的超时时间（秒），建议与客户端 timeout 保持一致
+# 服务端等待 owner run 到达 checkpoint 的最大时间（秒）
 CANCEL_WAIT_TIMEOUT = 3.0
 
 
@@ -533,8 +613,8 @@ def create_a2a_service() -> TrpcA2aAgentService:
     """创建带有 Cancel 支持的 A2A 服务"""
     from agent.agent import root_agent
 
-    # 关键配置：cancel_wait_timeout 控制服务端收到 cancel_task 后，
-    # 等待后端 Agent 完成取消操作的最大时间
+    # cancel_wait_timeout 限定等待执行任务感知取消信号并完成 checkpoint 清理的时间，
+    # 不会强杀 run
     executor_config = TrpcA2aAgentExecutorConfig(
         cancel_wait_timeout=CANCEL_WAIT_TIMEOUT,
     )
@@ -595,10 +675,6 @@ load_dotenv()
 
 # A2A 服务端地址，需与 run_server.py 中配置一致
 AGENT_BASE_URL = "http://127.0.0.1:18082"
-# 客户端等待取消完成的超时时间（秒），建议与服务端 cancel_wait_timeout 一致
-CANCEL_TIMEOUT = 3.0
-
-
 async def run_remote_agent(
     runner: Runner,
     user_id: str,
@@ -713,7 +789,7 @@ async def scenario_1_cancel_during_streaming(remote_agent: TrpcRemoteA2aAgent) -
     runner2 = create_runner(app_name, session_service, remote_agent)
     print("\n⏸️  Requesting cancellation after 10 events...")
     # cancel_run_async 会向远程 A2A 服务发送 cancel_task 请求
-    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id, timeout=CANCEL_TIMEOUT)
+    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id)
     print(f"✓ Cancellation requested: {success}")
 
     await task
@@ -773,7 +849,7 @@ async def scenario_2_cancel_during_tool_execution(remote_agent: TrpcRemoteA2aAge
     # 工具执行中发起取消，已完成的工具结果会保留，未完成的调用会被清理
     runner2 = create_runner(app_name, session_service, remote_agent)
     print("\n⏸️  Tool call detected! Requesting cancellation during tool execution...")
-    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id, timeout=CANCEL_TIMEOUT)
+    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id)
     print(f"✓ Cancellation requested: {success}")
 
     await task
@@ -818,10 +894,9 @@ if __name__ == "__main__":
 
 | 配置位置 | 参数 | 默认值 | 说明 |
 |----------|------|--------|------|
-| 服务端 | `cancel_wait_timeout` | 1.0 | 服务端等待后端 Agent 取消完成的超时时间 |
-| 客户端 | `timeout` | 1.0 | 客户端等待本端 RemoteA2aAgent 取消完成的超时时间 |
+| 服务端 | `cancel_wait_timeout` | 1.0 | 写入取消信号后，服务端等待 owner run 到达 checkpoint 的最大时间；不会强杀 run。 |
 
-建议两者配置相同的超时时间。
+多 worker 部署时，在 master 调用 `init_shared_mem()`，任意 worker 收到的 `CancelTask` 都能到达 owner。需要投递 steering 时，调用 `Runner.send_steering`（或 A2A 集成提供的 `POST /steering` 接口）。
 
 **完整示例：**
 - [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md)（a2a-sdk 0.3）
@@ -852,7 +927,7 @@ if __name__ == "__main__":
 │  │  ┌─────────────────────────────────────┐  │  │
 │  │  │  AgUiAgent.cancel_run()             │  │  │
 │  │  │    ↓                                │  │  │
-│  │  │  取消管理器 (cancel.cancel_run)       │  │  │
+│  │  │  Runner.cancel_run_async()          │  │  │
 │  │  │    ↓                                │  │  │
 │  │  │  Agent (在检查点处停止)               │  │  │
 │  │  └─────────────────────────────────────┘  │  │
@@ -968,8 +1043,8 @@ def _create_agui_agent(name: str, root_agent: BaseAgent, **kwargs) -> AgUiAgent:
     agui_agent = AgUiAgent(
         trpc_agent=root_agent,
         app_name=name,
-        # 关键配置：SSE 连接断开后，等待 Agent 完成取消的超时时间
-        # 如果配置过短，Cancel 可能未完成，流式文本无法保存到会话
+        # cancel_wait_timeout 限定等待 run 到达下一个 checkpoint 并落库部分结果的时间，
+        # 不会强杀 run
         cancel_wait_timeout=3.0,
         **kwargs,
     )
@@ -1067,7 +1142,9 @@ subscription.unsubscribe?.();
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `cancel_wait_timeout` | 3.0 | 等待 Cancel 操作完成的超时时间（秒）。如果此值配置不当，Cancel 操作可能无法成功执行，导致流式文本无法保存到会话中。 |
+| `cancel_wait_timeout` | 3.0 | 写入取消请求后，等待 run 到达下一个 checkpoint 的最大时间（秒）。不会强杀 run；配置过小可能在流式文本落库前返回。 |
+
+跨 worker 取消时，在 master 启动 worker 前调用 `init_shared_mem()`。之后 `AgUiAgent.cancel_run()` 写入共享 entry，从任意 worker 都可以取消。
 
 **完整示例：**
 - [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)

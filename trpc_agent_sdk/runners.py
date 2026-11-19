@@ -24,6 +24,8 @@ from opentelemetry import trace
 from trpc_agent_sdk import cancel
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.artifacts import BaseArtifactService
+from trpc_agent_sdk.cancel._cleanup import build_cancellation_text
+from trpc_agent_sdk.cancel._cleanup import complete_incomplete_function_calls
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.context import InvocationContext
@@ -313,54 +315,47 @@ class Runner:
         Args:
             user_id: The user ID of the session to cancel.
             session_id: The session ID to cancel.
-            timeout: Timeout in seconds to wait for cancellation to complete.
-                This method will wait until the run is cleaned up
-                (i.e., AgentCancelledEvent is processed) or the timeout is reached.
-                Default is 1.0 seconds.
+            timeout: Timeout in seconds for the local fast path. It is ignored
+                when the cancellation is delivered through the shared state;
+                that path returns after publishing the request. Callers should
+                observe ``AgentCancelledEvent`` or run completion to know when
+                the run actually stopped.
 
         Returns:
-            True if an active run was found and marked for cancellation,
-            False if no active run found for this session.
-
-        Example:
-            runner = Runner(app_name="my_app", agent=agent, ...)
-
-            # Start agent in background task
-            async def run_agent():
-                async for event in runner.run_async(
-                    user_id="user1",
-                    session_id="session1",
-                    new_message=...
-                ):
-                    process(event)
-
-            task = asyncio.create_task(run_agent())
-
-            # Later, cancel the run using same user_id and session_id
-            # Wait up to 2 seconds for cancellation to complete
-            success = await runner.cancel_run_async(
-                user_id="user1",
-                session_id="session1",
-                timeout=2.0
-            )
-            print(f"Cancellation requested: {success}")
+            True if an active run was marked locally or the shared cancel
+            request was published; False if no active run was found.
         """
-        # cancel_run returns an asyncio.Event that will be set when cleanup_run is called,
-        # or None if no active run found
-        cleanup_event = await cancel.cancel_run(self.app_name, user_id, session_id)
+        key = cancel.SessionKey(
+            app_name=self.app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        return await cancel.cancel_run(key, timeout=timeout)
 
-        if cleanup_event is None:
-            return False
+    async def send_steering(
+        self,
+        user_id: str,
+        session_id: str,
+        content: Content,
+    ) -> cancel.SteeringStatus:
+        """Enqueue one steering message for the active run of a session.
 
-        try:
-            await asyncio.wait_for(cleanup_event.wait(), timeout=timeout)
-            logger.info("Cancel completed for user_id %s, session %s", user_id, session_id)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Cancel wait timeout (%ss) reached for user_id %s, session %s. The execution may still be running.",
-                timeout, user_id, session_id)
+        Args:
+            user_id: The user ID of the session.
+            session_id: The session ID.
+            content: Text-only user content to deliver before the next LLM call.
 
-        return True
+        Returns:
+            The enqueue status.
+        """
+        return await cancel.send_steering(
+            cancel.SessionKey(
+                app_name=self.app_name,
+                user_id=user_id,
+                session_id=session_id,
+            ),
+            content,
+        )
 
     async def run_async(
         self,
@@ -415,6 +410,7 @@ class Runner:
                 f"[trpc-agent]: {self.app_name}/{self.agent.name}",
             )
 
+            run_registered = False
             try:
                 # Create default agent context if not provided
                 if agent_context is None:
@@ -450,6 +446,18 @@ class Runner:
                     run_config=run_config,
                     agent_context=agent_context,
                 )
+
+                # Attach this run before mutating the session. A rejected
+                # concurrent run must not append a stray user message.
+                session_key = cancel.SessionKey(
+                    app_name=self.app_name,
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+                cancel.register_run(session_key)
+                run_registered = True
+                invocation_context.session_key = session_key
+
                 root_agent = self.agent
                 if run_config.save_history_enabled and history_content:
                     history_event = Event(content=history_content,
@@ -466,17 +474,12 @@ class Runner:
                     )
 
                 invocation_context.agent = self._find_agent_to_run(session, root_agent, run_config)
-
-                # Register for cancellation tracking
-                session_key = await cancel.register_run(
-                    app_name=self.app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                )
-
-                # Store session_key in invocation_context for use by agents
-                invocation_context.session_key = session_key
             except Exception as ex:
+                if run_registered:
+                    try:
+                        cancel.unregister_run(session_key)
+                    except Exception:  # pylint: disable=broad-except
+                        logger.warning("Failed to release run during initialization", exc_info=True)
                 # Initialization failed before the main try/finally block
                 # below was reached, so there is no InvocationContext/Session
                 # to feed into trace_runner() yet. Call trace_runner() with
@@ -631,9 +634,13 @@ class Runner:
                 trace_error_type = ex.error_code
                 trace_error_message = str(ex)
                 logger.warning("Run for session %s exceeded a configured limit: %s", session_id, ex)
-                await cancel.cleanup_incomplete_function_calls(
+                await complete_incomplete_function_calls(
                     session,
+                    self.session_service,
                     invocation_id=invocation_context.invocation_id,
+                    agent_name=invocation_context.agent.name,
+                    branch=invocation_context.branch,
+                    reason="Run limit exceeded.",
                 )
                 await self.session_service.update_session(session=session)
                 raise
@@ -646,15 +653,25 @@ class Runner:
                 state_partial = dict(session.state)
                 temp_text = "".join(temp_text_parts)
 
-                # Handle session cleanup for cancellation (two scenarios: streaming vs non-streaming)
-                await cancel.handle_cancellation_session_cleanup(
-                    session=session,
-                    session_service=self.session_service,
+                # Fill skipped tool results first so the session remains a
+                # valid function-call/function-response sequence, then append
+                # the cancellation marker.
+                await complete_incomplete_function_calls(
+                    session,
+                    self.session_service,
                     invocation_id=invocation_context.invocation_id,
                     agent_name=invocation_context.agent.name,
                     branch=invocation_context.branch,
-                    temp_text=temp_text,
+                    reason="Run cancelled.",
                 )
+                cancel_marker = Event(
+                    invocation_id=invocation_context.invocation_id,
+                    author=invocation_context.agent.name,
+                    content=Content(parts=[Part.from_text(text=build_cancellation_text(temp_text))]),
+                    branch=invocation_context.branch,
+                    partial=False,
+                )
+                await self.session_service.append_event(session=session, event=cancel_marker)
                 await self.session_service.update_session(session=session)
 
                 # Trace the cancellation event
@@ -672,6 +689,14 @@ class Runner:
                         state_partial=state_partial,
                     )
                 runner_trace_recorded = True
+
+                # Release the run slot before notifying the caller: consumers
+                # commonly stop iterating as soon as they see this event, and
+                # an abandoned async generator would otherwise hold the slot
+                # until it is garbage collected.
+                if run_registered:
+                    cancel.unregister_run(session_key)
+                    run_registered = False
 
                 # Yield cancellation event to notify client
                 yield AgentCancelledEvent(
@@ -727,12 +752,15 @@ class Runner:
                             partial_text=trace_partial_text,
                         )
 
-                # Always cleanup cancellation tracking
-                await cancel.cleanup_run(
-                    app_name=self.app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                )
+                if run_registered:
+                    try:
+                        cancel.unregister_run(session_key)
+                    except Exception:  # pylint: disable=broad-except
+                        logger.warning(
+                            "Failed to release run for session %s",
+                            session_id,
+                            exc_info=True,
+                        )
 
     async def _append_new_message_to_session(
         self,

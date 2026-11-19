@@ -7,7 +7,9 @@
 
 ## LlmAgent
 
-### 直接测试
+### Base
+
+#### 直接测试
 
 在 `bench/` 目录下执行：
 
@@ -30,7 +32,7 @@ python -m trpc_agent_bench.run_bench \
 | `loop5` | 138.92 ms | 147.69 ms | 452.6 KiB |
 | `loop10` | 300.37 ms | 314.15 ms | 572.3 KiB |
 
-### 压力测试
+#### 压力测试
 
 ```bash
 python -m trpc_agent_bench.run_bench \
@@ -53,6 +55,57 @@ python -m trpc_agent_bench.run_bench \
 | `loop10` | 301.68 ms | 2288.40 ms | 4575.68 ms | 9370.65 ms |
 
 直接测试和压力测试是两次独立运行，两张表的 c1 数字会有少量抖动，但 benchmark 行和口径保持一致。
+
+### SharedMem
+
+通过 `init_shared_mem()` 启用共享内存控制面。每个 benchmark 子进程在 `prepare()` 中创建共享段，在 `cleanup()` 中销毁，不使用 fork 或 multiprocessing。
+
+#### 直接测试
+
+在 `bench/` 目录下执行：
+
+```bash
+python -m trpc_agent_bench.run_bench \
+  --targets llmagent.shared_mem \
+  --benchmarks turn1,turn5,turn10,loop1,loop5,loop10 \
+  --iterations 10 \
+  --results-dir results/shared_mem_direct
+```
+
+环境：16 vCPU，Python 3.12，mock 无额外延迟，`--iterations 10`。
+
+| benchmark | p50 | p95 | memory |
+|---|---|---|---|
+| `turn1` | 27.05 ms | 29.29 ms | 349.1 KiB |
+| `turn5` | 136.63 ms | 146.19 ms | 519.9 KiB |
+| `turn10` | 302.56 ms | 316.26 ms | 739.7 KiB |
+| `loop1` | 28.65 ms | 30.86 ms | 355.0 KiB |
+| `loop5` | 139.88 ms | 148.48 ms | 458.5 KiB |
+| `loop10` | 300.08 ms | 305.43 ms | 572.1 KiB |
+
+#### 压力测试
+
+```bash
+python -m trpc_agent_bench.run_bench \
+  --targets llmagent.shared_mem \
+  --benchmarks turn1,turn5,turn10,loop1,loop5,loop10 \
+  --concurrency 1,8,16,32 \
+  --iterations 10 \
+  --results-dir results/shared_mem_stress
+```
+
+环境：16 vCPU，Python 3.12，mock 无额外延迟，`--iterations 10`。
+
+| benchmark | c1 p50 | c8 p50 | c16 p50 | c32 p50 |
+|---|---|---|---|---|
+| `turn1` | 25.70 ms | 198.63 ms | 392.54 ms | 792.76 ms |
+| `turn5` | 139.04 ms | 1086.19 ms | 2151.88 ms | 4552.41 ms |
+| `turn10` | 297.77 ms | 2328.48 ms | 4898.90 ms | 9790.37 ms |
+| `loop1` | 27.15 ms | 207.51 ms | 428.61 ms | 843.44 ms |
+| `loop5` | 140.35 ms | 1079.75 ms | 2102.54 ms | 4472.64 ms |
+| `loop10` | 298.16 ms | 2309.24 ms | 4442.22 ms | 9390.25 ms |
+
+共享内存的 direct 和 stress 是两次独立运行，c1 数字会有少量抖动；两组数据都不与 Base 做逐项 baseline 对比。`memory` 是 `tracemalloc` 的 Python heap，默认约 1 MiB 的 mmap segment 不计入。
 
 ### 结论
 

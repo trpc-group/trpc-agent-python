@@ -29,7 +29,6 @@ from trpc_agent_sdk.context._invocation_context import (
 )
 from trpc_agent_sdk.types import EventActions, SearchMemoryResponse, State
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -110,6 +109,7 @@ def full_context(
 
 
 class TestInvocationContextCreation:
+
     def test_required_fields(self, invocation_context):
         assert invocation_context.invocation_id == "inv-test-001"
         assert invocation_context.session_service is not None
@@ -153,6 +153,7 @@ class TestInvocationContextCreation:
 
 
 class TestInvocationContextProperties:
+
     def test_app_name(self, invocation_context, mock_session):
         assert invocation_context.app_name == mock_session.app_name
 
@@ -182,6 +183,7 @@ class TestInvocationContextProperties:
 
 
 class TestInvocationContextState:
+
     def test_state_creates_state_object(self, invocation_context):
         state = invocation_context.state
         assert isinstance(state, State)
@@ -202,6 +204,7 @@ class TestInvocationContextState:
 
 
 class TestInvocationContextBranch:
+
     def test_branch_can_be_set(self, mock_session_service, mock_session, mock_agent, agent_context):
         ctx = InvocationContext(
             session_service=mock_session_service,
@@ -220,6 +223,7 @@ class TestInvocationContextBranch:
 
 
 class TestLoadArtifact:
+
     @pytest.mark.asyncio
     async def test_raises_when_no_service(self, invocation_context):
         with pytest.raises(ValueError, match="Artifact service is not initialized"):
@@ -251,6 +255,7 @@ class TestLoadArtifact:
 
 
 class TestSaveArtifact:
+
     @pytest.mark.asyncio
     async def test_raises_when_no_service(self, invocation_context):
         with pytest.raises(ValueError, match="Artifact service is not initialized"):
@@ -288,6 +293,7 @@ class TestSaveArtifact:
 
 
 class TestListArtifacts:
+
     @pytest.mark.asyncio
     async def test_raises_when_no_service(self, invocation_context):
         with pytest.raises(ValueError, match="Artifact service is not initialized"):
@@ -314,6 +320,7 @@ class TestListArtifacts:
 
 
 class TestSearchMemory:
+
     @pytest.mark.asyncio
     async def test_raises_when_no_service(self, invocation_context):
         with pytest.raises(ValueError, match="Memory service is not available"):
@@ -347,35 +354,83 @@ class TestSearchMemory:
 
 
 class TestRaiseIfCancelled:
+
     @pytest.mark.asyncio
     async def test_no_session_key_is_noop(self, invocation_context):
-        await invocation_context.raise_if_cancelled()
+        with patch("trpc_agent_sdk.cancel.raise_if_cancelled", new_callable=AsyncMock) as mock_raise:
+            await invocation_context.raise_if_cancelled()
+        mock_raise.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_delegates_to_cancel_module(self, invocation_context):
-        invocation_context.session_key = Mock()
+        from trpc_agent_sdk.cancel import SessionKey
+
+        key = SessionKey("test_app", "user_1", "session_1")
+        invocation_context.session_key = key
         with patch("trpc_agent_sdk.cancel.raise_if_cancelled", new_callable=AsyncMock) as mock_raise:
             await invocation_context.raise_if_cancelled()
-            mock_raise.assert_awaited_once_with(invocation_context.session_key)
+        mock_raise.assert_awaited_once_with(key)
+
+    @pytest.mark.asyncio
+    async def test_propagates_cancellation(self, invocation_context):
+        from trpc_agent_sdk.cancel import SessionKey
+        from trpc_agent_sdk.exceptions import RunCancelledException
+
+        invocation_context.session_key = SessionKey("test_app", "user_1", "session_1")
+        with patch(
+                "trpc_agent_sdk.cancel.raise_if_cancelled",
+                new_callable=AsyncMock,
+                side_effect=RunCancelledException("cancelled"),
+        ):
+            with pytest.raises(RunCancelledException):
+                await invocation_context.raise_if_cancelled()
 
 
 class TestGetCancelEvent:
+
     @pytest.mark.asyncio
     async def test_no_session_key_returns_none(self, invocation_context):
-        result = await invocation_context.get_cancel_event()
-        assert result is None
+        assert await invocation_context.get_cancel_event() is None
 
     @pytest.mark.asyncio
     async def test_delegates_to_cancel_module(self, invocation_context):
         import asyncio
 
+        from trpc_agent_sdk.cancel import SessionKey
+
         event = asyncio.Event()
-        invocation_context.session_key = Mock()
-        with patch("trpc_agent_sdk.cancel.get_cancel_event", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = event
-            result = await invocation_context.get_cancel_event()
-            assert result is event
-            mock_get.assert_awaited_once_with(invocation_context.session_key)
+        key = SessionKey("test_app", "user_1", "session_1")
+        invocation_context.session_key = key
+        with patch(
+                "trpc_agent_sdk.cancel.get_cancel_event",
+                new_callable=AsyncMock,
+                return_value=event,
+        ) as mock_get:
+            assert await invocation_context.get_cancel_event() is event
+        mock_get.assert_awaited_once_with(key)
+
+
+class TestConsumeSteering:
+
+    @pytest.mark.asyncio
+    async def test_no_session_key_returns_none(self, invocation_context):
+        assert await invocation_context.consume_steering() is None
+
+    @pytest.mark.asyncio
+    async def test_delegates_to_cancel_module(self, invocation_context):
+        from trpc_agent_sdk.cancel import SessionKey
+        from trpc_agent_sdk.types import Content, Part
+
+        merged = Content(role="user", parts=[Part(text="steer")])
+        key = SessionKey("test_app", "user_1", "session_1")
+        invocation_context.session_key = key
+        with patch(
+                "trpc_agent_sdk.cancel.consume_steering",
+                new_callable=AsyncMock,
+                return_value=merged,
+        ) as mock_consume:
+            assert await invocation_context.consume_steering() is merged
+        mock_consume.assert_awaited_once_with(key)
 
 
 # ---------------------------------------------------------------------------
@@ -384,6 +439,7 @@ class TestGetCancelEvent:
 
 
 class TestNewInvocationContextId:
+
     def test_starts_with_prefix(self):
         cid = new_invocation_context_id()
         assert cid.startswith("e-")
