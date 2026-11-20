@@ -149,7 +149,6 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
-from trpc_agent_sdk import cancel
 
 app = FastAPI()
 
@@ -199,14 +198,11 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
         finally:
             # Trigger cancel operation regardless of normal completion or disconnection
             # This ensures the Agent execution is properly terminated and partial results are saved
-            cleanup_event = await cancel.cancel_run(app_name, user_id, session_id)
-
-            if cleanup_event is not None:
-                try:
-                    # Wait for the cancel operation to complete
-                    await asyncio.wait_for(cleanup_event.wait(), timeout=CANCEL_WAIT_TIMEOUT)
-                except asyncio.TimeoutError:
-                    pass  # Continue after timeout, the Agent may still be running
+            await runner.cancel_run_async(
+                user_id=user_id,
+                session_id=session_id,
+                timeout=CANCEL_WAIT_TIMEOUT,
+            )
 
     return StreamingResponse(
         event_generator(),
@@ -852,8 +848,7 @@ Agent services deployed via the AG-UI protocol automatically trigger Cancel when
 │  │  ┌─────────────────────────────────────┐  │  │
 │  │  │  AgUiAgent.cancel_run()             │  │  │
 │  │  │    ↓                                │  │  │
-│  │  │  Cancellation Manager               │  │  │
-│  │  │  (cancel.cancel_run)                │  │  │
+│  │  │  Runner.cancel_run_async()          │  │  │
 │  │  │    ↓                                │  │  │
 │  │  │  Agent (stops at checkpoint)        │  │  │
 │  │  └─────────────────────────────────────┘  │  │

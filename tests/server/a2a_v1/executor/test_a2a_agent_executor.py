@@ -83,11 +83,6 @@ def _execute_patches():
             },
         ),
         patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=False,
-        ),
-        patch(
             "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.new_agent_context",
             return_value=MagicMock(),
         ),
@@ -132,17 +127,10 @@ def _failed_events(enqueued):
 
 
 def _pre_handle_patches():
-    return (
-        patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.get_user_session_id",
-            new_callable=AsyncMock,
-            return_value=("u1", "s1"),
-        ),
-        patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=False,
-        ),
+    return patch(
+        "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.get_user_session_id",
+        new_callable=AsyncMock,
+        return_value=("u1", "s1"),
     )
 
 
@@ -426,10 +414,6 @@ class TestExecute:
                 "run_config": MagicMock(),
             },
         ), patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=False,
-        ), patch(
             "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.new_agent_context",
             return_value=MagicMock(),
         ):
@@ -441,29 +425,6 @@ class TestExecute:
             first_event = calls[0].args[0]
             assert isinstance(first_event, Task)
             assert first_event.id == "task-1"
-
-    async def test_cancelled_session_enqueues_cancellation(self):
-        msg = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
-        runner = _make_runner()
-        executor = TrpcA2aAgentExecutor(runner=runner)
-        ctx = _make_context(message=msg, current_task=MagicMock())
-        ctx.call_context = None
-        queue = _make_event_queue()
-
-        with patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.get_user_session_id",
-            new_callable=AsyncMock,
-            return_value=("u1", "s1"),
-        ), patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=True,
-        ):
-            await executor.execute(ctx, queue)
-            enqueued_args = [call.args[0] for call in queue.enqueue_event.call_args_list]
-            # Should have a cancellation event
-            assert any(hasattr(e, "status") and e.status.state == TaskState.TASK_STATE_CANCELED
-                       for e in enqueued_args if hasattr(e, "status"))
 
     async def test_execution_error_enqueues_status_event(self):
         msg = Message(message_id="m1", role=Role.ROLE_USER, parts=[A2APart(text="hi")])
@@ -488,10 +449,6 @@ class TestExecute:
                 "new_message": MagicMock(),
                 "run_config": MagicMock(),
             },
-        ), patch(
-            "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=False,
         ), patch(
             "trpc_agent_sdk.server.a2a_v1.executor._a2a_agent_executor.new_agent_context",
             return_value=MagicMock(),
@@ -522,8 +479,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -552,8 +509,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -581,8 +538,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock(return_value=_make_inv_ctx())
             await executor.execute(ctx, queue)
 
@@ -619,8 +576,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -643,8 +600,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -660,9 +617,11 @@ class TestExecute:
 
     async def test_agent_cancelled_event_enqueues_cancellation(self):
         runner = _make_runner()
+        drained = []
 
         async def cancelled_run(**kwargs):
             yield AgentCancelledEvent(invocation_id="inv-1", author="agent")
+            drained.append(True)
 
         runner.run_async = cancelled_run
         executor = TrpcA2aAgentExecutor(runner=runner)
@@ -670,8 +629,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -680,6 +639,7 @@ class TestExecute:
         assert TaskState.TASK_STATE_CANCELED in states
         assert TaskState.TASK_STATE_COMPLETED not in states
         assert TaskState.TASK_STATE_FAILED not in states
+        assert drained == [True]
 
     async def test_event_callback_error_enqueues_failure(self):
         runner = _make_runner()
@@ -699,8 +659,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -727,8 +687,8 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -741,9 +701,9 @@ class TestExecute:
         ctx = _make_context(message=_user_message(), current_task=MagicMock())
         ctx.call_context = None
         queue = _make_event_queue()
-        p_session, p_cancelled = _pre_handle_patches()
+        p_session = _pre_handle_patches()
 
-        with p_session, p_cancelled, patch.object(
+        with p_session, patch.object(
                 executor, "_handle_request", new_callable=AsyncMock,
                 side_effect=RuntimeError("pre-handle boom")):
             await executor.execute(ctx, queue)
@@ -758,9 +718,9 @@ class TestExecute:
         ctx = _make_context(message=_user_message(), current_task=MagicMock())
         ctx.call_context = None
         queue = _make_event_queue()
-        p_session, p_cancelled = _pre_handle_patches()
+        p_session = _pre_handle_patches()
 
-        with p_session, p_cancelled, patch.object(
+        with p_session, patch.object(
                 executor, "_handle_request", new_callable=AsyncMock,
                 side_effect=_run_limit_exc()):
             await executor.execute(ctx, queue)
@@ -778,9 +738,9 @@ class TestExecute:
         ctx.call_context = None
         queue = _make_event_queue()
         queue.enqueue_event = AsyncMock(side_effect=RuntimeError("queue down"))
-        p_session, p_cancelled = _pre_handle_patches()
+        p_session = _pre_handle_patches()
 
-        with p_session, p_cancelled, patch.object(
+        with p_session, patch.object(
                 executor, "_handle_request", new_callable=AsyncMock,
                 side_effect=RuntimeError("pre-handle boom")):
             await executor.execute(ctx, queue)
@@ -800,8 +760,8 @@ class TestExecute:
         # working status succeeds; the subsequent failure event enqueue fails
         queue.enqueue_event = AsyncMock(side_effect=[None, RuntimeError("queue down")])
 
-        p_convert, p_cancelled, p_ctx = _execute_patches()
-        with p_convert, p_cancelled, p_ctx:
+        p_convert, p_ctx = _execute_patches()
+        with p_convert, p_ctx:
             runner._new_invocation_context = MagicMock()
             await executor.execute(ctx, queue)
 
@@ -812,12 +772,12 @@ class TestExecute:
         ctx.call_context = MagicMock()
         ctx.call_context.state = {"headers": {"traceparent": "00-abc"}}
         queue = _make_event_queue()
-        p_session, p_cancelled = _pre_handle_patches()
+        p_session = _pre_handle_patches()
         extract = MagicMock(side_effect=RuntimeError("otel boom"))
         handle_request = AsyncMock()
 
         with patch("opentelemetry.propagate.extract", extract), \
-                p_session, p_cancelled, \
+                p_session, \
                 patch.object(executor, "_handle_request", handle_request):
             await executor.execute(ctx, queue)
             extract.assert_called_once()
@@ -830,14 +790,14 @@ class TestExecute:
         ctx.call_context = MagicMock()
         ctx.call_context.state = {"headers": {"traceparent": "00-abc"}}
         queue = _make_event_queue()
-        p_session, p_cancelled = _pre_handle_patches()
+        p_session = _pre_handle_patches()
         detach = MagicMock(side_effect=RuntimeError("detach boom"))
         handle_request = AsyncMock()
 
         with patch("opentelemetry.propagate.extract", return_value="otel-ctx"), \
                 patch("opentelemetry.context.attach", return_value="token"), \
                 patch("opentelemetry.context.detach", detach), \
-                p_session, p_cancelled, \
+                p_session, \
                 patch.object(executor, "_handle_request", handle_request):
             await executor.execute(ctx, queue)
             handle_request.assert_awaited_once()

@@ -12,6 +12,7 @@ filter framework, and session management to deliver AI agent functionality.
 
 from __future__ import annotations
 
+from contextlib import aclosing
 from typing import Any
 from typing import AsyncGenerator
 from typing import Awaitable
@@ -28,6 +29,7 @@ from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
 
+from trpc_agent_sdk.cancel import mark_steering_content
 from trpc_agent_sdk.codeact import CodeActConfig
 from trpc_agent_sdk.codeact import CodeActResponseProcessor
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
@@ -499,6 +501,21 @@ class LlmAgent(BaseAgent):
                             observed_value=codeact_iterations,
                         )
 
+                # Deliver pending steering before rebuilding the request. The
+                # hidden event is persisted by Runner, so the request processor
+                # reads it back from session as part of the conversation history.
+                steering_content = await ctx.consume_steering()
+                if steering_content is not None:
+                    steering_event = Event(
+                        invocation_id=ctx.invocation_id,
+                        author="user",
+                        content=mark_steering_content(steering_content),
+                        branch=ctx.branch,
+                        visible=False,
+                    )
+                    yield steering_event
+                    accumulate_content(steering_event)
+
                 # Step 1: Build request using the request processor (includes conversation history)
                 request = LlmRequest(model=model_instance.name, )
 
@@ -532,78 +549,79 @@ class LlmAgent(BaseAgent):
                 logger.debug("Starting LLM call for agent: %s", self.name)
 
                 # Use LlmProcessor to get unified events
-                async for event in llm_processor.call_llm_async(request, ctx, stream=True):
-                    # Handle different event types by checking content and error status
-                    if event.is_error():
-                        # Error event - yield and stop
-                        yield event
-                        return
-                    elif event.content:
-                        if self.code_act and not event.partial and event.usage_metadata:
-                            codeact_usage_metadata = event.usage_metadata
-
-                        # Skip streaming tool calls (partial=True with streaming_tool_call metadata)
-                        # These events are yielded directly for consumers to handle
-                        if not event.is_streaming_tool_call():
-                            function_calls = event.get_function_calls()
-                            if function_calls:
-                                collected_tool_calls.extend(function_calls)
-                                logger.debug("Collected %s tool calls from LLM", len(function_calls))
-
-                        if event.is_final_response():
-                            if self.code_act and self.code_act.require_result:
-                                codeact_text_only = True
-                            else:
-                                self._save_output_to_state(ctx, event)
-
-                        # Route model-generated cells to exactly one execution
-                        # path. CodeAct and user/Skill code executors are separate.
-                        # We collect code execution events first (this mutates event.content in place,
-                        # stripping executable_code parts but keeping text/function_call), then yield
-                        # the main event BEFORE the code execution events so the causal order in
-                        # session is preserved: assistant declaration → code execution → result.
-                        pending_code_events: list[Event] = []
-                        codeact_final_event: Optional[Event] = None
-                        code_processor = None
-                        if self.code_act:
-                            code_processor = CodeActResponseProcessor
-                        elif self.code_executor:
-                            code_processor = CodeExecutionResponseProcessor
-                        if code_processor and event.content:
-                            async for code_event in code_processor.run_async(ctx, event):
-                                if code_event.object == "codeact.result":
-                                    codeact_final_event = code_event
-                                if code_event.content and code_event.content.parts:
-                                    for part in code_event.content.parts:
-                                        if part.code_execution_result or part.executable_code:
-                                            code_was_executed = True
-                                            break
-                                pending_code_events.append(code_event)
-
-                        # CodeAct model output is control code, not a user-facing
-                        # answer. Its executable-code and observation events are
-                        # emitted below; only the validated codeact.result is final.
-                        allow_codeact_text = bool(self.code_act and not self.code_act.require_result
-                                                  and event.is_final_response() and not pending_code_events)
-                        if event.content is not None and (not self.code_act or allow_codeact_text):
+                async with aclosing(llm_processor.call_llm_async(request, ctx, stream=True)) as llm_stream:
+                    async for event in llm_stream:
+                        # Handle different event types by checking content and error status
+                        if event.is_error():
+                            # Error event - yield and stop
                             yield event
-                            accumulate_content(event)
-
-                        # Then yield code execution events in order.
-                        if pending_code_events and event.usage_metadata:
-                            pending_code_events[-1].usage_metadata = event.usage_metadata
-                            codeact_usage_metadata = None
-                        for code_event in pending_code_events:
-                            yield code_event
-                            accumulate_content(code_event)
-
-                        if codeact_final_event is not None:
-                            self._save_output_to_state(ctx, codeact_final_event)
                             return
-                    else:
-                        # Yield other events directly
-                        yield event
-                    await ctx.raise_if_cancelled()
+                        elif event.content:
+                            if self.code_act and not event.partial and event.usage_metadata:
+                                codeact_usage_metadata = event.usage_metadata
+
+                            # Skip streaming tool calls (partial=True with streaming_tool_call metadata)
+                            # These events are yielded directly for consumers to handle
+                            if not event.is_streaming_tool_call():
+                                function_calls = event.get_function_calls()
+                                if function_calls:
+                                    collected_tool_calls.extend(function_calls)
+                                    logger.debug("Collected %s tool calls from LLM", len(function_calls))
+
+                            if event.is_final_response():
+                                if self.code_act and self.code_act.require_result:
+                                    codeact_text_only = True
+                                else:
+                                    self._save_output_to_state(ctx, event)
+
+                            # Route model-generated cells to exactly one execution
+                            # path. CodeAct and user/Skill code executors are separate.
+                            # We collect code execution events first (this mutates event.content in place,
+                            # stripping executable_code parts but keeping text/function_call), then yield
+                            # the main event BEFORE the code execution events so the causal order in
+                            # session is preserved: assistant declaration → code execution → result.
+                            pending_code_events: list[Event] = []
+                            codeact_final_event: Optional[Event] = None
+                            code_processor = None
+                            if self.code_act:
+                                code_processor = CodeActResponseProcessor
+                            elif self.code_executor:
+                                code_processor = CodeExecutionResponseProcessor
+                            if code_processor and event.content:
+                                async for code_event in code_processor.run_async(ctx, event):
+                                    if code_event.object == "codeact.result":
+                                        codeact_final_event = code_event
+                                    if code_event.content and code_event.content.parts:
+                                        for part in code_event.content.parts:
+                                            if part.code_execution_result or part.executable_code:
+                                                code_was_executed = True
+                                                break
+                                    pending_code_events.append(code_event)
+
+                            # CodeAct model output is control code, not a user-facing
+                            # answer. Its executable-code and observation events are
+                            # emitted below; only the validated codeact.result is final.
+                            allow_codeact_text = bool(self.code_act and not self.code_act.require_result
+                                                      and event.is_final_response() and not pending_code_events)
+                            if event.content is not None and (not self.code_act or allow_codeact_text):
+                                yield event
+                                accumulate_content(event)
+
+                            # Then yield code execution events in order.
+                            if pending_code_events and event.usage_metadata:
+                                pending_code_events[-1].usage_metadata = event.usage_metadata
+                                codeact_usage_metadata = None
+                            for code_event in pending_code_events:
+                                yield code_event
+                                accumulate_content(code_event)
+
+                            if codeact_final_event is not None:
+                                self._save_output_to_state(ctx, codeact_final_event)
+                                return
+                        else:
+                            # Yield other events directly
+                            yield event
+                        await ctx.raise_if_cancelled()
 
                 # CHECKPOINT 4: Before tool execution
                 await ctx.raise_if_cancelled()

@@ -13,17 +13,20 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from trpc_agent_sdk import cancel
 from trpc_agent_sdk.agents._llm_agent import LlmAgent
 from trpc_agent_sdk.agents._base_agent import BaseAgent
 from trpc_agent_sdk.agents.core._history_processor import BranchFilterMode
+from trpc_agent_sdk.cancel import _public
 from trpc_agent_sdk.context import InvocationContext, create_agent_context
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
 from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.types import Content, GenerateContentConfig, Part
+from trpc_agent_sdk.types import Blob, Content, GenerateContentConfig, Part
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-llm-.*"]
@@ -46,9 +49,7 @@ def register_test_model():
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test", user_id="u1", session_id="s1")
-    )
+    session = asyncio.run(service.create_session(app_name="test", user_id="u1", session_id="s1"))
     agent = LlmAgent(name="test_llm", model="test-llm-model")
     ctx = InvocationContext(
         session_service=service,
@@ -66,6 +67,7 @@ def invocation_context():
 
 
 class TestLlmAgentInit:
+
     def test_default_values(self):
         agent = LlmAgent(name="test", model="test-llm-model")
         assert agent.instruction == ""
@@ -95,6 +97,7 @@ class TestLlmAgentInit:
         assert agent.model is model_instance
 
     def test_callable_model_not_resolved_on_init(self):
+
         async def model_factory(custom_data):
             return MockLLMModel(model_name="test-llm-model")
 
@@ -112,6 +115,7 @@ class TestLlmAgentInit:
 
 
 class TestGetEffectiveBranchFilterMode:
+
     def test_default_returns_all(self):
         agent = LlmAgent(name="test", model="test-llm-model")
         assert agent._get_effective_branch_filter_mode() == BranchFilterMode.ALL
@@ -156,6 +160,7 @@ class TestGetEffectiveBranchFilterMode:
 
 
 class TestShouldEnableAgentTransfer:
+
     def test_no_sub_agents_no_parent(self):
         agent = LlmAgent(name="test", model="test-llm-model")
         assert agent._should_enable_agent_transfer() is False
@@ -189,12 +194,15 @@ class TestShouldEnableAgentTransfer:
 
 
 class TestIsLlmAgent:
+
     def test_llm_agent_returns_true(self):
         agent = LlmAgent(name="test", model="test-llm-model")
         assert agent._is_llm_agent(agent) is True
 
     def test_base_agent_returns_false(self):
+
         class SimpleAgent(BaseAgent):
+
             async def _run_async_impl(self, ctx):
                 yield
 
@@ -209,6 +217,7 @@ class TestIsLlmAgent:
 
 
 class TestResolveModel:
+
     def test_resolve_model_instance(self, invocation_context):
         model = MockLLMModel(model_name="test-llm-model")
         agent = LlmAgent(name="test", model=model)
@@ -250,6 +259,7 @@ class TestResolveModel:
 
 
 class TestCreateErrorEvent:
+
     def test_creates_error_event(self, invocation_context):
         agent = invocation_context.agent
         event = agent._create_error_event(invocation_context, "test_error", "Something failed")
@@ -265,6 +275,7 @@ class TestCreateErrorEvent:
 
 
 class TestSaveOutputToState:
+
     def test_saves_when_output_key_set(self, invocation_context):
         agent = LlmAgent(name="test", model="test-llm-model", output_key="result")
         invocation_context.agent = agent
@@ -295,6 +306,7 @@ class TestSaveOutputToState:
 
 
 class TestGenerateContentConfigValidator:
+
     def test_none_config_becomes_default(self):
         agent = LlmAgent(name="test", model="test-llm-model", generate_content_config=None)
         assert isinstance(agent.generate_content_config, GenerateContentConfig)
@@ -306,9 +318,7 @@ class TestGenerateContentConfigValidator:
             LlmAgent(
                 name="test",
                 model="test-llm-model",
-                generate_content_config=GenerateContentConfig(
-                    thinking_config=ThinkingConfig(thinking_budget=100)
-                ),
+                generate_content_config=GenerateContentConfig(thinking_config=ThinkingConfig(thinking_budget=100)),
             )
 
     def test_tools_in_config_raises(self):
@@ -326,7 +336,90 @@ class TestGenerateContentConfigValidator:
             LlmAgent(
                 name="test",
                 model="test-llm-model",
-                generate_content_config=GenerateContentConfig(
-                    system_instruction="bad"
-                ),
+                generate_content_config=GenerateContentConfig(system_instruction="bad"),
             )
+
+
+class CapturingLLMModel(LLMModel):
+    """LLM model that records every request it receives."""
+
+    def __init__(self, requests: List[LlmRequest]):
+        super().__init__(model_name="capturing-llm-model")
+        self.requests = requests
+
+    @classmethod
+    def supported_models(cls) -> List[str]:
+        return [r"capturing-llm-.*"]
+
+    async def _generate_async_impl(self, request, stream=False, ctx=None):
+        self.requests.append(request)
+        yield LlmResponse(content=Content(parts=[Part(text="done")]))
+
+    def validate_request(self, request):
+        pass
+
+
+class TestSteering:
+
+    async def test_steering_event_is_hidden_and_added_to_model_request(self, invocation_context):
+        requests = []
+        agent = LlmAgent(name="test_llm", model=CapturingLLMModel(requests))
+        invocation_context.agent = agent
+        invocation_context.session_key = cancel.SessionKey("test", "u1", "s1")
+
+        image = b"\x89PNG\r\n\x1a\n\x00\xff"
+        first = Content(
+            role="user",
+            parts=[
+                Part(text="check Shanghai weather instead"),
+                Part(inline_data=Blob(mime_type="image/png", data=image))
+            ],
+        )
+        second = Content(role="user", parts=[Part(text="then summarize the result")])
+
+        cancel.destroy_shared_mem()
+        cancel.register_run(invocation_context.session_key)
+        yielded = []
+        try:
+            assert await cancel.send_steering(invocation_context.session_key, first) is cancel.SteeringStatus.ACCEPTED
+            assert await cancel.send_steering(invocation_context.session_key, second) is cancel.SteeringStatus.ACCEPTED
+
+            async for event in agent._run_async_impl(invocation_context):
+                yielded.append(event)
+                # Mimic Runner: persist every non-partial event. Runner also
+                # skips yielding visible=False events to the client.
+                if not event.partial:
+                    await invocation_context.session_service.append_event(
+                        session=invocation_context.session,
+                        event=event,
+                    )
+        finally:
+            cancel.unregister_run(invocation_context.session_key)
+
+        assert len(requests) == 1
+        marked = requests[0].contents[-1]
+        assert marked.role == "user"
+        assert marked.parts[0].text == _public._STEERING_PREFIX
+        assert marked.parts[1].text == "check Shanghai weather instead"
+        assert marked.parts[2].inline_data.data == image
+        assert marked.parts[3].text == "then summarize the result"
+        assert marked.parts[4].text == _public._STEERING_SUFFIX
+
+        steering_events = [event for event in yielded if not event.visible]
+        assert len(steering_events) == 1
+        steering_event = steering_events[0]
+        assert steering_event.author == "user"
+        assert steering_event.branch == invocation_context.branch
+        assert [part.text for part in steering_event.content.parts] == [
+            _public._STEERING_PREFIX,
+            "check Shanghai weather instead",
+            None,
+            "then summarize the result",
+            _public._STEERING_SUFFIX,
+        ]
+        persisted_ids = {event.id for event in invocation_context.session.events}
+        assert steering_event.id in persisted_ids
+
+        visible_texts = [event.get_text() for event in yielded if event.visible]
+        assert all("check Shanghai weather instead" not in text and "then summarize the result" not in text
+                   for text in visible_texts)

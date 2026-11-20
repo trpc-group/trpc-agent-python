@@ -39,8 +39,6 @@ from a2a.types import Artifact
 from a2a.types import TaskArtifactUpdateEvent
 from a2a.types import TaskState
 from pydantic import BaseModel
-from trpc_agent_sdk.cancel import SessionKey
-from trpc_agent_sdk.cancel import is_run_cancelled
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import new_agent_context
 from trpc_agent_sdk.events import AgentCancelledEvent
@@ -220,19 +218,6 @@ class TrpcA2aAgentExecutor(AgentExecutor):
             try:
                 user_id, session_id = await get_user_session_id(context, self._user_id_extractor)
                 logger.info("Execute request for user_id: %s, session_id: %s", user_id, session_id)
-
-                runner = await self._resolve_runner()
-
-                session_key = SessionKey(runner.app_name, user_id, session_id)
-                if await is_run_cancelled(session_key):
-                    logger.warning("Session %s is cancelled, rejecting new execution", session_id)
-                    await event_queue.enqueue_event(
-                        create_cancellation_event(
-                            task_id=context.task_id,
-                            context_id=context.context_id,
-                            message_text="Session was cancelled",
-                        ))
-                    return
 
                 await self._handle_request(context, event_queue)
             except RunLimitException as ex:
