@@ -767,13 +767,14 @@ cancel_run(key)
       │      │                   await cleanup_event.wait()（最多 timeout）
       │      └── _UnixSocketManager: event.set()
       │                          一次性短连接发 send_cancel
+      │                          轮询 is_running 直到 run 释放（最多 timeout）
       │
       └── 本进程没有 run
-             └── 一次性短连接发 send_cancel
+             └── 一次性短连接发 send_cancel，再轮询 is_running
 ```
 
 - local 模式 `cancel_run` 会等 `cleanup_event`。
-- UDS 模式只发布 cancel，不等 owner 清理；`timeout` 参数保留但忽略。
+- UDS 模式发出 `send_cancel` 后按 `poll_interval` 轮询 master 的 `is_running`，直到 run 被释放或 `timeout` 到期；两种模式都遵守同一个 `timeout`。
 - 重复取消没有副作用；取消请求以 session 为粒度。
 
 ### 6.2 单 worker 取消
@@ -806,7 +807,7 @@ Runner except RunCancelledException
         └── yield AgentCancelledEvent
 ```
 
-`cancel_run_async()` 默认最多等 1 秒；run 在超时前完成清理就立即返回，超时后返回 `True` 并记录 warning。`timeout` 由调用方通过 `Runner.cancel_run_async(timeout=...)` 传入，最终透传给 `CancelManager.cancel_run`；A2A 和 AG-UI 分别使用自己的 `cancel_wait_timeout` 配置。`Runner.cancel_run_async()` 对用户保持返回 `bool`；manager 层的 `cancel.cancel_run()` 返回 `Status`，失败详情由 Runner 记录到日志。
+`cancel_run_async()` 默认最多等 1 秒；run 在超时前完成清理就返回 `True`，超时后返回 `False`，`error_msg` 由 Runner 记到 `logger.error`。`timeout` 由调用方通过 `Runner.cancel_run_async(timeout=...)` 传入，最终透传给 `CancelManager.cancel_run`；A2A 和 AG-UI 分别使用自己的 `cancel_wait_timeout` 配置。`Runner.cancel_run_async()` 对用户保持返回 `bool`；manager 层的 `cancel.cancel_run()` 返回 `Status`，失败详情由 Runner 记录到日志。超时返回的 `False` 只表示没在窗口内确认清理，取消信号已经发出。
 
 ### 6.3 多 worker 取消
 
@@ -817,7 +818,7 @@ Worker A（owner）              master server                Worker B（cancel�
     │   └── run 连接 + poller ─────►│ _runs[key] = _ServerRun      │
     │                              │                              │
     │                              │ cancelled=true ◄─────────────│ cancel_run(key)
-    │                              │                              │ 发布后立即返回
+    │                              │                              │ 轮询直到释放
     │ poller: sync RPC ───────────►│ 读 cancelled                 │
     │   event.set()                │                              │
     │                              │                              │
@@ -828,10 +829,10 @@ Worker A（owner）              master server                Worker B（cancel�
     │ unregister_run(key) ────────►│ EOF -> 删除 run              │
 ```
 
-- owner 调用 `cancel_run()`：set 本地 `event`，同时用一次性短连接发 `send_cancel`，然后立即返回。
-- 非 owner 调用 `cancel_run()`：直接发 `send_cancel`，立即返回；owner 在下一个 poll interval 的 `sync` 里看到取消。
+- owner 调用 `cancel_run()`：set 本地 `event`，用一次性短连接发 `send_cancel`，再轮询 `is_running` 等 run 释放。
+- 非 owner 调用 `cancel_run()`：直接发 `send_cancel` 再轮询 `is_running`；owner 在下一个 poll interval 的 `sync` 里看到取消。
 - 每个 run 在 `register_run()` 后都会启动 poller；`get_cancel_event()` 只返回本地 event，不再懒创建 watcher。
-- 没有跨进程的 cleanup Event；UDS 模式下 `cancel_run` 不等待清理。
+- 没有跨进程的 cleanup Event；UDS 模式下 `cancel_run` 改用 `is_running` 轮询确认 run 已释放，`timeout` 到期返回 `Status(ok=False)`。
 - checkpoint 只读本地 `event`，不发 RPC；跨 worker 取消的感知延迟上限是一个 `poll_interval`。
 
 ### 6.4 取消的生效点
@@ -1012,6 +1013,34 @@ LLM request
 - Steering 和 cancel 同时到达时，cancel 优先：先 `raise_if_cancelled()`，本轮不消费 steering，cancel 时残留的消息直接丢弃。
 - 跨 worker 下消息还在 master 的 `_ServerRun`、没同步到 owner 时 run 就结束，会随 `_ServerRun` 一起释放；这类 `poll_interval` 窗口内的消息不保证交付。
 
+### 7.6 其他 Agent 的 Steering 接入
+
+`LlmAgent` 自动消费 steering；其余 Agent 的接入方式不同，但入口都是 `ctx.consume_steering()`，也都遵循 §7.5 的 cancel 优先规则。
+
+**LangGraphAgent**：框架不往图里注入消息。业务在 `tools` 节点之后、`chatbot` 之前加一个 `steering_node`，用 `get_agent_context(config)` 拿到 ctx，调用 `consume_steering()`，把 Content 包成 `HumanMessage` 追加到 `state["messages"]`。`mark_steering_content()` 保留 marker，让模型能区分这是运行中追加的用户输入。示例见 `examples/langgraph_agent_with_steering`。
+
+**ClaudeAgent**：Claude 的对话由 SDK 管理，没有 LlmAgent 那样的多轮循环。框架在 run 开始时起一个 `_watch_steering` task，轮询 `ctx.consume_steering()`，把合并后的文本通过 `client.query(text, session_id=...)` 发给当前活跃的 Claude 请求（session 模式下经 `SessionManager.send_steering()` 转到 `_SessionWorker`）。转发成功的 Content 进入 `pending_steering`，再由 `_drain_steering_events()` 生成 `visible=False` Event，交给 Runner 持久化。
+
+```text
+ctx.consume_steering()          _watch_steering (0.05s 轮询)
+        │                              │
+        │  合并后的 Content             │ join parts
+        │                              ▼
+        │                      client.query(text, session_id)
+        │                              │
+        │                              ▼
+        │                      pending_steering
+        │                              │
+        └────── hidden Event(visible=False) ──► Runner append_event
+```
+
+两个边界：
+
+- watcher 在读队列前先看 `ctx.get_cancel_event()`。cancel event 置位后直接退出，不再消费也不再转发，对应 §7.5 的「cancel 优先」。Unix Socket 模式下这个 event 由 per-run poller 同步。
+- Claude 没有可重入的循环，因此没有 LlmAgent 那种「loop 退出前补一轮 iteration」的处理。响应结束后才到达的 steering 无法再注入当前 turn；已同步到 owner 但仍未转发的消息随 run 释放，属于 §9.3 的 best-effort 窗口。
+
+多 Agent 场景（Chain / Parallel / Cycle / Team）暂不支持 Steering：同一时刻可能有多个 Agent 在执行，插话目标不唯一。
+
 ## 8. A2A / AG-UI 集成
 
 A2A 和 AG-UI 都通过 `Runner` 的公开方法使用控制面，不直接调用 `_LocalManager` / `_UnixSocketManager`，也不直接读写 master 的 run 表。A2A v1 已按这个方向落地；AG-UI 的 cancel 已迁移到 `Runner`，steering 仍待迁移，下面分别说明。
@@ -1064,7 +1093,7 @@ Client ◄── TaskStatus(canceled) ── executor 消费事件并 enqueue
 - metadata 不完整时，`cancel()` 回退到 `get_user_session_id(context, user_id_extractor)`。
 - `cancel()` 只负责把取消信号交给 Runner。真正的 `canceled` 由 owner 的 `execute()` 写回：Runner yield `AgentCancelledEvent` 后，executor 把取消状态 enqueue 到原事件流，并把 Runner 生成器消费到结束（见 §4.1）。
 - 没有活跃 run 时，`cancel()` 直接 enqueue 一条 canceled 状态，message 为 `No active task found to cancel`。
-- 本地模式下 `cancel_wait_timeout` 控制等待清理的时间；UDS 模式下 cancel 通过 Unix Socket 发布请求，不等待 owner。
+- `cancel_wait_timeout` 在两种模式下都控制等待清理的时间：本地模式等 `cleanup_event`，UDS 模式通过 Unix Socket 发 `send_cancel` 后轮询 `is_running`。
 
 Steering 不属于 A2A 协议，`TrpcA2aAgentService` 不提供 `send_steering`。示例在 `create_a2a_application()` 返回的同一个 Starlette app 上注册应用层路由：
 
@@ -1165,7 +1194,7 @@ run 结束时：
 ### 9.3 交付语义
 
 - cancel 是 best-effort signal；本进程内 cancel 立即 set 本地 event，跨 worker cancel 最多一个 `poll_interval` 后由 poller 同步，Agent 在下一个 checkpoint 停止。
-- UDS 模式下 `cancel_run()` 发布后立即返回；owner 的 poller 在一个 `poll_interval` 内（默认 0.1s）把 master 的取消状态同步到本地 Event，随后 Agent 在下一个 checkpoint 退出。
+- UDS 模式下 `cancel_run()` 发出 `send_cancel` 后会轮询 master 的 `is_running`，直到 run 被释放或 `timeout` 到期才返回；owner 的 poller 在一个 `poll_interval` 内（默认 0.1s）把 master 的取消状态同步到本地 Event，随后 Agent 在下一个 checkpoint 退出。超时返回的 `Status(ok=False)` 只表示没在窗口内确认清理，取消信号已经发出。
 - `get_cancel_event()` 不启动额外任务；poller 对每个 run 始终存在。
 - steering 是 best-effort queue；`Status(ok=True)` 表示已入队，模型在下一次 LLM 请求前读取。跨 worker 投递延迟上限是一个 `poll_interval`。
 - `consume_steering()` 把多条 steering 按 FIFO 合并成一条 user Content；LlmAgent 把它包装成 `visible=False` Event 写入 session，客户端事件流不可见，但模型历史可见。它会继续影响同一 session 的后续 LLM 请求。

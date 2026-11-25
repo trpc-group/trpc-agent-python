@@ -65,6 +65,8 @@ def _make_ctx(
     ctx.invocation_id = "inv-1"
     ctx.branch = None
     ctx.raise_if_cancelled = AsyncMock()
+    ctx.consume_steering = AsyncMock(return_value=None)
+    ctx.get_cancel_event = AsyncMock(return_value=None)
     ctx.override_messages = override_messages
     ctx.user_content = None
 
@@ -1328,6 +1330,98 @@ class TestRunAsyncImpl:
             events.append(event)
 
         assert len(events) > 0
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent.ClaudeSDKClient")
+    async def test_run_forwards_steering_with_enable_session(self, MockClient, mock_add):
+        agent = self._make_agent(enable_session=True)
+
+        from claude_agent_sdk import TextBlock, AssistantMessage
+        assistant_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.query = AsyncMock()
+
+        async def mock_receive():
+            await asyncio.sleep(0.15)
+            yield assistant_msg
+
+        mock_client.receive_response = mock_receive
+        MockClient.return_value = mock_client
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        texts = [call.args[0] for call in mock_client.query.await_args_list]
+        assert texts[0] == "hello"
+        assert "steer" in texts
+        assert any(not event.visible for event in events)
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    async def test_run_forwards_steering_with_session_manager(self, mock_add):
+        agent = self._make_agent(enable_session=False)
+
+        from claude_agent_sdk import TextBlock, AssistantMessage
+        assistant_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        async def mock_stream_query(**kwargs):
+            await asyncio.sleep(0.15)
+            yield assistant_msg
+
+        mock_sm = MagicMock(spec=SessionManager)
+        mock_sm.stream_query = mock_stream_query
+        mock_sm.send_steering = AsyncMock(return_value=True)
+        agent._session_manager = mock_sm
+        agent._runtime = MagicMock(spec=AsyncRuntime)
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        mock_sm.send_steering.assert_awaited_once_with("test-session", "steer")
+        assert any(not event.visible for event in events)
+
+    async def test_watch_steering_stops_when_cancelled(self):
+        agent = self._make_agent(enable_session=False)
+
+        cancel_event = asyncio.Event()
+        cancel_event.set()
+        ctx = _make_ctx()
+        ctx.get_cancel_event = AsyncMock(return_value=cancel_event)
+        ctx.consume_steering = AsyncMock()
+
+        send = AsyncMock(return_value=True)
+        stop = asyncio.Event()
+        pending = []
+
+        await agent._watch_steering(ctx, send, stop, pending)
+
+        ctx.consume_steering.assert_not_awaited()
+        send.assert_not_awaited()
+        assert pending == []
 
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
     async def test_run_no_user_message(self, mock_add):

@@ -6,18 +6,20 @@ trpc-agent 为此提供了 Cancel 机制。Agent 在几个检查点检查有没�
 
 框架自带的 Agent 都已经接入了这项能力；业务自己实现的 CustomAgent 也可以按同样的方式接入。
 
-| 模块类型 | 模块名称 | Cancel 支持 | 说明 |
-|---------|---------|-------------|------|
-| Single Agent | `LlmAgent` | ✅ | 在 LLM 流式输出、工具执行等位置设置检查点 |
-| Single Agent | `LangGraphAgent` | ✅ | 在LangGraph的流式输出中设了置检查点 |
-| Single Agent | `ClaudeAgent` | ✅ | 在使用claude-sdk流式输出中设置了检查点 |
-| Single Agent | `TrpcRemoteA2aAgent` | ✅ | 在http流式输出中设置了检查点 |
-| Multi Agent | `ChainAgent` | ✅ | 从其子Agent中抛出异常 |
-| Multi Agent | `ParallelAgent` | ✅ | 任一子 Agent 抛出异常，则取消执行 |
-| Multi Agent | `CycleAgent` | ✅ | 从其子Agent中抛出异常 |
-| Multi Agent | `TeamAgent` | ✅ | Leader 和 Member 执行期间均可被取消 |
-| Agent Service | `TrpcA2aAgentService` | ✅ | A2A 协议的 cancel_task 接口取消远程Agent的执行 |
-| Agent Service | `AgUiService` | ✅ | 通过 SSE 连接断开检测，Agent自动取消执行 |
+| 模块类型 | 模块名称 | Cancel 支持 | Steering 支持 | 说明 |
+|---------|---------|-------------|---------------|------|
+| Single Agent | `LlmAgent` | ✅ | ✅ | 在 LLM 流式输出、工具执行等位置设置检查点 |
+| Single Agent | `LangGraphAgent` | ✅ | ✅ | Steering 由业务自定义节点消费 |
+| Single Agent | `ClaudeAgent` | ✅ | ✅ | 在 Claude SDK 流式输出中设置检查点 |
+| Single Agent | `TrpcRemoteA2aAgent` | ✅ | — | Steering 由远端 A2A 服务决定 |
+| Multi Agent | `ChainAgent` | ✅ | ❌ | 多 Agent 顺序执行，插话目标不唯一 |
+| Multi Agent | `ParallelAgent` | ✅ | ❌ | 多个 Agent 并发执行，插话目标不确定 |
+| Multi Agent | `CycleAgent` | ✅ | ❌ | 循环中执行 Agent 不唯一 |
+| Multi Agent | `TeamAgent` | ✅ | ❌ | Leader 和 Member 都可能执行，无法确定向谁插话 |
+| Agent Service | `TrpcA2aAgentService` | ✅ | — | Steering 由承载的 Agent 决定 |
+| Agent Service | `AgUiService` | ✅ | — | Steering 由承载的 Agent 决定 |
+
+多 Agent 场景暂不支持 Steering。多 Agent 可能并发执行，用户插话时无法确定应该发给当前执行的 Agent，还是发给入口 Agent；不同目标会得到不同结果，还会引入额外的路由、优先级和并发消费规则。等具体需求明确后再支持。
 
 
 ## Agent Cancel 机制设计介绍
@@ -214,11 +216,9 @@ class MyCancelManager(CancelManager):
         ...
 
     async def cancel_run(self, key: SessionKey, timeout: float = 1.0) -> Status:
-        # 请求取消。timeout 由 Runner.cancel_run_async(timeout=...) 传入，
-        # A2A / AG-UI 传的是各自的 cancel_wait_timeout。
-        # 本地实现可以在这段时间内等待 run 完成清理；远程实现可以忽略。
-        # 没有活跃 run 返回 Status(ok=False, error_msg="no active run")，
-        # 成功发出取消信号时返回 Status(ok=True)。
+        # 请求取消并等待 Agent 执行完毕。timeout 由 Runner.cancel_run_async 传入，
+        # 其他根据情况，返回Status(ok=False, error_msg="xxx")
+        # 只有Agent运行完毕才返回 Status(ok=True)。
         ...
 
     async def send_steering(self, key: SessionKey, content: Content) -> Status:
@@ -392,13 +392,7 @@ else:
 
 ### LlmAgent
 
-LlmAgent在执行流程的关键位置设置了检查点：
-
-**检查点位置：**
-- 每轮对话开始时
-- LLM API 调用前
-- LLM 流式输出期间（每个 chunk）
-- 工具执行前后
+LlmAgent在执行流程的关键位置设置了 Cancel 和 Steering 的检查点
 
 **使用示例：**
 
@@ -410,6 +404,7 @@ from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
 
 # 定义工具
 async def get_weather(city: str) -> dict:
@@ -432,26 +427,38 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# 运行并支持取消
+# 运行并支持Cancel
 async def run_with_cancel():
     task = asyncio.create_task(run_agent())
     await asyncio.sleep(1)
     await runner.cancel_run_async(user_id, session_id)
     await task
+
+# 运行并支持 Steering
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="顺便查一下北京")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
 **完整示例：**
-- [examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+- Cancel：[examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+- Steering：[examples/llmagent_with_steering](../../../examples/llmagent_with_steering/README.md)
 
 ### LangGraphAgent
 
-LangGraphAgent 将 LangGraph 封装为 trpc-agent 兼容的 Agent，同样支持 Cancel 机制。
+LangGraphAgent 将 LangGraph 封装为 trpc-agent 兼容的 Agent，支持 Cancel。Steering 需要业务在自己的图节点中消费，框架不会自动往图里注入消息。
 
-**检查点位置：**
-- 图节点执行前后
-- 流式输出期间
-
-**使用示例：**
+**Cancel 使用示例：**
 
 ```python
 import asyncio
@@ -464,8 +471,8 @@ from langgraph.graph import StateGraph
 # 构建 LangGraph
 def build_graph():
     builder = StateGraph(State)
-    builder.add_node("process", process_node) # 用户自定义处理节点
-    builder.add_node("respond", respond_node) # 用户自定义响应节点
+    builder.add_node("process", process_node)  # 用户自定义处理节点
+    builder.add_node("respond", respond_node)  # 用户自定义响应节点
     builder.set_entry_point("process")
     builder.add_edge("process", "respond")
     return builder.compile()
@@ -483,31 +490,95 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel 用法与 LlmAgent 相同
-await runner.cancel_run_async(user_id, session_id)
+# 运行并支持 Cancel
+async def run_with_cancel():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    await runner.cancel_run_async(user_id, session_id)
+    await task
+```
+
+**Steering 使用示例：**
+
+```python
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables.config import RunnableConfig
+from langgraph.graph import END
+from langgraph.prebuilt import tools_condition
+from langgraph.types import Command
+
+from trpc_agent_sdk.agents import get_agent_context
+from trpc_agent_sdk.cancel import mark_steering_content
+
+
+async def _take_steering(config: RunnableConfig):
+    ctx = get_agent_context(config)
+    content = await ctx.consume_steering()
+    if content is None:
+        return None
+    marked = mark_steering_content(content)
+    text = "".join(part.text or "" for part in marked.parts)
+    return HumanMessage(content=text)
+
+
+async def steering_node(state, config: RunnableConfig):
+    """工具执行后，检查下有无 steering 消息。"""
+    message = await _take_steering(config)
+    if message is None:
+        return {}
+    return {"messages": [message]}
+
+
+async def tail_steering_node(state, config: RunnableConfig) -> Command:
+    """Agent结束前，检查下有无 steering 消息。"""
+    message = await _take_steering(config)
+    if message is None:
+        return Command(goto=END)
+    return Command(update={"messages": [message]}, goto="chatbot")
+
+
+def route_after_chatbot(state) -> str:
+    return "tools" if tools_condition(state) == "tools" else "tail_steering"
+```
+
+构造图：
+
+```python
+builder.add_node("steering", steering_node)
+builder.add_node("tail_steering", tail_steering_node, destinations=("chatbot", END))
+builder.add_conditional_edges(
+    "chatbot", route_after_chatbot,
+    {"tools": "tools", "tail_steering": "tail_steering"},
+)
+builder.add_edge("tools", "steering")
+builder.add_edge("steering", "chatbot")
 ```
 
 **完整示例：**
-- [examples/langgraph_agent_with_cancel](../../../examples/langgraph_agent_with_cancel/README.md)
+- Cancel：[examples/langgraph_agent_with_cancel](../../../examples/langgraph_agent_with_cancel/README.md)
+- Steering：[examples/langgraph_agent_with_steering](../../../examples/langgraph_agent_with_steering/README.md)
 
 ### ClaudeAgent
 
-ClaudeAgent 使用 Claude SDK 的子进程模式运行，Cancel 时会终止子进程。
-
-**Cancel 实现：**
-- 检测到取消请求时，向 Claude SDK 子进程发送终止信号
-- 子进程退出后，保存部分响应到会话
+ClaudeAgent 基于 SDK 的能力，接入了框架的 Cancel 和 Steering 能力。
 
 **使用示例：**
 
 ```python
 import asyncio
 
-from trpc_agent_sdk.tools import FunctionTool
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.types import Content, Part
+
+# 定义工具
+async def get_weather(city: str) -> dict:
+    """获取城市天气"""
+    await asyncio.sleep(3)  # 模拟耗时操作
+    return {"city": city, "temperature": "25°C", "condition": "晴"}
 
 model = OpenAIModel(model_name="deepseek-chat")
 
@@ -523,7 +594,7 @@ agent = ClaudeAgent(
     name="claude_agent",
     model=model,
     instruction="你是一个智能助手",
-    tools=[FunctionTool(some_tool)], # some_tool 为用户自定义工具
+    tools=[FunctionTool(get_weather)],
 )
 agent.initialize()
 
@@ -533,16 +604,32 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel 用法相同
-await runner.cancel_run_async(user_id, session_id)
+# 运行并支持 Cancel
+async def run_with_cancel():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    await runner.cancel_run_async(user_id, session_id)
+    await task
+
+# 运行并支持 Steering
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="顺便查一下北京")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
-**注意事项：**
-- Cancel 会导致 Claude SDK 子进程被终止，可能会看到 `ProcessError` 日志，这是正常行为
-- 子进程终止后，部分响应会被保存到会话
-
 **完整示例：**
-- [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+- Cancel：[examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+- Steering：[examples/claude_agent_with_steering](../../../examples/claude_agent_with_steering/README.md)
 
 ### TeamAgent
 
@@ -1199,3 +1286,19 @@ subscription.unsubscribe?.();
 
 **完整示例：**
 - [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)
+
+## Agent 服务 Steering 指引
+
+Steering 不在 A2A / AG-UI 协议里，框架没有现成的客户端指令。业务要在自己的服务里支持一个 steering 接口（例如 `POST /steering`），收到请求后调用同一个 `Runner.send_steering()`：
+
+```python
+from trpc_agent_sdk.types import Content, Part
+
+status = await runner.send_steering(
+    user_id=user_id,
+    session_id=session_id,
+    content=Content(role="user", parts=[Part(text=text)]),
+)
+if not status.ok:
+    return {"error": status.error_msg}
+```

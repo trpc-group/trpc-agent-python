@@ -295,6 +295,7 @@ class TrpcA2aAgentExecutor(AgentExecutor):
 
         aggregator = TaskResultAggregator()
         event_callback = self._config.event_callback if self._config else None
+        cancelled = False
         async for trpc_event in runner.run_async(**run_args):
             if isinstance(trpc_event, AgentCancelledEvent):
                 await event_queue.enqueue_event(
@@ -303,7 +304,11 @@ class TrpcA2aAgentExecutor(AgentExecutor):
                         context_id=context.context_id,
                         message_text="Task was cancelled",
                     ))
-                return
+                # Drain the runner generator so its OpenTelemetry spans are
+                # closed in this task's context instead of being finalized
+                # later from a different context.
+                cancelled = True
+                continue
 
             if event_callback is not None:
                 result = event_callback(trpc_event, context)
@@ -321,6 +326,9 @@ class TrpcA2aAgentExecutor(AgentExecutor):
                     on_event=aggregator.process_event,
             ):
                 await event_queue.enqueue_event(a2a_event)
+
+        if cancelled:
+            return
 
         if (aggregator.task_state == TaskState.working and aggregator.task_status_message is not None
                 and aggregator.task_status_message.parts):

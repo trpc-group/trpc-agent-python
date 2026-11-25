@@ -116,6 +116,8 @@ class _SessionWorker:
         self._request_queue: asyncio.Queue[Optional[_SessionRequest]] = asyncio.Queue()
         self._closed = False
         self._run_future: Optional[Future[None]] = None
+        self._steering_queue: Optional[asyncio.Queue[str]] = None
+        self._steering_task: Optional[asyncio.Task[None]] = None
 
     def attach_future(self, future: Future[None]) -> None:
         """Attach the Future representing the worker's run() task.
@@ -160,6 +162,13 @@ class _SessionWorker:
         """
         try:
             await client.query(request.prompt, session_id=request.session_id)
+
+            # The steering queue only exists while this request owns the
+            # session. Starting the consumer after the initial query keeps
+            # steering messages behind the user's opening prompt.
+            self._steering_queue = asyncio.Queue()
+            self._steering_task = asyncio.create_task(self._apply_steering(client, self._steering_queue))
+
             async for message in client.receive_response():
                 # Check if request was cancelled before sending message
                 if request.is_cancelled():
@@ -171,7 +180,54 @@ class _SessionWorker:
             if not request.is_cancelled():
                 request.response_queue.put(exc)
         finally:
+            await self._stop_steering()
             request.response_queue.put(_RESPONSE_SENTINEL)
+
+    async def _apply_steering(
+        self,
+        client: ClaudeSDKClient,
+        steering_queue: "asyncio.Queue[str]",
+    ) -> None:
+        """Forward queued steering messages to the active Claude request.
+
+        Args:
+            client: The persistent ClaudeSDKClient instance
+            steering_queue: Queue populated by ``send_steering``
+        """
+        while True:
+            text = await steering_queue.get()
+            try:
+                await client.query(text, session_id=self._session_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error("Error applying steering for session '%s': %s", self._session_id, exc, exc_info=True)
+                return
+
+    async def _stop_steering(self) -> None:
+        """Cancel the active steering consumer and release its queue."""
+        task = self._steering_task
+        self._steering_task = None
+        self._steering_queue = None
+        if task is None:
+            return
+
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    async def send_steering(self, text: str) -> bool:
+        """Queue a steering message for the request currently in progress.
+
+        Args:
+            text: The steering text to send to Claude
+
+        Returns:
+            True when the message was queued, False when no request is active.
+        """
+        if self._steering_queue is None:
+            return False
+        await self._steering_queue.put(text)
+        return True
 
     async def _drain_pending_requests(self, error: Optional[Exception] = None) -> None:
         """Drain any pending requests from the queue, optionally sending an error.
@@ -316,6 +372,27 @@ class SessionManager:
             with self._thread_lock:
                 state.last_access = time.time()
             logger.debug("Cleaned up stream_query for session '%s'", session_id)
+
+    async def send_steering(self, session_id: str, text: str) -> bool:
+        """Dispatch a steering message to the worker owning ``session_id``.
+
+        Args:
+            session_id: Unique identifier for the session
+            text: The steering text to send to Claude
+
+        Returns:
+            True when the message was queued, False when no request is active.
+        """
+        if self._is_closed:
+            return False
+
+        with self._thread_lock:
+            state = self._sessions.get(session_id)
+        if state is None:
+            return False
+
+        future = self._runtime.submit_coroutine(state.worker.send_steering(text))
+        return await asyncio.wrap_future(future)
 
     async def _get_or_create_state(
         self,

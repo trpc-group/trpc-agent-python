@@ -39,6 +39,7 @@ from pydantic import Field
 
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.agents import InstructionProvider
+from trpc_agent_sdk.cancel import mark_steering_content
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.exceptions import RunCancelledException
@@ -233,6 +234,69 @@ class ClaudeAgent(BaseAgent):
             finally:
                 self._runtime = None
 
+    async def _watch_steering(
+        self,
+        ctx: InvocationContext,
+        send: Callable[[str], Awaitable[bool]],
+        stop: asyncio.Event,
+        pending: List[Content],
+    ) -> None:
+        """Consume pending steering and forward it to Claude.
+
+        Args:
+            ctx: Invocation context that owns the steering queue
+            send: Callback that forwards text to the active Claude request
+            stop: Event set when the run is no longer accepting steering
+            pending: Contents successfully forwarded, used to emit hidden events
+        """
+        # The poller keeps this event in sync with the master in Unix Socket
+        # mode. Cancel wins over steering: once it is set, stop draining so a
+        # correction is not delivered to a request that is about to be dropped.
+        cancel_event = await ctx.get_cancel_event()
+
+        while not stop.is_set():
+            if cancel_event is not None and cancel_event.is_set():
+                return
+
+            try:
+                content = await ctx.consume_steering()
+            except Exception as ex:  # pylint: disable=broad-except
+                logger.error("Error consuming steering: %s", ex, exc_info=True)
+                return
+
+            if content is not None:
+                text = "".join(part.text or "" for part in content.parts)
+                if text:
+                    while not stop.is_set():
+                        if cancel_event is not None and cancel_event.is_set():
+                            return
+                        try:
+                            sent = await send(text)
+                        except Exception as ex:  # pylint: disable=broad-except
+                            logger.error("Error forwarding steering: %s", ex, exc_info=True)
+                            return
+                        if sent:
+                            pending.append(content)
+                            break
+                        await asyncio.sleep(0.05)
+
+            await asyncio.sleep(0.05)
+
+    def _drain_steering_events(self, ctx: InvocationContext, pending: List[Content]) -> List[Event]:
+        """Build hidden events for steering that was forwarded to Claude."""
+        events: List[Event] = []
+        while pending:
+            content = pending.pop(0)
+            events.append(
+                Event(
+                    invocation_id=ctx.invocation_id,
+                    author="user",
+                    branch=ctx.branch,
+                    content=mark_steering_content(content),
+                    visible=False,
+                ))
+        return events
+
     @override
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """Core implementation of Claude agent execution.
@@ -307,37 +371,25 @@ class ClaudeAgent(BaseAgent):
                 tool_use_map = {}  # {tool_use_id: function_name}
                 tool_info_by_index: dict[int, dict] = {}  # {index: {id, name}}
 
-                async for message in self._session_manager.stream_query(
-                        session_id=claude_session_id,
-                        options=claude_options,
-                        prompt=user_prompt,
-                ):
-                    # CHECKPOINT 2: Each streaming message
-                    await ctx.raise_if_cancelled()
+                stop_steering = asyncio.Event()
+                pending_steering: List[Content] = []
 
-                    logger.debug("Received message from Claude: %s", type(message).__name__)
+                async def forward_steering_session(text: str) -> bool:
+                    """Forward steering through the session worker."""
+                    return await self._session_manager.send_steering(claude_session_id, text)
 
-                    event = self._convert_message_to_event(ctx, message, tool_use_map, tool_info_by_index)
+                steering_task = asyncio.create_task(
+                    self._watch_steering(ctx, forward_steering_session, stop_steering, pending_steering))
 
-                    if event:
-                        # Trace event
-                        trace_reporter.trace_event(ctx, event)
+                try:
+                    async for message in self._session_manager.stream_query(
+                            session_id=claude_session_id,
+                            options=claude_options,
+                            prompt=user_prompt,
+                    ):
+                        for steering_event in self._drain_steering_events(ctx, pending_steering):
+                            yield steering_event
 
-                        if event.is_final_response():
-                            self._save_output_to_state(ctx, event)
-                        yield event
-            else:
-                # For enable_session=True, we need to run in the current event loop
-                # Use async context manager for proper lifecycle
-                async with ClaudeSDKClient(options=claude_options) as client:
-                    logger.debug("Created new client for session '%s' (enable_session=True)", claude_session_id)
-
-                    await client.query(user_prompt, session_id=claude_session_id)
-
-                    tool_use_map = {}  # {tool_use_id: function_name}
-                    tool_info_by_index: dict[int, dict] = {}  # {index: {id, name}}
-
-                    async for message in client.receive_response():
                         # CHECKPOINT 2: Each streaming message
                         await ctx.raise_if_cancelled()
 
@@ -352,6 +404,65 @@ class ClaudeAgent(BaseAgent):
                             if event.is_final_response():
                                 self._save_output_to_state(ctx, event)
                             yield event
+                finally:
+                    stop_steering.set()
+                    try:
+                        await steering_task
+                    except Exception as ex:  # pylint: disable=broad-except
+                        logger.error("Error stopping steering watcher: %s", ex, exc_info=True)
+
+                for steering_event in self._drain_steering_events(ctx, pending_steering):
+                    yield steering_event
+            else:
+                # For enable_session=True, we need to run in the current event loop
+                # Use async context manager for proper lifecycle
+                async with ClaudeSDKClient(options=claude_options) as client:
+                    logger.debug("Created new client for session '%s' (enable_session=True)", claude_session_id)
+
+                    await client.query(user_prompt, session_id=claude_session_id)
+
+                    tool_use_map = {}  # {tool_use_id: function_name}
+                    tool_info_by_index: dict[int, dict] = {}  # {index: {id, name}}
+
+                    stop_steering = asyncio.Event()
+                    pending_steering: List[Content] = []
+
+                    async def forward_steering_local(text: str) -> bool:
+                        """Forward steering to the local Claude client."""
+                        await client.query(text, session_id=claude_session_id)
+                        return True
+
+                    steering_task = asyncio.create_task(
+                        self._watch_steering(ctx, forward_steering_local, stop_steering, pending_steering))
+
+                    try:
+                        async for message in client.receive_response():
+                            for steering_event in self._drain_steering_events(ctx, pending_steering):
+                                yield steering_event
+
+                            # CHECKPOINT 2: Each streaming message
+                            await ctx.raise_if_cancelled()
+
+                            logger.debug("Received message from Claude: %s", type(message).__name__)
+
+                            event = self._convert_message_to_event(ctx, message, tool_use_map, tool_info_by_index)
+
+                            if event:
+                                # Trace event
+                                trace_reporter.trace_event(ctx, event)
+
+                                if event.is_final_response():
+                                    self._save_output_to_state(ctx, event)
+                                yield event
+                    finally:
+                        stop_steering.set()
+                        try:
+                            await steering_task
+                        except Exception as ex:  # pylint: disable=broad-except
+                            logger.error("Error stopping steering watcher: %s", ex, exc_info=True)
+
+                    for steering_event in self._drain_steering_events(ctx, pending_steering):
+                        yield steering_event
 
         except RunCancelledException:
             # Re-raise to let Runner handle cleanup
