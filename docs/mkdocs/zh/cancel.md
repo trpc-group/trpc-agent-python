@@ -445,13 +445,9 @@ async def run_with_cancel():
 
 ### LangGraphAgent
 
-LangGraphAgent 将 LangGraph 封装为 trpc-agent 兼容的 Agent，同样支持 Cancel 机制。
+LangGraphAgent 将 LangGraph 封装为 trpc-agent 兼容的 Agent，支持 Cancel。Steering 需要业务在自己的图节点中消费，框架不会自动往图里注入消息。
 
-**检查点位置：**
-- 图节点执行前后
-- 流式输出期间
-
-**使用示例：**
+**Cancel 使用示例：**
 
 ```python
 import asyncio
@@ -464,8 +460,8 @@ from langgraph.graph import StateGraph
 # 构建 LangGraph
 def build_graph():
     builder = StateGraph(State)
-    builder.add_node("process", process_node) # 用户自定义处理节点
-    builder.add_node("respond", respond_node) # 用户自定义响应节点
+    builder.add_node("process", process_node)  # 用户自定义处理节点
+    builder.add_node("respond", respond_node)  # 用户自定义响应节点
     builder.set_entry_point("process")
     builder.add_edge("process", "respond")
     return builder.compile()
@@ -483,12 +479,73 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel 用法与 LlmAgent 相同
-await runner.cancel_run_async(user_id, session_id)
+# 运行并支持 Cancel
+async def run_with_cancel():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    await runner.cancel_run_async(user_id, session_id)
+    await task
+```
+
+**Steering 使用示例：**
+
+```python
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables.config import RunnableConfig
+from langgraph.graph import END
+from langgraph.prebuilt import tools_condition
+from langgraph.types import Command
+
+from trpc_agent_sdk.agents import get_agent_context
+from trpc_agent_sdk.cancel import mark_steering_content
+
+
+async def _take_steering(config: RunnableConfig):
+    ctx = get_agent_context(config)
+    content = await ctx.consume_steering()
+    if content is None:
+        return None
+    marked = mark_steering_content(content)
+    text = "".join(part.text or "" for part in marked.parts)
+    return HumanMessage(content=text)
+
+
+async def steering_node(state, config: RunnableConfig):
+    """工具执行后，检查下有无 steering 消息。"""
+    message = await _take_steering(config)
+    if message is None:
+        return {}
+    return {"messages": [message]}
+
+
+async def tail_steering_node(state, config: RunnableConfig) -> Command:
+    """Agent结束前，检查下有无 steering 消息。"""
+    message = await _take_steering(config)
+    if message is None:
+        return Command(goto=END)
+    return Command(update={"messages": [message]}, goto="chatbot")
+
+
+def route_after_chatbot(state) -> str:
+    return "tools" if tools_condition(state) == "tools" else "tail_steering"
+```
+
+构造图：
+
+```python
+builder.add_node("steering", steering_node)
+builder.add_node("tail_steering", tail_steering_node, destinations=("chatbot", END))
+builder.add_conditional_edges(
+    "chatbot", route_after_chatbot,
+    {"tools": "tools", "tail_steering": "tail_steering"},
+)
+builder.add_edge("tools", "steering")
+builder.add_edge("steering", "chatbot")
 ```
 
 **完整示例：**
-- [examples/langgraph_agent_with_cancel](../../../examples/langgraph_agent_with_cancel/README.md)
+- Cancel：[examples/langgraph_agent_with_cancel](../../../examples/langgraph_agent_with_cancel/README.md)
+- Steering：[examples/langgraph_agent_with_steering](../../../examples/langgraph_agent_with_steering/README.md)
 
 ### ClaudeAgent
 
