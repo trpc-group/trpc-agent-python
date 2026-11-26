@@ -48,7 +48,7 @@ weather_agent_with_cancel (LlmAgent)
 
 ```
 客户端 abort() → SSE 连接断开 → 服务端 asyncio.CancelledError
-→ AgUiAgent.cancel_run() → cancel.cancel_run(app_name, user_id, session_id)
+→ AgUiAgent.cancel_run() → Runner.cancel_run_async(user_id, session_id)
 → Agent 在检查点处停止 → 保存部分响应到会话
 ```
 
