@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.2.2](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.2.2) (2026-11-26)
+
+### Features
+
+* Cancel/Steering: Reworked cancellation into a shared control plane with single-process and fork-based multi-worker support, using Unix Socket signals across workers. Added a pluggable `CancelManager` via `set_cancel_manager()`, unified `Status` results, steering checkpoints across `LlmAgent`, and corrected A2A/AG-UI cancellation handling. See `docs/design/03-cancel-steering.md` for the design and deployment guidance. ([#377](https://github.com/trpc-group/trpc-agent-python/pull/377))
+* ClaudeAgent: Added steering support while a Claude turn is running. Steering is forwarded to the CLI around tool calls, and steering that arrives after the final model call continues the run as a new loop instead of being dropped. Added the `claude_agent_with_steering` example. ([#378](https://github.com/trpc-group/trpc-agent-python/pull/378))
+* LangGraphAgent: Added steering support and the `langgraph_agent_with_steering` example with documentation. ([#379](https://github.com/trpc-group/trpc-agent-python/pull/379))
+
+### Bug Fixes
+
+* Trace: Filtered framework-internal state keys from state-change telemetry so only user-visible state updates are reported. ([#376](https://github.com/trpc-group/trpc-agent-python/pull/376))
+* A2A: Fixed remote cancellation when the client cancels after the initial `Task` but before the first status or artifact event by reading the task ID from the initial `Task.id` field. ([#380](https://github.com/trpc-group/trpc-agent-python/pull/380))
+
+### Docs
+
+* Added the Cancel/Steering design document, Chinese and English cancel/steering guides, and runnable examples for `LlmAgent`, `ClaudeAgent`, `LangGraphAgent`, A2A, AG-UI, and multi-worker deployments.
+
+### Internal
+
+* Added regression coverage for cancel managers, cleanup, runner cancellation, and steering, and expanded multi-worker benchmark coverage.
+
 ## [1.2.1](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.2.1) (2026-11-06)
 
 ### Features
