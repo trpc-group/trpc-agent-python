@@ -19,10 +19,12 @@ from .._core import AgUiAgent
 
 async def event_generator(request: Request, agui_agent: AgUiAgent, input_data: RunAgentInput, encoder: EventEncoder):
     """Generate events from AG-UI agent."""
+    app_name = None
+    user_id = None
+    session_id = input_data.thread_id
     try:
         app_name = agui_agent.get_app_name(input_data)
         user_id = agui_agent.get_user_id(input_data)
-        session_id = input_data.thread_id
         # Get tRPC context from contextvars (injected by middleware)
         async for event in agui_agent.run(input_data, http_request=request):
             # Check for client disconnect periodically
@@ -71,10 +73,24 @@ async def event_generator(request: Request, agui_agent: AgUiAgent, input_data: R
             logger.error("Failed to encode agent error event, yielding basic SSE error")
             yield 'event: error\\ndata: {\\"error\\": \\"Agent execution failed\\"}\\n\\n'
     finally:
-        # Trigger cancellation of the background TRPC run
-        # Uses the configured cancel_wait_timeout from AgUiAgent
-        await agui_agent.cancel_run(
-            session_id=session_id,
-            app_name=app_name,
-            user_id=user_id,
-        )
+        # Trigger cancellation of the background TRPC run. The run stops
+        # cooperatively through Runner; do not cancel the asyncio task here.
+        if app_name is None or user_id is None:
+            logger.warning(
+                "Skipping cancel_run for thread %s: app_name or user_id is unavailable",
+                session_id,
+            )
+        else:
+            try:
+                await agui_agent.cancel_run(
+                    session_id=session_id,
+                    app_name=app_name,
+                    user_id=user_id,
+                )
+            except Exception as ex:  # pylint: disable=broad-except
+                logger.error(
+                    "Failed to cancel run for thread %s: %s",
+                    session_id,
+                    ex,
+                    exc_info=True,
+                )

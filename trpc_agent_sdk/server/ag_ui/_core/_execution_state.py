@@ -64,7 +64,13 @@ class ExecutionState:
         return time.time() - self.start_time > timeout_seconds
 
     async def cancel(self):
-        """Cancel the execution and clean up resources."""
+        """Force-stop the execution and clean up resources.
+
+        This is a hard stop for server shutdown and stale-execution cleanup.
+        User-initiated cancellation must go through ``Runner.cancel_run_async``
+        so the runner can finish its cooperative cleanup and close its
+        OpenTelemetry span in the owning task.
+        """
         logger.info("Cancelling execution for thread %s", self.thread_id)
 
         # Cancel the background task

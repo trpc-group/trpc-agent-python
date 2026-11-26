@@ -6,40 +6,75 @@ For this scenario, the trpc-agent-python framework provides a Cancel mechanism t
 
 This capability has been integrated into all Agents provided by the framework. Custom Agents implemented by other services can also be easily integrated.
 
-| Module Type | Module Name | Cancel Support | Description |
-|---------|---------|-------------|------|
-| Single Agent | `LlmAgent` | ✅ | Checkpoints set at LLM streaming output, tool execution, and other locations |
-| Single Agent | `LangGraphAgent` | ✅ | Checkpoints set during LangGraph streaming output |
-| Single Agent | `ClaudeAgent` | ✅ | Checkpoints set during claude-sdk streaming output |
-| Single Agent | `TrpcRemoteA2aAgent` | ✅ | Checkpoints set during HTTP streaming output |
-| Multi Agent | `ChainAgent` | ✅ | Exception propagated from its sub-Agents |
-| Multi Agent | `ParallelAgent` | ✅ | Execution cancelled when any sub-Agent throws an exception |
-| Multi Agent | `CycleAgent` | ✅ | Exception propagated from its sub-Agents |
-| Multi Agent | `TeamAgent` | ✅ | Cancellable during both Leader and Member execution |
-| Agent Service | `TrpcA2aAgentService` | ✅ | Cancels remote Agent execution via the A2A protocol's cancel_task interface |
-| Agent Service | `AgUiService` | ✅ | Agent automatically cancels execution upon SSE connection disconnect detection |
+| Module Type | Module Name | Cancel Support | Steering Support | Description |
+|---------|---------|-------------|---------------|------|
+| Single Agent | `LlmAgent` | ✅ | ✅ | Checkpoints set at LLM streaming output, tool execution, and other locations |
+| Single Agent | `LangGraphAgent` | ✅ | ✅ | Steering is consumed by a user-defined graph node |
+| Single Agent | `ClaudeAgent` | ✅ | ✅ | Checkpoints set during claude-sdk streaming output |
+| Single Agent | `TrpcRemoteA2aAgent` | ✅ | — | Steering is decided by the remote A2A service |
+| Multi Agent | `ChainAgent` | ✅ | ❌ | Sequential execution leaves no unique target for the correction |
+| Multi Agent | `ParallelAgent` | ✅ | ❌ | Several Agents run concurrently, so the target is ambiguous |
+| Multi Agent | `CycleAgent` | ✅ | ❌ | The executing Agent changes between loop iterations |
+| Multi Agent | `TeamAgent` | ✅ | ❌ | Either the Leader or a Member may be running |
+| Agent Service | `TrpcA2aAgentService` | ✅ | — | Steering is decided by the hosted Agent |
+| Agent Service | `AgUiService` | ✅ | — | Steering is decided by the hosted Agent |
 
 
 ## Agent Cancel Mechanism Design Overview
 
 ### Architecture Design
 
-As shown in the architecture below:
-- When the framework starts, it creates a global `_RunCancellationManager` object to manage Agent cancellation signals
-- Users run and interrupt Agent execution through the Runner
-    - Users execute an Agent via `run_async`. Before execution, the Runner registers the current run information with the Manager via `register_run`. The SessionKey is a triplet of (app_name, user_id, session_id)
-    - Users cancel Agent execution via `cancel_run_async`. The Runner receives the `RunCancelledException` thrown by the Agent and completes post-cancel processing (injecting partial streaming messages, partial tool call content into the Agent's session). After processing, the Runner generates an `AgentCancelledEvent` to convey the termination information, and the cancellation reason can be obtained through its error_message field
-- Agents embed checkpoints during execution to integrate the Cancel capability
-    - During Agent execution, within the `_run_async_impl` implementation, `ctx.raise_if_cancelled` is used at various checkpoints (after LLM streaming output chunks, after tool calls, etc.) to check whether the current execution has been cancelled. If `runner.cancel_run_async` has been called, the Agent's execution is marked as cancelled, and `raise_if_cancelled` throws a `RunCancelledException`
-    - Common checkpoint locations include: during LLM streaming output, after tool calls. Cancellation during tool call execution is not currently supported
-- Agent services automatically invoke `runner.cancel_run_async` through their interfaces and obtain cancellation details via the AgentCancelledEvent returned by the Runner
-    - For AG-UI services, the protocol does not natively support cancellation. The client cancels Agent execution by disconnecting the connection. The Agent service detects the disconnection exception and automatically calls `runner.cancel_run_async` to support this capability
-    - For A2A services, the protocol natively supports cancellation via the `cancel_task` interface. The framework already supports this interface and adapts it to `runner.cancel_run_async`, but it requires hash-based routing. In multi-node deployment scenarios, configuring hash-based routing can be cumbersome. A simpler approach, similar to AG-UI, would be for the Agent service to automatically detect connection disconnection and call `runner.cancel_run_async`. However, due to the current underlying implementation of the a2a-sdk, the Agent continues to execute after disconnection, so hash-based routing is temporarily required to complete the cancel operation.
-    - For custom services, it is recommended to implement Agent cancellation logic triggered by connection disconnection. This approach has very low implementation cost, does not require hash-based routing, and the client simply disconnects from the remote Agent.
+Cancel and Steering are both integrated through the Runner. `run_async()` runs the Agent, `cancel_run_async()` requests cancellation, and `send_steering()` adds user input while a run is active. The Runner registers the run, drives the Agent, and performs cleanup on cancellation; the Agent only checks the control state at checkpoints.
 
-<p align="center">
-  <img src="../assets/imgs/agent_cancel.png" alt="Agent Cancel" />
-</p>
+Overall architecture:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│   Entry layer: user code / A2A / AG-UI / custom services                │
+│                                                                         │
+│   run_async()          cancel_run_async()          send_steering()      │
+└───────────────────────────────────┬─────────────────────────────────────┘
+│                                   │ calls the Runner                    │
+│                                   ▼                                     │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│   ┌──────────────────────────┐           ┌────────────────────────┐     │
+│   │ Runner                   │           │ Agent execution        │     │
+│   │ register_run(SessionKey) │ drives ─► │ checkpoints:           │     │
+│   │ append_event             │           │   raise_if_cancelled() │     │
+│   │ unregister_run           │           │   consume_steering()   │     │
+│   └──────────────────────────┘           └────────────────────────┘     │
+│                                                                         │
+└───────────────────────────────────┬─────────────────────────────────────┘
+│                                   │ read / write control state          │
+│                                   ▼                                     │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│   ┌──────────────────────┐           ┌───────────────────────────┐      │
+│   │ Single worker        │           │ Multi-worker              │      │
+│   │ _LocalManager        │           │ Unix Socket control plane │      │
+│   │   ├─ cancel_event    │           │ master: _UnixSocketServer │      │
+│   │   └─ steering: deque │           │ worker: one UDS per run   │      │
+│   └──────────────────────┘           └───────────────────────────┘      │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+After `run_async()` is called, the Runner registers the execution and identifies it with `(app_name, user_id, session_id)`.
+
+**Cancel mechanism**
+
+After `cancel_run_async()` is called, the Runner sets the cancel signal for that run. With a single worker, the signal lives in process memory. In a multi-worker deployment, the master calls `init_unix_socket()` before forking, and each worker reaches the master's state over Unix Socket. When the Agent observes the signal at a checkpoint it raises `RunCancelledException`; the Runner catches it, persists the streamed text and completed tool results, appends a skipped result for tools that did not run, and finally returns `AgentCancelledEvent`.
+
+**Steering mechanism**
+
+After `send_steering()` is called, the message enters the steering queue of that run. Before the next LLM request, the Agent drains the queue and writes the messages into the session as a hidden user event, so the model sees them on the next request. Messages that arrive during the final LLM request are still delivered.
+
+**Server integration**
+
+- **A2A**: the client calls `cancel_task`, which the framework maps to `runner.cancel_run_async()`. Steering is outside the A2A protocol, so register your own `POST /steering` route. In a multi-worker deployment, the worker that receives the request forwards cancel and steering to the master over Unix Socket; the worker that owns the run reads them at its next checkpoint.
+- **AG-UI**: the client closes the SSE connection, and the server calls `runner.cancel_run_async()` after detecting the disconnect. Steering is outside the AG-UI protocol; expose your own route and call `runner.send_steering()`. Multi-worker behavior is the same as A2A.
+- **Custom server**: call `runner.cancel_run_async()` when the connection disconnects, and `runner.send_steering()` directly for steering. Multi-worker behavior is the same as A2A.
 
 ### Session Management
 
@@ -50,21 +85,10 @@ When an Agent is cancelled, different session management strategies are applied 
 - Effect: In the next conversation turn, the user can indicate which text was unsatisfactory, and the Agent will correct its output
 
 **Scenario 2: Cancellation during tool execution**
-- Session management: For scenarios where the Agent needs to call multiple tools, e.g., tool 1 and tool 2, if the user cancels Agent execution while tool 1 is being called, the system waits for tool 1 to complete, then skips tool 2 and terminates. The call information for tool 2 in this turn is removed from the session history, as if the Agent never executed tool 2 in this turn. Similarly, after tool 1's call response, a message "User cancel the agent execution." is appended to make the Agent aware of the cancellation event
-- Effect: In the next conversation turn, the Agent can perceive that tool 2 was not called and may proceed to call tool 2.
-
-### Limitations
-
-> **⚠️ The current Cancel mechanism only supports single-node scenarios**
-
-`_RunCancellationManager` uses in-process storage (`Dict`) to track active runs. This means:
-
-1. **Cancel requests must be sent to the same node running the Agent**
-2. **Cross-node cancellation is not supported**
-3. **Applicable scenarios**:
-   - Single-node deployment
-   - Client communicates with the Agent through the same connection (WebSocket, SSE)
-   - Cancellation is automatically triggered upon connection disconnection
+- If the model requested tool 1 and tool 2, and the user cancels while tool 1 is running, tool 1 finishes and its result is preserved.
+- Tool 2 is not executed, but its call record stays in the session with a skipped result whose `status` is `cancelled`. This keeps tool calls and responses paired so the next request remains valid.
+- A cancellation notice is appended to make the Agent aware of the cancellation event.
+- Effect: In the next conversation turn, the Agent can see that tool 2 was skipped and may call it again.
 
 ## Basic Usage
 
@@ -132,6 +156,92 @@ async def main():
 asyncio.run(main())
 ```
 
+`cancel_run_async()` returns `bool`: `True` means the cancel signal was delivered, `False` means no active run was found or delivery failed. The Runner logs the failure reason. If you need the detailed reason, call `cancel.cancel_run()` directly; it returns `Status`.
+
+### Multi-worker Cancellation
+
+Single-worker deployments need no extra configuration; the Runner uses the in-process cancel signal directly.
+
+In a multi-worker deployment, the master calls `init_unix_socket()` before forking; after the workers exit, the master calls `release_unix_socket()` and exits.
+
+Each call to `runner.run_async()` starts a periodic coroutine that syncs the Agent's control state (whether the run is cancelled and whether steering is pending) from the master over Unix Socket at `poll_interval`. When `runner.run_async()` finishes, its resources are cleaned up.
+
+```python
+from trpc_agent_sdk.cancel import UnixSocketConfig
+from trpc_agent_sdk.cancel import init_unix_socket
+from trpc_agent_sdk.cancel import release_unix_socket
+
+init_unix_socket(UnixSocketConfig(poll_interval=0.1, timeout=3.0))
+try:
+    server.serve()
+finally:
+    release_unix_socket()
+```
+
+| Option | Default | Description |
+|-------|--------|------|
+| `socket_path` | `/tmp/trpc-agent-py/cancel.sock` | UDS path of the master server |
+| `poll_interval` | 0.1 | Interval (seconds) at which each Agent run syncs state from the master |
+| `timeout` | 3.0 | Timeout (seconds) for Unix Socket read/write operations |
+
+### Custom Cancel Manager
+
+Single-process deployments use the in-process `_LocalManager` by default. For multiple processes, the framework provides `_UnixSocketManager` to connect them to the Cancel mechanism. The built-in implementations cover most scenarios. If you need to integrate an external system such as Redis or NATS for distributed cancellation, implement `CancelManager` and install it with `set_cancel_manager()`. You are responsible for handling distributed concerns such as ordering and messaging failures, and for validating the implementation thoroughly:
+
+```python
+import asyncio
+from typing import List
+from typing import Optional
+
+from trpc_agent_sdk.cancel import CancelManager
+from trpc_agent_sdk.cancel import SessionKey
+from trpc_agent_sdk.cancel import Status
+from trpc_agent_sdk.cancel import set_cancel_manager
+from trpc_agent_sdk.types import Content
+
+
+class MyCancelManager(CancelManager):
+
+    async def register_run(self, key: SessionKey) -> None:
+        # Register a run; raise RuntimeError when the same key is already active.
+        ...
+
+    async def unregister_run(self, key: SessionKey) -> None:
+        # Release the run; must be idempotent and drop its pending steering.
+        ...
+
+    async def cancel_run(self, key: SessionKey, timeout: float = 1.0) -> Status:
+        # Request cancellation and wait for the Agent to finish. timeout comes
+        # from Runner.cancel_run_async. Otherwise return Status(ok=False,
+        # error_msg="xxx") as appropriate. Return Status(ok=True) only after
+        # the Agent has finished.
+        ...
+
+    async def send_steering(self, key: SessionKey, content: Content) -> Status:
+        # Return Status(ok=True) on success. Return
+        # Status(ok=False, error_msg="steering content is empty") for empty content
+        # and Status(ok=False, error_msg="no active run") when no run matches.
+        ...
+
+    async def drain_steering(self, key: SessionKey) -> List[Content]:
+        # Drain and clear the run's steering queue in FIFO order; return an empty
+        # list when nothing is pending.
+        ...
+
+    async def check_cancel(self, key: SessionKey) -> bool:
+        # Return True when cancelled; False when no run matches or not cancelled.
+        ...
+
+    async def get_cancel_event(self, key: SessionKey) -> Optional[asyncio.Event]:
+        # Return this process's asyncio.Event for the run; return None when no run
+        # matches. Set the event when cancellation arrives.
+        ...
+
+
+# Install the cancel manager at process startup
+set_cancel_manager(MyCancelManager())
+```
+
 ### Agent Custom Service Examples
 
 #### Approach 1: Connection-disconnect-based cancellation (Recommended)
@@ -149,7 +259,6 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
-from trpc_agent_sdk import cancel
 
 app = FastAPI()
 
@@ -199,14 +308,11 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
         finally:
             # Trigger cancel operation regardless of normal completion or disconnection
             # This ensures the Agent execution is properly terminated and partial results are saved
-            cleanup_event = await cancel.cancel_run(app_name, user_id, session_id)
-
-            if cleanup_event is not None:
-                try:
-                    # Wait for the cancel operation to complete
-                    await asyncio.wait_for(cleanup_event.wait(), timeout=CANCEL_WAIT_TIMEOUT)
-                except asyncio.TimeoutError:
-                    pass  # Continue after timeout, the Agent may still be running
+            await runner.cancel_run_async(
+                user_id=user_id,
+                session_id=session_id,
+                timeout=CANCEL_WAIT_TIMEOUT,
+            )
 
     return StreamingResponse(
         event_generator(),
@@ -255,19 +361,42 @@ async def cancel_session_run(user_id: str, session_id: str):
         )
 ```
 
-**Note**: This approach requires that the cancel request is sent to the same node running the Agent. In multi-node deployment scenarios, hash-based routing must be used to ensure the cancel request reaches the node executing the Agent.
+**Note**: `cancel_run_async` first looks for an active run in the local process. In a multi-worker deployment, the master calls `init_unix_socket()` before forking, and cancel requests reach the master over Unix Socket; hash-based routing is no longer required.
+
+## Steering
+
+Steering lets the user add input while a run is executing. `send_steering()` puts the message into the current run's queue; `LlmAgent` drains the queue before its next LLM request and writes it into the session as a hidden user message. The model sees the new instruction in the same run, while the client event stream does not expose it.
+
+```python
+from trpc_agent_sdk.types import Content, Part
+
+status = await runner.send_steering(
+    user_id=user_id,
+    session_id=session_id,
+    content=Content(role="user", parts=[Part(text="also check Beijing")]),
+)
+if status.ok:
+    print("steering queued")
+else:
+    print(f"steering rejected: {status.error_msg}")
+```
+
+| Result | Meaning |
+|------|------|
+| `status.ok == True` | The message entered the active run's queue |
+| `status.ok == False` | Not queued; `status.error_msg` explains why |
+| `error_msg="no active run"` | The session has no active run |
+| `error_msg="steering content is empty"` | The message has no parts |
+
+A custom manager can return its own `error_msg`.
+
+The message must contain at least one part. In a multi-worker deployment, any worker can send steering over Unix Socket; the worker that owns the run drains it at the next checkpoint.
 
 ## Agent Cancel Guide
 
 ### LlmAgent
 
-LlmAgent has checkpoints set at critical positions in the execution flow:
-
-**Checkpoint locations:**
-- At the beginning of each conversation turn
-- Before LLM API calls
-- During LLM streaming output (each chunk)
-- Before and after tool execution
+LlmAgent sets Cancel and Steering checkpoints at critical positions in the execution flow.
 
 **Usage example:**
 
@@ -279,6 +408,7 @@ from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
 
 # Define tools
 async def get_weather(city: str) -> dict:
@@ -307,14 +437,30 @@ async def run_with_cancel():
     await asyncio.sleep(1)
     await runner.cancel_run_async(user_id, session_id)
     await task
+
+# Run with steering support
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="also check Beijing")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
-**Full example:**
-- [examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+**Full examples:**
+- Cancel: [examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+- Steering: [examples/llmagent_with_steering](../../../examples/llmagent_with_steering/README.md)
 
 ### LangGraphAgent
 
-LangGraphAgent wraps LangGraph as a trpc-agent-python compatible Agent, and also supports the Cancel mechanism.
+LangGraphAgent wraps LangGraph as a trpc-agent-python compatible Agent, and also supports the Cancel mechanism. Steering is not injected into the graph automatically: add your own node that consumes it.
 
 **Checkpoint locations:**
 - Before and after graph node execution
@@ -356,27 +502,87 @@ runner = Runner(
 await runner.cancel_run_async(user_id, session_id)
 ```
 
+**Steering usage:**
+
+```python
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables.config import RunnableConfig
+from langgraph.graph import END
+from langgraph.prebuilt import tools_condition
+from langgraph.types import Command
+
+from trpc_agent_sdk.agents import get_agent_context
+from trpc_agent_sdk.cancel import mark_steering_content
+
+
+async def _take_steering(config: RunnableConfig):
+    ctx = get_agent_context(config)
+    content = await ctx.consume_steering()
+    if content is None:
+        return None
+    marked = mark_steering_content(content)
+    text = "".join(part.text or "" for part in marked.parts)
+    return HumanMessage(content=text)
+
+
+async def steering_node(state, config: RunnableConfig):
+    """Check for steering messages after tool execution."""
+    message = await _take_steering(config)
+    if message is None:
+        return {}
+    return {"messages": [message]}
+
+
+async def tail_steering_node(state, config: RunnableConfig) -> Command:
+    """Check for steering messages before the Agent ends."""
+    message = await _take_steering(config)
+    if message is None:
+        return Command(goto=END)
+    return Command(update={"messages": [message]}, goto="chatbot")
+
+
+def route_after_chatbot(state) -> str:
+    return "tools" if tools_condition(state) == "tools" else "tail_steering"
+```
+
+Build the graph:
+
+```python
+builder.add_node("steering", steering_node)
+builder.add_node("tail_steering", tail_steering_node, destinations=("chatbot", END))
+builder.add_conditional_edges(
+    "chatbot", route_after_chatbot,
+    {"tools": "tools", "tail_steering": "tail_steering"},
+)
+builder.add_edge("tools", "steering")
+builder.add_edge("steering", "chatbot")
+```
+
 **Full example:**
 - [examples/langgraph_agent_with_cancel](../../../examples/langgraph_agent_with_cancel/README.md)
+- [examples/langgraph_agent_with_steering](../../../examples/langgraph_agent_with_steering/README.md)
 
 ### ClaudeAgent
 
-ClaudeAgent runs using the Claude SDK's subprocess mode. When cancelled, the subprocess is terminated.
-
-**Cancel implementation:**
-- When a cancellation request is detected, a termination signal is sent to the Claude SDK subprocess
-- After the subprocess exits, partial responses are saved to the session
+ClaudeAgent runs on the Claude SDK and supports both Cancel and Steering. Internally, when a steering message arrives, it is sent directly to the CLI.
 
 **Usage example:**
 
 ```python
 import asyncio
 
-from trpc_agent_sdk.tools import FunctionTool
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.types import Content, Part
+
+# Define a tool
+async def get_weather(city: str) -> dict:
+    """Get the weather for a city"""
+    await asyncio.sleep(3)  # Simulate a slow call
+    return {"city": city, "temperature": "25°C", "condition": "Sunny"}
 
 model = OpenAIModel(model_name="deepseek-chat")
 
@@ -392,7 +598,7 @@ agent = ClaudeAgent(
     name="claude_agent",
     model=model,
     instruction="You are an intelligent assistant",
-    tools=[FunctionTool(some_tool)], # some_tool is a user-defined tool
+    tools=[FunctionTool(get_weather)],
 )
 agent.initialize()
 
@@ -402,16 +608,32 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel usage is the same
-await runner.cancel_run_async(user_id, session_id)
+# Run with cancel support
+async def run_with_cancel():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    await runner.cancel_run_async(user_id, session_id)
+    await task
+
+# Run with steering support
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="also check Beijing")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
-**Notes:**
-- Cancel will cause the Claude SDK subprocess to be terminated. You may see `ProcessError` logs, which is expected behavior
-- After the subprocess is terminated, partial responses are saved to the session
-
-**Full example:**
-- [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+**Full examples:**
+- Cancel: [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+- Steering: [examples/claude_agent_with_steering](../../../examples/claude_agent_with_steering/README.md)
 
 ### TeamAgent
 
@@ -823,6 +1045,8 @@ if __name__ == "__main__":
 
 It is recommended to configure the same timeout value for both.
 
+In a multi-worker deployment, call `init_unix_socket()` in the master so a `CancelTask` received by any worker reaches the owner. To deliver steering, call `Runner.send_steering` from your own endpoint, for example a `POST /steering` route on the service.
+
 **Full example:**
 - [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md) (a2a-sdk 0.3)
 - [examples/a2a_v1_with_cancel](../../../examples/a2a_v1_with_cancel/README.md) (a2a-sdk 1.x)
@@ -852,8 +1076,7 @@ Agent services deployed via the AG-UI protocol automatically trigger Cancel when
 │  │  ┌─────────────────────────────────────┐  │  │
 │  │  │  AgUiAgent.cancel_run()             │  │  │
 │  │  │    ↓                                │  │  │
-│  │  │  Cancellation Manager               │  │  │
-│  │  │  (cancel.cancel_run)                │  │  │
+│  │  │  Runner.cancel_run_async()          │  │  │
 │  │  │    ↓                                │  │  │
 │  │  │  Agent (stops at checkpoint)        │  │  │
 │  │  └─────────────────────────────────────┘  │  │
@@ -1070,5 +1293,35 @@ subscription.unsubscribe?.();
 |------|--------|------|
 | `cancel_wait_timeout` | 3.0 | Timeout (in seconds) for waiting the Cancel operation to complete. If this value is not properly configured, the Cancel operation may fail to execute successfully, causing streamed text to not be saved to the session. |
 
+In a multi-worker deployment, call `init_unix_socket()` before starting the workers. `AgUiAgent.cancel_run()` then sends the cancel request to the master over Unix Socket, so any worker can cancel the run.
+
 **Full example:**
 - [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)
+
+## Agent Service Steering Guide
+
+Steering is not part of the A2A or AG-UI protocols, so the framework exposes no client command for it. Add your own endpoint (for example `POST /steering`) and call the same `Runner.send_steering()` from there:
+
+```python
+from trpc_agent_sdk.types import Content, Part
+
+status = await runner.send_steering(
+    user_id=user_id,
+    session_id=session_id,
+    content=Content(role="user", parts=[Part(text=text)]),
+)
+if not status.ok:
+    return {"error": status.error_msg}
+```
+
+**Key points:**
+
+- The endpoint does not need to run in the same process as the run. In a multi-worker deployment the master calls `init_unix_socket()` before forking; `send_steering()` writes to the master's authoritative run table over Unix Socket, and the owner worker's poller syncs it back at the next `poll_interval`. Cross-worker steering therefore has a delay of at most one `poll_interval`.
+- When `status.ok` is `False`, `error_msg` explains why. Common values are `no active run` and `steering content is empty`. The same reason is written to `logger.error`, and a custom manager may supply its own `error_msg`.
+- Steering is best-effort. A message that arrives during the final LLM request and has already been synced to the owner gets one extra iteration in `LlmAgent` before the loop exits. Messages still queued at the master, or left over when the run is cancelled, are released with the run and are not guaranteed to be delivered. Cancel wins over steering.
+- Consumption depends on the Agent: `LlmAgent` drains automatically, `LangGraphAgent` needs a user-defined `steering_node`, and `ClaudeAgent` is forwarded by the framework to the active Claude request. Multi-Agent scenarios (Chain / Parallel / Cycle / Team) do not support Steering because there is no unique target.
+
+**Full examples:**
+- [examples/llmagent_with_steering](../../../examples/llmagent_with_steering/README.md)
+- [examples/langgraph_agent_with_steering](../../../examples/langgraph_agent_with_steering/README.md)
+- [examples/claude_agent_with_steering](../../../examples/claude_agent_with_steering/README.md)

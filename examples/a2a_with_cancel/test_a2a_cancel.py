@@ -81,7 +81,9 @@ async def run_remote_agent(
 
             if isinstance(event, AgentCancelledEvent):
                 print(f"\n❌ Run was cancelled: {event.error_message}")
-                break
+                # Keep consuming until the SDK generator ends so its spans close
+                # in this task's context instead of being finalized in another one.
+                continue
 
             if not event.content or not event.content.parts:
                 continue

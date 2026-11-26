@@ -18,6 +18,8 @@ from a2a.types import (
     Message,
     Part as A2APart,
     Role,
+    SendStreamingMessageResponse,
+    SendStreamingMessageSuccessResponse,
     Task,
     TaskArtifactUpdateEvent,
     TaskState,
@@ -66,6 +68,7 @@ def _make_invocation_context(**overrides):
 # __init__
 # ---------------------------------------------------------------------------
 class TestTrpcRemoteA2aAgentInit:
+
     def test_with_base_url(self):
         agent = TrpcRemoteA2aAgent(name="remote", agent_base_url="http://remote:8080")
         assert agent.agent_base_url == "http://remote:8080"
@@ -102,6 +105,7 @@ class TestTrpcRemoteA2aAgentInit:
 # initialize
 # ---------------------------------------------------------------------------
 class TestInitialize:
+
     async def test_already_initialized(self):
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         agent._initialized = True
@@ -160,17 +164,18 @@ class TestInitialize:
 # _build_outgoing_message
 # ---------------------------------------------------------------------------
 class TestBuildOutgoingMessage:
+
     def test_with_override_messages(self):
         from google.genai import types as genai_types
         ctx = _make_invocation_context(
-            override_messages=[genai_types.Content(role="user", parts=[genai_types.Part(text="override")])]
-        )
+            override_messages=[genai_types.Content(role="user", parts=[genai_types.Part(text="override")])])
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         msg = agent._build_outgoing_message(ctx)
         assert msg is not None
 
     def test_from_session_events(self):
-        user_event = Event(invocation_id="inv-1", author="user",
+        user_event = Event(invocation_id="inv-1",
+                           author="user",
                            content=Content(role="user", parts=[Part(text="hello")]))
         ctx = _make_invocation_context(override_messages=None, events=[user_event])
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
@@ -197,6 +202,7 @@ class TestBuildOutgoingMessage:
 # _build_message_from_artifact_event
 # ---------------------------------------------------------------------------
 class TestBuildMessageFromArtifactEvent:
+
     def test_with_artifact(self):
         event = TaskArtifactUpdateEvent(
             task_id="t1",
@@ -227,30 +233,41 @@ class TestBuildMessageFromArtifactEvent:
 # _ensure_non_streaming_for_discrete_events
 # ---------------------------------------------------------------------------
 class TestEnsureNonStreamingForDiscreteEvents:
+
     def test_function_call_sets_partial_false(self):
         from google.genai.types import FunctionCall as GenaiFunctionCall
-        event = Event(invocation_id="inv-1", author="a", partial=True,
+        event = Event(invocation_id="inv-1",
+                      author="a",
+                      partial=True,
                       content=Content(role="model", parts=[Part(function_call=GenaiFunctionCall(name="fn", args={}))]))
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         agent._ensure_non_streaming_for_discrete_events(event)
         assert event.partial is False
 
     def test_tool_response_object(self):
-        event = Event(invocation_id="inv-1", author="a", partial=True, object="tool.response",
+        event = Event(invocation_id="inv-1",
+                      author="a",
+                      partial=True,
+                      object="tool.response",
                       content=Content(role="model", parts=[Part(text="resp")]))
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         agent._ensure_non_streaming_for_discrete_events(event)
         assert event.partial is False
 
     def test_code_execution_object(self):
-        event = Event(invocation_id="inv-1", author="a", partial=True, object="postprocessing.code_execution",
+        event = Event(invocation_id="inv-1",
+                      author="a",
+                      partial=True,
+                      object="postprocessing.code_execution",
                       content=Content(role="model", parts=[Part(text="code")]))
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         agent._ensure_non_streaming_for_discrete_events(event)
         assert event.partial is False
 
     def test_text_event_not_changed(self):
-        event = Event(invocation_id="inv-1", author="a", partial=True,
+        event = Event(invocation_id="inv-1",
+                      author="a",
+                      partial=True,
                       content=Content(role="model", parts=[Part(text="hi")]))
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         agent._ensure_non_streaming_for_discrete_events(event)
@@ -261,6 +278,7 @@ class TestEnsureNonStreamingForDiscreteEvents:
 # _resolve_partial
 # ---------------------------------------------------------------------------
 class TestResolvePartial:
+
     def test_none_metadata(self):
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         assert agent._resolve_partial(None) is True
@@ -294,6 +312,7 @@ class TestResolvePartial:
 # _events_from_response
 # ---------------------------------------------------------------------------
 class TestEventsFromResponse:
+
     def _make_agent(self):
         return TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
 
@@ -451,6 +470,7 @@ class TestEventsFromResponse:
 # _run_async_impl
 # ---------------------------------------------------------------------------
 class TestRunAsyncImpl:
+
     async def test_not_initialized_yields_error_event(self):
         agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
         agent._initialized = False
@@ -470,3 +490,33 @@ class TestRunAsyncImpl:
             events.append(event)
         assert len(events) == 1
         assert events[0].content is not None
+
+    async def test_cancel_uses_id_from_initial_task(self):
+        from google.genai import types as genai_types
+
+        task = Task(
+            id="task-from-id",
+            context_id="ctx1",
+            status=TaskStatus(state=TaskState.submitted),
+        )
+
+        async def stream():
+            yield SendStreamingMessageResponse(
+                root=SendStreamingMessageSuccessResponse(id="1", jsonrpc="2.0", result=task))
+            raise RunCancelledException("cancelled")
+
+        agent = TrpcRemoteA2aAgent(name="remote", agent_card=_make_agent_card())
+        agent._initialized = True
+        agent._a2a_client = MagicMock()
+        agent._a2a_client.send_message_streaming = MagicMock(return_value=stream())
+        agent._a2a_client.cancel_task = AsyncMock()
+        ctx = _make_invocation_context(
+            override_messages=[genai_types.Content(role="user", parts=[genai_types.Part(text="hi")])])
+
+        with pytest.raises(RunCancelledException):
+            async for _ in agent._run_async_impl(ctx):
+                pass
+
+        agent._a2a_client.cancel_task.assert_awaited()
+        cancel_request = agent._a2a_client.cancel_task.call_args.args[0]
+        assert cancel_request.params.id == "task-from-id"

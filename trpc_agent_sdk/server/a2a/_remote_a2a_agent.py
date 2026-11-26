@@ -72,6 +72,19 @@ from .converters import convert_content_to_a2a_message
 from .converters import convert_event_to_a2a_message
 
 
+async def _aclose_stream_iterator(stream_iter: Any) -> None:
+    """Close a remote SSE iterator without masking the caller's exception."""
+    aclose = getattr(stream_iter, "aclose", None)
+    if not callable(aclose):
+        return
+    try:
+        await aclose()
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # pylint: disable=broad-except
+        logger.debug("Failed to close remote A2A stream iterator", exc_info=True)
+
+
 class TrpcRemoteA2aAgent(BaseAgent):
     """Agent that communicates with a remote A2A agent via the standard A2A SDK client.
 
@@ -170,38 +183,47 @@ class TrpcRemoteA2aAgent(BaseAgent):
         """Wrap a streaming generator with concurrent cancel checking."""
         cancel_event = await ctx.get_cancel_event()
         stream_iter = streaming_generator.__aiter__()
+        try:
+            while True:
+                next_response_task = asyncio.create_task(stream_iter.__anext__())
+                try:
+                    cancel_wait_task = asyncio.create_task(cancel_event.wait())
+                    done, pending = await asyncio.wait(
+                        [next_response_task, cancel_wait_task],
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except (asyncio.CancelledError, StopAsyncIteration):
+                            pass
 
-        while True:
-            next_response_task = asyncio.create_task(stream_iter.__anext__())
-            try:
-                cancel_wait_task = asyncio.create_task(cancel_event.wait())
-                done, pending = await asyncio.wait(
-                    [next_response_task, cancel_wait_task],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in pending:
-                    task.cancel()
+                    if cancel_wait_task in done:
+                        logger.info("Cancel event triggered during streaming wait")
+                        next_response_task.cancel()
+                        try:
+                            await next_response_task
+                        except (asyncio.CancelledError, StopAsyncIteration):
+                            pass
+                        except Exception:  # pylint: disable=broad-except
+                            pass
+                        raise RunCancelledException("Run cancelled while waiting for stream response")
+
+                    if next_response_task in done:
+                        try:
+                            yield next_response_task.result()
+                        except StopAsyncIteration:
+                            return
+                except asyncio.CancelledError:
+                    next_response_task.cancel()
                     try:
-                        await task
+                        await next_response_task
                     except (asyncio.CancelledError, StopAsyncIteration):
                         pass
-
-                if cancel_wait_task in done:
-                    logger.info("Cancel event triggered during streaming wait")
-                    raise RunCancelledException("Run cancelled while waiting for stream response")
-
-                if next_response_task in done:
-                    try:
-                        yield next_response_task.result()
-                    except StopAsyncIteration:
-                        return
-            except asyncio.CancelledError:
-                next_response_task.cancel()
-                try:
-                    await next_response_task
-                except (asyncio.CancelledError, StopAsyncIteration):
-                    pass
-                raise
+                    raise
+        finally:
+            await _aclose_stream_iterator(stream_iter)
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         await ctx.raise_if_cancelled()
@@ -276,9 +298,10 @@ class TrpcRemoteA2aAgent(BaseAgent):
                 event_count += 1
                 result = response.root.result
 
-                if task_id is None and hasattr(result, "task_id"):
-                    task_id = result.task_id
-                    logger.debug("Captured task_id for cancellation: %s", task_id)
+                if task_id is None:
+                    task_id = self._task_id_from_payload(result)
+                    if task_id:
+                        logger.debug("Captured task_id for cancellation: %s", task_id)
 
                 for event in self._events_from_response(result, event_count, ctx):
                     trace_reporter.trace_event(ctx, event)
@@ -370,6 +393,21 @@ class TrpcRemoteA2aAgent(BaseAgent):
         if isinstance(partial, str):
             return partial.strip().lower() == "true"
         return True
+
+    def _task_id_from_payload(self, result: Any) -> Optional[str]:
+        """Read the remote task id from a stream payload.
+
+        ``TaskStatusUpdateEvent`` / ``TaskArtifactUpdateEvent`` carry
+        ``task_id``. The initial ``Task`` uses ``id`` instead, so cancel must
+        fall back to that field or the first event cannot seed
+        ``CancelTaskRequest``.
+        """
+        task_id = getattr(result, "task_id", None)
+        if task_id:
+            return task_id
+        if isinstance(result, Task) and result.id:
+            return result.id
+        return None
 
     def _events_from_response(self, result: Any, event_count: int, ctx: InvocationContext) -> List[Event]:
         """Produce TrpcAgent events from one streaming response."""
