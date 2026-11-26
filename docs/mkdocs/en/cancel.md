@@ -498,22 +498,25 @@ await runner.cancel_run_async(user_id, session_id)
 
 ### ClaudeAgent
 
-ClaudeAgent runs using the Claude SDK's subprocess mode. When cancelled, the subprocess is terminated.
-
-**Cancel implementation:**
-- When a cancellation request is detected, a termination signal is sent to the Claude SDK subprocess
-- After the subprocess exits, partial responses are saved to the session
+ClaudeAgent runs on the Claude SDK and supports both Cancel and Steering. Internally, when a steering message arrives, it is sent directly to the CLI.
 
 **Usage example:**
 
 ```python
 import asyncio
 
-from trpc_agent_sdk.tools import FunctionTool
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.types import Content, Part
+
+# Define a tool
+async def get_weather(city: str) -> dict:
+    """Get the weather for a city"""
+    await asyncio.sleep(3)  # Simulate a slow call
+    return {"city": city, "temperature": "25°C", "condition": "Sunny"}
 
 model = OpenAIModel(model_name="deepseek-chat")
 
@@ -529,7 +532,7 @@ agent = ClaudeAgent(
     name="claude_agent",
     model=model,
     instruction="You are an intelligent assistant",
-    tools=[FunctionTool(some_tool)], # some_tool is a user-defined tool
+    tools=[FunctionTool(get_weather)],
 )
 agent.initialize()
 
@@ -539,16 +542,32 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel usage is the same
-await runner.cancel_run_async(user_id, session_id)
+# Run with cancel support
+async def run_with_cancel():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    await runner.cancel_run_async(user_id, session_id)
+    await task
+
+# Run with steering support
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="also check Beijing")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
-**Notes:**
-- Cancel will cause the Claude SDK subprocess to be terminated. You may see `ProcessError` logs, which is expected behavior
-- After the subprocess is terminated, partial responses are saved to the session
-
-**Full example:**
-- [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+**Full examples:**
+- Cancel: [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+- Steering: [examples/claude_agent_with_steering](../../../examples/claude_agent_with_steering/README.md)
 
 ### TeamAgent
 

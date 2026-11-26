@@ -16,6 +16,7 @@ import pytest
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.exceptions import RunLimitException, RunLimitType
 from trpc_agent_sdk.types import Content, FunctionCall, FunctionResponse, Part, Schema, Type
 
 # Mock claude_agent_sdk types for test isolation
@@ -35,12 +36,13 @@ from trpc_agent_sdk.server.agents.claude._session_config import SessionConfig
 from trpc_agent_sdk.server.agents.claude._session_manager import SessionManager
 from trpc_agent_sdk.models import LLMModel
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-claude-.*"]
@@ -65,6 +67,8 @@ def _make_ctx(
     ctx.invocation_id = "inv-1"
     ctx.branch = None
     ctx.raise_if_cancelled = AsyncMock()
+    ctx.consume_steering = AsyncMock(return_value=None)
+    ctx.get_cancel_event = AsyncMock(return_value=None)
     ctx.override_messages = override_messages
     ctx.user_content = None
 
@@ -100,7 +104,9 @@ def _make_event(author="user", text="hello", role="user"):
 # Initialization
 # ---------------------------------------------------------------------------
 
+
 class TestClaudeAgentInit:
+
     def test_basic_init(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)
@@ -133,7 +139,9 @@ class TestClaudeAgentInit:
 # initialize / destroy
 # ---------------------------------------------------------------------------
 
+
 class TestClaudeAgentLifecycle:
+
     def test_initialize_creates_runtime_and_session_manager(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)
@@ -214,7 +222,9 @@ class TestClaudeAgentLifecycle:
 # _ensure_model_ready
 # ---------------------------------------------------------------------------
 
+
 class TestEnsureModelReady:
+
     async def test_static_model_cached(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)
@@ -237,6 +247,7 @@ class TestEnsureModelReady:
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="new-key")
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent._delete_model")
     async def test_callable_model_deletes_old_key(self, mock_delete, mock_add):
+
         async def model_factory(custom_data):
             return MockLLMModel(model_name="test-claude-dynamic")
 
@@ -248,8 +259,7 @@ class TestEnsureModelReady:
         mock_delete.assert_called_once_with("old-key")
         assert result == "new-key"
 
-    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model",
-           side_effect=RuntimeError("proxy not ready"))
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", side_effect=RuntimeError("proxy not ready"))
     async def test_raises_on_proxy_error(self, mock_add):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)
@@ -259,9 +269,9 @@ class TestEnsureModelReady:
             await agent._ensure_model_ready(ctx)
 
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="new-key")
-    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._delete_model",
-           side_effect=RuntimeError("delete failed"))
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._delete_model", side_effect=RuntimeError("delete failed"))
     async def test_callable_model_handles_delete_error(self, mock_delete, mock_add):
+
         async def model_factory(custom_data):
             return MockLLMModel(model_name="test-claude-dynamic")
 
@@ -277,7 +287,9 @@ class TestEnsureModelReady:
 # _detect_streaming_tools
 # ---------------------------------------------------------------------------
 
+
 class TestDetectStreamingTools:
+
     async def test_empty_tools(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model, tools=[])
@@ -326,8 +338,10 @@ class TestDetectStreamingTools:
         assert "inner_tool" in result
 
     async def test_callable_streaming(self):
+
         def my_func():
             pass
+
         my_func.__name__ = "my_func"
         my_func.is_streaming = True
 
@@ -342,7 +356,9 @@ class TestDetectStreamingTools:
 # _apply_template_substitution
 # ---------------------------------------------------------------------------
 
+
 class TestApplyTemplateSubstitution:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -407,7 +423,9 @@ class TestApplyTemplateSubstitution:
 # _extract_latest_user_message
 # ---------------------------------------------------------------------------
 
+
 class TestExtractLatestUserMessage:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -455,7 +473,9 @@ class TestExtractLatestUserMessage:
 # _convert_override_messages_to_prompt
 # ---------------------------------------------------------------------------
 
+
 class TestConvertOverrideMessagesToPrompt:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -502,7 +522,9 @@ class TestConvertOverrideMessagesToPrompt:
 # _build_prompt_with_history
 # ---------------------------------------------------------------------------
 
+
 class TestBuildPromptWithHistory:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -553,7 +575,9 @@ class TestBuildPromptWithHistory:
 # _format_agent_message_parts
 # ---------------------------------------------------------------------------
 
+
 class TestFormatAgentMessageParts:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -605,7 +629,9 @@ class TestFormatAgentMessageParts:
 # _save_output_to_state
 # ---------------------------------------------------------------------------
 
+
 class TestSaveOutputToState:
+
     def _make_agent(self, output_key="result"):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model, output_key=output_key)
@@ -649,7 +675,9 @@ class TestSaveOutputToState:
 # _get_python_type_from_schema
 # ---------------------------------------------------------------------------
 
+
 class TestGetPythonTypeFromSchema:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -711,7 +739,9 @@ class TestGetPythonTypeFromSchema:
 # _convert_schema_to_dict
 # ---------------------------------------------------------------------------
 
+
 class TestConvertSchemaToDict:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -747,7 +777,9 @@ class TestConvertSchemaToDict:
 # _get_entry_point_dir
 # ---------------------------------------------------------------------------
 
+
 class TestGetEntryPointDir:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -775,7 +807,9 @@ class TestGetEntryPointDir:
 # _convert_message_to_event
 # ---------------------------------------------------------------------------
 
+
 class TestConvertMessageToEvent:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -799,7 +833,10 @@ class TestConvertMessageToEvent:
             duration_api_ms=80,
             is_error=False,
             total_cost_usd=0.01,
-            usage={"input_tokens": 10, "output_tokens": 5},
+            usage={
+                "input_tokens": 10,
+                "output_tokens": 5
+            },
             result="done",
             session_id="s1",
         )
@@ -817,7 +854,9 @@ class TestConvertMessageToEvent:
 # _convert_assistant_message
 # ---------------------------------------------------------------------------
 
+
 class TestConvertAssistantMessage:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -850,9 +889,7 @@ class TestConvertAssistantMessage:
         from claude_agent_sdk import AssistantMessage, ToolUseBlock
         agent = self._make_agent()
         ctx = _make_ctx()
-        msg = AssistantMessage(model="test", content=[
-            ToolUseBlock(id="t1", name="search", input={"q": "test"})
-        ])
+        msg = AssistantMessage(model="test", content=[ToolUseBlock(id="t1", name="search", input={"q": "test"})])
         tool_use_map = {}
         event = agent._convert_assistant_message(ctx, msg, tool_use_map)
         assert event is not None
@@ -863,9 +900,7 @@ class TestConvertAssistantMessage:
         from claude_agent_sdk import AssistantMessage, ToolResultBlock
         agent = self._make_agent()
         ctx = _make_ctx()
-        msg = AssistantMessage(model="test", content=[
-            ToolResultBlock(tool_use_id="t1", content="result")
-        ])
+        msg = AssistantMessage(model="test", content=[ToolResultBlock(tool_use_id="t1", content="result")])
         tool_use_map = {}
         event = agent._convert_assistant_message(ctx, msg, tool_use_map)
         assert event is not None
@@ -874,12 +909,15 @@ class TestConvertAssistantMessage:
         from claude_agent_sdk import AssistantMessage, ToolResultBlock
         agent = self._make_agent()
         ctx = _make_ctx()
-        msg = AssistantMessage(model="test", content=[
-            ToolResultBlock(
+        msg = AssistantMessage(
+            model="test",
+            content=[ToolResultBlock(
                 tool_use_id="t1",
-                content=[{"type": "text", "text": "result text"}],
-            )
-        ])
+                content=[{
+                    "type": "text",
+                    "text": "result text"
+                }],
+            )])
         tool_use_map = {}
         event = agent._convert_assistant_message(ctx, msg, tool_use_map)
         assert event is not None
@@ -898,7 +936,9 @@ class TestConvertAssistantMessage:
 # _convert_user_message
 # ---------------------------------------------------------------------------
 
+
 class TestConvertUserMessage:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -907,9 +947,7 @@ class TestConvertUserMessage:
         from claude_agent_sdk import UserMessage, ToolResultBlock
         agent = self._make_agent()
         ctx = _make_ctx()
-        msg = UserMessage(content=[
-            ToolResultBlock(tool_use_id="t1", content="result text")
-        ])
+        msg = UserMessage(content=[ToolResultBlock(tool_use_id="t1", content="result text")])
         tool_use_map = {"t1": "search"}
         event = agent._convert_user_message(ctx, msg, tool_use_map)
         assert event is not None
@@ -919,12 +957,13 @@ class TestConvertUserMessage:
         from claude_agent_sdk import UserMessage, ToolResultBlock
         agent = self._make_agent()
         ctx = _make_ctx()
-        msg = UserMessage(content=[
-            ToolResultBlock(
-                tool_use_id="t1",
-                content=[{"type": "text", "text": "result"}],
-            )
-        ])
+        msg = UserMessage(content=[ToolResultBlock(
+            tool_use_id="t1",
+            content=[{
+                "type": "text",
+                "text": "result"
+            }],
+        )])
         tool_use_map = {"t1": "search"}
         event = agent._convert_user_message(ctx, msg, tool_use_map)
         assert event is not None
@@ -933,9 +972,7 @@ class TestConvertUserMessage:
         from claude_agent_sdk import UserMessage, ToolResultBlock
         agent = self._make_agent()
         ctx = _make_ctx()
-        msg = UserMessage(content=[
-            ToolResultBlock(tool_use_id="unknown", content="result")
-        ])
+        msg = UserMessage(content=[ToolResultBlock(tool_use_id="unknown", content="result")])
         tool_use_map = {}
         event = agent._convert_user_message(ctx, msg, tool_use_map)
         assert event is not None
@@ -964,7 +1001,9 @@ class TestConvertUserMessage:
 # _convert_streaming_event
 # ---------------------------------------------------------------------------
 
+
 class TestConvertStreamingEvent:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)
@@ -981,7 +1020,11 @@ class TestConvertStreamingEvent:
         stream_event = self._make_stream_event({
             "type": "content_block_start",
             "index": 1,
-            "content_block": {"type": "tool_use", "id": "t1", "name": "search"},
+            "content_block": {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "search"
+            },
         })
         tool_info = {}
         result = agent._convert_streaming_event(ctx, stream_event, tool_info)
@@ -994,7 +1037,10 @@ class TestConvertStreamingEvent:
         ctx = _make_ctx()
         stream_event = self._make_stream_event({
             "type": "content_block_delta",
-            "delta": {"type": "text_delta", "text": "hello"},
+            "delta": {
+                "type": "text_delta",
+                "text": "hello"
+            },
         })
         result = agent._convert_streaming_event(ctx, stream_event, {})
         assert result is not None
@@ -1006,7 +1052,10 @@ class TestConvertStreamingEvent:
         ctx = _make_ctx()
         stream_event = self._make_stream_event({
             "type": "content_block_delta",
-            "delta": {"type": "text_delta", "text": ""},
+            "delta": {
+                "type": "text_delta",
+                "text": ""
+            },
         })
         result = agent._convert_streaming_event(ctx, stream_event, {})
         assert result is None
@@ -1019,7 +1068,10 @@ class TestConvertStreamingEvent:
         stream_event = self._make_stream_event({
             "type": "content_block_delta",
             "index": 0,
-            "delta": {"type": "input_json_delta", "partial_json": '{"q":'},
+            "delta": {
+                "type": "input_json_delta",
+                "partial_json": '{"q":'
+            },
         })
         result = agent._convert_streaming_event(ctx, stream_event, tool_info)
         assert result is not None
@@ -1034,7 +1086,10 @@ class TestConvertStreamingEvent:
         stream_event = self._make_stream_event({
             "type": "content_block_delta",
             "index": 0,
-            "delta": {"type": "input_json_delta", "partial_json": '{"q":'},
+            "delta": {
+                "type": "input_json_delta",
+                "partial_json": '{"q":'
+            },
         })
         result = agent._convert_streaming_event(ctx, stream_event, tool_info)
         assert result is None
@@ -1073,7 +1128,10 @@ class TestConvertStreamingEvent:
         stream_event = self._make_stream_event({
             "type": "content_block_start",
             "index": 0,
-            "content_block": {"type": "text", "text": ""},
+            "content_block": {
+                "type": "text",
+                "text": ""
+            },
         })
         tool_info = {}
         result = agent._convert_streaming_event(ctx, stream_event, tool_info)
@@ -1085,7 +1143,9 @@ class TestConvertStreamingEvent:
 # _parse_agent_config
 # ---------------------------------------------------------------------------
 
+
 class TestParseAgentConfig:
+
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent.ClaudeAgentOptions")
     async def test_basic_config(self, MockOptions):
         mock_opts = MagicMock()
@@ -1171,7 +1231,9 @@ class TestParseAgentConfig:
 # _convert_tools_to_mcp
 # ---------------------------------------------------------------------------
 
+
 class TestConvertToolsToMcp:
+
     def _make_agent(self, tools=None):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model, tools=tools or [])
@@ -1225,6 +1287,7 @@ class TestConvertToolsToMcp:
         assert result is not None
 
     async def test_with_callable(self):
+
         def my_func(x: str) -> str:
             return x
 
@@ -1265,6 +1328,7 @@ class TestConvertToolsToMcp:
 # ---------------------------------------------------------------------------
 # _run_async_impl
 # ---------------------------------------------------------------------------
+
 
 class TestRunAsyncImpl:
     """Tests for _run_async_impl. We mock CustomTraceReporter to avoid ctx attribute issues."""
@@ -1328,6 +1392,248 @@ class TestRunAsyncImpl:
             events.append(event)
 
         assert len(events) > 0
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent.ClaudeSDKClient")
+    async def test_run_forwards_steering_with_enable_session(self, MockClient, mock_add):
+        agent = self._make_agent(enable_session=True)
+
+        from claude_agent_sdk import AssistantMessage, TextBlock, ToolUseBlock
+        tool_msg = AssistantMessage(model="test",
+                                    content=[ToolUseBlock(id="tool-1", name="get_weather", input={"city": "Beijing"})])
+        text_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.query = AsyncMock()
+
+        async def mock_receive():
+            yield tool_msg
+            yield text_msg
+
+        mock_client.receive_response = mock_receive
+        MockClient.return_value = mock_client
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        texts = [call.args[0] for call in mock_client.query.await_args_list]
+        assert texts[0] == "hello"
+        assert any("steer" in text for text in texts[1:])
+        assert any(not event.visible for event in events)
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent.ClaudeSDKClient")
+    async def test_run_continues_with_steering_with_enable_session(self, MockClient, mock_add):
+        agent = self._make_agent(enable_session=True)
+
+        from claude_agent_sdk import TextBlock, AssistantMessage
+        assistant_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.query = AsyncMock()
+
+        async def mock_receive():
+            yield assistant_msg
+
+        mock_client.receive_response = mock_receive
+        MockClient.return_value = mock_client
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        texts = [call.args[0] for call in mock_client.query.await_args_list]
+        assert texts[0] == "hello"
+        assert len(texts) == 2
+        assert "steer" in texts[1]
+        assert any(not event.visible for event in events)
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    async def test_run_forwards_steering_with_session_manager(self, mock_add):
+        agent = self._make_agent(enable_session=False)
+
+        from claude_agent_sdk import AssistantMessage, TextBlock, ToolUseBlock
+        tool_msg = AssistantMessage(model="test",
+                                    content=[ToolUseBlock(id="tool-1", name="get_weather", input={"city": "Beijing"})])
+        text_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        prompts = []
+
+        async def mock_stream_query(**kwargs):
+            prompts.append(kwargs["prompt"])
+            yield tool_msg
+            yield text_msg
+
+        mock_sm = MagicMock(spec=SessionManager)
+        mock_sm.stream_query = mock_stream_query
+        mock_sm.send_steering = AsyncMock(return_value=True)
+        agent._session_manager = mock_sm
+        agent._runtime = MagicMock(spec=AsyncRuntime)
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        assert prompts == ["hello"]
+        mock_sm.send_steering.assert_awaited_once()
+        assert "steer" in mock_sm.send_steering.await_args.args[1]
+        assert any(not event.visible for event in events)
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    async def test_run_continues_with_pending_steering(self, mock_add):
+        agent = self._make_agent(enable_session=False)
+
+        from claude_agent_sdk import TextBlock, AssistantMessage
+        assistant_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        prompts = []
+
+        async def mock_stream_query(**kwargs):
+            prompts.append(kwargs["prompt"])
+            yield assistant_msg
+
+        mock_sm = MagicMock(spec=SessionManager)
+        mock_sm.stream_query = mock_stream_query
+        mock_sm.send_steering = AsyncMock(return_value=True)
+        agent._session_manager = mock_sm
+        agent._runtime = MagicMock(spec=AsyncRuntime)
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        assert len(prompts) == 2
+        assert prompts[0] == "hello"
+        assert "steer" in prompts[1]
+        mock_sm.send_steering.assert_not_awaited()
+        hidden_events = [event for event in events if not event.visible]
+        assert len(hidden_events) == 1
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    async def test_run_drops_steering_when_send_fails(self, mock_add):
+        agent = self._make_agent(enable_session=False)
+
+        from claude_agent_sdk import AssistantMessage, TextBlock, ToolUseBlock
+        tool_msg = AssistantMessage(model="test",
+                                    content=[ToolUseBlock(id="tool-1", name="get_weather", input={"city": "Beijing"})])
+        text_msg = AssistantMessage(model="test", content=[TextBlock(text="response")])
+
+        prompts = []
+
+        async def mock_stream_query(**kwargs):
+            prompts.append(kwargs["prompt"])
+            yield tool_msg
+            yield text_msg
+
+        mock_sm = MagicMock(spec=SessionManager)
+        mock_sm.stream_query = mock_stream_query
+        mock_sm.send_steering = AsyncMock(return_value=False)
+        agent._session_manager = mock_sm
+        agent._runtime = MagicMock(spec=AsyncRuntime)
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        calls = {"count": 0}
+
+        async def consume():
+            calls["count"] += 1
+            return steering if calls["count"] == 1 else None
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.consume_steering = AsyncMock(side_effect=consume)
+
+        events = []
+        async for event in agent._run_async_impl(ctx):
+            events.append(event)
+
+        mock_sm.send_steering.assert_awaited_once()
+        assert prompts == ["hello"]
+        assert not any(not event.visible for event in events)
+
+    async def test_forward_steering_returns_none_when_send_fails(self):
+        agent = self._make_agent(enable_session=False)
+
+        steering = Content(role="user", parts=[Part.from_text(text="steer")])
+        ctx = _make_ctx()
+        ctx.consume_steering = AsyncMock(return_value=steering)
+
+        send = AsyncMock(return_value=False)
+
+        assert await agent._forward_steering(ctx, send) is None
+        send.assert_awaited_once()
+
+    async def test_forward_steering_returns_none_for_empty_queue(self):
+        agent = self._make_agent(enable_session=False)
+
+        ctx = _make_ctx()
+        ctx.consume_steering = AsyncMock(return_value=None)
+
+        send = AsyncMock(return_value=True)
+
+        assert await agent._forward_steering(ctx, send) is None
+        send.assert_not_awaited()
+
+    @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
+    async def test_run_limit_exception_propagates(self, mock_add):
+        agent = self._make_agent(enable_session=False)
+        agent._session_manager = MagicMock(spec=SessionManager)
+        agent._runtime = MagicMock(spec=AsyncRuntime)
+
+        ctx = _make_ctx(session_events=[_make_event(author="user", text="hello")])
+        ctx.raise_if_limit = Mock(side_effect=RunLimitException(
+            agent_name="test_agent",
+            limit_type=RunLimitType.MAX_LLM_CALLS,
+            configured_value=1,
+            observed_value=2,
+        ))
+
+        with pytest.raises(RunLimitException):
+            async for _ in agent._run_async_impl(ctx):
+                pass
 
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent._add_model", return_value="model-key")
     async def test_run_no_user_message(self, mock_add):
@@ -1478,8 +1784,10 @@ class TestRunAsyncImpl:
 
         with patch.object(AsyncRuntime, "start"), \
              patch.object(SessionManager, "stream_query") as mock_stream:
+
             async def mock_gen(*args, **kwargs):
                 yield assistant_msg
+
             mock_stream.return_value = mock_gen()
 
             events = []
@@ -1493,7 +1801,9 @@ class TestRunAsyncImpl:
 # _convert_tool_to_sdk_tool handler
 # ---------------------------------------------------------------------------
 
+
 class TestConvertToolToSdkToolHandler:
+
     async def test_handler_dict_with_content_key(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)
@@ -1533,7 +1843,9 @@ class TestConvertToolToSdkToolHandler:
 # _parse_agent_config with tools
 # ---------------------------------------------------------------------------
 
+
 class TestParseAgentConfigWithTools:
+
     @patch("trpc_agent_sdk.server.agents.claude._claude_agent.ClaudeAgentOptions")
     async def test_config_with_tools(self, MockOptions):
         mock_opts = MagicMock()
@@ -1608,7 +1920,9 @@ class TestParseAgentConfigWithTools:
 # _convert_message_to_event additional
 # ---------------------------------------------------------------------------
 
+
 class TestConvertMessageToEventAdditional:
+
     def _make_agent(self):
         model = MockLLMModel(model_name="test-claude-1")
         return ClaudeAgent(name="test_agent", model=model)
@@ -1643,7 +1957,9 @@ class TestConvertMessageToEventAdditional:
 # _get_entry_point_dir with valid file
 # ---------------------------------------------------------------------------
 
+
 class TestGetEntryPointDirWithFile:
+
     def test_with_valid_main(self):
         model = MockLLMModel(model_name="test-claude-1")
         agent = ClaudeAgent(name="test_agent", model=model)

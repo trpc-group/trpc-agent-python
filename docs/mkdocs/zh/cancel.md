@@ -492,22 +492,25 @@ await runner.cancel_run_async(user_id, session_id)
 
 ### ClaudeAgent
 
-ClaudeAgent 使用 Claude SDK 的子进程模式运行，Cancel 时会终止子进程。
-
-**Cancel 实现：**
-- 检测到取消请求时，向 Claude SDK 子进程发送终止信号
-- 子进程退出后，保存部分响应到会话
+ClaudeAgent 基于 Claude SDK 运行，支持 Cancel 和 Steering，其中内部实现上，当检测到 Steering 消息到达时，会直接发送到 CLI。
 
 **使用示例：**
 
 ```python
 import asyncio
 
-from trpc_agent_sdk.tools import FunctionTool
-from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.types import Content, Part
+
+# 定义工具
+async def get_weather(city: str) -> dict:
+    """获取城市天气"""
+    await asyncio.sleep(3)  # 模拟耗时操作
+    return {"city": city, "temperature": "25°C", "condition": "晴"}
 
 model = OpenAIModel(model_name="deepseek-chat")
 
@@ -523,7 +526,7 @@ agent = ClaudeAgent(
     name="claude_agent",
     model=model,
     instruction="你是一个智能助手",
-    tools=[FunctionTool(some_tool)], # some_tool 为用户自定义工具
+    tools=[FunctionTool(get_weather)],
 )
 agent.initialize()
 
@@ -533,16 +536,32 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel 用法相同
-await runner.cancel_run_async(user_id, session_id)
+# 运行并支持 Cancel
+async def run_with_cancel():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    await runner.cancel_run_async(user_id, session_id)
+    await task
+
+# 运行并支持 Steering
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="顺便查一下北京")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
-**注意事项：**
-- Cancel 会导致 Claude SDK 子进程被终止，可能会看到 `ProcessError` 日志，这是正常行为
-- 子进程终止后，部分响应会被保存到会话
-
 **完整示例：**
-- [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+- Cancel：[examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
+- Steering：[examples/claude_agent_with_steering](../../../examples/claude_agent_with_steering/README.md)
 
 ### TeamAgent
 
