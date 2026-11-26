@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 from typing import AsyncGenerator
+from typing import AsyncIterator
 from typing import Awaitable
 from typing import Callable
 from typing import List
@@ -39,9 +40,12 @@ from pydantic import Field
 
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.agents import InstructionProvider
+from trpc_agent_sdk.cancel import mark_steering_content
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.exceptions import RunCancelledException
+from trpc_agent_sdk.exceptions import RunLimitException
+from trpc_agent_sdk.exceptions import RunLimitType
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
@@ -233,6 +237,153 @@ class ClaudeAgent(BaseAgent):
             finally:
                 self._runtime = None
 
+    async def _forward_steering(
+        self,
+        ctx: InvocationContext,
+        send: Callable[[str], Awaitable[bool]],
+    ) -> Optional[Event]:
+        """Consume pending steering, write it to Claude, and return its hidden event.
+
+        Called after the caller consumed an event that announced a tool call.
+        The CLI is still running the tool at this point, so the text is queued
+        behind the tool result and picked up by the next model call.
+
+        Args:
+            ctx: Invocation context that owns the steering queue
+            send: Callback that writes text to the active Claude request and
+                returns True only after the text reached the CLI
+
+        Returns:
+            The hidden event for the consumed steering, or None when there was
+            nothing to forward.
+        """
+        try:
+            content = await ctx.consume_steering()
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error("Error consuming steering: %s", ex, exc_info=True)
+            return None
+
+        if content is None:
+            return None
+
+        text = self._steering_text(content)
+        if not text:
+            return None
+
+        try:
+            sent = await send(text)
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error("Error forwarding steering: %s", ex, exc_info=True)
+            return None
+        if not sent:
+            logger.warning("Steering was not written to Claude, dropping it")
+            return None
+
+        return self._steering_event(ctx, content)
+
+    def _steering_text(self, content: Content) -> str:
+        """Join steering parts into marked text for Claude.
+
+        Returns an empty string when the content carries no text; ``client.query``
+        only accepts text.
+        """
+        parts: List[Part] = list(content.parts or [])
+        for part in parts:
+            if not part.text:
+                logger.warning("Steering content contains non-text parts; "
+                               "claude_agent_sdk only accepts text, dropping them")
+        if not any(part.text for part in parts):
+            return ""
+        marked = mark_steering_content(Content(role="user", parts=parts))
+        return "".join(part.text or "" for part in marked.parts)
+
+    def _steering_event(self, ctx: InvocationContext, content: Content) -> Event:
+        """Build the hidden event that records one steering message."""
+        return Event(
+            invocation_id=ctx.invocation_id,
+            author="user",
+            branch=ctx.branch,
+            content=mark_steering_content(content),
+            visible=False,
+        )
+
+    async def _run_loops(
+        self,
+        ctx: InvocationContext,
+        prompt: str,
+        trace_reporter: CustomTraceReporter,
+        open_stream: Callable[[str], AsyncIterator[Any]],
+        send_steering: Callable[[str], Awaitable[bool]],
+    ) -> AsyncGenerator[Event, None]:
+        """Run Claude loops until no pending steering remains.
+
+        One loop sends one prompt and streams events until the first
+        ``ResultMessage``. After an event that announces a tool call, pending
+        steering is written to the CLI while the tool runs, so the next model
+        call in the same turn sees it. Steering that is still queued when the
+        loop ends becomes the next loop's prompt, so the run continues with the
+        correction instead of dropping it or leaving it to the next run.
+
+        Args:
+            ctx: Invocation context of this run
+            prompt: Prompt for the first loop; later loops use steering text
+            trace_reporter: Trace reporter shared by all loops
+            open_stream: Sends one prompt and returns an async iterator of
+                Claude SDK messages
+            send_steering: Writes steering text to the active CLI request and
+                returns True only after the write completed
+
+        Yields:
+            Event: Events from every loop in this run
+        """
+        while True:
+            # Checkpoint before each loop, including steering-triggered ones.
+            await ctx.raise_if_cancelled()
+            ctx.raise_if_limit(RunLimitType.MAX_LLM_CALLS)
+
+            tool_use_map: dict[str, str] = {}  # {tool_use_id: function_name}
+            tool_info_by_index: dict[int, dict] = {}  # {index: {id, name}}
+
+            async for message in open_stream(prompt):
+                # CHECKPOINT 2: Each streaming message
+                await ctx.raise_if_cancelled()
+
+                logger.debug("Received message from Claude: %s", type(message).__name__)
+
+                event = self._convert_message_to_event(ctx, message, tool_use_map, tool_info_by_index)
+
+                if event:
+                    # Trace event
+                    trace_reporter.trace_event(ctx, event)
+
+                    if event.is_final_response():
+                        self._save_output_to_state(ctx, event)
+                    yield event
+
+                    # The caller consumed this event and asked for the next
+                    # one. When it announced a tool call, the CLI is running
+                    # the tool now; write steering here so it is queued behind
+                    # the tool result and seen by the next model call.
+                    if event.get_function_calls():
+                        await ctx.raise_if_cancelled()
+                        steering_event = await self._forward_steering(ctx, send_steering)
+                        if steering_event is not None:
+                            yield steering_event
+
+            # The loop ended normally. Cancel wins over steering.
+            await ctx.raise_if_cancelled()
+            tail = await ctx.consume_steering()
+            if tail is None:
+                return
+
+            steering_text = self._steering_text(tail)
+            if not steering_text:
+                return
+
+            yield self._steering_event(ctx, tail)
+            logger.debug("Continuing Claude run with steering: %s...", steering_text[:100])
+            prompt = steering_text
+
     @override
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """Core implementation of Claude agent execution.
@@ -304,56 +455,42 @@ class ClaudeAgent(BaseAgent):
         try:
             # Only use session manager when enable_session is False
             if not self.enable_session:
-                tool_use_map = {}  # {tool_use_id: function_name}
-                tool_info_by_index: dict[int, dict] = {}  # {index: {id, name}}
 
-                async for message in self._session_manager.stream_query(
+                def open_stream(prompt: str) -> AsyncIterator[Any]:
+                    """Send one prompt through the session worker."""
+                    return self._session_manager.stream_query(
                         session_id=claude_session_id,
                         options=claude_options,
-                        prompt=user_prompt,
-                ):
-                    # CHECKPOINT 2: Each streaming message
-                    await ctx.raise_if_cancelled()
+                        prompt=prompt,
+                    )
 
-                    logger.debug("Received message from Claude: %s", type(message).__name__)
+                async def send_steering(text: str) -> bool:
+                    """Forward steering through the session worker."""
+                    return await self._session_manager.send_steering(claude_session_id, text)
 
-                    event = self._convert_message_to_event(ctx, message, tool_use_map, tool_info_by_index)
-
-                    if event:
-                        # Trace event
-                        trace_reporter.trace_event(ctx, event)
-
-                        if event.is_final_response():
-                            self._save_output_to_state(ctx, event)
-                        yield event
+                async for event in self._run_loops(ctx, user_prompt, trace_reporter, open_stream, send_steering):
+                    yield event
             else:
                 # For enable_session=True, we need to run in the current event loop
                 # Use async context manager for proper lifecycle
                 async with ClaudeSDKClient(options=claude_options) as client:
                     logger.debug("Created new client for session '%s' (enable_session=True)", claude_session_id)
 
-                    await client.query(user_prompt, session_id=claude_session_id)
+                    async def open_stream(prompt: str) -> AsyncIterator[Any]:
+                        """Send one prompt to the local Claude client."""
+                        await client.query(prompt, session_id=claude_session_id)
+                        async for message in client.receive_response():
+                            yield message
 
-                    tool_use_map = {}  # {tool_use_id: function_name}
-                    tool_info_by_index: dict[int, dict] = {}  # {index: {id, name}}
+                    async def send_steering(text: str) -> bool:
+                        """Forward steering to the local Claude client."""
+                        await client.query(text, session_id=claude_session_id)
+                        return True
 
-                    async for message in client.receive_response():
-                        # CHECKPOINT 2: Each streaming message
-                        await ctx.raise_if_cancelled()
+                    async for event in self._run_loops(ctx, user_prompt, trace_reporter, open_stream, send_steering):
+                        yield event
 
-                        logger.debug("Received message from Claude: %s", type(message).__name__)
-
-                        event = self._convert_message_to_event(ctx, message, tool_use_map, tool_info_by_index)
-
-                        if event:
-                            # Trace event
-                            trace_reporter.trace_event(ctx, event)
-
-                            if event.is_final_response():
-                                self._save_output_to_state(ctx, event)
-                            yield event
-
-        except RunCancelledException:
+        except (RunCancelledException, RunLimitException):
             # Re-raise to let Runner handle cleanup
             raise
 
