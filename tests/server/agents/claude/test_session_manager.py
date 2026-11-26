@@ -27,12 +27,13 @@ from trpc_agent_sdk.server.agents.claude._session_manager import (
     _RESPONSE_SENTINEL,
 )
 
-
 # ---------------------------------------------------------------------------
 # _SessionRequest
 # ---------------------------------------------------------------------------
 
+
 class TestSessionRequest:
+
     def test_default_init(self):
         q = queue.Queue()
         req = _SessionRequest(prompt="hello", session_id="s1", response_queue=q)
@@ -64,7 +65,9 @@ class TestSessionRequest:
 # _fingerprint_options
 # ---------------------------------------------------------------------------
 
+
 class TestFingerprintOptions:
+
     def test_model_dump_json(self):
         options = MagicMock()
         options.model_dump_json.return_value = '{"model":"test"}'
@@ -100,7 +103,9 @@ class TestFingerprintOptions:
 # _SessionWorker
 # ---------------------------------------------------------------------------
 
+
 class TestSessionWorker:
+
     def test_init(self):
         options = MagicMock()
         worker = _SessionWorker(session_id="s1", options=options)
@@ -131,6 +136,52 @@ class TestSessionWorker:
         await worker.close()
         item = worker._request_queue.get_nowait()
         assert item is None
+
+    async def test_send_steering_without_active_request(self):
+        options = MagicMock()
+        worker = _SessionWorker(session_id="s1", options=options)
+        assert await worker.send_steering("steer") is False
+
+    async def test_send_steering_returns_false_when_write_fails(self):
+        options = MagicMock()
+        worker = _SessionWorker(session_id="s1", options=options)
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock(side_effect=RuntimeError("write failed"))
+        worker._active_client = mock_client
+
+        assert await worker.send_steering("steer") is False
+
+    async def test_handle_request_applies_steering(self):
+        options = MagicMock()
+        worker = _SessionWorker(session_id="s1", options=options)
+
+        release = asyncio.Event()
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock()
+
+        async def mock_receive():
+            yield "msg1"
+            await release.wait()
+            yield "msg2"
+
+        mock_client.receive_response = mock_receive
+
+        q = queue.Queue()
+        req = _SessionRequest(prompt="initial", session_id="s1", response_queue=q)
+        task = asyncio.create_task(worker._handle_request(mock_client, req))
+
+        while worker._active_client is None:
+            await asyncio.sleep(0)
+
+        assert await worker.send_steering("steer") is True
+
+        release.set()
+        await task
+
+        calls = mock_client.query.await_args_list
+        assert calls[0].args[0] == "initial"
+        assert calls[1].args[0] == "steer"
+        assert worker._active_client is None
 
     async def test_close_is_idempotent(self):
         options = MagicMock()
@@ -277,7 +328,9 @@ class TestSessionWorker:
 # SessionManager
 # ---------------------------------------------------------------------------
 
+
 class TestSessionManager:
+
     def test_init_defaults(self):
         rt = MagicMock(spec=AsyncRuntime)
         mgr = SessionManager(runtime=rt)
@@ -312,6 +365,36 @@ class TestSessionManager:
         with pytest.raises(RuntimeError, match="SessionManager is closed"):
             async for _ in mgr.stream_query("s1", options, "hello"):
                 pass
+
+    async def test_send_steering_returns_false_for_unknown_session(self):
+        rt = MagicMock(spec=AsyncRuntime)
+        mgr = SessionManager(runtime=rt)
+        assert await mgr.send_steering("missing", "steer") is False
+
+    async def test_send_steering_dispatches_to_worker(self):
+        rt = MagicMock(spec=AsyncRuntime)
+        mgr = SessionManager(runtime=rt)
+
+        worker = MagicMock()
+        worker.send_steering = AsyncMock(return_value=True)
+        mgr._sessions["s1"] = _SessionState(
+            worker=worker,
+            options_signature="sig",
+            last_access=time.time(),
+        )
+
+        rt.submit_coroutine.side_effect = lambda coro: asyncio.create_task(coro)
+
+        result = await mgr.send_steering("s1", "steer")
+
+        assert result is True
+        worker.send_steering.assert_awaited_once_with("steer")
+
+    async def test_send_steering_returns_false_when_closed(self):
+        rt = MagicMock(spec=AsyncRuntime)
+        mgr = SessionManager(runtime=rt)
+        mgr._is_closed = True
+        assert await mgr.send_steering("s1", "steer") is False
 
     async def test_cleanup_expired_sessions_skips_when_ttl_disabled(self):
         rt = MagicMock(spec=AsyncRuntime)
@@ -526,14 +609,15 @@ class TestSessionManager:
 # _SessionState
 # ---------------------------------------------------------------------------
 
+
 class TestSessionState:
+
     def test_init(self):
         mock_worker = MagicMock()
         state = _SessionState(worker=mock_worker, options_signature="sig", last_access=100.0)
         assert state.worker is mock_worker
         assert state.options_signature == "sig"
         assert state.last_access == 100.0
-
 
     async def test_shutdown_state_handles_run_future_error(self):
         rt = MagicMock(spec=AsyncRuntime)
