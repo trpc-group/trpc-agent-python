@@ -6,18 +6,20 @@ trpc-agent 为此提供了 Cancel 机制。Agent 在几个检查点检查有没�
 
 框架自带的 Agent 都已经接入了这项能力；业务自己实现的 CustomAgent 也可以按同样的方式接入。
 
-| 模块类型 | 模块名称 | Cancel 支持 | 说明 |
-|---------|---------|-------------|------|
-| Single Agent | `LlmAgent` | ✅ | 在 LLM 流式输出、工具执行等位置设置检查点 |
-| Single Agent | `LangGraphAgent` | ✅ | 在LangGraph的流式输出中设了置检查点 |
-| Single Agent | `ClaudeAgent` | ✅ | 在使用claude-sdk流式输出中设置了检查点 |
-| Single Agent | `TrpcRemoteA2aAgent` | ✅ | 在http流式输出中设置了检查点 |
-| Multi Agent | `ChainAgent` | ✅ | 从其子Agent中抛出异常 |
-| Multi Agent | `ParallelAgent` | ✅ | 任一子 Agent 抛出异常，则取消执行 |
-| Multi Agent | `CycleAgent` | ✅ | 从其子Agent中抛出异常 |
-| Multi Agent | `TeamAgent` | ✅ | Leader 和 Member 执行期间均可被取消 |
-| Agent Service | `TrpcA2aAgentService` | ✅ | A2A 协议的 cancel_task 接口取消远程Agent的执行 |
-| Agent Service | `AgUiService` | ✅ | 通过 SSE 连接断开检测，Agent自动取消执行 |
+| 模块类型 | 模块名称 | Cancel 支持 | Steering 支持 | 说明 |
+|---------|---------|-------------|---------------|------|
+| Single Agent | `LlmAgent` | ✅ | ✅ | 在 LLM 流式输出、工具执行等位置设置检查点 |
+| Single Agent | `LangGraphAgent` | ✅ | ✅ | Steering 由业务自定义节点消费 |
+| Single Agent | `ClaudeAgent` | ✅ | ✅ | 在 Claude SDK 流式输出中设置检查点 |
+| Single Agent | `TrpcRemoteA2aAgent` | ✅ | — | Steering 由远端 A2A 服务决定 |
+| Multi Agent | `ChainAgent` | ✅ | ❌ | 多 Agent 顺序执行，插话目标不唯一 |
+| Multi Agent | `ParallelAgent` | ✅ | ❌ | 多个 Agent 并发执行，插话目标不确定 |
+| Multi Agent | `CycleAgent` | ✅ | ❌ | 循环中执行 Agent 不唯一 |
+| Multi Agent | `TeamAgent` | ✅ | ❌ | Leader 和 Member 都可能执行，无法确定向谁插话 |
+| Agent Service | `TrpcA2aAgentService` | ✅ | — | Steering 由承载的 Agent 决定 |
+| Agent Service | `AgUiService` | ✅ | — | Steering 由承载的 Agent 决定 |
+
+多 Agent 场景暂不支持 Steering。多 Agent 可能并发执行，用户插话时无法确定应该发给当前执行的 Agent，还是发给入口 Agent；不同目标会得到不同结果，还会引入额外的路由、优先级和并发消费规则。等具体需求明确后再支持。
 
 
 ## Agent Cancel 机制设计介绍
@@ -214,11 +216,9 @@ class MyCancelManager(CancelManager):
         ...
 
     async def cancel_run(self, key: SessionKey, timeout: float = 1.0) -> Status:
-        # 请求取消。timeout 由 Runner.cancel_run_async(timeout=...) 传入，
-        # A2A / AG-UI 传的是各自的 cancel_wait_timeout。
-        # 本地实现可以在这段时间内等待 run 完成清理；远程实现可以忽略。
-        # 没有活跃 run 返回 Status(ok=False, error_msg="no active run")，
-        # 成功发出取消信号时返回 Status(ok=True)。
+        # 请求取消并等待 Agent 执行完毕。timeout 由 Runner.cancel_run_async 传入，
+        # 其他根据情况，返回Status(ok=False, error_msg="xxx")
+        # 只有Agent运行完毕才返回 Status(ok=True)。
         ...
 
     async def send_steering(self, key: SessionKey, content: Content) -> Status:
@@ -392,13 +392,7 @@ else:
 
 ### LlmAgent
 
-LlmAgent在执行流程的关键位置设置了检查点：
-
-**检查点位置：**
-- 每轮对话开始时
-- LLM API 调用前
-- LLM 流式输出期间（每个 chunk）
-- 工具执行前后
+LlmAgent在执行流程的关键位置设置了 Cancel 和 Steering 的检查点
 
 **使用示例：**
 
@@ -410,6 +404,7 @@ from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
 
 # 定义工具
 async def get_weather(city: str) -> dict:
@@ -432,16 +427,32 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# 运行并支持取消
+# 运行并支持Cancel
 async def run_with_cancel():
     task = asyncio.create_task(run_agent())
     await asyncio.sleep(1)
     await runner.cancel_run_async(user_id, session_id)
     await task
+
+# 运行并支持 Steering
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="顺便查一下北京")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
 **完整示例：**
-- [examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+- Cancel：[examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+- Steering：[examples/llmagent_with_steering](../../../examples/llmagent_with_steering/README.md)
 
 ### LangGraphAgent
 
@@ -1275,3 +1286,19 @@ subscription.unsubscribe?.();
 
 **完整示例：**
 - [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)
+
+## Agent 服务 Steering 指引
+
+Steering 不在 A2A / AG-UI 协议里，框架没有现成的客户端指令。业务要在自己的服务里支持一个 steering 接口（例如 `POST /steering`），收到请求后调用同一个 `Runner.send_steering()`：
+
+```python
+from trpc_agent_sdk.types import Content, Part
+
+status = await runner.send_steering(
+    user_id=user_id,
+    session_id=session_id,
+    content=Content(role="user", parts=[Part(text=text)]),
+)
+if not status.ok:
+    return {"error": status.error_msg}
+```
