@@ -573,18 +573,30 @@ class TestGetSessionMetadata:
 
 
 class TestCancelRun:
-    @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.cancel")
-    async def test_cancels_active_run(self, mock_cancel_module, agui_agent):
-        cleanup_event = asyncio.Event()
-        cleanup_event.set()
-        mock_cancel_module.cancel_run = AsyncMock(return_value=cleanup_event)
+    @staticmethod
+    def _mock_runner(*, success=True):
+        runner = Mock()
+        runner.cancel_run_async = AsyncMock(return_value=success)
+        return runner
 
+    async def test_calls_runner_and_clears_pending_tool_calls(self, agui_agent):
         agui_agent._session_manager.set_state_value = AsyncMock(return_value=True)
+        runner = self._mock_runner()
+        agui_agent._create_runner = Mock(return_value=runner)
 
         result = await agui_agent.cancel_run("sess-1", "test_app", "test_user")
 
         assert result is True
-        mock_cancel_module.cancel_run.assert_awaited_once_with("test_app", "test_user", "sess-1")
+        agui_agent._create_runner.assert_called_once_with(
+            agent=agui_agent._trpc_agent,
+            user_id="test_user",
+            app_name="test_app",
+        )
+        runner.cancel_run_async.assert_awaited_once_with(
+            user_id="test_user",
+            session_id="sess-1",
+            timeout=agui_agent._cancel_wait_timeout,
+        )
         agui_agent._session_manager.set_state_value.assert_awaited_once_with(
             session_id="sess-1",
             app_name="test_app",
@@ -593,59 +605,39 @@ class TestCancelRun:
             value=[],
         )
 
-    @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.cancel")
-    async def test_handles_no_active_run(self, mock_cancel_module, agui_agent):
-        mock_cancel_module.cancel_run = AsyncMock(return_value=None)
+    async def test_handles_no_active_run(self, agui_agent):
+        runner = self._mock_runner(success=False)
+        agui_agent._create_runner = Mock(return_value=runner)
+        agui_agent._session_manager.set_state_value = AsyncMock(return_value=True)
 
         result = await agui_agent.cancel_run("sess-1", "test_app", "test_user")
 
         assert result is False
-
-    @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.cancel")
-    async def test_clears_pending_tool_calls(self, mock_cancel_module, agui_agent):
-        cleanup_event = asyncio.Event()
-        cleanup_event.set()
-        mock_cancel_module.cancel_run = AsyncMock(return_value=cleanup_event)
-
-        agui_agent._session_manager.set_state_value = AsyncMock(return_value=True)
-
-        await agui_agent.cancel_run("sess-1", "app", "user")
-
-        agui_agent._session_manager.set_state_value.assert_awaited_once_with(
+        runner.cancel_run_async.assert_awaited_once_with(
+            user_id="test_user",
             session_id="sess-1",
-            app_name="app",
-            user_id="user",
-            key="pending_tool_calls",
-            value=[],
+            timeout=agui_agent._cancel_wait_timeout,
         )
+        agui_agent._session_manager.set_state_value.assert_not_awaited()
 
-    @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.cancel")
-    async def test_cancels_execution_state(self, mock_cancel_module, agui_agent):
-        cleanup_event = asyncio.Event()
-        cleanup_event.set()
-        mock_cancel_module.cancel_run = AsyncMock(return_value=cleanup_event)
+    async def test_does_not_touch_active_execution(self, agui_agent):
+        async def _done():
+            return None
+
+        task = asyncio.create_task(_done())
+        await task
+        execution = ExecutionState(task=task, thread_id="sess-1", event_queue=asyncio.Queue())
+        execution.cancel = AsyncMock()
+        agui_agent._active_executions["sess-1"] = execution
         agui_agent._session_manager.set_state_value = AsyncMock(return_value=True)
-
-        mock_execution = AsyncMock(spec=ExecutionState)
-        mock_execution.cancel = AsyncMock()
-        agui_agent._active_executions["sess-1"] = mock_execution
+        runner = self._mock_runner()
+        agui_agent._create_runner = Mock(return_value=runner)
 
         result = await agui_agent.cancel_run("sess-1", "app", "user")
 
         assert result is True
-        mock_execution.cancel.assert_awaited_once()
-        assert "sess-1" not in agui_agent._active_executions
-
-    @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.cancel")
-    async def test_handles_timeout_during_cancel_wait(self, mock_cancel_module, agui_agent):
-        never_set_event = asyncio.Event()
-        mock_cancel_module.cancel_run = AsyncMock(return_value=never_set_event)
-        agui_agent._session_manager.set_state_value = AsyncMock(return_value=True)
-        agui_agent._cancel_wait_timeout = 0.01
-
-        result = await agui_agent.cancel_run("sess-1", "app", "user")
-        assert result is True
-
+        execution.cancel.assert_not_awaited()
+        assert agui_agent._active_executions["sess-1"] is execution
 
 # ---------------------------------------------------------------------------
 # TestExecuteUserFeedbackHandler
@@ -1490,6 +1482,42 @@ class TestRunTrpcInBackground:
             events.append(queue.get_nowait())
         assert events[-1] is None  # sentinel
         assert len(events) >= 2  # at least one event + None
+
+    async def test_agent_cancelled_event_is_not_reported_as_error(self, agui_agent, mock_agent):
+        from ag_ui.core import RunErrorEvent
+        from trpc_agent_sdk.events import AgentCancelledEvent
+
+        queue = asyncio.Queue()
+
+        agui_agent._session_manager.get_or_create_session = AsyncMock(return_value=Mock())
+        agui_agent._session_manager.update_session_state = AsyncMock(return_value=True)
+        agui_agent._session_manager.get_session_state = AsyncMock(return_value={})
+
+        inp = _make_input(messages=[_make_user_message("hello")])
+
+        with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner") as MockRunner:
+            mock_runner = Mock()
+
+            async def mock_run_async(**kwargs):
+                yield AgentCancelledEvent(invocation_id="inv-1", author="agent", reason="cancelled")
+
+            mock_runner.run_async = mock_run_async
+            MockRunner.return_value = mock_runner
+            with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
+                       return_value=[_make_text_part("hello")]):
+                await agui_agent._run_trpc_in_background(
+                    input=inp,
+                    agent=mock_agent,
+                    user_id="test_user",
+                    app_name="test_app",
+                    event_queue=queue,
+                )
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+        assert events[-1] is None
+        assert not any(isinstance(e, RunErrorEvent) for e in events)
 
     async def test_handles_error_and_puts_error_event(self, agui_agent, mock_agent):
         queue = asyncio.Queue()

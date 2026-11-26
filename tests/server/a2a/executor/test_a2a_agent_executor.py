@@ -257,10 +257,6 @@ class TestExecute:
                 "run_config": MagicMock(),
             },
         ), patch(
-            "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=False,
-        ), patch(
             "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.new_agent_context",
             return_value=MagicMock(),
         ):
@@ -268,30 +264,6 @@ class TestExecute:
             await executor.execute(ctx, queue)
             calls = queue.enqueue_event.call_args_list
             assert len(calls) >= 2
-
-    async def test_cancelled_session_enqueues_cancellation(self):
-        msg = Message(message_id="m1", role=Role.user, parts=[A2APart(root=TextPart(text="hi"))])
-        runner = _make_runner()
-        executor = TrpcA2aAgentExecutor(runner=runner)
-        ctx = _make_context(message=msg, current_task=MagicMock())
-        ctx.call_context = None
-        queue = _make_event_queue()
-
-        with patch(
-            "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.get_user_session_id",
-            new_callable=AsyncMock,
-            return_value=("u1", "s1"),
-        ), patch(
-            "trpc_agent_sdk.server.a2a.executor._a2a_agent_executor.is_run_cancelled",
-            new_callable=AsyncMock,
-            return_value=True,
-        ):
-            await executor.execute(ctx, queue)
-            enqueued_args = [call.args[0] for call in queue.enqueue_event.call_args_list]
-            # Should have a cancellation event
-            assert any(hasattr(e, "status") and e.status.state == TaskState.canceled
-                       for e in enqueued_args if hasattr(e, "status"))
-
 
 # ---------------------------------------------------------------------------
 # _prepare_session
