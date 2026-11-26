@@ -78,14 +78,18 @@ async def unregister_run(key: SessionKey) -> None:
 
 
 async def cancel_run(key: SessionKey, timeout: float = 1.0) -> Status:
-    """Request cancellation for ``key``.
+    """Request cancellation for ``key`` and wait for cleanup.
 
-    ``timeout`` is supplied by ``Runner.cancel_run_async`` and forwarded to the
-    active manager. Local runs wait up to ``timeout`` for the Runner to finish
-    cleanup; Unix socket runs publish the cancel request without waiting.
+    ``timeout`` is supplied by ``Runner.cancel_run_async`` and bounds how long
+    the active manager waits for the owner to finish cleanup. ``_LocalManager``
+    waits on ``cleanup_event``; ``_UnixSocketManager`` polls the master's
+    ``is_running`` at ``poll_interval`` until the run is released.
 
-    Returns a ``Status``; ``ok`` means the cancel signal was delivered, not that
-    the owner has finished cleanup.
+    Returns ``Status(ok=True)`` once cleanup is confirmed. Returns
+    ``Status(ok=False, error_msg=...)`` when no active run matches, the request
+    could not be delivered, or the wait expires. A timeout does not mean the
+    cancellation failed: the signal has already been delivered and the run may
+    stop shortly after.
     """
     return await _manager.cancel_run(key, timeout=timeout)
 

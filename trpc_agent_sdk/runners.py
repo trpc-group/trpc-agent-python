@@ -315,18 +315,20 @@ class Runner:
         Args:
             user_id: The user ID of the session to cancel.
             session_id: The session ID to cancel.
-            timeout: Timeout in seconds for the local fast path. It is forwarded
-                to ``CancelManager.cancel_run``. A2A and AG-UI callers pass
-                their ``cancel_wait_timeout`` here. The value is ignored when
-                cancellation is delivered through Unix Socket; that path
-                returns after publishing the request. Callers should observe
-                ``AgentCancelledEvent`` or run completion to know when the run
-                actually stopped.
+            timeout: Maximum seconds to wait for the owner to finish cleanup.
+                It is forwarded to ``CancelManager.cancel_run``; A2A and AG-UI
+                callers pass their ``cancel_wait_timeout`` here. Both built-in
+                managers wait up to this long: the local one on
+                ``cleanup_event``, the Unix Socket one by polling the master's
+                ``is_running``.
 
         Returns:
-            ``True`` if an active run was marked locally or the Unix Socket
-            cancel request was published. ``False`` otherwise; the failure
-            reason is logged.
+            ``True`` when cleanup was confirmed within ``timeout``. ``False``
+            when no active run matches, the request could not be delivered, or
+            the wait expired; the reason is logged. On expiration the cancel
+            signal has already been delivered, so ``False`` does not mean the
+            cancellation failed. Callers should observe
+            ``AgentCancelledEvent`` or run completion for the actual outcome.
         """
         key = cancel.SessionKey(
             app_name=self.app_name,

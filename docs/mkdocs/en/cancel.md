@@ -6,18 +6,18 @@ For this scenario, the trpc-agent-python framework provides a Cancel mechanism t
 
 This capability has been integrated into all Agents provided by the framework. Custom Agents implemented by other services can also be easily integrated.
 
-| Module Type | Module Name | Cancel Support | Description |
-|---------|---------|-------------|------|
-| Single Agent | `LlmAgent` | ✅ | Checkpoints set at LLM streaming output, tool execution, and other locations |
-| Single Agent | `LangGraphAgent` | ✅ | Checkpoints set during LangGraph streaming output |
-| Single Agent | `ClaudeAgent` | ✅ | Checkpoints set during claude-sdk streaming output |
-| Single Agent | `TrpcRemoteA2aAgent` | ✅ | Checkpoints set during HTTP streaming output |
-| Multi Agent | `ChainAgent` | ✅ | Exception propagated from its sub-Agents |
-| Multi Agent | `ParallelAgent` | ✅ | Execution cancelled when any sub-Agent throws an exception |
-| Multi Agent | `CycleAgent` | ✅ | Exception propagated from its sub-Agents |
-| Multi Agent | `TeamAgent` | ✅ | Cancellable during both Leader and Member execution |
-| Agent Service | `TrpcA2aAgentService` | ✅ | Cancels remote Agent execution via the A2A protocol's cancel_task interface |
-| Agent Service | `AgUiService` | ✅ | Agent automatically cancels execution upon SSE connection disconnect detection |
+| Module Type | Module Name | Cancel Support | Steering Support | Description |
+|---------|---------|-------------|---------------|------|
+| Single Agent | `LlmAgent` | ✅ | ✅ | Checkpoints set at LLM streaming output, tool execution, and other locations |
+| Single Agent | `LangGraphAgent` | ✅ | ✅ | Steering is consumed by a user-defined graph node |
+| Single Agent | `ClaudeAgent` | ✅ | ✅ | Checkpoints set during claude-sdk streaming output |
+| Single Agent | `TrpcRemoteA2aAgent` | ✅ | — | Steering is decided by the remote A2A service |
+| Multi Agent | `ChainAgent` | ✅ | ❌ | Sequential execution leaves no unique target for the correction |
+| Multi Agent | `ParallelAgent` | ✅ | ❌ | Several Agents run concurrently, so the target is ambiguous |
+| Multi Agent | `CycleAgent` | ✅ | ❌ | The executing Agent changes between loop iterations |
+| Multi Agent | `TeamAgent` | ✅ | ❌ | Either the Leader or a Member may be running |
+| Agent Service | `TrpcA2aAgentService` | ✅ | — | Steering is decided by the hosted Agent |
+| Agent Service | `AgUiService` | ✅ | — | Steering is decided by the hosted Agent |
 
 
 ## Agent Cancel Mechanism Design Overview
@@ -211,12 +211,10 @@ class MyCancelManager(CancelManager):
         ...
 
     async def cancel_run(self, key: SessionKey, timeout: float = 1.0) -> Status:
-        # Request cancellation. timeout is supplied by Runner.cancel_run_async;
-        # A2A and AG-UI pass their own cancel_wait_timeout.
-        # A local implementation may wait up to this long for cleanup; a remote
-        # implementation may ignore it.
-        # Return Status(ok=False, error_msg="no active run") when no active run
-        # matches, and Status(ok=True) after the cancel signal is delivered.
+        # Request cancellation and wait for the Agent to finish. timeout comes
+        # from Runner.cancel_run_async. Otherwise return Status(ok=False,
+        # error_msg="xxx") as appropriate. Return Status(ok=True) only after
+        # the Agent has finished.
         ...
 
     async def send_steering(self, key: SessionKey, content: Content) -> Status:
@@ -398,13 +396,7 @@ The message must contain at least one part. In a multi-worker deployment, any wo
 
 ### LlmAgent
 
-LlmAgent has checkpoints set at critical positions in the execution flow:
-
-**Checkpoint locations:**
-- At the beginning of each conversation turn
-- Before LLM API calls
-- During LLM streaming output (each chunk)
-- Before and after tool execution
+LlmAgent sets Cancel and Steering checkpoints at critical positions in the execution flow.
 
 **Usage example:**
 
@@ -416,6 +408,7 @@ from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
 
 # Define tools
 async def get_weather(city: str) -> dict:
@@ -444,10 +437,26 @@ async def run_with_cancel():
     await asyncio.sleep(1)
     await runner.cancel_run_async(user_id, session_id)
     await task
+
+# Run with steering support
+async def run_with_steering():
+    task = asyncio.create_task(run_agent())
+    await asyncio.sleep(1)
+    status = await runner.send_steering(
+        user_id=user_id,
+        session_id=session_id,
+        content=Content(role="user", parts=[Part(text="also check Beijing")]),
+    )
+    if status.ok:
+        print("steering queued")
+    else:
+        print(f"steering rejected: {status.error_msg}")
+    await task
 ```
 
-**Full example:**
-- [examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+**Full examples:**
+- Cancel: [examples/llmagent_with_cancel](../../../examples/llmagent_with_cancel/README.md)
+- Steering: [examples/llmagent_with_steering](../../../examples/llmagent_with_steering/README.md)
 
 ### LangGraphAgent
 
@@ -1212,3 +1221,31 @@ In a multi-worker deployment, call `init_unix_socket()` before starting the work
 
 **Full example:**
 - [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)
+
+## Agent Service Steering Guide
+
+Steering is not part of the A2A or AG-UI protocols, so the framework exposes no client command for it. Add your own endpoint (for example `POST /steering`) and call the same `Runner.send_steering()` from there:
+
+```python
+from trpc_agent_sdk.types import Content, Part
+
+status = await runner.send_steering(
+    user_id=user_id,
+    session_id=session_id,
+    content=Content(role="user", parts=[Part(text=text)]),
+)
+if not status.ok:
+    return {"error": status.error_msg}
+```
+
+**Key points:**
+
+- The endpoint does not need to run in the same process as the run. In a multi-worker deployment the master calls `init_unix_socket()` before forking; `send_steering()` writes to the master's authoritative run table over Unix Socket, and the owner worker's poller syncs it back at the next `poll_interval`. Cross-worker steering therefore has a delay of at most one `poll_interval`.
+- When `status.ok` is `False`, `error_msg` explains why. Common values are `no active run` and `steering content is empty`. The same reason is written to `logger.error`, and a custom manager may supply its own `error_msg`.
+- Steering is best-effort. A message that arrives during the final LLM request and has already been synced to the owner gets one extra iteration in `LlmAgent` before the loop exits. Messages still queued at the master, or left over when the run is cancelled, are released with the run and are not guaranteed to be delivered. Cancel wins over steering.
+- Consumption depends on the Agent: `LlmAgent` drains automatically, `LangGraphAgent` needs a user-defined `steering_node`, and `ClaudeAgent` is forwarded by the framework to the active Claude request. Multi-Agent scenarios (Chain / Parallel / Cycle / Team) do not support Steering because there is no unique target.
+
+**Full examples:**
+- [examples/llmagent_with_steering](../../../examples/llmagent_with_steering/README.md)
+- [examples/langgraph_agent_with_steering](../../../examples/langgraph_agent_with_steering/README.md)
+- [examples/claude_agent_with_steering](../../../examples/claude_agent_with_steering/README.md)
